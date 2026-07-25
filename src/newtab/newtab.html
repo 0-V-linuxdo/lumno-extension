@@ -20,6 +20,7 @@
       html,
       body {
         height: 100%;
+        overscroll-behavior: none;
       }
       html[data-wallpaper-preload-theme="dark"] {
         background-color: #111111;
@@ -43,7 +44,7 @@
         padding-top: 12vh;
         padding-bottom: 48px;
         box-sizing: border-box;
-        overflow-x: auto;
+        overflow-x: hidden;
         overflow-y: auto;
         font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
@@ -1664,6 +1665,7 @@
         width: 19px;
         height: 19px;
         border-radius: 0;
+        transform: translateY(1px);
       }
       .x-nt-bookmarks-topbar .x-nt-bookmark-title {
         flex: 0 1 auto;

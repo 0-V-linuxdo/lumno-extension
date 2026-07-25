@@ -307,9 +307,9 @@
         occupiedBottomHeight = Math.max(0, Number(dockRect && dockRect.height) || 0);
       }
       const occupiedTopHeight = Math.max(0, Number(getTopInsetPx()) || 0);
-      const availableHeight = Math.max(
+      const centeringHeight = Math.max(
         0,
-        viewportHeight - occupiedTopHeight - occupiedBottomHeight
+        viewportHeight - occupiedBottomHeight
       );
       const wordmarkOuterHeight = getElementOuterHeight(getWordmarkContainer());
       const searchBlockHeight = wordmarkOuterHeight + getSearchEntryBlockHeight();
@@ -326,15 +326,15 @@
         : contentSectionsExtraUpshiftPx;
       const upwardOffset = Math.min(
         upshiftMaxPx,
-        Math.max(upshiftMinPx, availableHeight * upshiftRatio)
+        Math.max(upshiftMinPx, centeringHeight * upshiftRatio)
       ) + extraUpshift;
       const effectiveMinTopPx = occupiedTopHeight + minimumTopGap;
       const maxTop = Math.max(
         effectiveMinTopPx,
-        occupiedTopHeight + availableHeight - searchBlockHeight - minBottomPx
+        centeringHeight - searchBlockHeight - minBottomPx
       );
-      let targetTop = occupiedTopHeight +
-        ((availableHeight - searchBlockHeight) / 2) -
+      let targetTop =
+        ((centeringHeight - searchBlockHeight) / 2) -
         upwardOffset;
       if (!Number.isFinite(targetTop)) {
         targetTop = effectiveMinTopPx;

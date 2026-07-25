@@ -256,6 +256,10 @@ assert.ok(
   'topbar action controls should use equal 28px footprints with a consistent 4px gap'
 );
 assert.ok(
+  /\.x-nt-bookmarks-topbar \.x-nt-bookmark-icon--figma\s*\{[\s\S]*?transform:\s*translateY\(1px\);/.test(newtabHtml),
+  'topbar folder SVG should receive a 1px optical baseline correction'
+);
+assert.ok(
   bookmarksViewJs.includes("state && state.viewMode === 'top'") &&
     bookmarksViewJs.includes('!isFolder && !isTopbarMode') &&
     bookmarksViewJs.includes('typeof documentObj.createDocumentFragment'),

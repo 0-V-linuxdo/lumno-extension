@@ -278,6 +278,27 @@ function testOccupiedTopSurfaceShiftsMinimumSearchInset() {
 
 testOccupiedTopSurfaceShiftsMinimumSearchInset();
 
+function testOccupiedTopSurfaceKeepsDesktopSearchPositionStable() {
+  const regular = createFixture({
+    innerHeight: 900
+  });
+  const withTopbar = createFixture({
+    innerHeight: 900,
+    topInsetPx: 36
+  });
+
+  regular.controller.updateSearchEntryLayout();
+  withTopbar.controller.updateSearchEntryLayout();
+
+  assert.strictEqual(
+    withTopbar.body.style.getPropertyValue('padding-top'),
+    regular.body.style.getPropertyValue('padding-top'),
+    'an occupied top surface should protect against overlap without recentering the logo and search entry'
+  );
+}
+
+testOccupiedTopSurfaceKeepsDesktopSearchPositionStable();
+
 function testDockRuntimeOwnsBottomDockComponentParts() {
   assert.ok(
     dockRuntime && typeof dockRuntime.createBottomDockRuntime === 'function',
@@ -390,6 +411,31 @@ function testNewtabLoadsAndUsesDockRuntime() {
 }
 
 testNewtabLoadsAndUsesDockRuntime();
+
+function testNewtabContainsRootOverscroll() {
+  assert.match(
+    newtabHtml,
+    /html,\s*body\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overscroll-behavior:\s*none;/,
+    'newtab root should suppress viewport rubber-band overscroll'
+  );
+  assert.match(
+    newtabHtml,
+    /body\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/,
+    'newtab should prevent horizontal document movement while preserving vertical document scrolling'
+  );
+  assert.match(
+    newtabHtml,
+    /\.x-nt-bookmarks-topbar-viewport\s*\{[\s\S]*?overflow-x:\s*auto;[\s\S]*?overscroll-behavior-x:\s*contain;/,
+    'newtab root isolation should preserve intentional horizontal scrolling inside the bookmarks topbar'
+  );
+  assert.match(
+    newtabHtml,
+    /#_x_extension_newtab_bottom_dock_scroller_2024_unique_\s*\{[\s\S]*?overflow-y:\s*auto;[\s\S]*?overscroll-behavior:\s*contain;/,
+    'newtab root isolation should preserve intentional vertical scrolling inside the bottom dock'
+  );
+}
+
+testNewtabContainsRootOverscroll();
 
 function testCompactDockKeepsSearchEntryClearOnShortViewports() {
   const { bottomDock, controller } = createFixture({
