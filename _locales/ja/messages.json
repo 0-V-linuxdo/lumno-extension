@@ -1046,6 +1046,27 @@
   "bookmark_view_mode_list": {
     "message": "多階層リスト表示"
   },
+  "bookmark_view_mode_top": {
+    "message": "上部ブックマークバー"
+  },
+  "bookmark_topbar_color_pick": {
+    "message": "ブラウザ上部バーから色を取得…"
+  },
+  "bookmark_topbar_color_reset": {
+    "message": "自動配色に戻す"
+  },
+  "bookmark_topbar_color_picked": {
+    "message": "ブラウザ上部バーの色に合わせました"
+  },
+  "bookmark_topbar_color_reset_done": {
+    "message": "自動配色に戻しました"
+  },
+  "bookmark_topbar_color_unsupported": {
+    "message": "このブラウザは画面からの色取得に対応していません"
+  },
+  "bookmark_topbar_color_failed": {
+    "message": "色を取得できませんでした。もう一度お試しください。"
+  },
   "bookmarks_empty_folder": {
     "message": "内容はありません"
   },
@@ -1294,6 +1315,9 @@
   },
   "overlay_empty_result": {
     "message": "一致する結果はありません"
+  },
+  "local_search_tab_hint": {
+    "message": "{source}のみ検索"
   },
   "overlay_empty_open_tabs": {
     "message": "タブはありません"
@@ -1569,7 +1593,7 @@
     "message": "ローカルアイコンについて"
   },
   "newtab_shortcuts_icon_info": {
-    "message": "背景が透明な 128×128 px 以上の正方形 PNG を推奨します。JPG と WebP にも対応しています。ファイルは 1 MB 以下、画像サイズは 4096×4096 px 以下にしてください。\nChrome 拡張機能の同期ストレージ（chrome.storage.sync）の割り当て上限により、このアイコンはこのデバイスにのみ保存され、ほかのデバイスには同期されません。"
+    "message": "PNG、JPG、WebP に対応。128×128 px 以上の透明な正方形アイコンを推奨します。このデバイスにのみ保存されます。"
   },
   "newtab_shortcuts_icon_choose": {
     "message": "画像を選択"
@@ -1582,9 +1606,6 @@
   },
   "newtab_shortcuts_icon_unsupported": {
     "message": "PNG、JPG、または WebP 画像を選択してください"
-  },
-  "newtab_shortcuts_icon_file_too_large": {
-    "message": "画像は 1 MB 以下にしてください"
   },
   "newtab_shortcuts_icon_dimensions_too_large": {
     "message": "画像サイズは 4096×4096 px 以下にしてください"

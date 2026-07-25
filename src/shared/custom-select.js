@@ -12,7 +12,10 @@
   const MENU_SURFACE_CLASS = '_x_extension_menu_surface_2024_unique_';
   const MENU_TITLE_CLASS = '_x_extension_select_menu_title_2024_unique_';
   const OPTION_CLASS = '_x_extension_select_option_2024_unique_';
+  const OPTION_ICON_CLASS = '_x_extension_select_option_icon_2026_unique_';
+  const OPTION_LABEL_CLASS = '_x_extension_select_option_label_2026_unique_';
   const ICON_CLASS = '_x_extension_select_icon_2024_unique_';
+  const ACTION_HANDLER_PROPERTY = '__lumnoCustomSelectActionHandler';
   const PORTAL_ATTRIBUTE = 'data-menu-portal';
   const PORTAL_Z_INDEX_ATTRIBUTE = 'data-menu-portal-z-index';
   const PORTAL_OFFSET_ATTRIBUTE = 'data-menu-portal-offset';
@@ -133,6 +136,9 @@
     if (config.menuTitle) {
       wrapper.setAttribute('data-menu-title', String(config.menuTitle));
     }
+    if (typeof config.onAction === 'function') {
+      wrapper[ACTION_HANDLER_PROPERTY] = config.onAction;
+    }
 
     const select = documentObj.createElement('select');
     select.className = SELECT_CLASS;
@@ -189,6 +195,15 @@
       option.textContent = getOptionLabel(item);
       if (item && item.i18nKey) {
         option.setAttribute('data-i18n', String(item.i18nKey));
+      }
+      if (item && item.action) {
+        option.setAttribute('data-action', String(item.action));
+      }
+      if (item && item.dividerBefore) {
+        option.setAttribute('data-divider-before', 'true');
+      }
+      if (item && item.iconClass) {
+        option.setAttribute('data-icon-class', String(item.iconClass));
       }
       select.appendChild(option);
     });
@@ -325,6 +340,14 @@
       return Number.isFinite(value) ? value : fallback;
     }
 
+    function getCustomSelectViewportTopInset(wrapper, fallback) {
+      if (typeof config.getViewportTopInset !== 'function') {
+        return fallback;
+      }
+      const value = Number(config.getViewportTopInset(wrapper));
+      return Number.isFinite(value) ? Math.max(fallback, value) : fallback;
+    }
+
     function setStyleProperty(element, name, value) {
       if (!element || !element.style || typeof element.style.setProperty !== 'function') {
         return;
@@ -439,6 +462,7 @@
           0
       );
       const padding = 8;
+      const viewportTopInset = getCustomSelectViewportTopInset(wrapper, padding);
       const offset = getCustomSelectPortalNumber(wrapper, PORTAL_OFFSET_ATTRIBUTE, 6);
       const menuWidth = Math.max(
         Number(menuRect && menuRect.width) || 0,
@@ -463,8 +487,14 @@
       if (viewportHeight > 0 &&
           menuHeight > 0 &&
           top + menuHeight > viewportHeight - padding &&
-          (Number(triggerRect.top) || 0) - offset - menuHeight >= padding) {
+          (Number(triggerRect.top) || 0) - offset - menuHeight >= viewportTopInset) {
         top = (Number(triggerRect.top) || 0) - offset - menuHeight;
+      }
+      if (viewportHeight > 0 && menuHeight > 0) {
+        const maxTop = viewportHeight - menuHeight - padding;
+        top = Math.max(viewportTopInset, Math.min(top, maxTop));
+      } else {
+        top = Math.max(viewportTopInset, top);
       }
       setStyleProperty(menu, 'position', 'fixed');
       setStyleProperty(menu, 'left', `${Math.round(left)}px`);
@@ -699,7 +729,7 @@
       labelEl.textContent = label;
       getMenuOptionItems(menu).forEach((item) => {
         const value = item.getAttribute('data-value');
-        const isSelected = value === select.value;
+        const isSelected = !item.getAttribute('data-action') && value === select.value;
         item.setAttribute('data-selected', isSelected ? 'true' : 'false');
         item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
       });
@@ -723,11 +753,42 @@
       appendCustomSelectMenuTitle(wrapper, menu);
       Array.from(select.options).forEach((option) => {
         const item = documentObj.createElement('div');
+        const action = String(option.getAttribute('data-action') || '');
+        const iconClass = String(option.getAttribute('data-icon-class') || '');
         item.className = OPTION_CLASS;
         item.setAttribute('role', 'option');
         item.setAttribute('data-value', option.value);
-        item.textContent = option.label || option.textContent || '';
+        if (action) {
+          item.setAttribute('data-action', action);
+        }
+        if (option.getAttribute('data-divider-before') === 'true') {
+          item.setAttribute('data-divider-before', 'true');
+        }
+        if (iconClass) {
+          const icon = documentObj.createElement('i');
+          icon.className = `${OPTION_ICON_CLASS} ri-icon ri-size-16 ${iconClass}`;
+          icon.setAttribute('aria-hidden', 'true');
+          item.appendChild(icon);
+        }
+        const label = documentObj.createElement('span');
+        label.className = OPTION_LABEL_CLASS;
+        label.textContent = option.label || option.textContent || '';
+        item.appendChild(label);
         item.addEventListener('click', () => {
+          if (action) {
+            setCustomSelectOpen(wrapper, false);
+            const actionHandler = wrapper[ACTION_HANDLER_PROPERTY];
+            if (typeof actionHandler === 'function') {
+              actionHandler({
+                action,
+                value: option.value,
+                option,
+                select,
+                wrapper
+              });
+            }
+            return;
+          }
           if (select.value !== option.value) {
             select.value = option.value;
             select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -923,6 +984,8 @@
       menu: MENU_CLASS,
       menuTitle: MENU_TITLE_CLASS,
       option: OPTION_CLASS,
+      optionIcon: OPTION_ICON_CLASS,
+      optionLabel: OPTION_LABEL_CLASS,
       label: LABEL_CLASS,
       select: SELECT_CLASS
     }

@@ -2260,6 +2260,36 @@
       .replace(/\{searchTerms\}/g, '{query}');
   }
 
+  const LOCAL_SEARCH_SOURCE_TYPES = new Set(['topSite', 'bookmark', 'history']);
+
+  function normalizeLocalSearchScopeTrigger(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function findLocalSearchScope(input, rules) {
+    const trigger = normalizeLocalSearchScopeTrigger(input);
+    if (!trigger || !Array.isArray(rules)) {
+      return null;
+    }
+    for (let i = 0; i < rules.length; i += 1) {
+      const rule = rules[i];
+      const sourceType = String(rule && rule.searchSourceType ? rule.searchSourceType : '').trim();
+      if (!LOCAL_SEARCH_SOURCE_TYPES.has(sourceType) || !Array.isArray(rule.keys)) {
+        continue;
+      }
+      const matchedKey = rule.keys.find((key) => normalizeLocalSearchScopeTrigger(key) === trigger);
+      if (!matchedKey) {
+        continue;
+      }
+      return {
+        sourceType,
+        trigger,
+        key: String(matchedKey)
+      };
+    }
+    return null;
+  }
+
   const INTERACTIVE_SITE_SEARCH_SUBMIT_STRATEGIES = Object.freeze([
     'geminiPrompt',
     'chatgptPrompt',
@@ -2819,6 +2849,7 @@
     isSiteSearchProviderTokenEligible,
     limitSearchSuggestionsForDisplay,
     findProviderForSiteSearchSuggestion,
+    findLocalSearchScope,
     findSiteSearchProvider,
     findSiteSearchProviderByInput,
     findSiteSearchProviderByKey,

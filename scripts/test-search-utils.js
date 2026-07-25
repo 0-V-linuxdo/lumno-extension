@@ -646,4 +646,31 @@ assert.strictEqual(
   'site-search title matching should ignore provider search-result URLs to avoid query-title overlap'
 );
 
+const shortcutRules = require('../assets/data/shortcut-rules.json').items;
+assert.deepStrictEqual(
+  search.findLocalSearchScope('  BOOKMARKS  ', shortcutRules),
+  { sourceType: 'bookmark', trigger: 'bookmarks', key: 'bookmarks' },
+  'bookmark scope should reuse the exact bundled English shortcut keyword'
+);
+assert.deepStrictEqual(
+  search.findLocalSearchScope('历史', shortcutRules),
+  { sourceType: 'history', trigger: '历史', key: '历史' },
+  'history scope should reuse the exact bundled Chinese shortcut keyword'
+);
+assert.deepStrictEqual(
+  search.findLocalSearchScope('常用', shortcutRules),
+  { sourceType: 'topSite', trigger: '常用', key: '常用' },
+  'frequent-site scope should expose a Chinese keyword'
+);
+assert.deepStrictEqual(
+  search.findLocalSearchScope('top sites', shortcutRules),
+  { sourceType: 'topSite', trigger: 'top sites', key: 'top sites' },
+  'frequent-site scope should expose an English keyword'
+);
+assert.strictEqual(
+  search.findLocalSearchScope('history today', shortcutRules),
+  null,
+  'local scopes should require an exact keyword so normal searches are not hijacked'
+);
+
 console.log('search utils tests passed');

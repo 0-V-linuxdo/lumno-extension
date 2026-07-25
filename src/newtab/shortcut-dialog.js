@@ -302,12 +302,6 @@
           'Choose a PNG, JPG, or WebP image.'
         );
       }
-      if (code === 'file-too-large') {
-        return t(
-          'newtab_shortcuts_icon_file_too_large',
-          'The image must be 1 MB or smaller.'
-        );
-      }
       if (code === 'dimensions-too-large') {
         return t(
           'newtab_shortcuts_icon_dimensions_too_large',
@@ -350,7 +344,7 @@
       );
       iconInfoDescription.textContent = t(
         'newtab_shortcuts_icon_info',
-        'A square PNG at 128 × 128 px or larger with a transparent background is recommended. JPG and WebP are also supported. Files must be 1 MB or smaller, with dimensions no larger than 4096 × 4096 px.\nBecause Chrome extension sync storage (chrome.storage.sync) has a limited quota, this icon is saved only on this device and cannot sync to other devices.'
+        'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.'
       );
       iconRemoveButton.setAttribute(
         'aria-label',

@@ -167,6 +167,8 @@
   const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
   const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY =
+    '_x_extension_bookmark_topbar_surface_color_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
@@ -215,6 +217,7 @@
     BOOKMARK_COUNT_STORAGE_KEY,
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     PINNED_RECENT_SITES_STORAGE_KEY,
     HIDDEN_RECENT_SITES_STORAGE_KEY,
@@ -358,10 +361,21 @@
             missingSyncValues[key] = localResult[key];
           }
         });
-        if (Object.keys(missingSyncValues).length === 0) {
+        const missingKeys = Object.keys(missingSyncValues);
+        if (missingKeys.length === 0) {
           return;
         }
-        storageArea.set(missingSyncValues);
+        storageArea.get(missingKeys, (latestSyncResult) => {
+          const stillMissingSyncValues = {};
+          missingKeys.forEach((key) => {
+            if (typeof latestSyncResult[key] === 'undefined') {
+              stillMissingSyncValues[key] = missingSyncValues[key];
+            }
+          });
+          if (Object.keys(stillMissingSyncValues).length > 0) {
+            storageArea.set(stillMissingSyncValues);
+          }
+        });
       });
     });
   }
@@ -2434,7 +2448,9 @@
     const containerRect = tabsContainer.getBoundingClientRect();
     const buttonRect = activeButton.getBoundingClientRect();
     const inset = 4;
-    const offset = Math.round(buttonRect.left - containerRect.left - inset);
+    const offset = Math.round(
+      buttonRect.left - containerRect.left - tabsContainer.clientLeft - inset
+    );
     tabsIndicator.style.width = `${Math.round(buttonRect.width)}px`;
     tabsIndicator.style.transform = `translateX(${offset}px)`;
   }
@@ -2733,6 +2749,7 @@
     BOOKMARK_COUNT_STORAGE_KEY,
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
@@ -5123,6 +5140,7 @@
         changes[BOOKMARK_COUNT_STORAGE_KEY] ||
         changes[BOOKMARK_COLUMNS_STORAGE_KEY] ||
         changes[BOOKMARK_VIEW_MODE_STORAGE_KEY] ||
+        changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY] ||
         changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] ||
         changes[NEWTAB_SHORTCUTS_STORAGE_KEY] ||
         changes[AUTO_PIP_ENABLED_STORAGE_KEY] ||

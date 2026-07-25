@@ -80,6 +80,11 @@
     const suggestionsBottomInsetPx = getOptionNumber(constants, 'suggestionsBottomInsetPx', 14);
     const visibleAttribute = 'data-visible';
     const suggestionsOpenAttribute = 'data-nt-suggestions-open';
+    const getTopInsetPx = typeof options.getTopInsetPx === 'function'
+      ? options.getTopInsetPx
+      : function() {
+        return 0;
+      };
 
     function getRoot() {
       return resolveElement(options.root);
@@ -301,7 +306,11 @@
         const dockRect = bottomDock.getBoundingClientRect();
         occupiedBottomHeight = Math.max(0, Number(dockRect && dockRect.height) || 0);
       }
-      const availableHeight = Math.max(0, viewportHeight - occupiedBottomHeight);
+      const occupiedTopHeight = Math.max(0, Number(getTopInsetPx()) || 0);
+      const availableHeight = Math.max(
+        0,
+        viewportHeight - occupiedTopHeight - occupiedBottomHeight
+      );
       const wordmarkOuterHeight = getElementOuterHeight(getWordmarkContainer());
       const searchBlockHeight = wordmarkOuterHeight + getSearchEntryBlockHeight();
       const bookmarkSection = getBookmarkSection();
@@ -309,7 +318,7 @@
       const bookmarkVisible = isSectionVisible(bookmarkSection);
       const recentVisible = isSectionVisible(recentSection);
       const viewportWidth = Math.max(0, windowObj.innerWidth || 0);
-      const effectiveMinTopPx = shortViewportMaxHeightPx > 0 && viewportHeight <= shortViewportMaxHeightPx
+      const minimumTopGap = shortViewportMaxHeightPx > 0 && viewportHeight <= shortViewportMaxHeightPx
         ? Math.max(minTopPx, shortMinTopPx)
         : minTopPx;
       const extraUpshift = (!bookmarkVisible && !recentVisible)
@@ -319,8 +328,14 @@
         upshiftMaxPx,
         Math.max(upshiftMinPx, availableHeight * upshiftRatio)
       ) + extraUpshift;
-      const maxTop = Math.max(effectiveMinTopPx, availableHeight - searchBlockHeight - minBottomPx);
-      let targetTop = ((availableHeight - searchBlockHeight) / 2) - upwardOffset;
+      const effectiveMinTopPx = occupiedTopHeight + minimumTopGap;
+      const maxTop = Math.max(
+        effectiveMinTopPx,
+        occupiedTopHeight + availableHeight - searchBlockHeight - minBottomPx
+      );
+      let targetTop = occupiedTopHeight +
+        ((availableHeight - searchBlockHeight) / 2) -
+        upwardOffset;
       if (!Number.isFinite(targetTop)) {
         targetTop = effectiveMinTopPx;
       }

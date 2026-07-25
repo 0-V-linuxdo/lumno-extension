@@ -1046,6 +1046,27 @@
   "bookmark_view_mode_list": {
     "message": "多级列表视图"
   },
+  "bookmark_view_mode_top": {
+    "message": "顶部书签栏"
+  },
+  "bookmark_topbar_color_pick": {
+    "message": "从浏览器顶部栏取色…"
+  },
+  "bookmark_topbar_color_reset": {
+    "message": "恢复自动配色"
+  },
+  "bookmark_topbar_color_picked": {
+    "message": "已匹配浏览器顶部栏颜色"
+  },
+  "bookmark_topbar_color_reset_done": {
+    "message": "已恢复自动配色"
+  },
+  "bookmark_topbar_color_unsupported": {
+    "message": "当前浏览器不支持屏幕取色"
+  },
+  "bookmark_topbar_color_failed": {
+    "message": "取色失败，请重试"
+  },
   "bookmarks_empty_folder": {
     "message": "暂无内容"
   },
@@ -1294,6 +1315,9 @@
   },
   "overlay_empty_result": {
     "message": "无匹配结果"
+  },
+  "local_search_tab_hint": {
+    "message": "仅搜索{source}"
   },
   "overlay_empty_open_tabs": {
     "message": "暂无标签"
@@ -1569,7 +1593,7 @@
     "message": "本地图标说明"
   },
   "newtab_shortcuts_icon_info": {
-    "message": "推荐使用 128×128 px 或更大的透明背景正方形 PNG；也支持 JPG、WebP。文件不超过 1 MB，尺寸不超过 4096×4096 px。\n受 Chrome 扩展同步存储（chrome.storage.sync）配额限制，本地图标仅保存在此设备，无法同步到其他设备。"
+    "message": "支持 PNG、JPG、WebP；推荐使用 128×128 px 以上、透明背景的正方形图标。仅保存在本设备。"
   },
   "newtab_shortcuts_icon_choose": {
     "message": "选择图片"
@@ -1582,9 +1606,6 @@
   },
   "newtab_shortcuts_icon_unsupported": {
     "message": "请选择 PNG、JPG 或 WebP 图片"
-  },
-  "newtab_shortcuts_icon_file_too_large": {
-    "message": "图片大小不能超过 1 MB"
   },
   "newtab_shortcuts_icon_dimensions_too_large": {
     "message": "图片尺寸不能超过 4096×4096 px"

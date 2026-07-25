@@ -95,9 +95,14 @@
 
   function getPlacementOptions(options) {
     const source = options || {};
+    const padding = Math.max(0, toFiniteNumber(source.viewportPadding, 8));
     return {
       spacing: toFiniteNumber(source.spacing, 8),
-      padding: Math.max(0, toFiniteNumber(source.viewportPadding, 8))
+      padding,
+      topPadding: Math.max(
+        padding,
+        toFiniteNumber(source.viewportTopPadding, padding)
+      )
     };
   }
 
@@ -106,7 +111,7 @@
     const anchor = normalizeRect(source.anchorRect);
     const menu = normalizeRect(source.menuRect);
     const viewport = normalizeViewport(source.viewport);
-    const { spacing, padding } = getPlacementOptions(source);
+    const { spacing, padding, topPadding } = getPlacementOptions(source);
     const maxLeft = viewport.width - menu.width - padding;
     const maxTop = viewport.height - menu.height - padding;
 
@@ -120,12 +125,12 @@
     left = clamp(left, padding, maxLeft);
 
     const availableBelow = viewport.height - padding - anchor.bottom - spacing;
-    const availableAbove = anchor.top - padding - spacing;
+    const availableAbove = anchor.top - topPadding - spacing;
     const belowTop = anchor.bottom + spacing;
     const aboveTop = anchor.top - spacing - menu.height;
     const shouldOpenBelow = availableBelow >= menu.height || availableBelow >= availableAbove;
     const vertical = shouldOpenBelow ? 'below' : 'above';
-    const top = clamp(shouldOpenBelow ? belowTop : aboveTop, padding, maxTop);
+    const top = clamp(shouldOpenBelow ? belowTop : aboveTop, topPadding, maxTop);
 
     return roundPlacement({ left, top, horizontal, vertical });
   }
@@ -136,7 +141,7 @@
     const trigger = normalizeRect(source.triggerRect);
     const menu = normalizeRect(source.menuRect);
     const viewport = normalizeViewport(source.viewport);
-    const { spacing, padding } = getPlacementOptions(source);
+    const { spacing, padding, topPadding } = getPlacementOptions(source);
     const maxLeft = viewport.width - menu.width - padding;
     const maxTop = viewport.height - menu.height - padding;
 
@@ -156,7 +161,7 @@
 
     return roundPlacement({
       left: clamp(left, padding, maxLeft),
-      top: clamp(trigger.top, padding, maxTop),
+      top: clamp(trigger.top, topPadding, maxTop),
       side
     });
   }

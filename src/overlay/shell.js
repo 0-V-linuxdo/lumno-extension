@@ -36,11 +36,12 @@
       width: ${width}px !important;
       max-width: calc(100vw - 24px) !important;
       max-height: ${maxHeightVh}vh !important;
+      --x-ov-panel-radius: 16px;
       background: var(--x-ov-bg, rgba(255, 255, 255, 0.95)) !important;
       backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
       -webkit-backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
       border: 1px solid var(--x-ov-border, rgba(0, 0, 0, 0.08)) !important;
-      border-radius: 32px !important;
+      border-radius: var(--x-ov-panel-radius) !important;
       box-shadow: var(--x-ov-shadow, 0 17px 120px 0 rgba(0, 0, 0, 0.05), 0 32px 44.5px 0 rgba(0, 0, 0, 0.10), 0 80px 120px 0 rgba(0, 0, 0, 0.15)) !important;
       z-index: 2147483647 !important;
       font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;

@@ -130,6 +130,10 @@ npm run test:onboarding-content
 - 内置图标集：[Remix Icon](https://remixicon.com/)
 - 内置字体：Open Sans
 
+## 赞助
+
+Lumno 计划通过 Stripe Payment Link 接受一次性、自选金额的开源维护支持。赞助不会购买私有功能、优先支持、路线图控制权或其他商业服务。完成账户配置和资格确认后将开放正式入口；详见[赞助政策](SPONSORING.zh-CN.md)。
+
 ## GitHub Star 变化
 
 <p align="center">

@@ -8,7 +8,6 @@
   'use strict';
 
   const DEFAULT_STORAGE_KEY = '_x_extension_newtab_shortcut_icons_2026_unique_';
-  const MAX_SOURCE_BYTES = 1024 * 1024;
   const MAX_SOURCE_DIMENSION = 4096;
   const OUTPUT_SIZE = 128;
   const MAX_STORED_DATA_URL_LENGTH = 160 * 1024;
@@ -46,9 +45,6 @@
     const size = Number(file.size);
     if (!Number.isFinite(size) || size <= 0) {
       throw createIconError('empty-file', 'Shortcut icon file is empty.');
-    }
-    if (size > MAX_SOURCE_BYTES) {
-      throw createIconError('file-too-large', 'Shortcut icon file is too large.');
     }
     return true;
   }
@@ -245,7 +241,6 @@
 
   return Object.freeze({
     DEFAULT_STORAGE_KEY,
-    MAX_SOURCE_BYTES,
     MAX_SOURCE_DIMENSION,
     OUTPUT_SIZE,
     ACCEPTED_MIME_TYPES,

@@ -5,6 +5,10 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const bookmarksView = fs.readFileSync(path.join(repoRoot, 'src/newtab/bookmarks-view.js'), 'utf8');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const bookmarksRuntime = fs.readFileSync(
+  path.join(repoRoot, 'src/newtab/bookmarks-runtime.js'),
+  'utf8'
+);
 
 function assertContains(source, needle, message) {
   assert.ok(source.includes(needle), message);
@@ -139,8 +143,8 @@ assertContains(
   'bookmark cards and cascade menus should share the drag hover suppression hook'
 );
 assertContains(
-  newtabJs,
-  'chrome.bookmarks.move(String(bookmarkId),',
+  bookmarksRuntime,
+  'bookmarksApi.move(id, moveDestination,',
   'bookmark reorder should persist through the Chrome bookmarks API'
 );
 assertContains(

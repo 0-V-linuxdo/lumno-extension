@@ -221,6 +221,7 @@
       if (!item || (!item.url && item.type !== 'folder') || !documentObj) {
         return null;
       }
+      const isTopbarMode = Boolean(state && state.viewMode === 'top');
       const menuMode = Boolean(state && state.menuMode);
       const isFolder = item.type === 'folder';
       const themeUrl = item.themeUrl || item.url || '';
@@ -247,12 +248,16 @@
       }));
       card._xNoThemeTint = isFolder;
 
-      const themeSuggestion = { type: isFolder ? 'bookmark' : 'bookmark', url: themeUrl, title: titleText };
-      const immediateTheme = getImmediateThemeForSuggestion(themeSuggestion);
+      const themeSuggestion = { type: 'bookmark', url: themeUrl, title: titleText };
+      const immediateTheme = isTopbarMode
+        ? null
+        : getImmediateThemeForSuggestion(themeSuggestion);
       card._xTheme = immediateTheme;
       card._xHost = host;
-      applyCardTheme(card, immediateTheme, host);
-      if (themeUrl) {
+      if (!isTopbarMode) {
+        applyCardTheme(card, immediateTheme, host);
+      }
+      if (!isTopbarMode && themeUrl) {
         queueThemeForTarget(card, themeSuggestion, (theme) => {
           if (!card.isConnected) {
             return;
@@ -269,7 +274,9 @@
         folderIcon.className = 'x-nt-bookmark-icon x-nt-bookmark-icon--figma';
         folderIcon.innerHTML = getFigmaFolderSvg(`${item.id || 'folder'}-${index}`);
         folderIcon.setAttribute('aria-hidden', 'true');
-        initFolderPathMorph(folderIcon);
+        if (!isTopbarMode) {
+          initFolderPathMorph(folderIcon);
+        }
         icon = folderIcon;
       } else {
         const favicon = documentObj.createElement('img');
@@ -294,7 +301,7 @@
 
       card.appendChild(icon);
       card.appendChild(title);
-      if (!isFolder) {
+      if (!isFolder && !isTopbarMode) {
         const copyButton = documentObj.createElement('button');
         let copyActionFocused = false;
         const setCopyActionVisible = (visible) => {
@@ -340,7 +347,8 @@
         });
         card.appendChild(copyButton);
       }
-      if (isFolder && Array.isArray(item.previewUrls) && item.previewUrls.length > 0) {
+      if (!isTopbarMode && isFolder &&
+          Array.isArray(item.previewUrls) && item.previewUrls.length > 0) {
         const previewWrap = documentObj.createElement('span');
         previewWrap.className = 'x-nt-folder-preview';
         const maxPreview = Math.min(4, item.previewUrls.length);
@@ -567,7 +575,10 @@
       const previousSignature = state && typeof state.signature === 'string' ? state.signature : '';
       const folderId = state && state.folderId ? String(state.folderId) : '';
       const rootFolderId = state && state.rootFolderId ? String(state.rootFolderId) : '1';
-      const viewMode = state && state.viewMode === 'list' ? 'list' : 'folder';
+      const requestedViewMode = state && state.viewMode;
+      const viewMode = requestedViewMode === 'list' || requestedViewMode === 'top'
+        ? requestedViewMode
+        : 'folder';
       const menuMode = Boolean(state && state.menuMode);
       const isAtRoot = String(folderId || '') === String(rootFolderId || '1');
       const nextSignature = `${folderId}##${viewMode}##${getBookmarksSignature(normalizedItems)}`;
@@ -595,6 +606,11 @@
           signature: nextSignature
         };
       }
+      const fragment = grid && documentObj &&
+          typeof documentObj.createDocumentFragment === 'function'
+        ? documentObj.createDocumentFragment()
+        : null;
+      const renderTarget = fragment || grid;
       normalizedItems.forEach((item, index) => {
         const cacheKey = `${viewMode}::${getBookmarkCacheKey(item)}`;
         let card = cacheKey && cardElementCache ? cardElementCache.get(cacheKey) : null;
@@ -604,16 +620,21 @@
             cardElementCache.set(cacheKey, card);
           }
         }
-        if (card && grid) {
+        if (card && renderTarget) {
           if (typeof card._xResetBookmarkInteractionState === 'function') {
             card._xResetBookmarkInteractionState();
           }
           applyBookmarkCardMetadata(card, item, index);
-          applyCardTheme(card, card._xTheme, card._xHost || '');
+          if (viewMode !== 'top') {
+            applyCardTheme(card, card._xTheme, card._xHost || '');
+          }
           cards.push(card);
-          grid.appendChild(card);
+          renderTarget.appendChild(card);
         }
       });
+      if (fragment && grid) {
+        grid.appendChild(fragment);
+      }
       return {
         changed: true,
         count: normalizedItems.length,

@@ -56,6 +56,38 @@ const spacing = 8;
 
 {
   const result = placeRootCascadeMenu({
+    anchorRect: { left: 280, right: 460, top: 300, bottom: 350, width: 180, height: 50 },
+    menuRect: { width: 210, height: 300 },
+    viewport,
+    spacing,
+    viewportTopPadding: 48
+  });
+
+  assert.strictEqual(
+    result.top,
+    48,
+    'root menus should stay below an occupied top surface'
+  );
+}
+
+{
+  const result = placeRootCascadeMenu({
+    anchorRect: { left: 194, right: 333, top: 4, bottom: 32, width: 139, height: 28 },
+    menuRect: { width: 258, height: 246 },
+    viewport,
+    spacing,
+    viewportTopPadding: 40
+  });
+
+  assert.strictEqual(
+    result.top,
+    40,
+    'topbar folder menus should keep a compact 4px gap below the occupied top surface'
+  );
+}
+
+{
+  const result = placeRootCascadeMenu({
     anchorRect: { left: 32, right: 212, top: 42, bottom: 92, width: 180, height: 50 },
     menuRect: { width: 210, height: 180 },
     viewport,
@@ -143,6 +175,23 @@ const spacing = 8;
 
   assert.strictEqual(result.left, 8, 'oversized submenu should be clamped inside the viewport');
   assert.strictEqual(result.side, 'left', 'oversized submenu should still pick the side with more room');
+}
+
+{
+  const result = placeCascadeSubmenu({
+    parentLevelRect: { left: 40, right: 250, top: 48, bottom: 250, width: 210, height: 202 },
+    triggerRect: { left: 48, right: 242, top: 20, bottom: 52, width: 194, height: 32 },
+    menuRect: { width: 210, height: 120 },
+    viewport,
+    spacing,
+    viewportTopPadding: 48
+  });
+
+  assert.strictEqual(
+    result.top,
+    48,
+    'submenus should clamp below an occupied top surface'
+  );
 }
 
 console.log('newtab bookmark cascade position tests passed');

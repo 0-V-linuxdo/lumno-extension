@@ -1237,6 +1237,9 @@ const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effec
 const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_unique_';
 const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
 const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
+const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
+const BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY =
+  '_x_extension_bookmark_topbar_surface_color_2026_unique_';
 const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
 const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
 const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
@@ -2435,10 +2438,21 @@ function migrateStorageIfNeeded(keys) {
           missingSyncValues[key] = localResult[key];
         }
       });
-      if (Object.keys(missingSyncValues).length === 0) {
+      const missingKeys = Object.keys(missingSyncValues);
+      if (missingKeys.length === 0) {
         return;
       }
-      storageArea.set(missingSyncValues);
+      storageArea.get(missingKeys, (latestSyncResult) => {
+        const stillMissingSyncValues = {};
+        missingKeys.forEach((key) => {
+          if (typeof latestSyncResult[key] === 'undefined') {
+            stillMissingSyncValues[key] = missingSyncValues[key];
+          }
+        });
+        if (Object.keys(stillMissingSyncValues).length > 0) {
+          storageArea.set(stillMissingSyncValues);
+        }
+      });
     });
   });
 }
@@ -5123,7 +5137,10 @@ function handleSearchMessage(request, sender, sendResponse) {
     }
     case 'getSearchSuggestions': {
       const query = request.query;
-      getSearchSuggestions(query).then(suggestions => {
+      getSearchSuggestions(query, {
+        sourceTypes: request.sourceTypes,
+        includeOpenTabs: request.includeOpenTabs
+      }).then(suggestions => {
         sendResponse({ suggestions: suggestions });
       }).catch(() => {
         sendResponse({ suggestions: [] });
@@ -5497,6 +5514,8 @@ migrateStorageIfNeeded([
   OVERLAY_SIZE_MODE_STORAGE_KEY,
   BOOKMARK_COUNT_STORAGE_KEY,
   BOOKMARK_COLUMNS_STORAGE_KEY,
+  BOOKMARK_VIEW_MODE_STORAGE_KEY,
+  BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
   BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
   PINNED_RECENT_SITES_STORAGE_KEY,
   HIDDEN_RECENT_SITES_STORAGE_KEY,
@@ -7698,8 +7717,9 @@ function buildBackgroundSearchQueryContext(query, searchUtils) {
 }
 
 // Function to get search suggestions from history and top sites
-async function getSearchSuggestions(query) {
+async function getSearchSuggestions(query, options) {
   const suggestions = [];
+  const requestOptions = options && typeof options === 'object' ? options : {};
   ensureLocalSearchSourceCacheListeners();
   const searchUtils = SEARCH_UTILS;
   const searchPolicy = getBackgroundSearchPolicy(searchUtils);
@@ -7715,14 +7735,26 @@ async function getSearchSuggestions(query) {
     isLocalNetworkHost,
     isOwnExtensionUrl
   };
-  const sourceTypes = await loadSearchResultSourceTypes();
+  const configuredSourceTypes = await loadSearchResultSourceTypes();
+  const requestedSourceTypes = Array.isArray(requestOptions.sourceTypes)
+    ? requestOptions.sourceTypes
+      .map((item) => String(item || '').trim())
+      .filter((item, index, items) => (
+        (item === 'topSite' || item === 'bookmark' || item === 'history') &&
+        items.indexOf(item) === index
+      ))
+    : [];
+  const sourceTypes = requestedSourceTypes.length > 0
+    ? configuredSourceTypes.filter((sourceType) => requestedSourceTypes.includes(sourceType))
+    : configuredSourceTypes;
   const sourceTypeSet = new Set(sourceTypes);
   const allowTopSites = sourceTypeSet.has('topSite');
   const allowBookmarks = sourceTypeSet.has('bookmark');
   const allowHistory = sourceTypeSet.has('history');
+  const allowOpenTabs = requestOptions.includeOpenTabs !== false;
 
   try {
-    const openTabsPromise = getOpenTabSearchItems();
+    const openTabsPromise = allowOpenTabs ? getOpenTabSearchItems() : Promise.resolve([]);
     const [
       historyItemsRaw,
       topSites,

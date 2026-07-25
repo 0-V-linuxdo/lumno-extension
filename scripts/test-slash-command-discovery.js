@@ -77,7 +77,9 @@ function assertPlainNavigationSuggestionsPreserved(source, surface, options) {
   assert.ok(providersStart > preSuggestionsStart, `${surface} should compose pre-suggestions before provider matching`);
   const block = source.slice(preSuggestionsStart, providersStart);
   const slashBranchIndex = block.indexOf('else if (slashCommandModeActive && !siteSearchQueryModeActive)');
-  const plainBranchIndex = block.indexOf('else if (!siteSearchQueryModeActive)');
+  const plainBranchIndex = block.search(
+    /else if \(!siteSearchQueryModeActive(?: && !localSearchQueryModeActive)?\)/
+  );
   assert.ok(slashBranchIndex >= 0, `${surface} should keep a slash-only command branch`);
   assert.ok(
     plainBranchIndex > slashBranchIndex,
@@ -264,12 +266,12 @@ assert.match(
 
 assert.match(
   newtabSource,
-  /if \(isSlashCommandInput\(query\)\) \{[\s\S]*?renderSuggestions\(\[\], query\);[\s\S]*?return;/,
-  'New Tab should route every slash-prefixed input directly to command rendering'
+  /if \((?:!localSearchScopeState && )?isSlashCommandInput\(query\)\) \{[\s\S]*?renderSuggestions\(\[\], query\);[\s\S]*?return;/,
+  'New Tab should route slash-prefixed input directly to command rendering outside local search scopes'
 );
 assert.ok(
-  (overlaySource.match(/if \(isSlashCommandInput\(query\)\) \{/g) || []).length >= 2,
-  'overlay input and paste paths should both route slash-prefixed input directly to command rendering'
+  (overlaySource.match(/if \((?:!localSearchScopeState && )?isSlashCommandInput\(query\)\) \{/g) || []).length >= 2,
+  'overlay input and paste paths should route slash-prefixed input to command rendering outside local search scopes'
 );
 assert.match(
   newtabSource,
@@ -309,12 +311,12 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /else if \(query\) \{\s*if \(isSlashCommandInput\(query\)\) \{\s*updateSearchSuggestions\(\[\], query\);\s*return;[\s\S]*?resolveQuickNavigation\(query\)/,
+  /else if \(query\) \{\s*if \((?:!localSearchScopeState && )?isSlashCommandInput\(query\)\) \{\s*updateSearchSuggestions\(\[\], query\);\s*return;[\s\S]*?resolveQuickNavigation\(query\)/,
   'overlay Enter should preserve the slash empty state instead of falling through to navigation'
 );
 assert.match(
   newtabSource,
-  /if \(selectedIndex >= 0 && currentSuggestions\[selectedIndex\]\) \{[\s\S]*?executeSuggestion\([\s\S]*?\}\s*if \(isSlashCommandInput\(query\)\) \{\s*renderSuggestions\(\[\], query\);\s*return;/,
+  /if \(selectedIndex >= 0 && currentSuggestions\[selectedIndex\]\) \{[\s\S]*?executeSuggestion\([\s\S]*?\}\s*if \((?:!localSearchScopeState && )?isSlashCommandInput\(query\)\) \{\s*renderSuggestions\(\[\], query\);\s*return;/,
   'New Tab Enter should execute a selected command before suppressing an unresolved slash input'
 );
 assert.match(

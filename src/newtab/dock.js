@@ -63,6 +63,7 @@
       suggestionsContainer: config.suggestionsContainer,
       suggestionsSurface: config.suggestionsSurface,
       suggestionsOutline: config.suggestionsOutline,
+      getTopInsetPx: config.getTopInsetPx,
       constants: {
         ...DEFAULT_LAYOUT_CONSTANTS,
         ...(config.constants || {})

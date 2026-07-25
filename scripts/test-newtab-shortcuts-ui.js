@@ -126,7 +126,11 @@ function getTestColorLuminance(color) {
 async function assertDarkWallpaperShortcutAdaptiveTone() {
   const shortcutTile = createToneElement();
   const addTile = createToneElement();
+  const disabledTarget = createToneElement();
   shortcutTile.setAttribute('data-shortcut-theme-default', 'true');
+  disabledTarget.setAttribute('data-wallpaper-ink', 'light');
+  disabledTarget.setAttribute('data-wallpaper-icon-bg', 'true');
+  disabledTarget.style.setProperty('--x-nt-wallpaper-icon-solid-bg', 'rgb(20 28 45)');
   const pixel = { red: 18, green: 20, blue: 22 };
   const canvas = {
     width: 0,
@@ -222,6 +226,14 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
           minHeight: 42,
           iconButton: true,
           forcedIconBackground: 'shortcut-add'
+        },
+        {
+          element: disabledTarget,
+          sampleElement: disabledTarget,
+          minWidth: 42,
+          minHeight: 42,
+          iconButton: true,
+          disabled: true
         }
       ];
     },
@@ -254,6 +266,12 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   );
   const addBackground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-bg'));
   const addForeground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-color'));
+  assert.strictEqual(disabledTarget.getAttribute('data-wallpaper-ink'), null);
+  assert.strictEqual(disabledTarget.getAttribute('data-wallpaper-icon-bg'), null);
+  assert.strictEqual(
+    disabledTarget.style.getPropertyValue('--x-nt-wallpaper-icon-solid-bg'),
+    ''
+  );
 
   assert.ok(
     getTestColorLuminance(shortcutBackground) < 0.36,
@@ -1915,7 +1933,6 @@ assertContains(
   'newtab_shortcuts_icon_replace',
   'newtab_shortcuts_icon_remove',
   'newtab_shortcuts_icon_unsupported',
-  'newtab_shortcuts_icon_file_too_large',
   'newtab_shortcuts_icon_dimensions_too_large',
   'newtab_shortcuts_icon_invalid',
   'newtab_shortcuts_icon_storage_error',

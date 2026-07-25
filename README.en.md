@@ -119,6 +119,10 @@ npm run test:onboarding-content
 - Bundled icon set: [Remix Icon](https://remixicon.com/)
 - Bundled typeface: Open Sans
 
+## Sponsorship
+
+Lumno plans to accept one-time, choose-your-own-amount support for open source maintenance through a Stripe Payment Link. Sponsorship does not purchase private features, priority support, roadmap control, or other commercial services. The official link will be enabled after account setup and eligibility confirmation; see the [sponsorship policy](SPONSORING.md).
+
 ## Star History
 
 <p align="center">

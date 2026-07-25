@@ -51,7 +51,7 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /if \(isModeCommand\(query\)\) \{[\s\S]*?setVisibleThemeMode\(getNextThemeMode\(currentThemeMode\)\);/,
+  /if \((?:!localSearchScopeState && )?isModeCommand\(query\)\) \{[\s\S]*?setVisibleThemeMode\(getNextThemeMode\(currentThemeMode\)\);/,
   'pressing Enter on /mode should switch the visible New Tab theme'
 );
 

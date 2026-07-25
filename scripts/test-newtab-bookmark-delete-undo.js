@@ -5,6 +5,10 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.html'), 'utf8');
+const bookmarksRuntimeJs = fs.readFileSync(
+  path.join(repoRoot, 'src', 'newtab', 'bookmarks-runtime.js'),
+  'utf8'
+);
 const bookmarkDragJs = fs.readFileSync(
   path.join(repoRoot, 'src', 'newtab', 'bookmark-drag.js'),
   'utf8'
@@ -102,8 +106,9 @@ assert.ok(
   'bookmark deletion should reuse the shortcut context-menu surface'
 );
 assert.ok(
-  newtabJs.includes('removeChromeBookmarkNode(record.bookmarkId, !record.snapshot.url)') &&
-    newtabJs.includes('restoreChromeBookmarkSnapshot(record.snapshot, record.parentId, record.index)'),
+  newtabJs.includes('bookmarksRuntime.remove(record.bookmarkId, {') &&
+    newtabJs.includes('bookmarksRuntime.restore(record.snapshot, {') &&
+    bookmarksRuntimeJs.includes('async function restore(snapshot, options)'),
   'deletion should remove folders recursively and restore the complete snapshot at its original location'
 );
 assert.ok(
@@ -130,11 +135,11 @@ assert.ok(
   'the source item should remain visibly active and an open cascade should survive context-menu interaction'
 );
 assert.ok(
-  newtabJs.includes('isControlledBookmarkMutation') &&
-    newtabJs.includes('bookmarkControlledMutationDepth > 0') &&
-    newtabJs.includes("eventName === 'onCreated'") &&
-    newtabJs.includes("eventName === 'onRemoved'") &&
-    newtabJs.includes('markBookmarkTreeDirty({ preserveCascadeOpen })'),
+  newtabJs.includes('bookmarksRuntime.runControlledMutation') &&
+    newtabJs.includes('if (change.isControlled)') &&
+    bookmarksRuntimeJs.includes('controlledMutationDepth > 0') &&
+    bookmarksRuntimeJs.includes("'onCreated'") &&
+    bookmarksRuntimeJs.includes("'onRemoved'"),
   'Chrome bookmark events from controlled moves, deletes, or restores should not repeatedly refresh the cascade'
 );
 

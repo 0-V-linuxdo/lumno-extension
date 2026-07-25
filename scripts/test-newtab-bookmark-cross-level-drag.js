@@ -5,6 +5,10 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.html'), 'utf8');
+const bookmarksRuntimeJs = fs.readFileSync(
+  path.join(repoRoot, 'src', 'newtab', 'bookmarks-runtime.js'),
+  'utf8'
+);
 const bookmarkDragJs = fs.readFileSync(
   path.join(repoRoot, 'src', 'newtab', 'bookmark-drag.js'),
   'utf8'
@@ -256,10 +260,11 @@ assert.ok(
   'successful moves from the cascade should keep and refresh the open menu'
 );
 assert.ok(
-  newtabJs.includes("eventName === 'onMoved'") &&
-    newtabJs.includes("eventName === 'onChildrenReordered'") &&
-    newtabJs.includes('bookmarkControlledMutationDepth > 0') &&
-    newtabJs.includes('markBookmarkTreeDirty({ preserveCascadeOpen })'),
+  bookmarksRuntimeJs.includes("'onMoved'") &&
+    bookmarksRuntimeJs.includes("'onChildrenReordered'") &&
+    bookmarksRuntimeJs.includes('controlledMutationDepth > 0') &&
+    newtabJs.includes('if (change.isControlled)') &&
+    newtabJs.includes('skipRuntimeInvalidate: true'),
   'controlled browser move events should mark data dirty without triggering a second render'
 );
 assert.ok(
@@ -302,6 +307,21 @@ assert.ok(
   'card drags should use a compact floating preview that stays close to the pointer'
 );
 assert.ok(
+  bookmarkDragJs.includes('previewRoot.appendChild(preview);') &&
+    newtabJs.includes("state.card.closest('.x-nt-bookmark-cascade-menu')") &&
+    newtabJs.includes('previewRoot,'),
+  'cascade drag previews should render inside the cascade overlay so menu rows cannot cover them'
+);
+assert.ok(
+  /\.x-nt-bookmark-card\[data-bookmark-dragging="true"\]:not\(\.x-nt-bookmark-card-drag-preview\)\s*\{\s*opacity:\s*0\.36;/s.test(newtabHtml) &&
+    /\.x-nt-bookmark-cascade-item\[data-bookmark-dragging="true"\]:not\(\.x-nt-bookmark-cascade-drag-preview\)\s*\{\s*opacity:\s*0\.38;/s.test(newtabHtml),
+  'active drag sources should remain in their layout slot as a translucent placeholder'
+);
+assert.ok(
+  /\.x-nt-bookmark-cascade-row:has\(> \.x-nt-bookmark-cascade-item\[data-bookmark-dragging="true"\]\)[\s\S]*?> \.x-nt-bookmark-cascade-copy-trigger\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none;/s.test(newtabHtml),
+  'a dragged cascade row should hide its sibling copy trigger instead of leaving the icon above the preview'
+);
+assert.ok(
   bookmarkDragJs.includes('function resetPreviewFolderVisual(state, preview, options)') &&
     newtabJs.includes('getFigmaFolderSvg(`${bookmarkId}-drag-preview`)') &&
     newtabJs.includes('setFolderPathMorphState(folderIcon, false);') &&
@@ -341,12 +361,13 @@ assert.ok(
   'bookmark moves should expose keyboard undo and redo handling immediately after a drag'
 );
 assert.ok(
-  newtabJs.includes('const invalidatesBookmarkMoveHistory = (') &&
-    newtabJs.includes("eventName === 'onCreated'") &&
-    newtabJs.includes("eventName === 'onRemoved'") &&
-    newtabJs.includes("eventName === 'onMoved'") &&
-    newtabJs.includes("eventName === 'onChildrenReordered'") &&
-    newtabJs.includes("eventName === 'onImportEnded'") &&
+  bookmarksRuntimeJs.includes('HISTORY_INVALIDATING_EVENT_NAMES') &&
+    bookmarksRuntimeJs.includes("'onCreated'") &&
+    bookmarksRuntimeJs.includes("'onRemoved'") &&
+    bookmarksRuntimeJs.includes("'onMoved'") &&
+    bookmarksRuntimeJs.includes("'onChildrenReordered'") &&
+    bookmarksRuntimeJs.includes("'onImportEnded'") &&
+    newtabJs.includes('if (change.invalidatesHistory)') &&
     newtabJs.includes('bookmarkMoveHistory.clear();'),
   'external bookmark structure changes should invalidate stale move and delete history records'
 );

@@ -1046,6 +1046,27 @@
   "bookmark_view_mode_list": {
     "message": "Multi-level list view"
   },
+  "bookmark_view_mode_top": {
+    "message": "Top bookmarks bar"
+  },
+  "bookmark_topbar_color_pick": {
+    "message": "Pick browser toolbar color…"
+  },
+  "bookmark_topbar_color_reset": {
+    "message": "Restore automatic colors"
+  },
+  "bookmark_topbar_color_picked": {
+    "message": "Browser toolbar color matched"
+  },
+  "bookmark_topbar_color_reset_done": {
+    "message": "Automatic colors restored"
+  },
+  "bookmark_topbar_color_unsupported": {
+    "message": "Screen color picking is not supported in this browser"
+  },
+  "bookmark_topbar_color_failed": {
+    "message": "Could not pick a color. Try again."
+  },
   "bookmarks_empty_folder": {
     "message": "No content"
   },
@@ -1294,6 +1315,9 @@
   },
   "overlay_empty_result": {
     "message": "No matching results"
+  },
+  "local_search_tab_hint": {
+    "message": "Only search {source}"
   },
   "overlay_empty_open_tabs": {
     "message": "No tabs"
@@ -1569,7 +1593,7 @@
     "message": "About local shortcut icons"
   },
   "newtab_shortcuts_icon_info": {
-    "message": "A square PNG at 128×128 px or larger with a transparent background is recommended. JPG and WebP are also supported. Files must be 1 MB or smaller, with dimensions no larger than 4096×4096 px.\nBecause Chrome extension sync storage (chrome.storage.sync) has a limited quota, this icon is saved only on this device and cannot sync to other devices."
+    "message": "PNG, JPG, and WebP supported. A transparent square icon at 128×128 px or larger is recommended. Saved only on this device."
   },
   "newtab_shortcuts_icon_choose": {
     "message": "Choose image"
@@ -1582,9 +1606,6 @@
   },
   "newtab_shortcuts_icon_unsupported": {
     "message": "Choose a PNG, JPG, or WebP image"
-  },
-  "newtab_shortcuts_icon_file_too_large": {
-    "message": "The image must be 1 MB or smaller"
   },
   "newtab_shortcuts_icon_dimensions_too_large": {
     "message": "The image must be no larger than 4096×4096 px"

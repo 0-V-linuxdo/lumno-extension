@@ -153,6 +153,10 @@
     const rect = state.card.getBoundingClientRect();
     const preview = state.card.cloneNode(true);
     const isCascadeSource = state.sourceKind === 'cascade';
+    const previewRoot = config.previewRoot &&
+      typeof config.previewRoot.appendChild === 'function'
+      ? config.previewRoot
+      : documentObj.body;
     const previewWidth = isCascadeSource
       ? Math.min(rect.width, 196)
       : Math.min(rect.width, 208);
@@ -171,13 +175,30 @@
       'data-bookmark-parent-id',
       'data-bookmark-index',
       'data-bookmark-draggable',
+      'data-active',
+      'data-bookmark-context-menu-open',
+      'data-bookmark-copy-action-visible',
+      'data-hover-suppressed',
       'aria-expanded'
     ].forEach((name) => preview.removeAttribute(name));
+    if (preview.classList && typeof preview.classList.remove === 'function') {
+      preview.classList.remove(
+        'x-nt-bookmark-card--hover',
+        'x-nt-bookmark-card--folder-expanded'
+      );
+    }
     preview.setAttribute('aria-hidden', 'true');
     preview.setAttribute('data-bookmark-drag-preview', 'true');
     preview.tabIndex = -1;
     if (typeof preview.querySelectorAll === 'function') {
       preview.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'));
+      preview.querySelectorAll(
+        '.x-nt-bookmark-copy-action, .x-nt-bookmark-cascade-copy-trigger'
+      ).forEach((element) => {
+        if (element && typeof element.remove === 'function') {
+          element.remove();
+        }
+      });
     }
     resetPreviewFolderVisual(state, preview, config);
     preview.style.left = `${rect.left}px`;
@@ -185,7 +206,7 @@
     preview.style.width = `${previewWidth}px`;
     preview.style.height = `${rect.height}px`;
     preview.style.willChange = 'transform';
-    documentObj.body.appendChild(preview);
+    previewRoot.appendChild(preview);
     state.dragPreviewElement = preview;
     state.baseLeft = rect.left;
     state.baseTop = rect.top;

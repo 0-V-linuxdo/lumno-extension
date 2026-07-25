@@ -61,8 +61,14 @@
   const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
   const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY =
+    '_x_extension_bookmark_topbar_surface_color_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const BOOKMARK_CASCADE_DEBUG_STORAGE_KEY = '_x_extension_bookmark_cascade_debug_2026_unique_';
+  const BOOKMARK_TOPBAR_PICK_COLOR_ACTION = 'pick-bookmark-topbar-color';
+  const BOOKMARK_TOPBAR_RESET_COLOR_ACTION = 'reset-bookmark-topbar-color';
+  const NEWTAB_FLOATING_TOP_GAP_PX = 12;
+  const BOOKMARK_CASCADE_TOPBAR_GAP_PX = 4;
   // Flip this to true when inspecting bookmark cascade hover intent and safe-triangle timing.
   const BOOKMARK_CASCADE_DEBUG_UI_ENABLED = false;
   const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = '_x_extension_default_search_engine_2024_unique_';
@@ -89,6 +95,12 @@
   const NEWTAB_FAVICON_VIEW = globalThis.LumnoNewtabFaviconView || {};
   const NEWTAB_RECENT_STORE = globalThis.LumnoNewtabRecentSitesStore || {};
   const NEWTAB_BOOKMARKS_STORE = globalThis.LumnoNewtabBookmarksStore || {};
+  const NEWTAB_BOOKMARKS_RUNTIME = globalThis.LumnoNewtabBookmarksRuntime || {};
+  const NEWTAB_BOOKMARKS_TOPBAR = globalThis.LumnoNewtabBookmarksTopbar || {};
+  const BOOKMARK_TOPBAR_HEIGHT_PX = Math.max(
+    0,
+    Number(NEWTAB_BOOKMARKS_TOPBAR.HEIGHT_PX) || 36
+  );
   const NEWTAB_BOOKMARK_MOVE_HISTORY = globalThis.LumnoNewtabBookmarkMoveHistory || {};
   const NEWTAB_BOOKMARK_DRAG = globalThis.LumnoNewtabBookmarkDrag || {};
   const NEWTAB_PAGE_NOTICE = globalThis.LumnoNewtabPageNotice || {};
@@ -115,6 +127,8 @@
       typeof NEWTAB_RECENT_STORE.normalizeRecentSiteItem !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.buildBookmarkFolderCache !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.shouldApplyBookmarkCacheHydration !== 'function' ||
+      typeof NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime !== 'function' ||
+      typeof NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.canMoveBookmarkToLocation !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.canMoveBookmarkToFolder !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.createBookmarkMoveHistory !== 'function' ||
@@ -156,6 +170,11 @@
     return;
   }
   const normalizeHost = NEWTAB_FAVICON_THEME.normalizeHost;
+  const bookmarksRuntime = NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime({
+    chromeApi: typeof chrome !== 'undefined' ? chrome : null,
+    store: NEWTAB_BOOKMARKS_STORE,
+    normalizeHost
+  });
   const TAB_RANK_SCORE_DEBUG_STORAGE_KEY = '_x_extension_tab_rank_score_debug_2026_unique_';
   const NEWTAB_OPEN_TAB_SUGGESTION_LIMIT = 8;
   const FAVICON_CACHE_BOOT_WAIT_MS = 120;
@@ -205,6 +224,13 @@
   const initialLanguageReadyPromise = new Promise((resolve) => {
     resolveInitialLanguageReady = resolve;
   });
+  let resolveInitialBookmarkViewModeReady = null;
+  const initialBookmarkViewModeReadyPromise = new Promise((resolve) => {
+    resolveInitialBookmarkViewModeReady = resolve;
+    if (!storageArea) {
+      resolve();
+    }
+  });
   let modeBadge = null;
   let siteSearchTabHint = null;
   let inputModeController = null;
@@ -217,6 +243,7 @@
   let currentSuggestions = [];
   let lastSuggestionResponse = [];
   let siteSearchTriggerState = null;
+  let localSearchScopeTriggerState = null;
   let lastRenderedQuery = '';
   let lastRenderedActionContextKey = '';
   let suggestionsView = null;
@@ -239,6 +266,9 @@
   let currentBookmarkCount = 8;
   let currentBookmarkColumns = 4;
   let currentBookmarkViewMode = 'folder';
+  let bookmarkViewModeRevision = 0;
+  let currentBookmarkTopbarSurfaceColor = '';
+  let bookmarkTopbarSurfaceColorRevision = 0;
   let bookmarkFolderIconsVisible = true;
   let tabRankScoreDebugEnabled = false;
   let searchLayer = null;
@@ -278,16 +308,12 @@
   let bookmarkFolderPath = [];
   let bookmarkRootTotalCount = 0;
   let bookmarkRootVisibleCount = 0;
-  let bookmarkNodeMap = new Map();
-  let bookmarkFolderItemsCache = new Map();
-  let bookmarkTreeCacheReady = false;
-  let bookmarkTreeCacheDirty = true;
-  let bookmarkTreeCacheLoadingPromise = null;
   let bookmarkTitleWrap = null;
   let bookmarkHeading = null;
   let bookmarkModeMenu = null;
   let bookmarkGrid = null;
   let bookmarkCascadeRuntime = null;
+  let bookmarkTopbarRuntime = null;
   let recentHeader = null;
   let recentHeading = null;
   let recentModeMenu = null;
@@ -300,8 +326,6 @@
   let bookmarkDragState = null;
   const bookmarkMoveHistory = NEWTAB_BOOKMARK_MOVE_HISTORY.createBookmarkMoveHistory({ maxEntries: 30 });
   let bookmarkMoveHistoryBusy = false;
-  let bookmarkControlledMutationDepth = 0;
-  let bookmarkControlledMutationEventDirty = false;
   let bookmarkContextMenu = null;
   let bookmarkContextMenuTarget = null;
   let bookmarkPendingLayoutAnimation = null;
@@ -335,7 +359,8 @@
     ? globalThis.LumnoCustomSelect.createController({
       documentObj: document,
       windowObj: window,
-      onBeforeOpen: hideTopActionTooltip
+      onBeforeOpen: hideTopActionTooltip,
+      getViewportTopInset: getNewtabViewportTopPaddingPx
     })
     : null;
   const shortcutContextMenuSelectController = globalThis.LumnoCustomSelect &&
@@ -357,7 +382,8 @@
       onBeforeOpen: () => {
         hideCursorTooltip();
         hideTopActionTooltip();
-      }
+      },
+      getViewportTopInset: getNewtabViewportTopPaddingPx
     })
     : null;
   const BOOKMARK_WHEEL_SWITCH_COOLDOWN_MS = 220;
@@ -446,7 +472,201 @@
   }
 
   function normalizeBookmarkViewMode(value) {
-    return value === 'list' ? 'list' : 'folder';
+    return value === 'list' || value === 'top' ? value : 'folder';
+  }
+
+  function shouldRepairBookmarkViewModeStorageValue(rawValue, normalizedValue) {
+    return typeof rawValue !== 'undefined' && rawValue !== normalizedValue;
+  }
+
+  function persistBookmarkViewMode(value) {
+    const mode = normalizeBookmarkViewMode(value);
+    const syncArea = chrome && chrome.storage && chrome.storage.sync
+      ? chrome.storage.sync
+      : storageArea;
+    if (!syncArea || typeof syncArea.set !== 'function') {
+      return false;
+    }
+    syncArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
+    if (chrome && chrome.storage && chrome.storage.local &&
+        chrome.storage.local !== syncArea) {
+      chrome.storage.local.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
+    }
+    return true;
+  }
+
+  function mirrorBookmarkViewModeLocally(value) {
+    if (!chrome || !chrome.storage || !chrome.storage.local ||
+        chrome.storage.local === storageArea) {
+      return false;
+    }
+    chrome.storage.local.set({
+      [BOOKMARK_VIEW_MODE_STORAGE_KEY]: normalizeBookmarkViewMode(value)
+    });
+    return true;
+  }
+
+  function settleInitialBookmarkViewModeReady() {
+    if (typeof resolveInitialBookmarkViewModeReady !== 'function') {
+      return;
+    }
+    resolveInitialBookmarkViewModeReady();
+    resolveInitialBookmarkViewModeReady = null;
+  }
+
+  function applyInitialBookmarkViewModeValue(rawValue, source, expectedRevision) {
+    try {
+      const mode = normalizeBookmarkViewMode(rawValue);
+      const applyResult = applyBookmarkViewMode(mode, {
+        expectedRevision,
+        ensureLoaded: true
+      });
+      if (!applyResult.applied) {
+        return;
+      }
+      if (shouldRepairBookmarkViewModeStorageValue(rawValue, mode) ||
+          (source === 'local-fallback' && typeof rawValue !== 'undefined')) {
+        persistBookmarkViewMode(mode);
+      } else {
+        mirrorBookmarkViewModeLocally(mode);
+      }
+    } finally {
+      settleInitialBookmarkViewModeReady();
+    }
+  }
+
+  function loadInitialBookmarkViewMode() {
+    if (!storageArea || typeof storageArea.get !== 'function') {
+      settleInitialBookmarkViewModeReady();
+      return;
+    }
+    const expectedRevision = bookmarkViewModeRevision;
+    const readLocalFallback = () => {
+      if (!localStorageArea || localStorageArea === storageArea ||
+          typeof localStorageArea.get !== 'function') {
+        applyInitialBookmarkViewModeValue(undefined, 'primary', expectedRevision);
+        return;
+      }
+      try {
+        localStorageArea.get([BOOKMARK_VIEW_MODE_STORAGE_KEY], (localResult) => {
+          const localValue = localResult
+            ? localResult[BOOKMARK_VIEW_MODE_STORAGE_KEY]
+            : undefined;
+          applyInitialBookmarkViewModeValue(
+            localValue,
+            'local-fallback',
+            expectedRevision
+          );
+        });
+      } catch (_error) {
+        applyInitialBookmarkViewModeValue(undefined, 'primary', expectedRevision);
+      }
+    };
+    try {
+      storageArea.get([BOOKMARK_VIEW_MODE_STORAGE_KEY], (result) => {
+        const stored = result ? result[BOOKMARK_VIEW_MODE_STORAGE_KEY] : undefined;
+        if (typeof stored === 'undefined' && localStorageArea !== storageArea) {
+          readLocalFallback();
+          return;
+        }
+        applyInitialBookmarkViewModeValue(stored, 'primary', expectedRevision);
+      });
+    } catch (_error) {
+      readLocalFallback();
+    }
+  }
+
+  function normalizeBookmarkTopbarSurfaceColor(value) {
+    if (NEWTAB_BOOKMARKS_TOPBAR &&
+        typeof NEWTAB_BOOKMARKS_TOPBAR.normalizeSurfaceColor === 'function') {
+      return NEWTAB_BOOKMARKS_TOPBAR.normalizeSurfaceColor(value);
+    }
+    const raw = String(value || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(raw) ? raw : '';
+  }
+
+  function persistBookmarkTopbarSurfaceColor(value) {
+    const color = normalizeBookmarkTopbarSurfaceColor(value);
+    const syncArea = chrome && chrome.storage && chrome.storage.sync
+      ? chrome.storage.sync
+      : storageArea;
+    if (!syncArea || typeof syncArea.set !== 'function') {
+      return false;
+    }
+    syncArea.set({ [BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]: color });
+    return true;
+  }
+
+  function applyBookmarkTopbarSurfaceColor(value, options) {
+    const config = options && typeof options === 'object' ? options : {};
+    if (Object.prototype.hasOwnProperty.call(config, 'expectedRevision') &&
+        config.expectedRevision !== bookmarkTopbarSurfaceColorRevision) {
+      return currentBookmarkTopbarSurfaceColor;
+    }
+    const color = normalizeBookmarkTopbarSurfaceColor(value);
+    if (color !== currentBookmarkTopbarSurfaceColor) {
+      bookmarkTopbarSurfaceColorRevision += 1;
+    }
+    currentBookmarkTopbarSurfaceColor = color;
+    if (bookmarkTopbarRuntime &&
+        typeof bookmarkTopbarRuntime.setSurfaceColor === 'function') {
+      bookmarkTopbarRuntime.setSurfaceColor(color);
+    }
+    if (config.updateMenu !== false) {
+      updateBookmarkModeMenu();
+    }
+    if (config.persist === true) {
+      persistBookmarkTopbarSurfaceColor(color);
+    }
+    return color;
+  }
+
+  function pickBookmarkTopbarSurfaceColor() {
+    if (!window || typeof window.EyeDropper !== 'function') {
+      showToast(t(
+        'bookmark_topbar_color_unsupported',
+        'Screen color picking is not supported in this browser'
+      ), true);
+      return Promise.resolve(false);
+    }
+    let request;
+    try {
+      request = new window.EyeDropper().open();
+    } catch (error) {
+      showToast(t('bookmark_topbar_color_failed', 'Could not pick a color. Try again.'), true);
+      return Promise.resolve(false);
+    }
+    return request.then((result) => {
+      const color = normalizeBookmarkTopbarSurfaceColor(result && result.sRGBHex);
+      if (!color) {
+        showToast(t('bookmark_topbar_color_failed', 'Could not pick a color. Try again.'), true);
+        return false;
+      }
+      applyBookmarkTopbarSurfaceColor(color, { persist: true });
+      showToast(t('bookmark_topbar_color_picked', 'Browser toolbar color matched'));
+      return true;
+    }).catch((error) => {
+      if (error && error.name === 'AbortError') {
+        return false;
+      }
+      showToast(t('bookmark_topbar_color_failed', 'Could not pick a color. Try again.'), true);
+      return false;
+    });
+  }
+
+  function resetBookmarkTopbarSurfaceColor() {
+    applyBookmarkTopbarSurfaceColor('', { persist: true });
+    showToast(t('bookmark_topbar_color_reset_done', 'Automatic colors restored'));
+  }
+
+  function handleBookmarkModeMenuAction(action) {
+    if (action === BOOKMARK_TOPBAR_PICK_COLOR_ACTION) {
+      pickBookmarkTopbarSurfaceColor();
+      return;
+    }
+    if (action === BOOKMARK_TOPBAR_RESET_COLOR_ACTION) {
+      resetBookmarkTopbarSurfaceColor();
+    }
   }
 
   function normalizeNewtabWidthMode(value) {
@@ -1097,10 +1317,21 @@
             missingSyncValues[key] = localResult[key];
           }
         });
-        if (Object.keys(missingSyncValues).length === 0) {
+        const missingKeys = Object.keys(missingSyncValues);
+        if (missingKeys.length === 0) {
           return;
         }
-        storageArea.set(missingSyncValues);
+        storageArea.get(missingKeys, (latestSyncResult) => {
+          const stillMissingSyncValues = {};
+          missingKeys.forEach((key) => {
+            if (typeof latestSyncResult[key] === 'undefined') {
+              stillMissingSyncValues[key] = missingSyncValues[key];
+            }
+          });
+          if (Object.keys(stillMissingSyncValues).length > 0) {
+            storageArea.set(stillMissingSyncValues);
+          }
+        });
       });
     });
   }
@@ -1834,7 +2065,8 @@
         sampleElement: bookmarkModeMenu && (bookmarkModeMenu.trigger || bookmarkModeMenu.control),
         minWidth: 42,
         minHeight: 42,
-        iconButton: true
+        iconButton: true,
+        disabled: isBookmarkTopbarMode()
       },
       {
         element: bookmarkPager,
@@ -2861,6 +3093,79 @@
     bookmarkHeading.textContent = t('bookmarks_heading', '书签');
   }
 
+  function isBookmarkTopbarMode() {
+    return currentBookmarkViewMode === 'top';
+  }
+
+  function getNewtabTopOccupiedInsetPx() {
+    return document.body &&
+      document.body.getAttribute('data-nt-top-occupied') === 'true'
+      ? BOOKMARK_TOPBAR_HEIGHT_PX
+      : 0;
+  }
+
+  function getNewtabViewportTopPaddingPx() {
+    return getNewtabTopOccupiedInsetPx() + Math.min(8, NEWTAB_FLOATING_TOP_GAP_PX);
+  }
+
+  function getBookmarkCascadeViewportTopPaddingPx() {
+    const occupiedTopInset = getNewtabTopOccupiedInsetPx();
+    return occupiedTopInset > 0
+      ? occupiedTopInset + BOOKMARK_CASCADE_TOPBAR_GAP_PX
+      : 8;
+  }
+
+  function setNewtabTopOccupied(occupied) {
+    if (!document.body) {
+      return;
+    }
+    const nextValue = occupied === true ? 'true' : 'false';
+    if (document.body.getAttribute('data-nt-top-occupied') === nextValue) {
+      return;
+    }
+    document.body.setAttribute('data-nt-top-occupied', nextValue);
+    updateSearchEntryLayout();
+    if (bookmarkCascadeRuntime &&
+        typeof bookmarkCascadeRuntime.positionLevels === 'function' &&
+        bookmarkCascadeRuntime.isOpen()) {
+      bookmarkCascadeRuntime.positionLevels();
+    }
+  }
+
+  function syncBookmarkSurfaceMode() {
+    if (!bookmarkTopbarRuntime) {
+      return;
+    }
+    if (isBookmarkTopbarMode()) {
+      bookmarkTopbarRuntime.activate();
+      setContentSectionVisible(bookmarkSection, false);
+      bookmarkTopbarRuntime.setVisible(
+        bookmarkCards.length > 0 && currentBookmarkCount > 0
+      );
+    } else {
+      bookmarkTopbarRuntime.deactivate();
+      setContentSectionVisible(
+        bookmarkSection,
+        bookmarkCards.length > 0 && currentBookmarkCount > 0
+      );
+    }
+  }
+
+  function setBookmarkSurfaceVisible(visible) {
+    const nextVisible = visible === true;
+    if (isBookmarkTopbarMode()) {
+      setContentSectionVisible(bookmarkSection, false);
+      if (bookmarkTopbarRuntime) {
+        bookmarkTopbarRuntime.setVisible(nextVisible && !zenModeEnabled);
+      }
+      return;
+    }
+    if (bookmarkTopbarRuntime) {
+      bookmarkTopbarRuntime.setVisible(false);
+    }
+    setContentSectionVisible(bookmarkSection, nextVisible);
+  }
+
   function updateBookmarkModeMenu() {
     if (bookmarkModeMenu && typeof bookmarkModeMenu.update === 'function') {
       bookmarkModeMenu.update();
@@ -2868,24 +3173,67 @@
     if (bookmarkGrid) {
       bookmarkGrid.setAttribute('data-view-mode', currentBookmarkViewMode);
     }
+    if (document.body) {
+      document.body.setAttribute('data-bookmark-view-mode', currentBookmarkViewMode);
+    }
+    syncBookmarkSurfaceMode();
   }
 
-  function setBookmarkViewMode(nextMode) {
+  function applyBookmarkViewMode(nextMode, options) {
+    const config = options && typeof options === 'object' ? options : {};
+    if (Object.prototype.hasOwnProperty.call(config, 'expectedRevision') &&
+        config.expectedRevision !== bookmarkViewModeRevision) {
+      return {
+        applied: false,
+        changed: false,
+        mode: currentBookmarkViewMode,
+        revision: bookmarkViewModeRevision
+      };
+    }
     const mode = normalizeBookmarkViewMode(nextMode);
-    if (currentBookmarkViewMode === mode) {
+    const changed = currentBookmarkViewMode !== mode;
+    if (!changed) {
       updateBookmarkModeMenu();
-      return;
+      if (config.ensureLoaded === true && !bookmarkLoadedOnce) {
+        bookmarkCurrentPage = 0;
+        bookmarkRenderSignature = '';
+        markBookmarkDataDirty();
+        loadBookmarks(config.force === true ? { force: true } : undefined);
+      }
+      return {
+        applied: true,
+        changed: false,
+        mode,
+        revision: bookmarkViewModeRevision
+      };
     }
     closeBookmarkCascadeMenu();
     currentBookmarkViewMode = mode;
+    bookmarkViewModeRevision += 1;
+    if (mode === 'top') {
+      bookmarkCurrentFolderId = bookmarkRootFolderId;
+    }
     bookmarkCurrentPage = 0;
     bookmarkRenderSignature = '';
     updateBookmarkModeMenu();
-    if (storageArea) {
-      storageArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
+    if (config.persist === true) {
+      persistBookmarkViewMode(mode);
     }
     markBookmarkDataDirty();
-    loadBookmarks({ force: true });
+    loadBookmarks(config.force === true ? { force: true } : undefined);
+    return {
+      applied: true,
+      changed: true,
+      mode,
+      revision: bookmarkViewModeRevision
+    };
+  }
+
+  function setBookmarkViewMode(nextMode) {
+    return applyBookmarkViewMode(nextMode, {
+      persist: true,
+      force: true
+    });
   }
 
   function navigateBookmarkFolder(targetId) {
@@ -2954,7 +3302,12 @@
       if (!label) {
         return;
       }
-      showTopActionTooltip(button, label, { placement: 'top' });
+      const inTopbar = Boolean(
+        bookmarkTopbarRuntime &&
+        bookmarkTopbarRuntime.element &&
+        bookmarkTopbarRuntime.element.contains(button)
+      );
+      showTopActionTooltip(button, label, { placement: inTopbar ? 'bottom' : 'top' });
     };
     button.addEventListener('pointerenter', showTooltip);
     button.addEventListener('pointerleave', hideTopActionTooltip);
@@ -3012,6 +3365,9 @@
     updateRecentHeading();
     updateBookmarkHeading();
     updateBookmarkPagerLabels();
+    if (bookmarkTopbarRuntime) {
+      bookmarkTopbarRuntime.updateLanguage(t('bookmark_view_mode_top', 'Top bookmarks bar'));
+    }
     updateBookmarkBreadcrumb();
     updateRecentModeMenu();
     updateBookmarkModeMenu();
@@ -3025,8 +3381,11 @@
     }
     if (inputParts && inputParts.input) {
       defaultPlaceholderText = t('search_placeholder', defaultPlaceholderText);
-      if (!siteSearchState) {
+      if (!siteSearchState && !localSearchScopeState) {
         inputParts.input.placeholder = defaultPlaceholderText;
+      }
+      if (localSearchScopeState) {
+        setLocalSearchScopePrefix(localSearchScopeState);
       }
     }
     updateModeBadge(inputParts && inputParts.input ? inputParts.input.value : '');
@@ -3421,19 +3780,18 @@
     if (changes[BOOKMARK_VIEW_MODE_STORAGE_KEY]) {
       const rawMode = changes[BOOKMARK_VIEW_MODE_STORAGE_KEY].newValue;
       const nextMode = normalizeBookmarkViewMode(rawMode);
-      if (storageArea && rawMode !== nextMode) {
-        storageArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: nextMode });
-      }
-      if (currentBookmarkViewMode === nextMode) {
-        updateBookmarkModeMenu();
+      if (shouldRepairBookmarkViewModeStorageValue(rawMode, nextMode)) {
+        persistBookmarkViewMode(nextMode);
       } else {
-        closeBookmarkCascadeMenu();
-        currentBookmarkViewMode = nextMode;
-        bookmarkCurrentPage = 0;
-        bookmarkRenderSignature = '';
-        updateBookmarkModeMenu();
-        markBookmarkDataDirty();
-        loadBookmarks({ force: true });
+        mirrorBookmarkViewModeLocally(nextMode);
+      }
+      applyBookmarkViewMode(nextMode, { force: true });
+    }
+    if (changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]) {
+      const rawColor = changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY].newValue;
+      const color = applyBookmarkTopbarSurfaceColor(rawColor, { updateMenu: true });
+      if (rawColor && rawColor !== color) {
+        persistBookmarkTopbarSurfaceColor(color);
       }
     }
     if (changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY]) {
@@ -3629,20 +3987,18 @@
         loadRecentSites();
       }
     });
-    storageArea.get([BOOKMARK_VIEW_MODE_STORAGE_KEY], (result) => {
-      const stored = result[BOOKMARK_VIEW_MODE_STORAGE_KEY];
-      const mode = normalizeBookmarkViewMode(stored);
-      const changed = currentBookmarkViewMode !== mode;
-      currentBookmarkViewMode = mode;
-      updateBookmarkModeMenu();
-      if (stored !== mode) {
-        storageArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
+    loadInitialBookmarkViewMode();
+    const bookmarkTopbarSurfaceColorReadRevision = bookmarkTopbarSurfaceColorRevision;
+    storageArea.get([BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY], (result) => {
+      if (bookmarkTopbarSurfaceColorRevision !== bookmarkTopbarSurfaceColorReadRevision) {
+        return;
       }
-      if (changed || !bookmarkLoadedOnce) {
-        bookmarkCurrentPage = 0;
-        bookmarkRenderSignature = '';
-        markBookmarkDataDirty();
-        loadBookmarks();
+      const rawColor = result[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
+      const color = applyBookmarkTopbarSurfaceColor(rawColor, {
+        updateMenu: true
+      });
+      if (rawColor && rawColor !== color) {
+        persistBookmarkTopbarSurfaceColor(color);
       }
     });
     storageArea.get([BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY], (result) => {
@@ -3907,6 +4263,11 @@
     applyNewtabShortcutsVisibility();
     syncSectionZenVisibility(bookmarkSection);
     syncSectionZenVisibility(recentSection);
+    if (bookmarkTopbarRuntime && isBookmarkTopbarMode()) {
+      bookmarkTopbarRuntime.setVisible(
+        !zenModeEnabled && bookmarkCards.length > 0 && currentBookmarkCount > 0
+      );
+    }
     if (zenModeEnabled) {
       closeBookmarkCascadeMenu();
       closeShortcutContextMenu();
@@ -4058,6 +4419,7 @@
     return imeKeyGuard.shouldIgnoreKeydown(event);
   }
   let siteSearchState = null;
+  let localSearchScopeState = null;
   let remoteSuggestionDebounceTimer = null;
   let tabs = [];
   let currentNewtabTabId = null;
@@ -4066,6 +4428,7 @@
   let suggestionRequestSeq = 0;
   let suggestionRequestWatchdogTimer = null;
   let searchResultPriorityMode = 'autocomplete';
+  let enabledSearchResultSourceTypes = ['topSite', 'bookmark', 'history'];
   let openTabQuickSwitchEnabled = true;
   let searchInputRef = null;
   let faviconRequestBlacklistItems = [];
@@ -4084,6 +4447,15 @@
       }
       if (changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY]) {
         searchResultPriorityMode = normalizeSearchResultPriority(changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY].newValue);
+      }
+      if (changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]) {
+        enabledSearchResultSourceTypes = normalizeEnabledSearchResultSourceTypes(
+          changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY].newValue
+        );
+        if (localSearchScopeState &&
+            !enabledSearchResultSourceTypes.includes(localSearchScopeState.sourceType)) {
+          clearLocalSearchScope();
+        }
       }
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
@@ -4147,6 +4519,7 @@
     BOOKMARK_COUNT_STORAGE_KEY,
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     BOOKMARK_CASCADE_DEBUG_STORAGE_KEY,
     TAB_RANK_SCORE_DEBUG_STORAGE_KEY,
@@ -5638,14 +6011,68 @@
   }
 
   function getSectionModeSelectOptions(config) {
-    const options = Array.isArray(config && config.options) ? config.options : [];
+    const rawOptions = config && typeof config.getOptions === 'function'
+      ? config.getOptions()
+      : (config && config.options);
+    const options = Array.isArray(rawOptions) ? rawOptions : [];
     return options.map((item) => {
       const value = String(item && item.value !== undefined ? item.value : '');
-      return {
+      const option = {
         value,
         label: t(item && item.labelKey, (item && item.fallback) || value)
       };
+      if (item && item.action) {
+        option.action = String(item.action);
+      }
+      if (item && item.iconClass) {
+        option.iconClass = String(item.iconClass);
+      }
+      if (item && item.dividerBefore) {
+        option.dividerBefore = true;
+      }
+      return option;
     });
+  }
+
+  function getBookmarkViewModeOptions() {
+    const options = [
+      {
+        value: 'folder',
+        labelKey: 'bookmark_view_mode_folder',
+        fallback: 'Multi-layer folder view'
+      },
+      {
+        value: 'list',
+        labelKey: 'bookmark_view_mode_list',
+        fallback: 'Multi-level list view'
+      },
+      {
+        value: 'top',
+        labelKey: 'bookmark_view_mode_top',
+        fallback: 'Top bookmarks bar'
+      }
+    ];
+    if (!isBookmarkTopbarMode()) {
+      return options;
+    }
+    options.push({
+      value: '__pick_bookmark_topbar_color__',
+      action: BOOKMARK_TOPBAR_PICK_COLOR_ACTION,
+      labelKey: 'bookmark_topbar_color_pick',
+      fallback: 'Pick browser toolbar color…',
+      iconClass: 'ri-dropper-line',
+      dividerBefore: true
+    });
+    if (currentBookmarkTopbarSurfaceColor) {
+      options.push({
+        value: '__reset_bookmark_topbar_color__',
+        action: BOOKMARK_TOPBAR_RESET_COLOR_ACTION,
+        labelKey: 'bookmark_topbar_color_reset',
+        fallback: 'Restore automatic colors',
+        iconClass: 'ri-refresh-line'
+      });
+    }
+    return options;
   }
 
   function createSectionModeSelect(config) {
@@ -5672,6 +6099,9 @@
       value: currentValue,
       ariaLabel: title,
       tooltip: title,
+      onAction: typeof config.onAction === 'function'
+        ? ({ action }) => config.onAction(action)
+        : null,
       options: getSectionModeSelectOptions(config)
     });
     const control = created.wrapper;
@@ -5705,7 +6135,15 @@
       if (sectionModeSelectController.isOpen(control)) {
         return;
       }
-      showTopActionTooltip(trigger, trigger.getAttribute('data-tooltip') || t('display_mode_title', 'Display mode'));
+      const placement = trigger.closest &&
+        trigger.closest('.x-nt-bookmarks-topbar')
+        ? 'bottom'
+        : 'top';
+      showTopActionTooltip(
+        trigger,
+        trigger.getAttribute('data-tooltip') || t('display_mode_title', 'Display mode'),
+        { placement }
+      );
     };
     trigger.addEventListener('mouseenter', showButtonTooltip);
     trigger.addEventListener('mouseleave', hideTopActionTooltip);
@@ -7300,18 +7738,8 @@
     menuTitleFallback: 'Display mode',
     getValue: () => currentBookmarkViewMode,
     onChange: setBookmarkViewMode,
-    options: [
-      {
-        value: 'folder',
-        labelKey: 'bookmark_view_mode_folder',
-        fallback: 'Multi-layer folder view'
-      },
-      {
-        value: 'list',
-        labelKey: 'bookmark_view_mode_list',
-        fallback: 'Multi-level list view'
-      }
-    ]
+    onAction: handleBookmarkModeMenuAction,
+    getOptions: getBookmarkViewModeOptions
   });
   const bookmarkPager = document.createElement('div');
   bookmarkPager.className = 'x-nt-bookmarks-pager';
@@ -7430,10 +7858,9 @@
     isLocalNetworkHost,
     getChromeFaviconUrl,
     getBrowserPageFaviconUrl,
-    ensureReady: ensureBookmarkTreeCache,
+    ensureReady: (forceReload) => bookmarksRuntime.ensureReady(forceReload),
     getItems: (folderId) => {
-      const id = String(folderId || '');
-      return id ? (bookmarkFolderItemsCache.get(id) || []) : [];
+      return bookmarksRuntime.getFolderItems(folderId);
     },
     navigateToUrl,
     openUrl: openUrlFromNewtabCard,
@@ -7446,10 +7873,22 @@
     hideTopActionTooltip,
     onItemPointerDown: handleBookmarkCascadeItemPointerDown,
     onItemContextMenu: handleBookmarkItemContextMenu,
-    shouldKeepOpenForExternalNode: isBookmarkContextMenuNode
+    shouldKeepOpenForExternalNode: isBookmarkContextMenuNode,
+    getViewportTopPadding: getBookmarkCascadeViewportTopPaddingPx
   });
   bookmarkSection.appendChild(bookmarkHeader);
   bookmarkSection.appendChild(bookmarkGrid);
+  bookmarkTopbarRuntime = NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar({
+    documentObj: document,
+    windowObj: window,
+    grid: bookmarkGrid,
+    modeControl: bookmarkModeMenu ? bookmarkModeMenu.control : null,
+    managerButton: bookmarkOpenManagerButton,
+    ariaLabel: t('bookmark_view_mode_top', 'Top bookmarks bar'),
+    onVisibilityChange: setNewtabTopOccupied
+  });
+  bookmarkTopbarRuntime.setSurfaceColor(currentBookmarkTopbarSurfaceColor);
+  syncBookmarkSurfaceMode();
   let bookmarkRenderSignature = '';
   let bookmarkLoadToken = 0;
   let bookmarkDataDirty = true;
@@ -7567,6 +8006,7 @@
     suggestionsContainer,
     suggestionsSurface,
     suggestionsOutline,
+    getTopInsetPx: getNewtabTopOccupiedInsetPx,
     constants: {
       minTopPx: SEARCH_LAYOUT_MIN_TOP_PX,
       minBottomPx: SEARCH_LAYOUT_MIN_BOTTOM_PX,
@@ -7643,6 +8083,9 @@
   }, { passive: false });
 
   function getBookmarkPageCount() {
+    if (isBookmarkTopbarMode()) {
+      return 1;
+    }
     const total = Array.isArray(bookmarkAllItems) ? bookmarkAllItems.length : 0;
     return Math.max(1, Math.ceil(total / getBookmarkLimit()));
   }
@@ -7650,6 +8093,10 @@
   function getBookmarkPageItems() {
     if (!Array.isArray(bookmarkAllItems) || bookmarkAllItems.length === 0) {
       return [];
+    }
+    if (isBookmarkTopbarMode()) {
+      bookmarkCurrentPage = 0;
+      return bookmarkAllItems.slice();
     }
     const pageCount = getBookmarkPageCount();
     bookmarkCurrentPage = Math.min(Math.max(0, bookmarkCurrentPage), pageCount - 1);
@@ -7687,6 +8134,10 @@
 
   function updateBookmarkGridHeightLock() {
     if (!bookmarkGrid) {
+      return;
+    }
+    if (isBookmarkTopbarMode()) {
+      bookmarkGrid.style.removeProperty('min-height');
       return;
     }
     const total = Array.isArray(bookmarkAllItems) ? bookmarkAllItems.length : 0;
@@ -7964,24 +8415,25 @@
   }
 
   function getBookmarkPageStartIndex() {
+    if (isBookmarkTopbarMode()) {
+      return 0;
+    }
     return Math.max(0, bookmarkCurrentPage * getBookmarkLimit());
   }
 
   function getBookmarkCardLayoutRect(card) {
-    if (!card || !bookmarkGrid || typeof card.offsetLeft !== 'number' ||
-        typeof card.offsetTop !== 'number') {
+    if (!card || !bookmarkGrid || typeof card.getBoundingClientRect !== 'function') {
       return null;
     }
-    const offsetParent = card.offsetParent && typeof card.offsetParent.getBoundingClientRect === 'function'
-      ? card.offsetParent
-      : bookmarkGrid;
-    const parentRect = typeof offsetParent.getBoundingClientRect === 'function'
-      ? offsetParent.getBoundingClientRect()
-      : { left: 0, top: 0 };
-    const width = Number(card.offsetWidth) || 0;
-    const height = Number(card.offsetHeight) || 0;
-    const left = parentRect.left + card.offsetLeft;
-    const top = parentRect.top + card.offsetTop;
+    const rect = card.getBoundingClientRect();
+    const left = Number(rect && rect.left);
+    const top = Number(rect && rect.top);
+    const width = Number(rect && rect.width);
+    const height = Number(rect && rect.height);
+    if (!Number.isFinite(left) || !Number.isFinite(top) ||
+        !Number.isFinite(width) || !Number.isFinite(height)) {
+      return null;
+    }
     return {
       left,
       top,
@@ -8214,8 +8666,13 @@
   }
 
   function createBookmarkCascadeDragPreview(state) {
+    const previewRoot = state && state.sourceKind === 'cascade' &&
+      state.card && typeof state.card.closest === 'function'
+      ? state.card.closest('.x-nt-bookmark-cascade-menu')
+      : null;
     return NEWTAB_BOOKMARK_DRAG.createPreview(state, {
       documentObj: document,
+      previewRoot,
       renderClosedFolderIcon: ({ bookmarkId, folderIcon }) => {
         folderIcon.innerHTML = getFigmaFolderSvg(`${bookmarkId}-drag-preview`);
         initFolderPathMorph(folderIcon);
@@ -8324,7 +8781,7 @@
         bookmarkId: state.bookmarkId,
         sourceParentId: state.parentId,
         targetFolderId: target.folderId,
-        nodeMap: bookmarkNodeMap
+        nodeMap: bookmarksRuntime.getNodeMap()
       })
     );
   }
@@ -8340,7 +8797,7 @@
         sourceIndex: state.originalIndex,
         targetParentId: target.folderId,
         targetIndex: target.index,
-        nodeMap: bookmarkNodeMap
+        nodeMap: bookmarksRuntime.getNodeMap()
       })
     );
   }
@@ -8599,6 +9056,15 @@
     if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
       return;
     }
+    const topbarScrollDelta = bookmarkTopbarRuntime &&
+      bookmarkTopbarRuntime.isActive() &&
+      bookmarkTopbarRuntime.isVisible()
+      ? bookmarkTopbarRuntime.autoScroll(pointerX, pointerY)
+      : 0;
+    if (topbarScrollDelta) {
+      updateBookmarkDragLayoutCache(state);
+      scheduleBookmarkDragMove(state, pointerX, pointerY);
+    }
     setBookmarkDragCardTransform(state, pointerX, pointerY);
     const pageSwitchDirection = getBookmarkDragPageSwitchDirection(pointerX, pointerY);
     if (pageSwitchDirection) {
@@ -8695,113 +9161,11 @@
     };
   }
 
-  function moveChromeBookmarkNode(bookmarkId, destination) {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.bookmarks || typeof chrome.bookmarks.move !== 'function' ||
-          !bookmarkId || !destination) {
-        reject(new Error('Chrome bookmarks.move is unavailable.'));
-        return;
-      }
-      const moveDestination = {
-        parentId: String(destination.parentId || '')
-      };
-      if (Number.isFinite(Number(destination.index))) {
-        moveDestination.index = Math.max(0, Math.round(Number(destination.index)));
-      }
-      chrome.bookmarks.move(String(bookmarkId), moveDestination, (node) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message || 'Failed to move bookmark.'));
-          return;
-        }
-        resolve(node);
-      });
-    });
-  }
-
-  function removeChromeBookmarkNode(bookmarkId, isFolder) {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.bookmarks || !bookmarkId) {
-        reject(new Error('Chrome bookmarks API is unavailable.'));
-        return;
-      }
-      const removeMethod = isFolder
-        ? chrome.bookmarks.removeTree
-        : chrome.bookmarks.remove;
-      if (typeof removeMethod !== 'function') {
-        reject(new Error('Chrome bookmark removal is unavailable.'));
-        return;
-      }
-      removeMethod.call(chrome.bookmarks, String(bookmarkId), () => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message || 'Failed to delete bookmark.'));
-          return;
-        }
-        resolve(true);
-      });
-    });
-  }
-
-  function createChromeBookmarkNode(details) {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.bookmarks ||
-          typeof chrome.bookmarks.create !== 'function') {
-        reject(new Error('Chrome bookmarks.create is unavailable.'));
-        return;
-      }
-      chrome.bookmarks.create(details, (node) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message || 'Failed to restore bookmark.'));
-          return;
-        }
-        resolve(node);
-      });
-    });
-  }
-
-  async function restoreChromeBookmarkSnapshot(snapshot, parentId, index) {
-    if (!snapshot || !parentId) {
-      throw new Error('Bookmark restore snapshot is incomplete.');
-    }
-    const details = {
-      parentId: String(parentId),
-      index: Math.max(0, Math.round(Number(index) || 0)),
-      title: String(snapshot.title || '')
-    };
-    if (snapshot.url) {
-      details.url = String(snapshot.url);
-    }
-    const createdNode = await createChromeBookmarkNode(details);
-    const createdId = String((createdNode && createdNode.id) || '');
-    if (!createdId) {
-      throw new Error('Chrome did not return the restored bookmark id.');
-    }
-    if (!snapshot.url && Array.isArray(snapshot.children)) {
-      for (let childIndex = 0; childIndex < snapshot.children.length; childIndex += 1) {
-        await restoreChromeBookmarkSnapshot(snapshot.children[childIndex], createdId, childIndex);
-      }
-    }
-    return createdNode;
-  }
-
-  function beginBookmarkControlledMutation() {
-    if (bookmarkControlledMutationDepth === 0) {
-      bookmarkControlledMutationEventDirty = false;
-    }
-    bookmarkControlledMutationDepth += 1;
-  }
-
-  function endBookmarkControlledMutation() {
-    bookmarkControlledMutationDepth = Math.max(0, bookmarkControlledMutationDepth - 1);
-    if (bookmarkControlledMutationDepth === 0) {
-      bookmarkControlledMutationEventDirty = false;
-    }
-  }
-
   function getBookmarkDeleteRecord(target) {
     if (!target || !target.bookmarkId) {
       return null;
     }
-    const node = bookmarkNodeMap.get(String(target.bookmarkId));
+    const node = bookmarksRuntime.getNode(target.bookmarkId);
     if (!node) {
       return null;
     }
@@ -8819,34 +9183,36 @@
       return false;
     }
     bookmarkMoveHistoryBusy = true;
-    beginBookmarkControlledMutation();
     const keepCascadeOpen = Boolean(
       target.sourceKind === 'cascade' &&
       bookmarkCascadeRuntime &&
       typeof bookmarkCascadeRuntime.isOpen === 'function' &&
       bookmarkCascadeRuntime.isOpen()
     );
-    ensureBookmarkTreeCache(false).then(() => {
-      const record = getBookmarkDeleteRecord(target);
-      if (!record) {
-        throw new Error('Bookmark snapshot is unavailable.');
-      }
-      queueBookmarkLayoutAnimation(record.bookmarkId);
-      return removeChromeBookmarkNode(record.bookmarkId, !record.snapshot.url).then(() => {
-        bookmarkMoveHistory.push(record);
-        markBookmarkTreeDirty({ preserveCascadeOpen: keepCascadeOpen });
-        loadBookmarks({ force: true });
-        if (keepCascadeOpen) {
-          refreshOpenBookmarkCascadeMenu();
+    bookmarksRuntime.runControlledMutation(() => {
+      return bookmarksRuntime.ensureReady(false).then(() => {
+        const record = getBookmarkDeleteRecord(target);
+        if (!record) {
+          throw new Error('Bookmark snapshot is unavailable.');
         }
-        return true;
+        queueBookmarkLayoutAnimation(record.bookmarkId);
+        return bookmarksRuntime.remove(record.bookmarkId, {
+          recursive: !record.snapshot.url
+        }).then(() => {
+          bookmarkMoveHistory.push(record);
+          markBookmarkTreeDirty({ preserveCascadeOpen: keepCascadeOpen });
+          loadBookmarks({ force: true });
+          if (keepCascadeOpen) {
+            refreshOpenBookmarkCascadeMenu();
+          }
+          return true;
+        });
       });
     }).catch((error) => {
       bookmarkPendingLayoutAnimation = null;
       console.warn('[Lumno] Failed to delete bookmark', error);
       showToast(t('bookmarks_delete_failed', 'Could not delete bookmark'), true);
     }).finally(() => {
-      endBookmarkControlledMutation();
       bookmarkMoveHistoryBusy = false;
     });
     return true;
@@ -8940,17 +9306,16 @@
     if (!destination) {
       return Promise.resolve(false);
     }
-    beginBookmarkControlledMutation();
-    return moveChromeBookmarkNode(state.bookmarkId, destination).then((movedNode) => {
-      return finishPersistedBookmarkMove(state, destination, movedNode);
+    return bookmarksRuntime.runControlledMutation(() => {
+      return bookmarksRuntime.move(state.bookmarkId, destination).then((movedNode) => {
+        return finishPersistedBookmarkMove(state, destination, movedNode);
+      });
     }).catch((error) => {
       console.warn('[Lumno] Failed to reorder bookmark', error);
       markBookmarkTreeDirty();
       loadBookmarks({ force: true });
       showToast(t('bookmarks_move_failed', 'Could not move bookmark'), true);
       return false;
-    }).finally(() => {
-      endBookmarkControlledMutation();
     });
   }
 
@@ -8959,7 +9324,7 @@
       return Promise.resolve(false);
     }
     const targetFolderId = String(target.folderId);
-    const targetItems = bookmarkFolderItemsCache.get(targetFolderId) || [];
+    const targetItems = bookmarksRuntime.getFolderItems(targetFolderId);
     const rawTargetIndex = target.kind === 'insertion' && Number.isFinite(Number(target.index))
       ? Number(target.index)
       : targetItems.length;
@@ -8980,17 +9345,16 @@
       parentId: targetFolderId,
       index: destinationIndex
     };
-    beginBookmarkControlledMutation();
-    return moveChromeBookmarkNode(state.bookmarkId, destination).then((movedNode) => {
-      return finishPersistedBookmarkMove(state, destination, movedNode);
+    return bookmarksRuntime.runControlledMutation(() => {
+      return bookmarksRuntime.move(state.bookmarkId, destination).then((movedNode) => {
+        return finishPersistedBookmarkMove(state, destination, movedNode);
+      });
     }).catch((error) => {
       console.warn('[Lumno] Failed to move bookmark across folders', error);
       markBookmarkTreeDirty();
       loadBookmarks({ force: true });
       showToast(t('bookmarks_move_failed', 'Could not move bookmark'), true);
       return false;
-    }).finally(() => {
-      endBookmarkControlledMutation();
     });
   }
 
@@ -9004,7 +9368,6 @@
       return false;
     }
     bookmarkMoveHistoryBusy = true;
-    beginBookmarkControlledMutation();
     const keepCascadeOpen = Boolean(
       bookmarkCascadeRuntime &&
       typeof bookmarkCascadeRuntime.isOpen === 'function' &&
@@ -9016,20 +9379,25 @@
           ? ''
           : String((record.runtime && record.runtime.currentBookmarkId) || record.bookmarkId || '')
       );
-      const deleteAction = isUndo
-        ? restoreChromeBookmarkSnapshot(record.snapshot, record.parentId, record.index).then((node) => {
-          if (record.runtime) {
-            record.runtime.currentBookmarkId = String((node && node.id) || '');
-          }
-        })
-        : removeChromeBookmarkNode(
-          String((record.runtime && record.runtime.currentBookmarkId) || ''),
-          !record.snapshot.url
-        ).then(() => {
-          if (record.runtime) {
-            record.runtime.currentBookmarkId = '';
-          }
-        });
+      const deleteAction = bookmarksRuntime.runControlledMutation(() => {
+        return isUndo
+          ? bookmarksRuntime.restore(record.snapshot, {
+            parentId: record.parentId,
+            index: record.index
+          }).then((node) => {
+            if (record.runtime) {
+              record.runtime.currentBookmarkId = String((node && node.id) || '');
+            }
+          })
+          : bookmarksRuntime.remove(
+            String((record.runtime && record.runtime.currentBookmarkId) || ''),
+            { recursive: !record.snapshot.url }
+          ).then(() => {
+            if (record.runtime) {
+              record.runtime.currentBookmarkId = '';
+            }
+          });
+      });
       deleteAction.then(() => {
         if (isUndo) {
           bookmarkMoveHistory.commitUndo();
@@ -9056,7 +9424,6 @@
         console.warn('[Lumno] Failed to restore bookmark deletion history', error);
         showToast(t('bookmarks_delete_failed', 'Could not delete bookmark'), true);
       }).finally(() => {
-        endBookmarkControlledMutation();
         bookmarkMoveHistoryBusy = false;
       });
       return true;
@@ -9072,7 +9439,9 @@
         targetIndex: target.index
       })
     };
-    moveChromeBookmarkNode(record.bookmarkId, destination).then(() => {
+    bookmarksRuntime.runControlledMutation(() => {
+      return bookmarksRuntime.move(record.bookmarkId, destination);
+    }).then(() => {
       if (isUndo) {
         bookmarkMoveHistory.commitUndo();
         showToast(formatMessage(
@@ -9098,7 +9467,6 @@
       console.warn('[Lumno] Failed to restore bookmark move history', error);
       showToast(t('bookmarks_move_failed', 'Could not move bookmark'), true);
     }).finally(() => {
-      endBookmarkControlledMutation();
       bookmarkMoveHistoryBusy = false;
     });
     return true;
@@ -9419,18 +9787,14 @@
       folderId: bookmarkCurrentFolderId,
       rootFolderId: bookmarkRootFolderId,
       viewMode: currentBookmarkViewMode,
-      menuMode: currentBookmarkViewMode === 'list'
+      menuMode: currentBookmarkViewMode === 'list' || isBookmarkTopbarMode()
     });
     syncOpenBookmarkCascadeAnchorVisual();
     if (!renderResult.changed) {
       if (normalizedItems.length === 0) {
-        if (isAtRoot) {
-          setContentSectionVisible(bookmarkSection, false);
-        } else {
-          setContentSectionVisible(bookmarkSection, true);
-        }
+        setBookmarkSurfaceVisible(!isAtRoot);
       } else {
-        setContentSectionVisible(bookmarkSection, true);
+        setBookmarkSurfaceVisible(true);
         updateBookmarkGridHeightLock();
         updateBookmarkSectionPosition();
       }
@@ -9439,17 +9803,13 @@
     }
     bookmarkRenderSignature = renderResult.signature;
     if (normalizedItems.length === 0) {
-      if (isAtRoot) {
-        setContentSectionVisible(bookmarkSection, false);
-      } else {
-        setContentSectionVisible(bookmarkSection, true);
-      }
+      setBookmarkSurfaceVisible(!isAtRoot);
       updateBookmarkGridHeightLock();
       updateBookmarkSectionPosition();
       updateBookmarkPagerState();
       return;
     }
-    setContentSectionVisible(bookmarkSection, true);
+    setBookmarkSurfaceVisible(true);
     updateBookmarkPagerState();
     updateBookmarkGridHeightLock();
     updateBookmarkSectionPosition();
@@ -9516,10 +9876,9 @@
   function markBookmarkTreeDirty(options) {
     const preserveCascadeOpen = Boolean(options && options.preserveCascadeOpen);
     bookmarkDataDirty = true;
-    bookmarkTreeCacheDirty = true;
-    bookmarkTreeCacheReady = false;
-    bookmarkTreeCacheLoadingPromise = null;
-    bookmarkFolderItemsCache.clear();
+    if (!options || options.skipRuntimeInvalidate !== true) {
+      bookmarksRuntime.invalidate();
+    }
     if (!preserveCascadeOpen) {
       closeBookmarkCascadeMenu();
     }
@@ -9606,7 +9965,9 @@
         return;
       }
       bookmarkCurrentPage = 0;
-      bookmarkAllItems = items.slice(0, Math.max(0, getBookmarkLimit()));
+      bookmarkAllItems = isBookmarkTopbarMode()
+        ? items.slice()
+        : items.slice(0, Math.max(0, getBookmarkLimit()));
       bookmarkRootTotalCount = bookmarkAllItems.length;
       bookmarkRootVisibleCount = bookmarkAllItems.length;
       bookmarkRenderSignature = '';
@@ -9644,7 +10005,7 @@
       bookmarkCurrentPage = 0;
       bookmarkRenderSignature = '';
       bookmarksView.clear();
-      setContentSectionVisible(bookmarkSection, false);
+      setBookmarkSurfaceVisible(false);
       bookmarkDataDirty = false;
       bookmarkLoadedOnce = true;
       updateBookmarkSectionPosition();
@@ -9662,7 +10023,7 @@
         bookmarkCurrentPage = 0;
         bookmarkRenderSignature = '';
         bookmarksView.clear();
-        setContentSectionVisible(bookmarkSection, false);
+        setBookmarkSurfaceVisible(false);
         bookmarkDataDirty = false;
         bookmarkLoadedOnce = true;
         updateBookmarkSectionPosition();
@@ -9686,7 +10047,13 @@
       renderCurrentBookmarkPage();
       playPendingBookmarkLayoutAnimation();
       if (isAtRoot) {
-        writeSectionCache(NEWTAB_BOOKMARK_CACHE_STORAGE_KEY, bookmarkAllItems.slice(0, getBookmarkLimit()));
+        const bookmarkCacheLimit = isBookmarkTopbarMode()
+          ? Math.min(200, bookmarkAllItems.length)
+          : getBookmarkLimit();
+        writeSectionCache(
+          NEWTAB_BOOKMARK_CACHE_STORAGE_KEY,
+          bookmarkAllItems.slice(0, bookmarkCacheLimit)
+        );
       }
       bookmarkDataDirty = false;
       bookmarkLoadedOnce = true;
@@ -10553,59 +10920,6 @@
     scheduleThemeAwareFaviconRescue();
   });
 
-  function rebuildBookmarkTreeCache(nodes) {
-    const cache = NEWTAB_BOOKMARKS_STORE.buildBookmarkFolderCache(nodes, { normalizeHost });
-    bookmarkNodeMap = cache.nodeMap || new Map();
-    bookmarkFolderItemsCache = cache.folderItemsCache || new Map();
-    const barNode = cache.rootNode || null;
-    if (!barNode) {
-      bookmarkTreeCacheReady = false;
-      return false;
-    }
-    bookmarkRootFolderId = String(cache.rootFolderId || barNode.id || '1');
-    bookmarkTreeCacheReady = true;
-    bookmarkTreeCacheDirty = false;
-    return true;
-  }
-
-  function ensureBookmarkTreeCache(forceReload) {
-    if (!chrome.bookmarks || !chrome.bookmarks.getTree) {
-      bookmarkFolderPath = [{ id: '1', title: t('bookmarks_heading', '书签') }];
-      return Promise.resolve(false);
-    }
-    if (!forceReload && bookmarkTreeCacheReady && !bookmarkTreeCacheDirty) {
-      return Promise.resolve(true);
-    }
-    if (bookmarkTreeCacheLoadingPromise) {
-      return bookmarkTreeCacheLoadingPromise;
-    }
-    bookmarkTreeCacheLoadingPromise = new Promise((resolve) => {
-      chrome.bookmarks.getTree((nodes) => {
-        let ok = false;
-        if (!chrome.runtime.lastError && Array.isArray(nodes) && nodes.length > 0) {
-          ok = rebuildBookmarkTreeCache(nodes);
-        } else {
-          bookmarkFolderItemsCache.clear();
-          bookmarkTreeCacheReady = false;
-        }
-        if (!ok) {
-          bookmarkFolderPath = [{ id: String(bookmarkRootFolderId || '1'), title: t('bookmarks_heading', '书签') }];
-        }
-        bookmarkTreeCacheLoadingPromise = null;
-        resolve(ok);
-      });
-    });
-    return bookmarkTreeCacheLoadingPromise;
-  }
-
-  function buildBookmarkFolderPath(folderId) {
-    return NEWTAB_BOOKMARKS_STORE.buildBookmarkFolderPath(folderId, {
-      nodeMap: bookmarkNodeMap,
-      rootId: bookmarkRootFolderId,
-      rootTitle: t('bookmarks_heading', '书签')
-    });
-  }
-
   function openBookmarkCascadeMenu(item, anchorElement, options) {
     if (bookmarkCascadeRuntime) {
       bookmarkCascadeRuntime.open(item, anchorElement, options);
@@ -10631,27 +10945,21 @@
   }
 
   function getTopBookmarks(limit, folderId) {
-    return new Promise((resolve) => {
-      const parsedLimit = Number.parseInt(limit, 10);
-      const safeLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
-      ensureBookmarkTreeCache(false).then((ready) => {
-        if (!ready) {
-          resolve([]);
-          return;
-        }
-        const rootId = String(bookmarkRootFolderId || '1');
-        const targetFolderId = String(folderId || bookmarkCurrentFolderId || rootId);
-        const targetNode = bookmarkNodeMap.get(targetFolderId) || bookmarkNodeMap.get(rootId);
-        if (!targetNode) {
-          bookmarkFolderPath = [{ id: rootId, title: t('bookmarks_heading', '书签') }];
-          resolve([]);
-          return;
-        }
-        bookmarkCurrentFolderId = String(targetNode.id || rootId);
-        bookmarkFolderPath = buildBookmarkFolderPath(bookmarkCurrentFolderId);
-        const cachedItems = bookmarkFolderItemsCache.get(bookmarkCurrentFolderId) || [];
-        resolve(safeLimit > 0 ? cachedItems.slice(0, safeLimit) : cachedItems);
-      });
+    const parsedLimit = Number.parseInt(limit, 10);
+    const safeLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
+    return bookmarksRuntime.readFolder(
+      folderId || bookmarkCurrentFolderId || bookmarkRootFolderId,
+      {
+        limit: safeLimit,
+        rootTitle: t('bookmarks_heading', '书签')
+      }
+    ).then((result) => {
+      bookmarkRootFolderId = String(result.rootFolderId || '1');
+      bookmarkCurrentFolderId = String(result.folderId || bookmarkRootFolderId);
+      bookmarkFolderPath = Array.isArray(result.path)
+        ? result.path
+        : [{ id: bookmarkRootFolderId, title: t('bookmarks_heading', '书签') }];
+      return Array.isArray(result.items) ? result.items : [];
     });
   }
 
@@ -11514,10 +11822,99 @@
     });
   }
 
+  function normalizeEnabledSearchResultSourceTypes(value) {
+    if (SETTINGS && typeof SETTINGS.normalizeSearchResultSourceTypes === 'function') {
+      return SETTINGS.normalizeSearchResultSourceTypes(value);
+    }
+    return ['topSite', 'bookmark', 'history'];
+  }
+
+  function getLocalSearchScopeCandidate(input, rules) {
+    if (!SEARCH_UTILS || typeof SEARCH_UTILS.findLocalSearchScope !== 'function') {
+      return null;
+    }
+    const scope = SEARCH_UTILS.findLocalSearchScope(input, rules);
+    if (!scope || !enabledSearchResultSourceTypes.includes(scope.sourceType)) {
+      return null;
+    }
+    return scope;
+  }
+
+  function getLocalSearchScopeLabel(scope) {
+    const sourceType = scope && scope.sourceType ? scope.sourceType : '';
+    if (sourceType === 'bookmark') {
+      return t('search_tag_bookmark', '书签');
+    }
+    if (sourceType === 'history') {
+      return t('search_tag_history', '历史');
+    }
+    if (sourceType === 'topSite') {
+      return t('search_tag_top_site', '常用');
+    }
+    return '';
+  }
+
+  function getLocalSearchScopeTabHintProvider(scope) {
+    const source = getLocalSearchScopeLabel(scope);
+    return {
+      name: source,
+      tabHintLabel: formatMessage(
+        'local_search_tab_hint',
+        '仅搜索{source}',
+        { source }
+      )
+    };
+  }
+
+  function setLocalSearchScopePrefix(scope) {
+    if (!inputModeController || !scope) {
+      return;
+    }
+    inputModeController.setPrefixText(
+      getLocalSearchScopeLabel(scope),
+      defaultTheme,
+      { animate: true }
+    );
+  }
+
+  function activateLocalSearchScope(scope) {
+    if (!scope || !enabledSearchResultSourceTypes.includes(scope.sourceType)) {
+      return false;
+    }
+    suggestionRequestSeq += 1;
+    localSearchScopeState = scope;
+    localSearchScopeTriggerState = null;
+    siteSearchState = null;
+    siteSearchTriggerState = null;
+    inlineSearchState = null;
+    inputParts.input.value = '';
+    latestRawQuery = '';
+    latestQuery = '';
+    clearAutocomplete();
+    setLocalSearchScopePrefix(scope);
+    clearSearchSuggestions();
+    return true;
+  }
+
+  function clearLocalSearchScope() {
+    if (!localSearchScopeState) {
+      return false;
+    }
+    suggestionRequestSeq += 1;
+    localSearchScopeState = null;
+    localSearchScopeTriggerState = null;
+    inlineSearchState = null;
+    clearSiteSearchPrefix();
+    clearAutocomplete();
+    return true;
+  }
+
   function activateSiteSearch(provider) {
     if (!provider) {
       return;
     }
+    localSearchScopeState = null;
+    localSearchScopeTriggerState = null;
     siteSearchState = provider;
     inlineSearchState = null;
     inputParts.input.value = '';
@@ -12149,6 +12546,7 @@
   function clearSearchSuggestions() {
     inlineSearchState = null;
     siteSearchTriggerState = null;
+    localSearchScopeTriggerState = null;
     clearSiteSearchTabHint();
     suggestionsView.clear();
     currentSuggestions = [];
@@ -12170,8 +12568,11 @@
         return;
       }
       const rawTagInput = (latestRawQuery || inputParts.input.value || '').trim();
-      const slashCommandModeActive = isSlashCommandInput(rawTagInput);
-      const siteSearchQueryModeActive = !slashCommandModeActive && Boolean(siteSearchState && String(query || '').trim());
+      const localSearchQueryModeActive = Boolean(localSearchScopeState && String(query || '').trim());
+      const slashCommandModeActive = !localSearchQueryModeActive && isSlashCommandInput(rawTagInput);
+      const siteSearchQueryModeActive = !localSearchQueryModeActive &&
+        !slashCommandModeActive &&
+        Boolean(siteSearchState && String(query || '').trim());
       const modeCommandActive = slashCommandModeActive && !siteSearchQueryModeActive && isModeCommand(rawTagInput);
       const zenCommandActive = slashCommandModeActive && !siteSearchQueryModeActive && isZenCommand(rawTagInput);
       const toggleCommandActive = modeCommandActive || zenCommandActive;
@@ -12206,7 +12607,7 @@
         commandMatches.forEach((command) => {
           preSuggestions.push(buildCommandSuggestion(command));
         });
-      } else if (!siteSearchQueryModeActive) {
+      } else if (!siteSearchQueryModeActive && !localSearchQueryModeActive) {
         const directUrlSuggestion = getDirectUrlSuggestion(query);
         if (directUrlSuggestion) {
           preSuggestions.push(directUrlSuggestion);
@@ -12229,7 +12630,8 @@
           renderSuggestions(lastSuggestionResponse, query);
         });
       }
-      const inlineCandidate = (!slashCommandModeActive && !siteSearchQueryModeActive && !toggleCommandActive && !hasCommand)
+      const inlineCandidate = (!localSearchQueryModeActive && !slashCommandModeActive &&
+          !siteSearchQueryModeActive && !toggleCommandActive && !hasCommand)
         ? getInlineSiteSearchCandidate(rawTagInput, providersForTags)
         : null;
       let inlineSuggestion = null;
@@ -12247,7 +12649,8 @@
         }
       }
 
-      const newTabSuggestion = (slashCommandModeActive || toggleCommandActive || siteSearchQueryModeActive)
+      const newTabSuggestion = (localSearchQueryModeActive || slashCommandModeActive ||
+          toggleCommandActive || siteSearchQueryModeActive)
         ? null
         : {
           type: 'newtab',
@@ -12276,9 +12679,15 @@
           })()
         : null;
 
-      let allSuggestions = slashCommandModeActive ? [...preSuggestions] : (siteSearchQueryModeActive
-        ? (siteSearchSuggestion ? [siteSearchSuggestion] : [])
-        : (toggleCommandActive ? [...preSuggestions] : [...preSuggestions, newTabSuggestion, ...suggestions]));
+      let allSuggestions = localSearchQueryModeActive
+        ? suggestions.filter((item) => (
+          item &&
+          localSearchScopeState &&
+          item.type === localSearchScopeState.sourceType
+        ))
+        : (slashCommandModeActive ? [...preSuggestions] : (siteSearchQueryModeActive
+          ? (siteSearchSuggestion ? [siteSearchSuggestion] : [])
+          : (toggleCommandActive ? [...preSuggestions] : [...preSuggestions, newTabSuggestion, ...suggestions])));
       allSuggestions.forEach((item) => {
         if (!item || !item.url) {
           return;
@@ -12307,7 +12716,7 @@
       const inlineEnabled = Boolean(inlineSuggestion);
       let siteSearchTrigger = null;
       const preferAutocompleteFirst = searchResultPriorityMode !== 'search';
-      if (!slashCommandModeActive && !toggleCommandActive && !hasCommand) {
+      if (!localSearchQueryModeActive && !slashCommandModeActive && !toggleCommandActive && !hasCommand) {
         if (!siteSearchState && !inlineEnabled && preferAutocompleteFirst) {
           strongNavigationMatch = promoteStrongNavigationMatch(allSuggestions, latestRawQuery.trim());
           if (strongNavigationMatch) {
@@ -12398,18 +12807,38 @@
             }
           : null;
         const resolvedProvider = siteSearchTrigger;
+        const resolvedLocalScope = !resolvedProvider
+          ? getLocalSearchScopeCandidate(rawTagInput, rules)
+          : null;
         siteSearchTriggerState = resolvedProvider
           ? { provider: resolvedProvider, rawInput: rawTagInput }
           : null;
+        localSearchScopeTriggerState = resolvedLocalScope
+          ? { scope: resolvedLocalScope, rawInput: rawTagInput }
+          : null;
         if (siteSearchTriggerState) {
           setSiteSearchTabHint(resolvedProvider);
+        } else if (localSearchScopeTriggerState) {
+          setSiteSearchTabHint(getLocalSearchScopeTabHintProvider(resolvedLocalScope));
         } else {
           clearSiteSearchTabHint();
+        }
+      } else if (localSearchQueryModeActive) {
+        clearAutocomplete();
+        inlineSearchState = null;
+        siteSearchTriggerState = null;
+        localSearchScopeTriggerState = null;
+        clearSiteSearchTabHint();
+        if (allSuggestions.length > 0) {
+          primaryHighlightIndex = 0;
+          primaryHighlightReason = 'localScope';
+          primarySuggestion = allSuggestions[0];
         }
       } else if (modeCommandActive) {
         clearAutocomplete();
         inlineSearchState = null;
         siteSearchTriggerState = null;
+        localSearchScopeTriggerState = null;
         clearSiteSearchTabHint();
         primaryHighlightIndex = 0;
         primaryHighlightReason = 'modeSwitch';
@@ -12417,6 +12846,7 @@
         clearAutocomplete();
         inlineSearchState = null;
         siteSearchTriggerState = null;
+        localSearchScopeTriggerState = null;
         clearSiteSearchTabHint();
         primaryHighlightIndex = 0;
         primaryHighlightReason = 'zenSwitch';
@@ -12424,6 +12854,7 @@
         clearAutocomplete();
         inlineSearchState = null;
         siteSearchTriggerState = null;
+        localSearchScopeTriggerState = null;
         clearSiteSearchTabHint();
         primaryHighlightIndex = 0;
         primaryHighlightReason = 'command';
@@ -12434,7 +12865,9 @@
       allSuggestions = limitSuggestionsForDisplay(allSuggestions);
       const emptyMessage = slashCommandModeActive && allSuggestions.length === 0
         ? t('slash_command_empty', '无匹配命令')
-        : '';
+        : (localSearchQueryModeActive && allSuggestions.length === 0
+          ? t('overlay_empty_result', '无匹配结果')
+          : '');
 
       const actionContextKey = getSuggestionActionContextKey({
         primaryHighlightIndex,
@@ -12472,7 +12905,8 @@
 
   function requestSuggestions(query, options) {
     latestQuery = query;
-    if (isSlashCommandInput(query)) {
+    const requestLocalSearchScope = localSearchScopeState;
+    if (!requestLocalSearchScope && isSlashCommandInput(query)) {
       renderSuggestions([], query);
       return;
     }
@@ -12502,7 +12936,9 @@
     chrome.runtime.sendMessage({
       action: 'getSearchSuggestions',
       query: requestQuery,
-      context: 'newtab'
+      context: 'newtab',
+      sourceTypes: requestLocalSearchScope ? [requestLocalSearchScope.sourceType] : undefined,
+      includeOpenTabs: requestLocalSearchScope ? false : undefined
     }, function(response) {
       if (suggestionRequestWatchdogTimer) {
         clearTimeout(suggestionRequestWatchdogTimer);
@@ -12517,6 +12953,9 @@
       }
       const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
       renderSuggestions(localSuggestions, requestQuery);
+      if (requestLocalSearchScope) {
+        return;
+      }
       refreshTabsForSearchContext(() => {});
       const remoteDelay = immediate ? 0 : Math.max(0, 120 - (Date.now() - requestStartedAt));
       remoteSuggestionDebounceTimer = setTimeout(function() {
@@ -12615,7 +13054,7 @@
       }
       latestRawQuery = rawValue;
       clearAutocomplete();
-      if (isSlashCommandInput(query)) {
+      if (!localSearchScopeState && isSlashCommandInput(query)) {
         latestQuery = query;
         renderSuggestions([], query);
         return;
@@ -12630,7 +13069,7 @@
     },
     onBlur: function(event) {
       const rawValue = event && event.target ? event.target.value : '';
-      if (!isSlashCommandInput(rawValue)) {
+      if (localSearchScopeState || !isSlashCommandInput(rawValue)) {
         return;
       }
       latestRawQuery = '';
@@ -12654,8 +13093,24 @@
         clearSiteSearch();
         return;
       }
+      if (event.key === 'Escape' && localSearchScopeState) {
+        event.preventDefault();
+        clearLocalSearchScope();
+        const fallbackQuery = inputParts.input.value.trim();
+        if (fallbackQuery) {
+          requestSuggestions(fallbackQuery, { immediate: true });
+        } else {
+          clearSearchSuggestions();
+        }
+        return;
+      }
       if (event.key === 'Backspace' && siteSearchState && !inputParts.input.value) {
         clearSiteSearch();
+        return;
+      }
+      if (event.key === 'Backspace' && localSearchScopeState && !inputParts.input.value) {
+        clearLocalSearchScope();
+        clearSearchSuggestions();
         return;
       }
       if (isImeCompositionEvent(event)) {
@@ -12713,7 +13168,7 @@
       if (!query) {
         return;
       }
-      const commandMatch = getCommandMatch(query);
+      const commandMatch = localSearchScopeState ? null : getCommandMatch(query);
       if (commandMatch && selectedIndex === -1) {
         if (commandMatch.command.type === 'commandNewTab') {
           chrome.runtime.sendMessage({ action: 'openNewTab' });
@@ -12724,11 +13179,11 @@
           return;
         }
       }
-      if (isModeCommand(query)) {
+      if (!localSearchScopeState && isModeCommand(query)) {
         setVisibleThemeMode(getNextThemeMode(currentThemeMode));
         return;
       }
-      if (isZenCommand(query)) {
+      if (!localSearchScopeState && isZenCommand(query)) {
         setZenModeEnabled(!zenModeEnabled);
         return;
       }
@@ -12795,8 +13250,11 @@
           }
         }
       }
-      if (isSlashCommandInput(query)) {
+      if (!localSearchScopeState && isSlashCommandInput(query)) {
         renderSuggestions([], query);
+        return;
+      }
+      if (localSearchScopeState) {
         return;
       }
       if (siteSearchState) {
@@ -13345,10 +13803,17 @@
   }
 
   if (storageArea) {
-    storageArea.get([SEARCH_RESULT_PRIORITY_STORAGE_KEY, OVERLAY_TAB_PRIORITY_STORAGE_KEY], (result) => {
+    storageArea.get([
+      SEARCH_RESULT_PRIORITY_STORAGE_KEY,
+      SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
+      OVERLAY_TAB_PRIORITY_STORAGE_KEY
+    ], (result) => {
       const raw = result ? result[SEARCH_RESULT_PRIORITY_STORAGE_KEY] : null;
       const nextMode = normalizeSearchResultPriority(raw);
       searchResultPriorityMode = nextMode;
+      enabledSearchResultSourceTypes = normalizeEnabledSearchResultSourceTypes(
+        result ? result[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY] : null
+      );
       openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(
         result ? result[OVERLAY_TAB_PRIORITY_STORAGE_KEY] : null
       );
@@ -13384,7 +13849,7 @@
     attachFaviconData,
     attachProviderIcon: attachInputModeProviderIcon,
     formatMessage,
-    isTabHintSuppressed: () => Boolean(siteSearchState)
+    isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
   siteSearchTabHint = inputModeController.tabHintElement;
 
@@ -13436,7 +13901,7 @@
   }, { passive: true });
 
   handleTabKey = function(event) {
-    if (siteSearchState) {
+    if (siteSearchState || localSearchScopeState) {
       return false;
     }
     const rawValue = inputParts.input.value;
@@ -13449,6 +13914,12 @@
       activateSiteSearch(siteSearchTriggerState.provider);
       return true;
     }
+    if (localSearchScopeTriggerState &&
+        localSearchScopeTriggerState.rawInput === triggerInput &&
+        localSearchScopeTriggerState.scope) {
+      event.preventDefault();
+      return activateLocalSearchScope(localSearchScopeTriggerState.scope);
+    }
     if (triggerInput) {
       event.preventDefault();
       const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
@@ -13460,11 +13931,26 @@
         activateSiteSearch(directProvider);
         return true;
       }
-      getSiteSearchProviders().then((items) => {
+      const cachedRules = window._x_extension_shortcut_rules_2024_unique_;
+      const directLocalScope = getLocalSearchScopeCandidate(triggerInput, cachedRules);
+      if (siteSearchProvidersCache && directLocalScope) {
+        activateLocalSearchScope(directLocalScope);
+        return true;
+      }
+      Promise.all([getSiteSearchProviders(), getShortcutRules()]).then(([items, rules]) => {
+        if (siteSearchState || localSearchScopeState ||
+            String(inputParts.input.value || '').trim() !== triggerInput) {
+          return;
+        }
         const asyncTopSiteMatch = getTopSiteMatchCandidate(currentSuggestions, triggerInput);
         const asyncProvider = getSiteSearchTriggerCandidate(triggerInput, items, asyncTopSiteMatch);
         if (asyncProvider) {
           activateSiteSearch(asyncProvider);
+          return;
+        }
+        const asyncLocalScope = getLocalSearchScopeCandidate(triggerInput, rules);
+        if (asyncLocalScope) {
+          activateLocalSearchScope(asyncLocalScope);
           return;
         }
         if (autocompleteState && autocompleteState.completion) {
@@ -13644,6 +14130,9 @@
   document.body.insertBefore(suggestionsSurface, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsOutline, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsContainer, newtabUpdateNoticeAnchor);
+  if (bookmarkTopbarRuntime) {
+    bookmarkTopbarRuntime.mount(document.body);
+  }
   bottomDockRuntime.mount(document.body);
   if (wallpaperControl) {
     document.body.appendChild(wallpaperControl);
@@ -13679,63 +14168,32 @@
         scheduleRecentReloadIfVisible();
       });
     }
-    if (chrome.bookmarks) {
-      const bindBookmarkEvent = (eventName) => {
-        const eventTarget = chrome.bookmarks[eventName];
-        if (!eventTarget || !eventTarget.addListener) {
-          return;
-        }
-        eventTarget.addListener(() => {
-          const invalidatesBookmarkMoveHistory = (
-            eventName === 'onCreated' ||
-            eventName === 'onRemoved' ||
-            eventName === 'onMoved' ||
-            eventName === 'onChildrenReordered' ||
-            eventName === 'onImportEnded'
-          );
-          const isControlledBookmarkMutation = bookmarkControlledMutationDepth > 0 && (
-            eventName === 'onCreated' ||
-            eventName === 'onRemoved' ||
-            eventName === 'onMoved' ||
-            eventName === 'onChildrenReordered'
-          );
-          if (isControlledBookmarkMutation) {
-            if (!bookmarkControlledMutationEventDirty) {
-              bookmarkControlledMutationEventDirty = true;
-              const preserveCascadeOpen = Boolean(
-                bookmarkCascadeRuntime &&
-                typeof bookmarkCascadeRuntime.isOpen === 'function' &&
-                bookmarkCascadeRuntime.isOpen()
-              );
-              markBookmarkTreeDirty({ preserveCascadeOpen });
-            }
-            return;
-          }
-          if (invalidatesBookmarkMoveHistory) {
-            bookmarkMoveHistory.clear();
-          }
-          const shouldRefreshOpenCascade = (
-            eventName === 'onMoved' ||
-            eventName === 'onChildrenReordered'
-          ) && Boolean(
-            bookmarkCascadeRuntime &&
-            typeof bookmarkCascadeRuntime.isOpen === 'function' &&
-            bookmarkCascadeRuntime.isOpen()
-          );
-          markBookmarkTreeDirty({ preserveCascadeOpen: shouldRefreshOpenCascade });
-          scheduleBookmarkReloadIfVisible();
-          if (shouldRefreshOpenCascade) {
-            refreshOpenBookmarkCascadeMenu();
-          }
+    bookmarksRuntime.subscribe((change) => {
+      const cascadeOpen = Boolean(
+        bookmarkCascadeRuntime &&
+        typeof bookmarkCascadeRuntime.isOpen === 'function' &&
+        bookmarkCascadeRuntime.isOpen()
+      );
+      if (change.isControlled) {
+        markBookmarkTreeDirty({
+          preserveCascadeOpen: cascadeOpen,
+          skipRuntimeInvalidate: true
         });
-      };
-      bindBookmarkEvent('onCreated');
-      bindBookmarkEvent('onRemoved');
-      bindBookmarkEvent('onChanged');
-      bindBookmarkEvent('onMoved');
-      bindBookmarkEvent('onChildrenReordered');
-      bindBookmarkEvent('onImportEnded');
-    }
+        return;
+      }
+      if (change.invalidatesHistory) {
+        bookmarkMoveHistory.clear();
+      }
+      const shouldRefreshOpenCascade = change.shouldRefreshCascade && cascadeOpen;
+      markBookmarkTreeDirty({
+        preserveCascadeOpen: shouldRefreshOpenCascade,
+        skipRuntimeInvalidate: true
+      });
+      scheduleBookmarkReloadIfVisible();
+      if (shouldRefreshOpenCascade) {
+        refreshOpenBookmarkCascadeMenu();
+      }
+    });
   }
 
   bindRecentAndBookmarkChangeListeners();
@@ -13754,6 +14212,7 @@
     bootstrapInitialWallpaperOverlay(),
     bootstrapInitialWallpaperEffect(),
     bootstrapInitialNewtabFavicon(),
+    initialBookmarkViewModeReadyPromise,
     loadZenMode(),
     loadSearchBlacklistItems(),
     loadFaviconRequestBlacklistItems(),

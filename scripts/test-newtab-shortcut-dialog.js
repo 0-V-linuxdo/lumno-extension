@@ -258,10 +258,10 @@ async function run() {
   assert.strictEqual(cancelButton.disabled, false);
   assert.strictEqual(iconUploadTile.getAttribute('aria-label'), 'Choose image');
   assert.strictEqual(iconUploadTile.getAttribute('data-has-icon'), 'false');
-  assert.ok(
-    iconInfoDescription.textContent.includes('chrome.storage.sync') &&
-      iconInfoDescription.textContent.includes('4096 × 4096 px'),
-    'the accessible info description should explain why local icons do not sync'
+  assert.strictEqual(
+    iconInfoDescription.textContent,
+    'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.',
+    'the accessible info description should concisely cover format, recommended shape, and local storage'
   );
   assert.strictEqual(
     iconInfoButton.className.includes('x-nt-appearance-info-button'),
@@ -270,10 +270,10 @@ async function run() {
   );
   assert.strictEqual(tooltipBindings.length, 2, 'shared Tooltip should bind the info trigger and upload tile');
   assert.strictEqual(tooltipBindings[0].target, iconInfoButton);
-  assert.ok(
-    tooltipBindings[0].getText().includes('chrome.storage.sync') &&
-      tooltipBindings[0].getText().includes('4096 × 4096 px'),
-    'the shared Tooltip should resolve the local-only storage explanation'
+  assert.strictEqual(
+    tooltipBindings[0].getText(),
+    'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.',
+    'the shared Tooltip should use the concise icon guidance'
   );
   assert.strictEqual(tooltipBindings[1].target, iconUploadTile);
   assert.strictEqual(tooltipBindings[1].getText(), 'Choose image');

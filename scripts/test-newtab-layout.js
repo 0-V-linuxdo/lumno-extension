@@ -217,6 +217,7 @@ function createFixture(options) {
     suggestionsContainer,
     suggestionsSurface,
     suggestionsOutline,
+    getTopInsetPx: () => Number(config.topInsetPx) || 0,
     constants: {
       minTopPx: 28,
       minBottomPx: 20,
@@ -256,6 +257,26 @@ function testPreservesSearchTopDuringRestoreLayoutPass() {
 }
 
 testPreservesSearchTopDuringRestoreLayoutPass();
+
+function testOccupiedTopSurfaceShiftsMinimumSearchInset() {
+  const { body, controller } = createFixture({
+    innerHeight: 460,
+    topInsetPx: 36,
+    constants: {
+      shortViewportMaxHeightPx: 680,
+      shortMinTopPx: 44
+    }
+  });
+
+  controller.updateSearchEntryLayout();
+
+  assert.ok(
+    Number.parseFloat(body.style.getPropertyValue('padding-top')) >= 80,
+    'short viewports should reserve the occupied top surface plus the normal search gap'
+  );
+}
+
+testOccupiedTopSurfaceShiftsMinimumSearchInset();
 
 function testDockRuntimeOwnsBottomDockComponentParts() {
   assert.ok(
@@ -589,8 +610,8 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
   );
   assert.match(
     newtabHtml,
-    /@media \(max-width:\s*640px\)[\s\S]*?body\.x-nt-mobile-flow\s*\{[\s\S]*?padding-top:\s*max\(48px,\s*env\(safe-area-inset-top\)\);[\s\S]*?padding-inline:\s*max\(24px,\s*env\(safe-area-inset-left\)\)\s*max\(24px,\s*env\(safe-area-inset-right\)\);/,
-    'mobile flow should keep a 48px top inset and 24px horizontal insets'
+    /@media \(max-width:\s*640px\)[\s\S]*?body\.x-nt-mobile-flow\s*\{[\s\S]*?padding-top:\s*max\([\s\S]*?48px,[\s\S]*?var\(--x-nt-top-occupied-inset,[\s\S]*?env\(safe-area-inset-top\)[\s\S]*?\);[\s\S]*?padding-inline:\s*max\(24px,\s*env\(safe-area-inset-left\)\)\s*max\(24px,\s*env\(safe-area-inset-right\)\);/,
+    'mobile flow should keep its touch inset while respecting an occupied top surface'
   );
   assert.match(
     newtabHtml,

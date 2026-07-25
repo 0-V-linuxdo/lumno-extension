@@ -3,6 +3,7 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const {
+  createPreview,
   createSession,
   getFloatingPreviewPosition,
   getGridInsertionTarget,
@@ -77,6 +78,103 @@ sourceItems.push({ id: 'later' });
 sourcePageIds.push('later');
 assert.strictEqual(session.originalAllItems.length, 2);
 assert.strictEqual(session.originalPageCardIds.length, 2);
+
+const previewAttributes = new Map([
+  ['data-active', 'true'],
+  ['data-bookmark-context-menu-open', 'true'],
+  ['data-bookmark-copy-action-visible', 'true'],
+  ['data-hover-suppressed', 'true']
+]);
+const previewClasses = new Set([
+  'x-nt-bookmark-cascade-item',
+  'x-nt-bookmark-card--hover',
+  'x-nt-bookmark-card--folder-expanded'
+]);
+const clonedPreviewActions = [
+  {
+    removed: false,
+    remove() {
+      this.removed = true;
+    }
+  }
+];
+const previewNode = {
+  classList: {
+    add(...names) {
+      names.forEach((name) => previewClasses.add(name));
+    },
+    remove(...names) {
+      names.forEach((name) => previewClasses.delete(name));
+    }
+  },
+  querySelector() {
+    return null;
+  },
+  querySelectorAll(selector) {
+    if (selector === '.x-nt-bookmark-copy-action, .x-nt-bookmark-cascade-copy-trigger') {
+      return clonedPreviewActions;
+    }
+    return [];
+  },
+  removeAttribute(name) {
+    previewAttributes.delete(name);
+  },
+  setAttribute(name, value) {
+    previewAttributes.set(name, String(value));
+  },
+  style: {}
+};
+const previewSourceCard = {
+  cloneNode() {
+    return previewNode;
+  },
+  getBoundingClientRect() {
+    return createRect(120, 180, 240, 32);
+  }
+};
+const documentBody = {
+  children: [],
+  appendChild(child) {
+    this.children.push(child);
+    child.parentNode = this;
+  }
+};
+const cascadePreviewRoot = {
+  children: [],
+  appendChild(child) {
+    this.children.push(child);
+    child.parentNode = this;
+  }
+};
+const previewSession = {
+  card: previewSourceCard,
+  isFolder: false,
+  sourceKind: 'cascade'
+};
+const cascadePreview = createPreview(previewSession, {
+  documentObj: { body: documentBody },
+  previewRoot: cascadePreviewRoot
+});
+assert.strictEqual(cascadePreview, previewNode);
+assert.deepStrictEqual(cascadePreviewRoot.children, [previewNode]);
+assert.deepStrictEqual(
+  documentBody.children,
+  [],
+  'a cascade drag preview should stay inside the cascade overlay stacking context'
+);
+assert.strictEqual(previewClasses.has('x-nt-bookmark-cascade-drag-preview'), true);
+assert.strictEqual(previewAttributes.get('data-bookmark-drag-preview'), 'true');
+assert.strictEqual(previewAttributes.has('data-active'), false);
+assert.strictEqual(previewAttributes.has('data-bookmark-context-menu-open'), false);
+assert.strictEqual(previewAttributes.has('data-bookmark-copy-action-visible'), false);
+assert.strictEqual(previewAttributes.has('data-hover-suppressed'), false);
+assert.strictEqual(previewClasses.has('x-nt-bookmark-card--hover'), false);
+assert.strictEqual(previewClasses.has('x-nt-bookmark-card--folder-expanded'), false);
+assert.strictEqual(
+  clonedPreviewActions.every((element) => element.removed),
+  true,
+  'drag previews should not clone copy controls from their source card'
+);
 
 assert.deepStrictEqual(
   getFloatingPreviewPosition({

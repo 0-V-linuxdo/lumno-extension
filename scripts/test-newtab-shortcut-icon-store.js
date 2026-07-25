@@ -21,7 +21,6 @@ function createMemoryStorage(initialData) {
 }
 
 function testSourceValidation() {
-  assert.strictEqual(iconStoreApi.MAX_SOURCE_BYTES, 1024 * 1024);
   assert.strictEqual(iconStoreApi.MAX_SOURCE_DIMENSION, 4096);
   assert.strictEqual(iconStoreApi.OUTPUT_SIZE, 128);
   assert.strictEqual(iconStoreApi.isAcceptedMimeType('image/png'), true);
@@ -31,12 +30,13 @@ function testSourceValidation() {
     () => iconStoreApi.validateSourceFile({ type: 'image/svg+xml', size: 120 }),
     (error) => error && error.code === 'unsupported-type'
   );
-  assert.throws(
-    () => iconStoreApi.validateSourceFile({
+  assert.strictEqual(
+    iconStoreApi.validateSourceFile({
       type: 'image/png',
-      size: iconStoreApi.MAX_SOURCE_BYTES + 1
+      size: (1024 * 1024) + 1
     }),
-    (error) => error && error.code === 'file-too-large'
+    true,
+    'source images larger than 1 MB should be accepted before normalization'
   );
   assert.throws(
     () => iconStoreApi.validateSourceDimensions(4097, 128),

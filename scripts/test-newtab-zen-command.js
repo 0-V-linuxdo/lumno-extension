@@ -37,7 +37,7 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /if \(isZenCommand\(query\)\) \{[\s\S]*?setZenModeEnabled\(!zenModeEnabled\);/,
+  /if \((?:!localSearchScopeState && )?isZenCommand\(query\)\) \{[\s\S]*?setZenModeEnabled\(!zenModeEnabled\);/,
   'pressing Enter on /zen should toggle Zen mode'
 );
 
@@ -49,7 +49,7 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /bootstrapInitialNewtabFavicon\(\),\s*loadZenMode\(\),/,
+  /Promise\.all\(\[[\s\S]*?bootstrapInitialNewtabFavicon\(\),[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.then/,
   'New Tab should restore Zen mode before marking the page ready'
 );
 

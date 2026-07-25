@@ -499,6 +499,39 @@ async function run() {
       throw new Error('network disabled in background search test');
     }
   });
+
+  const bookmarkOnlySuggestions = await context.__testGetSearchSuggestions('github', {
+    sourceTypes: ['bookmark'],
+    includeOpenTabs: false
+  });
+  assert.ok(
+    bookmarkOnlySuggestions.length > 0 &&
+      bookmarkOnlySuggestions.every((item) => item && item.type === 'bookmark'),
+    'request-scoped bookmark search should not mix history, top sites, or open tabs'
+  );
+
+  const historyOnlySuggestions = await context.__testGetSearchSuggestions('github', {
+    sourceTypes: ['history'],
+    includeOpenTabs: false
+  });
+  assert.ok(
+    historyOnlySuggestions.length > 0 &&
+      historyOnlySuggestions.every((item) => item && item.type === 'history'),
+    'request-scoped history search should only return history suggestions'
+  );
+
+  const topSiteOnlyResponse = await sendBackgroundMessage(messageListeners, {
+    action: 'getSearchSuggestions',
+    query: 'github',
+    sourceTypes: ['topSite'],
+    includeOpenTabs: false
+  }, 1000);
+  assert.ok(
+    topSiteOnlyResponse &&
+      topSiteOnlyResponse.suggestions.length > 0 &&
+      topSiteOnlyResponse.suggestions.every((item) => item && item.type === 'topSite'),
+    'message-scoped frequent-site search should only return top-site suggestions'
+  );
   assert.strictEqual(
     typeof context.__testGetSearchSuggestions,
     'function',

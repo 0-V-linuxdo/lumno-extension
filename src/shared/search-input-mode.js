@@ -195,6 +195,7 @@
 
     let baseInputPaddingLeft = null;
     let inputModePrefixAnimationFrame = null;
+    let layoutResizeObserver = null;
     let destroyed = false;
 
     const siteSearchPrefix = applyNoTranslate(doc.createElement('span'));
@@ -324,9 +325,7 @@
         return;
       }
       let totalReserve = rightReserveBase;
-      const badgeElement = typeof config.getModeBadgeElement === 'function'
-        ? config.getModeBadgeElement()
-        : config.modeBadgeElement;
+      const badgeElement = getModeBadgeElement();
       if (isElementVisible(badgeElement)) {
         const badgeWidth = Math.ceil(badgeElement.getBoundingClientRect().width || 0);
         totalReserve = Math.max(totalReserve, rightAnchorOffset + badgeWidth + 12);
@@ -336,6 +335,12 @@
         totalReserve = Math.max(totalReserve, rightAnchorOffset + hintWidth + 12);
       }
       setInputStyle(input, 'padding-right', `${totalReserve}px`);
+    }
+
+    function getModeBadgeElement() {
+      return typeof config.getModeBadgeElement === 'function'
+        ? config.getModeBadgeElement()
+        : config.modeBadgeElement;
     }
 
     function getBaseInputPaddingLeft() {
@@ -503,7 +508,11 @@
 
     function renderTabHint(provider) {
       const site = getSiteSearchDisplayName(provider);
-      const label = formatMessage('site_search_tab_hint', '使用 {site} 搜索', { site });
+      const explicitLabel = provider && provider.tabHintLabel
+        ? String(provider.tabHintLabel).trim()
+        : '';
+      const label = explicitLabel ||
+        formatMessage('site_search_tab_hint', '使用 {site} 搜索', { site });
       siteSearchTabHint.textContent = '';
       const keyLabel = applyNoTranslate(doc.createElement('span'));
       keyLabel.textContent = 'Tab';
@@ -574,6 +583,16 @@
       updateLayout();
     }
 
+    if (win && typeof win.ResizeObserver === 'function') {
+      layoutResizeObserver = new win.ResizeObserver(updateLayout);
+      layoutResizeObserver.observe(siteSearchPrefix);
+      layoutResizeObserver.observe(siteSearchTabHint);
+      const badgeElement = getModeBadgeElement();
+      if (badgeElement) {
+        layoutResizeObserver.observe(badgeElement);
+      }
+    }
+
     if (win && typeof win.addEventListener === 'function') {
       win.addEventListener('resize', onResize);
     }
@@ -586,6 +605,10 @@
       }
       if (win && typeof win.removeEventListener === 'function') {
         win.removeEventListener('resize', onResize);
+      }
+      if (layoutResizeObserver) {
+        layoutResizeObserver.disconnect();
+        layoutResizeObserver = null;
       }
       if (siteSearchPrefix && siteSearchPrefix.parentNode) {
         siteSearchPrefix.parentNode.removeChild(siteSearchPrefix);

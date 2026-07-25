@@ -104,6 +104,9 @@
     const shouldKeepOpenForExternalNode = getFunction(config, 'shouldKeepOpenForExternalNode', function() {
       return false;
     });
+    const getViewportTopPadding = getFunction(config, 'getViewportTopPadding', function() {
+      return 8;
+    });
 
     let bookmarkCascadeMenu = null;
     let bookmarkCascadeAnchor = null;
@@ -864,6 +867,7 @@
         return;
       }
       const viewport = getBookmarkCascadeViewport();
+      const viewportTopPadding = Math.max(8, Number(getViewportTopPadding()) || 8);
       if (entry.levelIndex <= 0) {
         const anchorRect = getBookmarkCascadeElementRect(bookmarkCascadeAnchor, {
           ignoreElementTranslate: true
@@ -876,7 +880,8 @@
           menuRect: levelRect,
           viewport,
           spacing: 8,
-          viewportPadding: 8
+          viewportPadding: 8,
+          viewportTopPadding
         });
         entry.placement = placement;
         applyBookmarkCascadePlacement(entry.levelElement, placement);
@@ -893,7 +898,8 @@
         menuRect: levelRect,
         viewport,
         spacing: BOOKMARK_CASCADE_SUBMENU_GAP_PX,
-        viewportPadding: 8
+        viewportPadding: 8,
+        viewportTopPadding
       });
       entry.placement = placement;
       applyBookmarkCascadePlacement(entry.levelElement, placement);

@@ -515,6 +515,18 @@
       return Array.isArray(targets) ? targets : [];
     }
 
+    function clearTargetTone(element) {
+      if (!element) {
+        return;
+      }
+      element.removeAttribute('data-wallpaper-ink');
+      element.removeAttribute('data-wallpaper-icon-bg');
+      element.removeAttribute('data-wallpaper-overlay-cover');
+      element.style.removeProperty('--x-nt-wallpaper-local-luma');
+      clearForcedIconBackgroundStyles(element);
+      clearAdaptiveToneStyles(element);
+    }
+
     function clear(options) {
       if (toneFrame) {
         cancelFrame(toneFrame);
@@ -524,12 +536,7 @@
         if (!target || !target.element) {
           return;
         }
-        target.element.removeAttribute('data-wallpaper-ink');
-        target.element.removeAttribute('data-wallpaper-icon-bg');
-        target.element.removeAttribute('data-wallpaper-overlay-cover');
-        target.element.style.removeProperty('--x-nt-wallpaper-local-luma');
-        clearForcedIconBackgroundStyles(target.element);
-        clearAdaptiveToneStyles(target.element);
+        clearTargetTone(target.element);
       });
       if (!options || options.updateWordmark !== false) {
         applyWordmarkThemeAppearance();
@@ -768,7 +775,14 @@
       const overlayLuminance = clampNumber(getOverlayLuminance(), 0, 1);
       const themeMode = getDocumentThemeMode();
       getToneTargets().forEach((target) => {
-        if (!target || !target.element || !target.sampleElement) {
+        if (!target || !target.element) {
+          return;
+        }
+        if (target.disabled === true) {
+          clearTargetTone(target.element);
+          return;
+        }
+        if (!target.sampleElement) {
           return;
         }
         const rect = target.sampleElement.getBoundingClientRect();
@@ -778,12 +792,7 @@
             rect.left >= viewport.width ||
             rect.bottom <= 0 ||
             rect.top >= viewport.height) {
-          target.element.removeAttribute('data-wallpaper-ink');
-          target.element.removeAttribute('data-wallpaper-icon-bg');
-          target.element.removeAttribute('data-wallpaper-overlay-cover');
-          target.element.style.removeProperty('--x-nt-wallpaper-local-luma');
-          clearForcedIconBackgroundStyles(target.element);
-          clearAdaptiveToneStyles(target.element);
+          clearTargetTone(target.element);
           return;
         }
         const sampleRect = getSampleRect(rect, target);

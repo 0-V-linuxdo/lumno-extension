@@ -91,6 +91,7 @@
     },
     {
       "type": "browserPage",
+      "searchSourceType": "history",
       "keys": [
         "history",
         "hist",
@@ -123,6 +124,7 @@
     },
     {
       "type": "browserPage",
+      "searchSourceType": "bookmark",
       "keys": [
         "bookmarks",
         "bookmark",
@@ -136,6 +138,23 @@
         "ブックマーク"
       ],
       "path": "bookmarks"
+    },
+    {
+      "type": "searchScope",
+      "searchSourceType": "topSite",
+      "keys": [
+        "frequent",
+        "frequently visited",
+        "top site",
+        "top sites",
+        "common",
+        "常用",
+        "常用网站",
+        "常用站点",
+        "常用網站",
+        "よく使う",
+        "よく見るサイト"
+      ]
     },
     {
       "type": "browserPage",

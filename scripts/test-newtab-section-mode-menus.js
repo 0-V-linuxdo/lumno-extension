@@ -34,6 +34,25 @@ function getCssRuleBody(source, selector) {
   return source.slice(braceStart + 1, braceEnd);
 }
 
+function getFunctionSource(source, name) {
+  const marker = `function ${name}(`;
+  const start = source.indexOf(marker);
+  assert.ok(start >= 0, `${name} should exist`);
+  const bodyStart = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      depth += 1;
+    } else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  assert.fail(`${name} should have a complete body`);
+}
+
 assert.ok(fs.existsSync(customSelectJsPath), 'custom select behavior should live in a shared JS module');
 assert.ok(fs.existsSync(customSelectCssPath), 'custom select styling should live in a shared CSS module');
 assert.ok(fs.existsSync(menuSurfaceJsPath), 'shared menu surface behavior should live in a shared JS module');
@@ -186,6 +205,7 @@ function createFakeElement(tagName, ownerDocument) {
   const attributes = new Map();
   const classes = new Set();
   const properties = new Map();
+  const listeners = new Map();
   let classNameValue = '';
   const element = {
     tagName: String(tagName || '').toUpperCase(),
@@ -263,7 +283,19 @@ function createFakeElement(tagName, ownerDocument) {
     removeAttribute(name) {
       attributes.delete(name);
     },
-    addEventListener() {},
+    addEventListener(type, listener) {
+      listeners.set(String(type), [...(listeners.get(String(type)) || []), listener]);
+    },
+    dispatchEvent(event) {
+      const nextEvent = event || {};
+      (listeners.get(String(nextEvent.type || '')) || []).forEach((listener) => {
+        listener(nextEvent);
+      });
+      return true;
+    },
+    click() {
+      element.dispatchEvent({ type: 'click', target: element });
+    },
     contains(target) {
       if (target === element) {
         return true;
@@ -428,6 +460,90 @@ assert.strictEqual(
   'closing a portal custom select should restore the menu to its wrapper'
 );
 
+const insetSelectController = globalThis.LumnoCustomSelect.createController({
+  documentObj: fakeDocument,
+  windowObj: {
+    requestAnimationFrame: (callback) => callback(),
+    getComputedStyle: () => ({
+      paddingLeft: '0',
+      paddingRight: '0',
+      borderLeftWidth: '0',
+      borderRightWidth: '0'
+    })
+  },
+  getViewportTopInset: () => 48
+});
+const insetPortalSelect = insetSelectController.createSelect({
+  menuPortal: true,
+  menuPortalOffset: 0,
+  options: [{ value: 'top', label: 'Top bookmarks bar' }],
+  value: 'top'
+});
+fakeDocument.body.appendChild(insetPortalSelect.wrapper);
+insetPortalSelect.trigger.getBoundingClientRect = () => ({
+  left: 48,
+  right: 72,
+  top: 0,
+  bottom: 24,
+  width: 24,
+  height: 24
+});
+insetSelectController.setOpen(insetPortalSelect.wrapper, true);
+assert.strictEqual(
+  insetPortalSelect.menu.style.getPropertyValue('top'),
+  '48px',
+  'portal custom select menus should stay below an occupied top surface'
+);
+insetSelectController.setOpen(insetPortalSelect.wrapper, false);
+
+const selectActions = [];
+const actionSelect = customSelectController.createSelect({
+  options: [
+    { value: 'top', label: 'Top bookmarks bar' },
+    {
+      value: '__pick_color__',
+      label: 'Pick browser toolbar color…',
+      action: 'pick-color',
+      iconClass: 'ri-dropper-line',
+      dividerBefore: true
+    }
+  ],
+  value: 'top',
+  onAction: (detail) => selectActions.push(detail.action)
+});
+const actionItem = actionSelect.menu.querySelectorAll(
+  '._x_extension_select_option_2024_unique_'
+).find((item) => item.getAttribute('data-action') === 'pick-color');
+assert.ok(actionItem, 'custom select should render action options');
+assert.strictEqual(
+  actionItem.getAttribute('data-divider-before'),
+  'true',
+  'custom select actions should support a visual divider'
+);
+assert.strictEqual(
+  actionItem.getAttribute('aria-selected'),
+  'false',
+  'custom select actions should never appear as the selected display mode'
+);
+assert.ok(
+  actionItem.querySelector('._x_extension_select_option_icon_2026_unique_'),
+  'custom select actions should support an icon'
+);
+actionItem.click();
+assert.strictEqual(actionSelect.select.value, 'top', 'an action should not replace the selected value');
+assert.deepStrictEqual(selectActions, ['pick-color'], 'an action should invoke its dedicated handler');
+
+assertContains(
+  customSelectCss,
+  '._x_extension_select_option_2024_unique_[data-divider-before="true"]',
+  'shared custom select CSS should style action dividers'
+);
+assertContains(
+  customSelectCss,
+  '._x_extension_select_option_icon_2026_unique_',
+  'shared custom select CSS should style action icons'
+);
+
 assertContains(
   optionsHtml,
   '<link rel="stylesheet" href="../shared/menu-surface.css" />',
@@ -515,6 +631,156 @@ assertContains(
 );
 assertContains(
   newtabJs,
+  'function persistBookmarkViewMode(value)',
+  'bookmark display mode writes should use one explicit persistence path'
+);
+{
+  const createShouldRepair = new Function(
+    `${getFunctionSource(newtabJs, 'shouldRepairBookmarkViewModeStorageValue')}
+    return shouldRepairBookmarkViewModeStorageValue;`
+  );
+  const shouldRepairBookmarkViewModeStorageValue = createShouldRepair();
+  assert.strictEqual(
+    shouldRepairBookmarkViewModeStorageValue(undefined, 'folder'),
+    false,
+    'a missing synced mode should remain an implicit default instead of writing folder back'
+  );
+  assert.strictEqual(
+    shouldRepairBookmarkViewModeStorageValue('invalid', 'folder'),
+    true,
+    'an explicitly invalid synced mode should still be normalized'
+  );
+  assert.strictEqual(
+    shouldRepairBookmarkViewModeStorageValue('top', 'top'),
+    false,
+    'a valid synced mode should not trigger a redundant write'
+  );
+}
+assertContains(
+  newtabJs,
+  '? chrome.storage.sync',
+  'bookmark display mode should prefer Chrome sync storage across devices'
+);
+{
+  const syncWrites = [];
+  const localWrites = [];
+  const createPersist = new Function(
+    'chrome',
+    'storageArea',
+    'BOOKMARK_VIEW_MODE_STORAGE_KEY',
+    'normalizeBookmarkViewMode',
+    `${getFunctionSource(newtabJs, 'persistBookmarkViewMode')}
+    return persistBookmarkViewMode;`
+  );
+  const persistBookmarkViewMode = createPersist(
+    {
+      storage: {
+        sync: {
+          set(payload) {
+            syncWrites.push(payload);
+          }
+        }
+      }
+    },
+    {
+      set(payload) {
+        localWrites.push(payload);
+      }
+    },
+    '_x_extension_bookmark_view_mode_2026_unique_',
+    (value) => (value === 'list' || value === 'top' ? value : 'folder')
+  );
+  assert.strictEqual(persistBookmarkViewMode('top'), true);
+  assert.deepStrictEqual(syncWrites, [{
+    _x_extension_bookmark_view_mode_2026_unique_: 'top'
+  }]);
+  assert.deepStrictEqual(localWrites, []);
+}
+{
+  const createBookmarkViewModeHarness = new Function(`
+    let currentBookmarkViewMode = 'folder';
+    let bookmarkViewModeRevision = 0;
+    let bookmarkLoadedOnce = false;
+    let bookmarkCurrentFolderId = '1';
+    const bookmarkRootFolderId = '1';
+    let bookmarkCurrentPage = 0;
+    let bookmarkRenderSignature = '';
+    const calls = {
+      close: 0,
+      update: 0,
+      persist: [],
+      dirty: 0,
+      loads: []
+    };
+    function normalizeBookmarkViewMode(value) {
+      return value === 'list' || value === 'top' ? value : 'folder';
+    }
+    function closeBookmarkCascadeMenu() {
+      calls.close += 1;
+    }
+    function updateBookmarkModeMenu() {
+      calls.update += 1;
+    }
+    function persistBookmarkViewMode(mode) {
+      calls.persist.push(mode);
+    }
+    function markBookmarkDataDirty() {
+      calls.dirty += 1;
+    }
+    function loadBookmarks(options) {
+      calls.loads.push(options);
+    }
+    ${getFunctionSource(newtabJs, 'applyBookmarkViewMode')}
+    return {
+      applyBookmarkViewMode,
+      getState() {
+        return {
+          mode: currentBookmarkViewMode,
+          revision: bookmarkViewModeRevision,
+          calls
+        };
+      }
+    };
+  `);
+  const harness = createBookmarkViewModeHarness();
+  const hydrationRevision = harness.getState().revision;
+  const localResult = harness.applyBookmarkViewMode('top', {
+    persist: true,
+    force: true
+  });
+  assert.strictEqual(localResult.applied, true);
+  assert.strictEqual(harness.getState().mode, 'top');
+  assert.strictEqual(harness.getState().revision, 1);
+  assert.deepStrictEqual(harness.getState().calls.persist, ['top']);
+
+  const staleHydrationResult = harness.applyBookmarkViewMode('folder', {
+    expectedRevision: hydrationRevision,
+    ensureLoaded: true
+  });
+  assert.strictEqual(staleHydrationResult.applied, false);
+  assert.strictEqual(harness.getState().mode, 'top');
+  assert.strictEqual(harness.getState().revision, 1);
+
+  const freshSyncResult = harness.applyBookmarkViewMode('folder', {
+    force: true
+  });
+  assert.strictEqual(freshSyncResult.applied, true);
+  assert.strictEqual(freshSyncResult.changed, true);
+  assert.strictEqual(harness.getState().mode, 'folder');
+  assert.strictEqual(harness.getState().revision, 2);
+}
+assertContains(
+  newtabJs,
+  'const expectedRevision = bookmarkViewModeRevision;',
+  'bookmark mode hydration should reject reads that predate a local mode selection'
+);
+assertContains(
+  newtabJs,
+  'applyInitialBookmarkViewModeValue(stored, \'primary\', expectedRevision);',
+  'bookmark mode hydration should apply the revision captured before its async read'
+);
+assertContains(
+  newtabJs,
   'LumnoCustomSelect.createController',
   'new tab should initialize section mode dropdowns through the shared component runtime'
 );
@@ -532,6 +798,11 @@ assertContains(
   newtabJs,
   'element: bookmarkModeMenu && bookmarkModeMenu.control',
   'bookmark section mode icon should be sampled as its own wallpaper adaptive target'
+);
+assertContains(
+  newtabJs,
+  'disabled: isBookmarkTopbarMode()',
+  'top bookmark mode should opt its mode button out of wallpaper adaptive sampling'
 );
 assertContains(
   newtabJs,
@@ -611,6 +882,11 @@ assertContains(
   newtabJs,
   "value: 'list'",
   'bookmark menu should include the multi-level list view option'
+);
+assertContains(
+  newtabJs,
+  "value: 'top'",
+  'bookmark menu should include the top bookmarks bar option'
 );
 assertContains(
   newtabJs,
@@ -724,6 +1000,21 @@ assert.ok(
 assert.ok(
   !newtabHtml.includes('.x-nt-section-mode-option'),
   'new tab should not keep private section mode option styles'
+);
+assertContains(
+  newtabJs,
+  'getBookmarkViewModeOptions',
+  'bookmark display mode menu should build its mode and color actions together'
+);
+assertContains(
+  newtabJs,
+  'BOOKMARK_TOPBAR_PICK_COLOR_ACTION',
+  'bookmark display mode menu should expose the browser toolbar color picker action'
+);
+assertContains(
+  getFunctionSource(newtabJs, 'getBookmarkViewModeOptions'),
+  'if (!isBookmarkTopbarMode())',
+  'bookmark topbar color actions should only appear while top mode is active'
 );
 assertContains(
   newtabHtml,
@@ -855,5 +1146,6 @@ assert.ok(
 assert.strictEqual(zhCnMessages.display_mode_title.message, '显示模式');
 assert.strictEqual(zhCnMessages.bookmark_view_mode_folder.message, '多层文件夹视图');
 assert.strictEqual(zhCnMessages.bookmark_view_mode_list.message, '多级列表视图');
+assert.strictEqual(zhCnMessages.bookmark_view_mode_top.message, '顶部书签栏');
 
 console.log('newtab section mode menu tests passed');

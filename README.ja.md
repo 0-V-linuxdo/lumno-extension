@@ -119,6 +119,10 @@ npm run test:onboarding-content
 - 同梱アイコンセット：[Remix Icon](https://remixicon.com/)
 - 同梱書体：Open Sans
 
+## スポンサーシップ
+
+Lumno は、オープンソースの維持を目的とする一回限りの任意金額の支援を Stripe Payment Link で受け付ける予定です。スポンサーシップによって、非公開機能、優先サポート、ロードマップの決定権、その他の商用サービスが提供されることはありません。正式なリンクはアカウント設定と資格確認の完了後に有効化されます。詳細は[スポンサーシップポリシー](SPONSORING.md)をご覧ください。
+
 ## Star History
 
 <p align="center">

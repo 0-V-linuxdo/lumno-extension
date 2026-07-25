@@ -15,7 +15,7 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   background: transparent;
-  border-radius: 0 0 32px 32px;
+  border-radius: 0 0 var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px);
   padding: 12px;
   box-sizing: border-box;
   display: block;
