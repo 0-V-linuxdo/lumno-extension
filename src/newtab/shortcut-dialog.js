@@ -365,9 +365,13 @@
 
     function updateIconControlState() {
       const disabled = busy || iconBusy;
+      nameInput.disabled = busy;
+      urlInput.disabled = busy;
+      iconInfoButton.disabled = busy;
       iconUploadTile.setAttribute('data-loading', disabled ? 'true' : 'false');
       iconUploadTile.setAttribute('aria-disabled', disabled ? 'true' : 'false');
       iconRemoveButton.disabled = disabled;
+      cancelButton.disabled = busy;
       doneButton.disabled = disabled;
       form.setAttribute('aria-busy', disabled ? 'true' : 'false');
     }
@@ -433,9 +437,12 @@
 
     function close(closeOptions) {
       if (destroyed) {
-        return;
+        return false;
       }
       const closeOpts = closeOptions && typeof closeOptions === 'object' ? closeOptions : {};
+      if (busy && closeOpts.force !== true) {
+        return false;
+      }
       if (openFrame) {
         cancelFrame(openFrame);
         openFrame = 0;
@@ -464,11 +471,12 @@
         focusElement(previousFocus);
       }
       previousFocus = null;
+      return true;
     }
 
     function open(openOptions) {
-      if (destroyed) {
-        return;
+      if (destroyed || busy) {
+        return false;
       }
       const openOpts = openOptions && typeof openOptions === 'object' ? openOptions : {};
       previousFocus = openOpts.sourceElement || documentObj.activeElement;
@@ -501,6 +509,7 @@
         backdrop.setAttribute('data-open', 'true');
         focusElement(nameInput);
       });
+      return true;
     }
 
     function mount(parentNode, beforeNode) {
@@ -533,7 +542,7 @@
         .then(() => onSubmit(payload))
         .then((saved) => {
           if (saved) {
-            close({ restoreFocus: true });
+            close({ restoreFocus: true, force: true });
           }
           return Boolean(saved);
         })
@@ -664,7 +673,7 @@
       if (destroyed) {
         return;
       }
-      close();
+      close({ force: true });
       destroyed = true;
       form.removeEventListener('submit', handleSubmit);
       cancelButton.removeEventListener('click', handleCancel);

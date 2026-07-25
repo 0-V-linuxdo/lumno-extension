@@ -1856,7 +1856,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
         for (let j = 0; j < tokens.length; j += 1) {
           const token = String(tokens[j] || '').trim().toLowerCase();
-          if (token.startsWith(input) || input.startsWith(token)) {
+          if (token.startsWith(input)) {
             matches.push(command);
             break;
           }

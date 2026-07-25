@@ -341,6 +341,16 @@ assert.ok(
   'bookmark moves should expose keyboard undo and redo handling immediately after a drag'
 );
 assert.ok(
+  newtabJs.includes('const invalidatesBookmarkMoveHistory = (') &&
+    newtabJs.includes("eventName === 'onCreated'") &&
+    newtabJs.includes("eventName === 'onRemoved'") &&
+    newtabJs.includes("eventName === 'onMoved'") &&
+    newtabJs.includes("eventName === 'onChildrenReordered'") &&
+    newtabJs.includes("eventName === 'onImportEnded'") &&
+    newtabJs.includes('bookmarkMoveHistory.clear();'),
+  'external bookmark structure changes should invalidate stale move and delete history records'
+);
+assert.ok(
   cascadeJs.includes('isBookmarkCascadePointInsideInteractiveArea(point)'),
   'cascade drag routing should preserve the existing safe-area behavior'
 );

@@ -242,6 +242,7 @@ async function run() {
   const inputs = findAll(controller.element, (element) => element.tagName === 'INPUT');
   const buttons = findAll(controller.element, (element) => element.tagName === 'BUTTON');
   const doneButton = findByClass(controller.element, 'x-nt-shortcut-dialog-button--primary');
+  const cancelButton = findByClass(controller.element, 'x-nt-shortcut-dialog-button--secondary');
   const iconUploadTile = findByClass(controller.element, 'x-nt-shortcut-icon-upload-tile');
   const iconRemoveButton = findByClass(controller.element, 'x-nt-shortcut-icon-remove');
   const iconInput = findByClass(controller.element, 'x-nt-shortcut-icon-input');
@@ -254,6 +255,7 @@ async function run() {
   assert.strictEqual(documentObj.activeElement, inputs[0], 'opening should focus the name field');
   assert.strictEqual(title.textContent, 'Add shortcut');
   assert.strictEqual(doneButton.textContent, 'Done');
+  assert.strictEqual(cancelButton.disabled, false);
   assert.strictEqual(iconUploadTile.getAttribute('aria-label'), 'Choose image');
   assert.strictEqual(iconUploadTile.getAttribute('data-has-icon'), 'false');
   assert.ok(
@@ -354,6 +356,59 @@ async function run() {
   controller.destroy();
   assert.strictEqual(controller.element.parentNode, null, 'destroy should detach the component');
 
+  const pendingDocument = createFakeDocument();
+  const pendingWindow = createFakeWindow();
+  const pendingTrigger = pendingDocument.createElement('button');
+  pendingTrigger.focus();
+  let resolvePendingSubmit = null;
+  const pendingController = component.createShortcutDialog({
+    documentObj: pendingDocument,
+    windowObj: pendingWindow,
+    closeDelayMs: 0,
+    t(key, fallback) {
+      return fallback || key;
+    },
+    onSubmit() {
+      return new Promise((resolve) => {
+        resolvePendingSubmit = resolve;
+      });
+    }
+  });
+  pendingController.mount(pendingDocument.body);
+  pendingController.open({ sourceElement: pendingTrigger });
+  pendingWindow.flushAnimationFrame();
+  const pendingCancelButton = findByClass(
+    pendingController.element,
+    'x-nt-shortcut-dialog-button--secondary'
+  );
+  const pendingSubmit = pendingController.submit();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(pendingController.getState().busy, true);
+  assert.strictEqual(pendingCancelButton.disabled, true, 'cancel should be disabled during persistence');
+  assert.strictEqual(
+    pendingController.close({ restoreFocus: true }),
+    false,
+    'a user close should not dismiss the dialog while persistence is pending'
+  );
+  assert.strictEqual(
+    pendingController.open({
+      mode: 'edit',
+      shortcut: {
+        id: 'second-shortcut',
+        title: 'Second',
+        url: 'https://second.example/'
+      },
+      sourceElement: pendingTrigger
+    }),
+    false,
+    'a second dialog state should not replace a pending submission'
+  );
+  assert.strictEqual(pendingController.getState().mode, 'add');
+  resolvePendingSubmit(true);
+  assert.strictEqual(await pendingSubmit, true);
+  assert.strictEqual(pendingController.element.hidden, true);
+  pendingController.destroy();
+
   const componentCss = fs.readFileSync(componentCssPath, 'utf8');
   const newtabHtml = fs.readFileSync(newtabHtmlPath, 'utf8');
   const newtabJs = fs.readFileSync(newtabJsPath, 'utf8');
@@ -368,6 +423,11 @@ async function run() {
   assert.ok(
     newtabHtml.includes('<script src="shortcut-icon-store.js"></script>'),
     'newtab should load the local shortcut icon processor'
+  );
+  assert.match(
+    newtabJs,
+    /let didWriteIcons = false;[\s\S]*?didWriteIcons = true;[\s\S]*?catch\(async \(\) => \{[\s\S]*?await shortcutIconStore\.writeAll\(previousIcons\);[\s\S]*?newtabShortcutIcons = previousIcons;[\s\S]*?renderShortcuts\(\);/,
+    'shortcut persistence should roll local icons and rendered state back when the synced shortcut write fails'
   );
   assert.ok(
     newtabHtml.indexOf('<script src="shortcut-icon-store.js"></script>') <

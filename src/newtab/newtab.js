@@ -3744,7 +3744,7 @@
       const tokens = [command.primary].concat(command.aliases || []);
       for (let j = 0; j < tokens.length; j += 1) {
         const token = String(tokens[j] || '').trim().toLowerCase();
-        if (token.startsWith(input) || input.startsWith(token)) {
+        if (token.startsWith(input)) {
           matches.push(command);
           break;
         }
@@ -5851,7 +5851,10 @@
 
   function closeShortcutDialog(options) {
     if (shortcutDialogController) {
-      shortcutDialogController.close(options);
+      shortcutDialogController.close({
+        ...(options || {}),
+        force: true
+      });
     }
   }
 
@@ -7090,8 +7093,12 @@
     const previousIcons = newtabShortcutIcons;
     const nextIcons = getNextShortcutIconMap(normalized, iconChange);
     const iconsChanged = !areShortcutIconMapsEqual(previousIcons, nextIcons);
+    let didWriteIcons = false;
     const iconsReady = iconsChanged
-      ? shortcutIconStore.writeAll(nextIcons)
+      ? shortcutIconStore.writeAll(nextIcons).then((savedIcons) => {
+        didWriteIcons = true;
+        return savedIcons;
+      })
       : Promise.resolve(nextIcons);
     const persistItems = () => {
       if (!storageArea) {
@@ -7112,8 +7119,16 @@
         }
         return true;
       })
-      .catch(() => {
+      .catch(async () => {
+        if (didWriteIcons) {
+          try {
+            await shortcutIconStore.writeAll(previousIcons);
+          } catch (rollbackError) {
+            console.warn('[Lumno] Failed to roll back shortcut icons', rollbackError);
+          }
+        }
         newtabShortcutIcons = previousIcons;
+        renderShortcuts();
         setShortcutIconError(t(
           'newtab_shortcuts_icon_storage_error',
           'The local icon could not be saved. Try another image.'
@@ -13671,6 +13686,13 @@
           return;
         }
         eventTarget.addListener(() => {
+          const invalidatesBookmarkMoveHistory = (
+            eventName === 'onCreated' ||
+            eventName === 'onRemoved' ||
+            eventName === 'onMoved' ||
+            eventName === 'onChildrenReordered' ||
+            eventName === 'onImportEnded'
+          );
           const isControlledBookmarkMutation = bookmarkControlledMutationDepth > 0 && (
             eventName === 'onCreated' ||
             eventName === 'onRemoved' ||
@@ -13688,6 +13710,9 @@
               markBookmarkTreeDirty({ preserveCascadeOpen });
             }
             return;
+          }
+          if (invalidatesBookmarkMoveHistory) {
+            bookmarkMoveHistory.clear();
           }
           const shouldRefreshOpenCascade = (
             eventName === 'onMoved' ||

@@ -55,8 +55,13 @@ function assertSlashCommandDiscovery(source, expectedTypes, surface) {
   });
   assert.match(
     source,
-    /function getCommandMatches\(rawInput\) \{[\s\S]*?const matches = \[\];[\s\S]*?token\.startsWith\(input\) \|\| input\.startsWith\(token\)[\s\S]*?matches\.push\(command\)[\s\S]*?return matches;/,
+    /function getCommandMatches\(rawInput\) \{[\s\S]*?const matches = \[\];[\s\S]*?token\.startsWith\(input\)[\s\S]*?matches\.push\(command\)[\s\S]*?return matches;/,
     `${surface} should return every slash command matching the live input`
+  );
+  assert.doesNotMatch(
+    source,
+    /input\.startsWith\(token\)/,
+    `${surface} should stop matching after the user types past a complete command or alias`
   );
   assert.match(
     source,
@@ -183,6 +188,13 @@ assert.deepStrictEqual(
   [],
   'New Tab should remove commands that no longer match the input'
 );
+['/nothing', '/something', '/settings-extra', '/newtab-extra'].forEach((input) => {
+  assert.deepStrictEqual(
+    Array.from(getNewtabCommandMatches(input), (command) => command.type),
+    [],
+    `New Tab should not execute a command when ${input} only starts with an alias or command`
+  );
+});
 
 const getOverlayCommandMatches = createCommandMatcher(overlaySource, true);
 assert.deepStrictEqual(
@@ -205,6 +217,13 @@ assert.deepStrictEqual(
   ['commandSettings'],
   'overlay should filter slash commands by aliases'
 );
+['/continue', '/test', '/copycat', '/tabs-extra'].forEach((input) => {
+  assert.deepStrictEqual(
+    Array.from(getOverlayCommandMatches(input), (command) => command.type),
+    [],
+    `overlay should not execute a command when ${input} only starts with an alias or command`
+  );
+});
 assert.deepStrictEqual(
   Array.from(getOverlayCommandMatches('clip'), (command) => command.type),
   ['commandDocumentPip'],
