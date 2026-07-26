@@ -7,6 +7,12 @@ type OnboardingRuntime = typeof globalThis & {
   LumnoOnboardingActionsReact?: {
     implementation?: string;
   };
+  LumnoOnboardingInteractions?: {
+    implementation?: string;
+  };
+  LumnoOnboardingInteractionsReact?: {
+    implementation?: string;
+  };
   LumnoOnboardingPageStrip?: {
     implementation?: string;
   };
@@ -25,6 +31,8 @@ const runtime = globalThis as OnboardingRuntime;
 function clearRuntime(): void {
   delete runtime.LumnoOnboardingActions;
   delete runtime.LumnoOnboardingActionsReact;
+  delete runtime.LumnoOnboardingInteractions;
+  delete runtime.LumnoOnboardingInteractionsReact;
   delete runtime.LumnoOnboardingPageStrip;
   delete runtime.LumnoOnboardingPageStripReact;
   delete runtime.LumnoOnboardingReactBootstrap;
@@ -54,8 +62,13 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingActionsReact).toBe(
       runtime.LumnoOnboardingActions
     );
+    expect(runtime.LumnoOnboardingInteractions?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingInteractionsReact).toBe(
+      runtime.LumnoOnboardingInteractions
+    );
     expect(runtime.LumnoOnboardingReactIslands).toEqual({
       actions: runtime.LumnoOnboardingActions,
+      interactions: runtime.LumnoOnboardingInteractions,
       pageStrip: runtime.LumnoOnboardingPageStrip
     });
   });
@@ -70,6 +83,7 @@ describe('Onboarding React islands entry', () => {
 
     expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(false);
     expect(runtime.LumnoOnboardingActions).toBeUndefined();
+    expect(runtime.LumnoOnboardingInteractions).toBeUndefined();
     expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
     expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
   });

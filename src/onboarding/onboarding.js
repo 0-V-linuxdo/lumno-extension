@@ -249,6 +249,7 @@
   const ghostActionButton = document.querySelector('.onboarding-action-button--ghost');
   const onboardingPageStripApi = globalThis.LumnoOnboardingPageStrip || {};
   const onboardingActionsApi = globalThis.LumnoOnboardingActions || {};
+  const onboardingInteractionsApi = globalThis.LumnoOnboardingInteractions || {};
   const pageStripController = pageStrip &&
       typeof onboardingPageStripApi.createPageStripController === 'function'
     ? onboardingPageStripApi.createPageStripController(pageStrip, {
@@ -268,6 +269,23 @@
       },
       onHideTooltip() {
         hideActionButtonTooltip();
+      }
+    })
+    : null;
+  const interactionSlotsController = interactionSlots &&
+      typeof onboardingInteractionsApi.createInteractionsController === 'function'
+    ? onboardingInteractionsApi.createInteractionsController(interactionSlots, {
+      onAction(actionId, event) {
+        runExtensionAction(actionId, event);
+      },
+      onToggleAccordion(accordionId) {
+        toggleInteractionAccordion(accordionId);
+      },
+      onShowInfoTooltip(target, infoTooltip, browserAvatars) {
+        showOnboardingInfoTooltip(target, infoTooltip, browserAvatars);
+      },
+      onHideInfoTooltip() {
+        hideOnboardingInfoTooltip();
       }
     })
     : null;
@@ -1190,6 +1208,12 @@
     if (!interactionSlots) {
       return;
     }
+    if (interactionSlotsController) {
+      interactionSlotsController.setExpandedAccordionId(
+        expandedInteractionAccordionId
+      );
+      return;
+    }
     interactionSlots
       .querySelectorAll('.interaction-slot--accordion[data-accordion-id]')
       .forEach((item) => {
@@ -1284,6 +1308,13 @@
     hideOnboardingInfoTooltip();
     const hasAccordion = slide.left.interactionSlots.some((slot) => slot.accordion && slot.accordion.text);
     interactionSlots.dataset.accordion = hasAccordion ? 'true' : 'false';
+    if (interactionSlotsController) {
+      interactionSlotsController.render({
+        slots: slide.left.interactionSlots,
+        expandedAccordionId: expandedInteractionAccordionId
+      });
+      return;
+    }
     interactionSlots.textContent = '';
     slide.left.interactionSlots.forEach((slot) => {
       interactionSlots.appendChild(createInteractionSlot(slot));
