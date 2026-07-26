@@ -3,7 +3,8 @@
 
   const EFFECT_TYPES = ['none', 'grain', 'halftone', 'ascii'];
   const ASCII_LIGHT_WALLPAPER_THRESHOLD = 0.58;
-  const MAX_EFFECT_CANVAS_PIXELS = 1920 * 1080;
+  const TARGET_EFFECT_CANVAS_PIXELS = 2048 * 2048;
+  const MAX_EFFECT_CANVAS_SCALE = 1.6;
   const PARAMETER_RENDER_DEBOUNCE_MS = 72;
   const DEFAULT_PREFS = {
     version: 3,
@@ -37,11 +38,11 @@
   function getEffectCanvasScale(devicePixelRatio, viewportWidth, viewportHeight) {
     const width = Math.max(1, Number(viewportWidth) || 1);
     const height = Math.max(1, Number(viewportHeight) || 1);
-    const pixelBudgetScale = Math.sqrt(MAX_EFFECT_CANVAS_PIXELS / (width * height));
+    const pixelBudgetScale = Math.sqrt(TARGET_EFFECT_CANVAS_PIXELS / (width * height));
     return clampNumber(
-      Math.min(Number(devicePixelRatio) || 1, pixelBudgetScale),
-      0.72,
-      1
+      Math.min(Number(devicePixelRatio) || 1, pixelBudgetScale, MAX_EFFECT_CANVAS_SCALE),
+      1,
+      MAX_EFFECT_CANVAS_SCALE
     );
   }
 
@@ -159,8 +160,8 @@
     let hoverSafeZoneRectCache = null;
     let hoverSafeZoneRectCacheTime = 0;
     let asciiGlyphMetricsCache = null;
-    let effectBaseCanvas = null;
-    let effectBaseContext = null;
+    let hoverCanvas = null;
+    let hoverContext = null;
     let effectBaseCacheKey = '';
 
     function requestFrame(callback) {
@@ -212,6 +213,7 @@
 
     function ensureCanvas() {
       if (canvas && context) {
+        ensureHoverCanvas();
         return canvas;
       }
       if (!documentObj || !documentObj.createElement || !documentObj.body) {
@@ -226,9 +228,32 @@
         return null;
       }
       documentObj.body.insertBefore(canvas, documentObj.body.firstChild || null);
+      ensureHoverCanvas();
       bindObservers();
       bindPointer();
       return canvas;
+    }
+
+    function ensureHoverCanvas() {
+      if (hoverCanvas && hoverContext) {
+        return hoverCanvas;
+      }
+      if (!documentObj || !documentObj.createElement || !documentObj.body) {
+        return null;
+      }
+      hoverCanvas = documentObj.createElement('canvas');
+      hoverCanvas.className = 'x-nt-wallpaper-effect-hover-canvas';
+      hoverCanvas.setAttribute('aria-hidden', 'true');
+      hoverContext = hoverCanvas.getContext('2d', { alpha: true });
+      if (!hoverContext) {
+        hoverCanvas = null;
+        return null;
+      }
+      const referenceNode = canvas && canvas.nextSibling
+        ? canvas.nextSibling
+        : (documentObj.body.firstChild || null);
+      documentObj.body.insertBefore(hoverCanvas, referenceNode);
+      return hoverCanvas;
     }
 
     function bindObservers() {
@@ -276,8 +301,6 @@
     }
 
     function clearEffectBaseCache() {
-      effectBaseCanvas = null;
-      effectBaseContext = null;
       effectBaseCacheKey = '';
     }
 
@@ -441,11 +464,21 @@
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
+        effectBaseCacheKey = '';
       }
       canvas.style.width = `${viewport.width}px`;
       canvas.style.height = `${viewport.height}px`;
       context.setTransform(scale, 0, 0, scale, 0, 0);
-      context.clearRect(0, 0, viewport.width, viewport.height);
+      if (ensureHoverCanvas() && hoverContext) {
+        if (hoverCanvas.width !== width || hoverCanvas.height !== height) {
+          hoverCanvas.width = width;
+          hoverCanvas.height = height;
+        }
+        hoverCanvas.style.width = `${viewport.width}px`;
+        hoverCanvas.style.height = `${viewport.height}px`;
+        hoverContext.setTransform(scale, 0, 0, scale, 0, 0);
+        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
+      }
       return viewport;
     }
 
@@ -467,6 +500,13 @@
         canvas.removeAttribute('data-effect');
         canvas.style.opacity = '0';
         canvas.style.mixBlendMode = 'normal';
+      }
+      if (hoverCanvas && hoverContext) {
+        const viewport = getViewportSize();
+        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
+        hoverCanvas.removeAttribute('data-effect');
+        hoverCanvas.style.opacity = '0';
+        hoverCanvas.style.mixBlendMode = 'normal';
       }
       onRender();
     }
@@ -738,6 +778,13 @@
       canvas.setAttribute('data-effect', type);
       canvas.style.opacity = String(clampNumber(opacity, 0, 1));
       canvas.style.mixBlendMode = blendMode || 'normal';
+      if (hoverCanvas) {
+        hoverCanvas.setAttribute('data-effect', type);
+        hoverCanvas.style.opacity = type === 'grain'
+          ? '0'
+          : String(clampNumber(opacity, 0, 1));
+        hoverCanvas.style.mixBlendMode = blendMode || 'normal';
+      }
       onRender();
     }
 
@@ -788,6 +835,7 @@
     }
 
     function drawGrain(viewport, strength) {
+      context.clearRect(0, 0, viewport.width, viewport.height);
       const tile = documentObj.createElement('canvas');
       tile.width = 180;
       tile.height = 180;
@@ -838,47 +886,6 @@
         size,
         spacing
       ].join(':');
-    }
-
-    function ensureEffectBaseCanvas(viewport) {
-      if (!canvas || !documentObj || typeof documentObj.createElement !== 'function') {
-        return null;
-      }
-      if (!effectBaseCanvas) {
-        effectBaseCanvas = documentObj.createElement('canvas');
-      }
-      if (effectBaseCanvas.width !== canvas.width) {
-        effectBaseCanvas.width = canvas.width;
-      }
-      if (effectBaseCanvas.height !== canvas.height) {
-        effectBaseCanvas.height = canvas.height;
-      }
-      effectBaseContext = effectBaseCanvas.getContext('2d', { alpha: true });
-      if (!effectBaseContext) {
-        clearEffectBaseCache();
-        return null;
-      }
-      const scale = effectBaseCanvas.width / viewport.width;
-      effectBaseContext.setTransform(scale, 0, 0, scale, 0, 0);
-      return effectBaseCanvas;
-    }
-
-    function copyEffectBaseToVisible(viewport) {
-      context.clearRect(0, 0, viewport.width, viewport.height);
-      if (!effectBaseCanvas) {
-        return;
-      }
-      context.drawImage(
-        effectBaseCanvas,
-        0,
-        0,
-        effectBaseCanvas.width,
-        effectBaseCanvas.height,
-        0,
-        0,
-        viewport.width,
-        viewport.height
-      );
     }
 
     function drawHalftoneLayer(targetContext, viewport, sampler, strength, size, spacing, hoverOnly) {
@@ -957,6 +964,8 @@
       const strengthRatio = clampNumber(strength, 0, 100) / 100;
       const fontSize = Math.round(getControlRange(size, 7, viewport.width < 720 ? 22 : 24));
       targetContext.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      targetContext.textRendering = 'geometricPrecision';
+      targetContext.fontKerning = 'none';
       targetContext.textBaseline = 'middle';
       targetContext.textAlign = 'center';
       const glyphMetrics = getAsciiGlyphMetrics(fontSize, targetContext.font, targetContext);
@@ -1023,20 +1032,18 @@
     }
 
     function drawCachedLayeredEffect(type, viewport, sampler, strength, size, spacing, drawLayer) {
-      const baseCanvas = ensureEffectBaseCanvas(viewport);
-      if (!baseCanvas) {
-        return;
-      }
       const cacheKey = getEffectBaseKey(type, viewport, sampler, strength, size, spacing);
       if (effectBaseCacheKey !== cacheKey) {
-        effectBaseContext.clearRect(0, 0, viewport.width, viewport.height);
-        drawLayer(effectBaseContext, viewport, sampler, strength, size, spacing, false);
+        context.clearRect(0, 0, viewport.width, viewport.height);
+        drawLayer(context, viewport, sampler, strength, size, spacing, false);
         effectBaseCacheKey = cacheKey;
       }
-      copyEffectBaseToVisible(viewport);
       beginHoverRender();
-      if (hoverRenderIntensity > 0) {
-        drawLayer(context, viewport, sampler, strength, size, spacing, true);
+      if (hoverContext) {
+        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
+        if (hoverRenderIntensity > 0) {
+          drawLayer(hoverContext, viewport, sampler, strength, size, spacing, true);
+        }
       }
       setCanvasVisuals(type, 1, 'normal');
       finishHoverRender();
@@ -1158,6 +1165,9 @@
           prefs.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
+        if (hoverCanvas) {
+          hoverCanvas.style.opacity = '0';
+        }
         scheduleRender(EFFECT_CROSSFADE_MS);
         return;
       }
@@ -1176,6 +1186,9 @@
           normalized.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
+        if (hoverCanvas) {
+          hoverCanvas.style.opacity = '0';
+        }
         scheduleRender(EFFECT_CROSSFADE_MS);
         return;
       }

@@ -341,7 +341,8 @@
       .x-nt-wallpaper-transition-layer[data-exit="true"] {
         opacity: 0;
       }
-      .x-nt-wallpaper-effect-canvas {
+      .x-nt-wallpaper-effect-canvas,
+      .x-nt-wallpaper-effect-hover-canvas {
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -354,7 +355,9 @@
         contain: strict;
       }
       body:not([data-wallpaper-active="true"]) .x-nt-wallpaper-effect-canvas,
-      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-canvas {
+      body:not([data-wallpaper-active="true"]) .x-nt-wallpaper-effect-hover-canvas,
+      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-canvas,
+      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-hover-canvas {
         opacity: 0 !important;
       }
       body[data-wallpaper-active="true"][data-wallpaper-effect="ascii"] {
@@ -384,6 +387,7 @@
       @media (prefers-reduced-motion: reduce) {
         .x-nt-wallpaper-transition-layer,
         .x-nt-wallpaper-effect-canvas,
+        .x-nt-wallpaper-effect-hover-canvas,
         body::after {
           transition: none;
         }

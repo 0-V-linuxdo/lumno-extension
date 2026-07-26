@@ -60,19 +60,23 @@ assert.deepStrictEqual(
   }
 );
 
-assert.strictEqual(
-  effects.getEffectCanvasScale(2, 1920, 1080),
-  1,
-  'effect canvases should not exceed CSS-pixel resolution on common desktop viewports'
+assert.ok(
+  effects.getEffectCanvasScale(2, 1920, 1080) > 1.4,
+  'common desktop viewports should receive supersampled effect layers'
 );
 assert.ok(
-  effects.getEffectCanvasScale(2, 2560, 1440) < 0.8,
-  'large desktop canvases should scale down to stay inside the pixel budget'
+  effects.getEffectCanvasScale(2, 2560, 1440) > 1,
+  'large desktop canvases should stay above CSS-pixel resolution while respecting the target budget'
 );
 assert.strictEqual(
   effects.getEffectCanvasScale(3, 390, 844),
+  1.6,
+  'small mobile canvases should use the configured supersampling ceiling'
+);
+assert.strictEqual(
+  effects.getEffectCanvasScale(2, 5120, 2880),
   1,
-  'small mobile canvases should stay sharp without multiplying by device DPR'
+  'very large viewports should never be upscaled from a sub-CSS-pixel backing buffer'
 );
 
 const normalized = effects.normalizePrefs({
@@ -109,8 +113,13 @@ assert.doesNotMatch(
 const effectsSource = fs.readFileSync('src/newtab/wallpaper-effects.js', 'utf8');
 assert.match(
   effectsSource,
-  /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(effectBaseContext[\s\S]*?drawLayer\(context,[\s\S]*?true\);/,
-  'pointer movement should reuse the static effect layer and only draw the local hover region'
+  /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(context,[\s\S]*?false\);[\s\S]*?hoverContext\.clearRect[\s\S]*?drawLayer\(hoverContext,[\s\S]*?true\);/,
+  'pointer movement should preserve the high-resolution static layer and redraw only the local hover layer'
+);
+assert.match(
+  newtabHtml,
+  /\.x-nt-wallpaper-effect-canvas,\s*\.x-nt-wallpaper-effect-hover-canvas\s*\{/,
+  'base and hover canvases should share the same composited viewport styling'
 );
 assert.match(
   effectsSource,
