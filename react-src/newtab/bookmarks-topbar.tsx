@@ -1,0 +1,465 @@
+import { useLayoutEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot, type Root } from 'react-dom/client';
+
+export const BOOKMARK_TOPBAR_IDS = Object.freeze({
+  topbar: '_x_extension_newtab_bookmarks_topbar_2026_unique_',
+  viewport: '_x_extension_newtab_bookmarks_topbar_viewport_2026_unique_',
+  items: '_x_extension_newtab_bookmarks_topbar_items_2026_unique_',
+  edgeFade: '_x_extension_newtab_bookmarks_topbar_edge_fade_2026_unique_',
+  actions: '_x_extension_newtab_bookmarks_topbar_actions_2026_unique_'
+});
+
+export const BOOKMARK_TOPBAR_HEIGHT_PX = 36;
+
+const SURFACE_STYLE_PROPERTIES = Object.freeze([
+  '--x-nt-bookmarks-topbar-surface',
+  '--x-nt-bookmarks-topbar-terminal-surface',
+  '--x-nt-bookmarks-topbar-ink',
+  '--x-nt-bookmarks-topbar-action-hover',
+  '--x-nt-bookmarks-topbar-item-hover',
+  '--x-nt-bookmarks-topbar-folder-hover'
+]);
+
+export function normalizeSurfaceColor(value: unknown) {
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(raw)) {
+    return raw;
+  }
+  if (/^#[0-9a-f]{3}$/.test(raw)) {
+    return `#${raw
+      .slice(1)
+      .split('')
+      .map((part) => `${part}${part}`)
+      .join('')}`;
+  }
+  return '';
+}
+
+function getRelativeLuminance(color: unknown) {
+  const normalized = normalizeSurfaceColor(color);
+  if (!normalized) {
+    return 1;
+  }
+  const channels = [1, 3, 5].map((index) => {
+    const channel =
+      Number.parseInt(normalized.slice(index, index + 2), 16) / 255;
+    return channel <= 0.04045
+      ? channel / 12.92
+      : Math.pow((channel + 0.055) / 1.055, 2.4);
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+export function getSurfaceColorTokens(value: unknown) {
+  const surfaceColor = normalizeSurfaceColor(value);
+  if (!surfaceColor) {
+    return null;
+  }
+  const useDarkInk = getRelativeLuminance(surfaceColor) >= 0.2;
+  return Object.freeze({
+    surfaceColor,
+    ink: useDarkInk ? '#111827' : '#f8fafc',
+    actionHover: useDarkInk
+      ? 'rgba(15, 23, 42, 0.065)'
+      : 'rgba(255, 255, 255, 0.095)',
+    itemHover: useDarkInk
+      ? 'rgba(15, 23, 42, 0.065)'
+      : 'rgba(255, 255, 255, 0.095)',
+    folderHover: useDarkInk
+      ? 'rgba(37, 99, 235, 0.075)'
+      : 'rgba(96, 165, 250, 0.12)'
+  });
+}
+
+interface TopbarElements {
+  actions: HTMLDivElement;
+  edgeFade: HTMLDivElement;
+  itemsHost: HTMLDivElement;
+  viewport: HTMLDivElement;
+}
+
+function TopbarStructure({
+  register
+}: {
+  register(elements: TopbarElements): void;
+}) {
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const edgeFadeRef = useRef<HTMLDivElement>(null);
+  const itemsHostRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (
+      actionsRef.current &&
+      edgeFadeRef.current &&
+      itemsHostRef.current &&
+      viewportRef.current
+    ) {
+      register({
+        actions: actionsRef.current,
+        edgeFade: edgeFadeRef.current,
+        itemsHost: itemsHostRef.current,
+        viewport: viewportRef.current
+      });
+    }
+  }, [register]);
+  return (
+    <>
+      <div
+        className="x-nt-bookmarks-topbar-viewport"
+        id={BOOKMARK_TOPBAR_IDS.viewport}
+        ref={viewportRef}
+      >
+        <div
+          className="x-nt-bookmarks-topbar-items"
+          id={BOOKMARK_TOPBAR_IDS.items}
+          ref={itemsHostRef}
+        />
+      </div>
+      <div
+        aria-hidden="true"
+        className="x-nt-bookmarks-topbar-edge-fade"
+        data-visible="false"
+        id={BOOKMARK_TOPBAR_IDS.edgeFade}
+        ref={edgeFadeRef}
+      />
+      <div
+        className="x-nt-bookmarks-topbar-actions"
+        id={BOOKMARK_TOPBAR_IDS.actions}
+        ref={actionsRef}
+      />
+    </>
+  );
+}
+
+interface Placement {
+  nextSibling: ChildNode | null;
+  parent: ParentNode;
+}
+
+function rememberPlacement(element: HTMLElement | null): Placement | null {
+  return element?.parentNode
+    ? {
+        parent: element.parentNode,
+        nextSibling: element.nextSibling
+      }
+    : null;
+}
+
+function restorePlacement(
+  element: HTMLElement | null,
+  placement: Placement | null
+) {
+  if (!element || !placement) {
+    return false;
+  }
+  if (
+    placement.nextSibling &&
+    placement.nextSibling.parentNode === placement.parent
+  ) {
+    placement.parent.insertBefore(element, placement.nextSibling);
+  } else {
+    placement.parent.appendChild(element);
+  }
+  return true;
+}
+
+export interface BookmarksTopbarRuntime {
+  actions: HTMLDivElement;
+  activate(): boolean;
+  autoScroll(pointerX: number, pointerY: number): number;
+  deactivate(): boolean;
+  destroy(): void;
+  edgeFade: HTMLDivElement;
+  element: HTMLElement;
+  isActive(): boolean;
+  isVisible(): boolean;
+  itemsHost: HTMLDivElement;
+  mount(parent?: HTMLElement | null): BookmarksTopbarRuntime;
+  setSurfaceColor(value: unknown): string;
+  setVisible(visible: boolean): boolean;
+  syncOverflowFade(): boolean;
+  updateLanguage(ariaLabel: string): void;
+  viewport: HTMLDivElement;
+  windowObj: Window;
+}
+
+export function createBookmarksTopbar(
+  options: Record<string, any> = {}
+): BookmarksTopbarRuntime {
+  const documentObj: Document = options.documentObj || document;
+  const windowObj: Window = options.windowObj || window;
+  const element = documentObj.createElement('section');
+  element.id = BOOKMARK_TOPBAR_IDS.topbar;
+  element.className = 'x-nt-bookmarks-topbar';
+  element.dataset.reactIsland = 'newtab-bookmarks-topbar';
+  element.dataset.visible = 'false';
+  element.setAttribute('aria-label', String(options.ariaLabel || 'Bookmarks'));
+  const reactRoot: Root = createRoot(element);
+  let elements: TopbarElements | null = null;
+  const register = (nextElements: TopbarElements) => {
+    elements = nextElements;
+  };
+  flushSync(() => reactRoot.render(<TopbarStructure register={register} />));
+  if (!elements) {
+    flushSync(() => reactRoot.unmount());
+    throw new Error('Lumno New Tab React bookmarks topbar did not mount.');
+  }
+  const { actions, edgeFade, itemsHost, viewport } =
+    elements as TopbarElements;
+  const grid: HTMLElement | null = options.grid || null;
+  const modeControl: HTMLElement | null = options.modeControl || null;
+  const managerButton: HTMLElement | null = options.managerButton || null;
+  const onVisibilityChange =
+    typeof options.onVisibilityChange === 'function'
+      ? options.onVisibilityChange
+      : null;
+  const placements = {
+    grid: rememberPlacement(grid),
+    managerButton: rememberPlacement(managerButton),
+    modeControl: rememberPlacement(modeControl)
+  };
+  let active = false;
+  let visible = false;
+  let overflowRight = false;
+  let overflowSyncFrameId = 0;
+  let destroyed = false;
+
+  const setSurfaceColor = (value: unknown) => {
+    const tokens = getSurfaceColorTokens(value);
+    if (!tokens) {
+      SURFACE_STYLE_PROPERTIES.forEach((propertyName) =>
+        element.style.removeProperty(propertyName)
+      );
+      element.removeAttribute('data-custom-surface');
+      return '';
+    }
+    element.style.setProperty(
+      '--x-nt-bookmarks-topbar-surface',
+      tokens.surfaceColor
+    );
+    element.style.setProperty(
+      '--x-nt-bookmarks-topbar-terminal-surface',
+      tokens.surfaceColor
+    );
+    element.style.setProperty('--x-nt-bookmarks-topbar-ink', tokens.ink);
+    element.style.setProperty(
+      '--x-nt-bookmarks-topbar-action-hover',
+      tokens.actionHover
+    );
+    element.style.setProperty(
+      '--x-nt-bookmarks-topbar-item-hover',
+      tokens.itemHover
+    );
+    element.style.setProperty(
+      '--x-nt-bookmarks-topbar-folder-hover',
+      tokens.folderHover
+    );
+    element.dataset.customSurface = 'true';
+    return tokens.surfaceColor;
+  };
+
+  const setOverflowFadeVisible = (nextVisible: boolean) => {
+    const nextOverflowRight = nextVisible === true;
+    if (overflowRight !== nextOverflowRight) {
+      overflowRight = nextOverflowRight;
+      edgeFade.dataset.visible = overflowRight ? 'true' : 'false';
+    }
+    return overflowRight;
+  };
+
+  const syncOverflowFade = () => {
+    const scrollWidth = Number(viewport.scrollWidth) || 0;
+    const clientWidth = Number(viewport.clientWidth) || 0;
+    const scrollLeft = Math.max(0, Number(viewport.scrollLeft) || 0);
+    return setOverflowFadeVisible(
+      active &&
+        visible &&
+        clientWidth > 0 &&
+        scrollLeft + clientWidth < scrollWidth - 1
+    );
+  };
+
+  const scheduleOverflowFadeSync = () => {
+    if (destroyed || overflowSyncFrameId) {
+      return;
+    }
+    if (typeof windowObj.requestAnimationFrame !== 'function') {
+      syncOverflowFade();
+      return;
+    }
+    overflowSyncFrameId = windowObj.requestAnimationFrame(() => {
+      overflowSyncFrameId = 0;
+      syncOverflowFade();
+    });
+  };
+
+  const setVisible = (nextVisible: boolean) => {
+    const previousVisible = visible;
+    visible = nextVisible === true;
+    element.dataset.visible = visible ? 'true' : 'false';
+    if (visible) {
+      scheduleOverflowFadeSync();
+    } else {
+      setOverflowFadeVisible(false);
+    }
+    if (onVisibilityChange && previousVisible !== visible) {
+      onVisibilityChange(visible, {
+        element,
+        height: BOOKMARK_TOPBAR_HEIGHT_PX
+      });
+    }
+    return visible;
+  };
+
+  const activate = () => {
+    if (active) {
+      return false;
+    }
+    if (grid) {
+      itemsHost.appendChild(grid);
+    }
+    if (modeControl) {
+      actions.appendChild(modeControl);
+    }
+    if (managerButton) {
+      actions.appendChild(managerButton);
+    }
+    active = true;
+    element.dataset.active = 'true';
+    scheduleOverflowFadeSync();
+    return true;
+  };
+
+  const deactivate = () => {
+    if (!active) {
+      return false;
+    }
+    restorePlacement(grid, placements.grid);
+    restorePlacement(modeControl, placements.modeControl);
+    restorePlacement(managerButton, placements.managerButton);
+    active = false;
+    setVisible(false);
+    element.dataset.active = 'false';
+    return true;
+  };
+
+  const autoScroll = (pointerX: number, pointerY: number) => {
+    if (!active || !visible) {
+      return 0;
+    }
+    const x = Number(pointerX);
+    const y = Number(pointerY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return 0;
+    }
+    const rect = viewport.getBoundingClientRect();
+    const edgeSize = Math.min(72, Math.max(36, rect.width * 0.1));
+    if (
+      y < rect.top ||
+      y > rect.bottom ||
+      x < rect.left - edgeSize ||
+      x > rect.right + edgeSize
+    ) {
+      return 0;
+    }
+    let direction = 0;
+    let strength = 0;
+    if (x < rect.left + edgeSize) {
+      direction = -1;
+      strength = 1 - Math.max(0, x - rect.left) / edgeSize;
+    } else if (x > rect.right - edgeSize) {
+      direction = 1;
+      strength = 1 - Math.max(0, rect.right - x) / edgeSize;
+    }
+    if (!direction) {
+      return 0;
+    }
+    const delta =
+      direction * Math.max(4, Math.round(18 * Math.min(1, strength)));
+    const previousScrollLeft = Number(viewport.scrollLeft) || 0;
+    viewport.scrollLeft = previousScrollLeft + delta;
+    scheduleOverflowFadeSync();
+    return (Number(viewport.scrollLeft) || 0) - previousScrollLeft;
+  };
+
+  const onScroll = () => scheduleOverflowFadeSync();
+  const onResize = () => scheduleOverflowFadeSync();
+  const onWheel = (event: WheelEvent) => {
+    if (!active || !visible) {
+      return;
+    }
+    const horizontalDelta = Math.abs(Number(event.deltaX) || 0);
+    const verticalDelta = Math.abs(Number(event.deltaY) || 0);
+    const delta =
+      horizontalDelta > verticalDelta ? event.deltaX : event.deltaY;
+    if (!delta || viewport.scrollWidth <= viewport.clientWidth) {
+      return;
+    }
+    event.preventDefault();
+    viewport.scrollLeft += delta;
+    scheduleOverflowFadeSync();
+  };
+  viewport.addEventListener('scroll', onScroll, { passive: true });
+  viewport.addEventListener('wheel', onWheel, { passive: false });
+  windowObj.addEventListener('resize', onResize);
+
+  const runtime: BookmarksTopbarRuntime = {
+    actions,
+    activate,
+    autoScroll,
+    deactivate,
+    destroy() {
+      if (destroyed) {
+        return;
+      }
+      deactivate();
+      destroyed = true;
+      if (overflowSyncFrameId) {
+        windowObj.cancelAnimationFrame?.(overflowSyncFrameId);
+        overflowSyncFrameId = 0;
+      }
+      viewport.removeEventListener('scroll', onScroll);
+      viewport.removeEventListener('wheel', onWheel);
+      windowObj.removeEventListener('resize', onResize);
+      if (element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+      flushSync(() => reactRoot.unmount());
+    },
+    edgeFade,
+    element,
+    isActive: () => active,
+    isVisible: () => visible,
+    itemsHost,
+    mount(parent) {
+      const target = parent || documentObj.body;
+      if (element.parentNode !== target) {
+        target.appendChild(element);
+      }
+      return runtime;
+    },
+    setSurfaceColor,
+    setVisible,
+    syncOverflowFade,
+    updateLanguage(ariaLabel) {
+      element.setAttribute('aria-label', String(ariaLabel || 'Bookmarks'));
+    },
+    viewport,
+    windowObj
+  };
+  return Object.freeze(runtime);
+}
+
+export function createBookmarksTopbarApi() {
+  return Object.freeze({
+    HEIGHT_PX: BOOKMARK_TOPBAR_HEIGHT_PX,
+    IDS: BOOKMARK_TOPBAR_IDS,
+    implementation: 'react',
+    createBookmarksTopbar,
+    getSurfaceColorTokens,
+    normalizeSurfaceColor
+  });
+}
