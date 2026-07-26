@@ -146,6 +146,14 @@
   const storageAreaName = storageArea
     ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null;
+  function addStorageChangeListener(listener) {
+    if (!chrome || !chrome.storage || !chrome.storage.onChanged ||
+        typeof chrome.storage.onChanged.addListener !== 'function') {
+      return false;
+    }
+    chrome.storage.onChanged.addListener(listener);
+    return true;
+  }
   function getRiSvg(id, sizeClass) {
     const size = sizeClass || 'ri-size-12';
     return `<i class="ri-icon ${size} ${id}" aria-hidden="true"></i>`;
@@ -983,21 +991,52 @@
     });
   }
 
-  function updateInlineTabsIndicator(wrapper, indicator, activeSelector) {
-    if (!wrapper || !indicator) {
+  function measureTabsIndicator(container, indicator, activeButton, inset, containerInset) {
+    if (!container || !indicator) {
+      return null;
+    }
+    if (!activeButton) {
+      return {
+        indicator,
+        width: '0px',
+        transform: null
+      };
+    }
+    const containerRect = container.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
+    const offset = Math.round(
+      buttonRect.left - containerRect.left + (Number(container.scrollLeft) || 0) -
+      (Number(containerInset) || 0) - inset
+    );
+    return {
+      indicator,
+      width: `${Math.round(buttonRect.width)}px`,
+      transform: `translateX(${offset}px)`
+    };
+  }
+
+  function applyTabsIndicatorMeasurement(measurement) {
+    if (!measurement) {
       return;
+    }
+    measurement.indicator.style.width = measurement.width;
+    if (measurement.transform !== null) {
+      measurement.indicator.style.transform = measurement.transform;
+    }
+  }
+
+  function measureInlineTabsIndicator(wrapper, indicator, activeSelector) {
+    if (!wrapper || !indicator) {
+      return null;
     }
     const activeButton = wrapper.querySelector(activeSelector);
-    if (!activeButton) {
-      indicator.style.width = '0px';
-      return;
-    }
-    const containerRect = wrapper.getBoundingClientRect();
-    const buttonRect = activeButton.getBoundingClientRect();
-    const inset = 3;
-    const offset = Math.round(buttonRect.left - containerRect.left - inset);
-    indicator.style.width = `${Math.round(buttonRect.width)}px`;
-    indicator.style.transform = `translateX(${offset}px)`;
+    return measureTabsIndicator(wrapper, indicator, activeButton, 3, 0);
+  }
+
+  function updateInlineTabsIndicator(wrapper, indicator, activeSelector) {
+    applyTabsIndicatorMeasurement(
+      measureInlineTabsIndicator(wrapper, indicator, activeSelector)
+    );
   }
 
   function updateRecentModeTabsIndicator() {
@@ -1041,25 +1080,56 @@
   }
 
   function refreshAllTabsIndicators() {
-    updateTabIndicator();
-    updateThemeIndicator();
-    updateNewtabWidthTabsIndicator();
-    updateRecentModeTabsIndicator();
-    updateOverlaySizeTabsIndicator();
-    updateRestrictedActionTabsIndicator();
-    updateSearchResultPriorityTabsIndicator();
+    const measurements = [
+      measureTabIndicator(),
+      measureThemeIndicator(),
+      measureInlineTabsIndicator(
+        newtabWidthTabsWrap,
+        newtabWidthTabsIndicator,
+        'button[data-newtab-width][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        recentModeTabsWrap,
+        recentModeTabsIndicator,
+        'button[data-recent-mode][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        overlaySizeTabsWrap,
+        overlaySizeTabsIndicator,
+        'button[data-overlay-size][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        restrictedActionSelectWrap,
+        restrictedActionTabsIndicator,
+        'button[data-restricted-action][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        searchResultPriorityTabsWrap,
+        searchResultPriorityTabsIndicator,
+        'button[data-search-result-priority][data-active="true"]'
+      )
+    ];
+    measurements.forEach(applyTabsIndicatorMeasurement);
   }
 
+  let tabsIndicatorsRefreshFrame = 0;
+  let tabsIndicatorsRefreshPasses = 0;
   function scheduleTabsIndicatorsRefresh(framePasses) {
     const passes = Number.isFinite(framePasses) && framePasses > 0 ? Math.floor(framePasses) : 2;
-    const run = (remaining) => {
-      if (remaining <= 0) {
+    tabsIndicatorsRefreshPasses = Math.max(tabsIndicatorsRefreshPasses, passes);
+    if (tabsIndicatorsRefreshFrame) {
+      return;
+    }
+    const run = () => {
+      if (tabsIndicatorsRefreshPasses <= 0) {
+        tabsIndicatorsRefreshFrame = 0;
         refreshAllTabsIndicators();
         return;
       }
-      requestAnimationFrame(() => run(remaining - 1));
+      tabsIndicatorsRefreshPasses -= 1;
+      tabsIndicatorsRefreshFrame = requestAnimationFrame(run);
     };
-    run(passes);
+    tabsIndicatorsRefreshFrame = requestAnimationFrame(run);
   }
 
   function setRecentModeTabState(mode) {
@@ -2441,18 +2511,14 @@
     }
   }
 
-  function updateTabIndicator() {
-    if (!tabsContainer || !tabsIndicator) return;
+  function measureTabIndicator() {
+    if (!tabsContainer || !tabsIndicator) return null;
     const activeButton = tabButtons.find((button) => button.getAttribute('data-active') === 'true');
-    if (!activeButton) return;
-    const containerRect = tabsContainer.getBoundingClientRect();
-    const buttonRect = activeButton.getBoundingClientRect();
-    const inset = 4;
-    const offset = Math.round(
-      buttonRect.left - containerRect.left - tabsContainer.clientLeft - inset
-    );
-    tabsIndicator.style.width = `${Math.round(buttonRect.width)}px`;
-    tabsIndicator.style.transform = `translateX(${offset}px)`;
+    return measureTabsIndicator(tabsContainer, tabsIndicator, activeButton, 4, tabsContainer.clientLeft);
+  }
+
+  function updateTabIndicator() {
+    applyTabsIndicatorMeasurement(measureTabIndicator());
   }
 
   function updateTabsStickyVisualState() {
@@ -2460,6 +2526,30 @@
     const stickyTop = parseFloat(window.getComputedStyle(tabsRow).top || '0') || 0;
     const isStuck = tabsRow.getBoundingClientRect().top <= stickyTop + 0.5;
     tabsRow.setAttribute('data-stuck', isStuck ? 'true' : 'false');
+  }
+
+  let optionsScrollFrame = 0;
+  let optionsResizeFrame = 0;
+  function scheduleOptionsScrollRefresh() {
+    if (optionsScrollFrame) {
+      return;
+    }
+    optionsScrollFrame = window.requestAnimationFrame(() => {
+      optionsScrollFrame = 0;
+      updateTabsStickyVisualState();
+    });
+  }
+
+  function scheduleOptionsViewportLayoutRefresh() {
+    if (optionsResizeFrame) {
+      return;
+    }
+    optionsResizeFrame = window.requestAnimationFrame(() => {
+      optionsResizeFrame = 0;
+      updateTabsStickyVisualState();
+      refreshAllTabsIndicators();
+      syncFallbackShortcutWrapWidth();
+    });
   }
 
   function resetPageScrollToDefault() {
@@ -2545,6 +2635,11 @@
   function applyResolvedTheme(resolvedTheme) {
     document.body.setAttribute('data-theme', resolvedTheme);
     panel.setAttribute('data-theme', resolvedTheme);
+    document.documentElement.style.colorScheme = resolvedTheme;
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', resolvedTheme === 'dark' ? '#111111' : '#f1f5f9');
+    }
   }
 
   function resolveTheme(mode) {
@@ -2576,16 +2671,14 @@
     requestAnimationFrame(updateThemeIndicator);
   }
 
-  function updateThemeIndicator() {
-    if (!themePicker || !themeIndicator) return;
+  function measureThemeIndicator() {
+    if (!themePicker || !themeIndicator) return null;
     const activeButton = themeButtons.find((button) => button.getAttribute('data-active') === 'true');
-    if (!activeButton) return;
-    const containerRect = themePicker.getBoundingClientRect();
-    const buttonRect = activeButton.getBoundingClientRect();
-    const inset = 3;
-    const offset = Math.round(buttonRect.left - containerRect.left - inset);
-    themeIndicator.style.width = `${Math.round(buttonRect.width)}px`;
-    themeIndicator.style.transform = `translateX(${offset}px)`;
+    return measureTabsIndicator(themePicker, themeIndicator, activeButton, 3, 0);
+  }
+
+  function updateThemeIndicator() {
+    applyTabsIndicatorMeasurement(measureThemeIndicator());
   }
 
   function onMediaChange() {
@@ -2729,17 +2822,9 @@
       scheduleTabsIndicatorsRefresh(2);
     });
   }
-  window.addEventListener('scroll', updateTabsStickyVisualState, { passive: true });
-  window.addEventListener('resize', updateTabsStickyVisualState);
+  window.addEventListener('scroll', scheduleOptionsScrollRefresh, { passive: true });
   updateTabsStickyVisualState();
-  window.addEventListener('resize', updateTabIndicator);
-  window.addEventListener('resize', updateThemeIndicator);
-  window.addEventListener('resize', updateNewtabWidthTabsIndicator);
-  window.addEventListener('resize', updateRecentModeTabsIndicator);
-  window.addEventListener('resize', updateOverlaySizeTabsIndicator);
-  window.addEventListener('resize', updateRestrictedActionTabsIndicator);
-  window.addEventListener('resize', updateSearchResultPriorityTabsIndicator);
-  window.addEventListener('resize', syncFallbackShortcutWrapWidth);
+  window.addEventListener('resize', scheduleOptionsViewportLayoutRefresh, { passive: true });
   migrateStorageIfNeeded([
     THEME_STORAGE_KEY,
     LANGUAGE_STORAGE_KEY,
@@ -4329,7 +4414,9 @@
   }
 
   function loadDefaultSiteSearchProviders() {
-    const localUrl = chrome.runtime.getURL('assets/data/site-search.json');
+    const localUrl = chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function'
+      ? chrome.runtime.getURL('assets/data/site-search.json')
+      : '../../assets/data/site-search.json';
     return fetch(localUrl)
       .then((resp) => resp.json())
       .then((data) => {
@@ -4338,6 +4425,10 @@
         return source.map((item) => normalizeSiteSearchProvider(item)).filter(Boolean);
       })
       .catch(() => new Promise((resolve) => {
+        if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+          resolve(fallbackSiteSearchProviders.slice());
+          return;
+        }
         chrome.runtime.sendMessage({ action: 'getSiteSearchProviders' }, (response) => {
           const items = response && Array.isArray(response.items) ? response.items : [];
           const source = items.length > 0 ? items : fallbackSiteSearchProviders;
@@ -5125,7 +5216,7 @@
   }
   */
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  addStorageChangeListener((changes, areaName) => {
     const isPrimaryArea = Boolean(storageAreaName) && areaName === storageAreaName;
     if (!isPrimaryArea) {
       return;

@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111111" />
     <title data-i18n="options_page_title">Lumno 设置</title>
     <link rel="stylesheet" href="../../assets/fonts/open-sans/open-sans.css" />
     <link rel="stylesheet" href="../../assets/remixicon/fonts/remixicon.css" />
@@ -422,6 +423,10 @@
       ._x_extension_settings_tab_button_2024_unique_[data-active="true"] {
         font-weight: 500;
         color: var(--tab-active-text);
+      }
+      ._x_extension_settings_tab_button_2024_unique_:focus-visible {
+        outline: 2px solid var(--input-focus-color);
+        outline-offset: -2px;
       }
       ._x_extension_settings_tab_button_2024_unique_[data-active="true"] ._x_extension_tab_icon_2024_unique_ {
         opacity: 1;
@@ -2109,6 +2114,27 @@
         background: transparent;
       }
       @media (max-width: 720px) {
+        ._x_extension_settings_tabs_row_2024_unique_ {
+          min-width: 0;
+        }
+        #_x_extension_settings_tabs_2024_unique_ {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto;
+          overscroll-behavior-x: contain;
+          scrollbar-width: none;
+          touch-action: pan-x;
+        }
+        #_x_extension_settings_tabs_2024_unique_::-webkit-scrollbar {
+          display: none;
+        }
+        ._x_extension_settings_tab_button_2024_unique_ {
+          flex: 0 0 auto;
+          white-space: nowrap;
+        }
+        ._x_extension_settings_version_badge_2024_unique_ {
+          display: none;
+        }
         ._x_extension_theme_gallery_2026_unique_ {
           grid-template-columns: 120px;
           justify-content: end;
@@ -2170,6 +2196,10 @@
         position: relative;
         outline: none;
         transition: background-color 0.15s ease, border-color 0.15s ease;
+      }
+      ._x_extension_toggle_2024_unique_ input:focus-visible {
+        outline: 2px solid var(--input-focus-color);
+        outline-offset: 2px;
       }
       ._x_extension_toggle_2024_unique_ input::after {
         content: "";
@@ -2471,7 +2501,7 @@
             <div class="_x_extension_theme_picker_2024_unique_ _x_extension_theme_gallery_2026_unique_" role="group" aria-label="主题模式" data-i18n-aria-label="settings_theme_title">
               <button class="_x_extension_theme_option_2024_unique_" data-mode="system" data-active="true" aria-pressed="true" type="button">
                 <span class="_x_extension_theme_preview_2026_unique_" data-preview-mode="system">
-                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/system.svg" alt="" aria-hidden="true" />
+                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/system.svg" alt="" aria-hidden="true" width="120" height="80" />
                   <span class="_x_extension_theme_check_2026_unique_" aria-hidden="true">
                     <i class="ri-icon ri-check-line" aria-hidden="true"></i>
                   </span>
@@ -2480,7 +2510,7 @@
               </button>
               <button class="_x_extension_theme_option_2024_unique_" data-mode="light" data-active="false" aria-pressed="false" type="button">
                 <span class="_x_extension_theme_preview_2026_unique_" data-preview-mode="light">
-                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/light.svg" alt="" aria-hidden="true" />
+                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/light.svg" alt="" aria-hidden="true" width="120" height="80" />
                   <span class="_x_extension_theme_check_2026_unique_" aria-hidden="true">
                     <i class="ri-icon ri-check-line" aria-hidden="true"></i>
                   </span>
@@ -2489,7 +2519,7 @@
               </button>
               <button class="_x_extension_theme_option_2024_unique_" data-mode="dark" data-active="false" aria-pressed="false" type="button">
                 <span class="_x_extension_theme_preview_2026_unique_" data-preview-mode="dark">
-                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/dark.svg" alt="" aria-hidden="true" />
+                  <img class="_x_extension_theme_preview_img_2026_unique_" src="../../assets/images/dark.svg" alt="" aria-hidden="true" width="120" height="80" />
                   <span class="_x_extension_theme_check_2026_unique_" aria-hidden="true">
                     <i class="ri-icon ri-check-line" aria-hidden="true"></i>
                   </span>

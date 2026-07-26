@@ -115,6 +115,11 @@
     function clear() {
       hideTopActionTooltip();
       hideCursorTooltip();
+      cards.forEach((card) => {
+        if (card && typeof card._xDisposeRecentCard === 'function') {
+          card._xDisposeRecentCard();
+        }
+      });
       if (grid) {
         grid.innerHTML = '';
       }
@@ -184,6 +189,9 @@
       const faviconImage = documentObj.createElement('img');
       faviconImage.className = 'x-nt-recent-favicon';
       faviconImage.alt = siteName || t('site_icon_alt', '站点');
+      faviconImage.width = 25;
+      faviconImage.height = 25;
+      faviconImage.decoding = 'async';
       faviconImage.loading = shouldEager ? 'eager' : 'lazy';
       if (shouldEager) {
         faviconImage.fetchPriority = 'high';
@@ -249,6 +257,7 @@
       let suppressClickAfterPointerNavigation = false;
       let rollbackTimerId = null;
       let hoverUnlockTimerId = null;
+      let navigationSignalCleanup = null;
       let isHoverLocked = false;
       const rollbackClassName = 'x-nt-recent-card--rollback';
       const ROLLBACK_ANIMATION_MS = 220;
@@ -275,9 +284,51 @@
           card.classList.remove(rollbackClassName);
         }, ROLLBACK_ANIMATION_MS + HOVER_REENABLE_DELAY_MS);
       };
+      const clearNavigationSignals = () => {
+        if (typeof navigationSignalCleanup !== 'function') {
+          return;
+        }
+        const cleanup = navigationSignalCleanup;
+        navigationSignalCleanup = null;
+        cleanup();
+      };
       const markNavigationSuccess = () => {
         clearRollbackTimer();
         clearHoverUnlockTimer();
+        clearNavigationSignals();
+      };
+      const bindNavigationSignals = () => {
+        clearNavigationSignals();
+        if (!documentObj || typeof documentObj.addEventListener !== 'function' ||
+            !windowObj || typeof windowObj.addEventListener !== 'function') {
+          return;
+        }
+        let active = true;
+        const finishNavigation = () => {
+          if (!active) {
+            return;
+          }
+          markNavigationSuccess();
+        };
+        const onVisibilityChange = () => {
+          if (documentObj.visibilityState === 'hidden') {
+            finishNavigation();
+          }
+        };
+        navigationSignalCleanup = () => {
+          if (!active) {
+            return;
+          }
+          active = false;
+          if (typeof documentObj.removeEventListener === 'function') {
+            documentObj.removeEventListener('visibilitychange', onVisibilityChange);
+          }
+          if (typeof windowObj.removeEventListener === 'function') {
+            windowObj.removeEventListener('pagehide', finishNavigation);
+          }
+        };
+        documentObj.addEventListener('visibilitychange', onVisibilityChange);
+        windowObj.addEventListener('pagehide', finishNavigation, { once: true });
       };
       const scheduleRollbackIfPending = () => {
         clearRollbackTimer();
@@ -288,6 +339,7 @@
           }
           lockHoverAfterRollback();
           hasNavigateAttempted = false;
+          clearNavigationSignals();
         }, 180);
       };
       const resetBackgroundOpenGuard = () => {
@@ -311,6 +363,9 @@
           card.classList.remove(rollbackClassName);
         }
         const openInBackgroundTab = shouldOpenUrlInBackground(event);
+        if (!openInBackgroundTab) {
+          bindNavigationSignals();
+        }
         openUrl(item.url, { openInBackgroundTab });
         if (openInBackgroundTab) {
           resetBackgroundOpenGuard();
@@ -358,14 +413,6 @@
           card.classList.remove(rollbackClassName);
         }
       });
-      const onVisibilityChange = () => {
-        if (documentObj.visibilityState === 'hidden') {
-          markNavigationSuccess();
-          documentObj.removeEventListener('visibilitychange', onVisibilityChange);
-        }
-      };
-      documentObj.addEventListener('visibilitychange', onVisibilityChange);
-      windowObj.addEventListener('pagehide', markNavigationSuccess, { once: true });
       bindCursorTooltip(card, () => card._xTitleText || safeTitleText, {
         maxWidth: 460,
         shouldShow: () => !isTooltipSuppressedAfterActivation && isRecentTitleTruncated(title)
@@ -485,6 +532,11 @@
         showTopActionTooltip(dismissButton, label);
       });
       dismissButton.addEventListener('blur', hideTopActionTooltip);
+      card._xDisposeRecentCard = () => {
+        clearRollbackTimer();
+        clearHoverUnlockTimer();
+        clearNavigationSignals();
+      };
 
       return card;
     }
@@ -501,13 +553,21 @@
         };
       }
       clear();
+      const fragment = grid && documentObj &&
+          typeof documentObj.createDocumentFragment === 'function'
+        ? documentObj.createDocumentFragment()
+        : null;
+      const renderTarget = fragment || grid;
       normalizedItems.forEach((item, index) => {
         const card = buildCard(item, index);
-        if (card && grid) {
+        if (card && renderTarget) {
           cards.push(card);
-          grid.appendChild(card);
+          renderTarget.appendChild(card);
         }
       });
+      if (fragment && grid) {
+        grid.appendChild(fragment);
+      }
       return {
         changed: true,
         count: normalizedItems.length,

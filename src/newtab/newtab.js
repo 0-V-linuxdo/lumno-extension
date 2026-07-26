@@ -21,6 +21,21 @@
   const recentSitesStorageAreaName = recentSitesStorageArea
     ? (recentSitesStorageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null;
+  function addStorageChangeListener(listener) {
+    if (!chrome || !chrome.storage || !chrome.storage.onChanged ||
+        typeof chrome.storage.onChanged.addListener !== 'function') {
+      return false;
+    }
+    chrome.storage.onChanged.addListener(listener);
+    return true;
+  }
+  function getExtensionResourceUrl(resourcePath) {
+    const normalizedPath = String(resourcePath || '').replace(/^\/+/, '');
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      return chrome.runtime.getURL(normalizedPath);
+    }
+    return new URL(`../../${normalizedPath}`, window.location.href).href;
+  }
 
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
@@ -205,6 +220,7 @@
   const BOOKMARK_DRAG_CLICK_SUPPRESS_MS = 420;
   const BOOKMARK_DRAG_PAGE_SWITCH_DELAY_MS = 640;
   const NEWTAB_SECTION_CACHE_TTL_MS = 1000 * 60 * 5;
+  const NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS = 120;
   const pageSearchParams = new URLSearchParams(window.location.search || '');
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let mediaListenerAttached = false;
@@ -242,6 +258,8 @@
   let selectedIndex = -1;
   let currentSuggestions = [];
   let lastSuggestionResponse = [];
+  let latestQuery = '';
+  let latestRawQuery = '';
   let siteSearchTriggerState = null;
   let localSearchScopeTriggerState = null;
   let lastRenderedQuery = '';
@@ -258,6 +276,7 @@
   let toastElement = null;
   let toastController = null;
   let layoutController = null;
+  let faviconViewRuntime = null;
   let searchEntryRestoreLayoutLockUntil = 0;
   let searchEntryLastVisibleViewportWidth = Math.max(0, window.innerWidth || 0);
   let searchEntryLastVisibleViewportHeight = Math.max(0, window.innerHeight || 0);
@@ -1352,7 +1371,7 @@
 
   function loadLocaleMessages(locale) {
     const normalized = normalizeLocale(locale);
-    const localePath = chrome.runtime.getURL(`_locales/${normalized}/messages.json`);
+    const localePath = getExtensionResourceUrl(`_locales/${normalized}/messages.json`);
     return fetch(localePath)
       .then((response) => response.json())
       .catch(() => ({}));
@@ -3462,6 +3481,24 @@
     });
   }
 
+  function refreshFallbackIcons() {
+    if (faviconViewRuntime && typeof faviconViewRuntime.refreshFallbackIcons === 'function') {
+      faviconViewRuntime.refreshFallbackIcons();
+    }
+  }
+
+  function refreshThemeAwareFavicons() {
+    if (faviconViewRuntime && typeof faviconViewRuntime.refreshThemeAwareFavicons === 'function') {
+      faviconViewRuntime.refreshThemeAwareFavicons();
+    }
+  }
+
+  function scheduleThemeAwareFaviconRescue() {
+    if (faviconViewRuntime && typeof faviconViewRuntime.scheduleThemeAwareFaviconRescue === 'function') {
+      faviconViewRuntime.scheduleThemeAwareFaviconRescue();
+    }
+  }
+
   function applyThemeMode(mode, options) {
     const previousThemeMode = currentThemeMode;
     currentThemeMode = normalizeThemeMode(mode);
@@ -3473,6 +3510,11 @@
     document.body.setAttribute('data-theme', resolved);
     if (document.documentElement) {
       document.documentElement.removeAttribute('data-wallpaper-preload-theme');
+      document.documentElement.style.colorScheme = resolved;
+    }
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', resolved === 'dark' ? '#111111' : '#ffffff');
     }
     applyWordmarkThemeAppearance(resolved);
     const didResolvedThemeChange = previousResolved !== resolved;
@@ -3649,7 +3691,7 @@
   bootstrapInitialWallpaperEffect();
   bootstrapInitialNewtabFavicon();
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  addStorageChangeListener((changes, areaName) => {
     if (areaName === 'local' && changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY]) {
       newtabShortcutIcons = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(
         changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY].newValue
@@ -4207,7 +4249,7 @@
         mode: getThemeModeLabel(nextMode)
       }),
       url: '',
-      favicon: chrome.runtime.getURL('assets/images/lumno.png'),
+      favicon: getExtensionResourceUrl('assets/images/lumno.png'),
       commandText: '/mode',
       commandAliases: [],
       nextMode: nextMode
@@ -4221,7 +4263,7 @@
         ? formatMessage('zen_disable_title', '{name}：退出 Zen 模式', { name: 'Lumno' })
         : formatMessage('zen_enable_title', '{name}：进入 Zen 模式', { name: 'Lumno' }),
       url: '',
-      favicon: chrome.runtime.getURL('assets/images/lumno.png'),
+      favicon: getExtensionResourceUrl('assets/images/lumno.png'),
       commandText: '/zen',
       commandAliases: [],
       nextEnabled: !zenModeEnabled
@@ -4406,8 +4448,6 @@
     });
   }
 
-  let latestQuery = '';
-  let latestRawQuery = '';
   let lastDeletionAt = 0;
   let fallbackShortcutRaw = '';
   let fallbackShortcutSpec = null;
@@ -4435,7 +4475,7 @@
   let faviconEnhancedFetchEnabled = false;
   loadDefaultSearchEngineState();
   if (chrome && chrome.storage && chrome.storage.onChanged) {
-    chrome.storage.onChanged.addListener((changes, areaName) => {
+    addStorageChangeListener((changes, areaName) => {
       if (!storageAreaName || areaName !== storageAreaName) {
         return;
       }
@@ -4566,7 +4606,7 @@
   const shouldSkipThemeUpgradeCandidate = FAVICON_UTILS.shouldSkipThemeUpgradeCandidate || NEWTAB_FAVICON_THEME.shouldSkipThemeUpgradeCandidate;
   const getKnownThemedFaviconCandidates = typeof FAVICON_UTILS.getKnownThemedFaviconCandidateUrls === 'function'
     ? ((hostname, preferredTheme) => FAVICON_UTILS.getKnownThemedFaviconCandidateUrls(hostname, preferredTheme, {
-      getRuntimeUrl: (path) => chrome.runtime.getURL(path)
+      getRuntimeUrl: getExtensionResourceUrl
     }))
     : NEWTAB_FAVICON_THEME.getKnownThemedFaviconCandidates;
   const getRootFaviconCandidates = typeof FAVICON_UTILS.getRootFaviconCandidateUrls === 'function'
@@ -5518,7 +5558,7 @@
   const logNewtabFaviconDecision = typeof FAVICON_UTILS.createFaviconDecisionLogger === 'function'
     ? FAVICON_UTILS.createFaviconDecisionLogger({ surface: 'newtab' })
     : (() => false);
-  const faviconViewRuntime = NEWTAB_FAVICON_VIEW.createFaviconViewRuntime({
+  faviconViewRuntime = NEWTAB_FAVICON_VIEW.createFaviconViewRuntime({
     document,
     windowObj: window,
     chromeApi: chrome,
@@ -5547,16 +5587,13 @@
   const applyFaviconOpticalAlignment = faviconViewRuntime.applyFaviconOpticalAlignment;
   const reportMissingIcon = faviconViewRuntime.reportMissingIcon;
   const applyFallbackIcon = faviconViewRuntime.applyFallbackIcon;
-  const refreshFallbackIcons = faviconViewRuntime.refreshFallbackIcons;
   const requestFaviconData = faviconViewRuntime.requestFaviconData;
   const setFaviconSrcWithAnimation = faviconViewRuntime.setFaviconSrcWithAnimation;
   const attachFaviconData = faviconViewRuntime.attachFaviconData;
   const preloadIcon = faviconViewRuntime.preloadIcon;
   const warmIconCache = faviconViewRuntime.warmIconCache;
   const attachFaviconWithFallbacks = faviconViewRuntime.attachFaviconWithFallbacks;
-  const refreshThemeAwareFavicons = faviconViewRuntime.refreshThemeAwareFavicons;
   const rescueThemeAwareFallbackFavicons = faviconViewRuntime.rescueThemeAwareFallbackFavicons;
-  const scheduleThemeAwareFaviconRescue = faviconViewRuntime.scheduleThemeAwareFaviconRescue;
 
   function isAllowedFaviconProxyRequestUrl(url) {
     return typeof FAVICON_UTILS.isAllowedFaviconProxyRequestUrl === 'function'
@@ -10623,7 +10660,7 @@
     }
     if (normalized === 'lumno.kubai.design') {
       return (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function')
-        ? chrome.runtime.getURL('assets/images/lumno.png')
+        ? getExtensionResourceUrl('assets/images/lumno.png')
         : 'https://lumno.kubai.design/favicon.png';
     }
     return getGstaticFaviconUrl(`https://${normalized}/`);
@@ -12034,7 +12071,7 @@
     if (window._x_extension_shortcut_rules_promise_2024_unique_) {
       return window._x_extension_shortcut_rules_promise_2024_unique_;
     }
-    const rulesUrl = chrome.runtime.getURL('assets/data/shortcut-rules.json');
+    const rulesUrl = getExtensionResourceUrl('assets/data/shortcut-rules.json');
     const rulesPromise = fetch(rulesUrl)
       .then((response) => response.json())
       .then((data) => {
@@ -12043,6 +12080,11 @@
         return items;
       })
       .catch(() => new Promise((resolve) => {
+        if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+          window._x_extension_shortcut_rules_2024_unique_ = [];
+          resolve([]);
+          return;
+        }
         chrome.runtime.sendMessage({ action: 'getShortcutRules' }, (response) => {
           const items = response && Array.isArray(response.items) ? response.items : [];
           window._x_extension_shortcut_rules_2024_unique_ = items;
@@ -13779,7 +13821,7 @@
       }
       const optionsUrl = typeof EXTENSION_ROUTES.buildOptionsUrl === 'function'
         ? EXTENSION_ROUTES.buildOptionsUrl(chrome)
-        : chrome.runtime.getURL('src/options/options.html');
+        : getExtensionResourceUrl('src/options/options.html');
       window.open(optionsUrl, '_blank');
     });
   }
@@ -14018,7 +14060,7 @@
 
   getSiteSearchProviders();
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  addStorageChangeListener((changes, areaName) => {
     if (!storageAreaName || areaName !== storageAreaName ||
         (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY])) {
       return;
@@ -14147,18 +14189,36 @@
     document.body.appendChild(bookmarkCascadeRuntime.getDebugControl());
   }
 
+  let recentExternalChangeTimer = 0;
+  let bookmarkExternalChangeTimer = 0;
   function scheduleRecentReloadIfVisible() {
     if (document.visibilityState !== 'visible') {
       return;
     }
-    loadRecentSites({ force: true });
+    if (recentExternalChangeTimer) {
+      window.clearTimeout(recentExternalChangeTimer);
+    }
+    recentExternalChangeTimer = window.setTimeout(() => {
+      recentExternalChangeTimer = 0;
+      if (document.visibilityState === 'visible') {
+        loadRecentSites({ force: true });
+      }
+    }, NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS);
   }
 
   function scheduleBookmarkReloadIfVisible() {
     if (document.visibilityState !== 'visible') {
       return;
     }
-    loadBookmarks({ force: true });
+    if (bookmarkExternalChangeTimer) {
+      window.clearTimeout(bookmarkExternalChangeTimer);
+    }
+    bookmarkExternalChangeTimer = window.setTimeout(() => {
+      bookmarkExternalChangeTimer = 0;
+      if (document.visibilityState === 'visible') {
+        loadBookmarks({ force: true });
+      }
+    }, NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS);
   }
 
   function bindRecentAndBookmarkChangeListeners() {

@@ -174,15 +174,40 @@
       grid.appendChild(emptyState);
     }
 
-    function syncCardElementCache() {
+    function disposeCachedCard(card) {
+      if (card && typeof card._xDisposeBookmarkCard === 'function') {
+        card._xDisposeBookmarkCard();
+      }
+    }
+
+    function syncCardElementCache(items) {
       const MAX_CACHE_SIZE = 1500;
-      if (!cardElementCache || cardElementCache.size <= MAX_CACHE_SIZE) {
+      if (!cardElementCache) {
+        return;
+      }
+      if (Array.isArray(items)) {
+        const activeItemKeys = new Set(
+          items.map(getBookmarkCacheKey).filter(Boolean)
+        );
+        cardElementCache.forEach((card, cacheKey) => {
+          const key = String(cacheKey || '');
+          const separatorIndex = key.indexOf('::');
+          const itemKey = separatorIndex >= 0 ? key.slice(separatorIndex + 2) : '';
+          if (!itemKey || !activeItemKeys.has(itemKey)) {
+            disposeCachedCard(card);
+            cardElementCache.delete(cacheKey);
+          }
+        });
+      }
+      if (cardElementCache.size <= MAX_CACHE_SIZE) {
         return;
       }
       const keys = Array.from(cardElementCache.keys());
       const removeCount = Math.max(1, cardElementCache.size - MAX_CACHE_SIZE);
       for (let i = 0; i < removeCount && i < keys.length; i += 1) {
-        cardElementCache.delete(keys[i]);
+        const cacheKey = keys[i];
+        disposeCachedCard(cardElementCache.get(cacheKey));
+        cardElementCache.delete(cacheKey);
       }
     }
 
@@ -282,6 +307,9 @@
         const favicon = documentObj.createElement('img');
         favicon.className = 'x-nt-bookmark-icon';
         favicon.alt = siteName || t('site_icon_alt', '站点');
+        favicon.width = 22;
+        favicon.height = 22;
+        favicon.decoding = 'async';
         favicon.loading = index < 4 ? 'eager' : 'lazy';
         if (index < 4) {
           favicon.fetchPriority = 'high';
@@ -365,6 +393,8 @@
           }
           const previewFavicon = documentObj.createElement('img');
           previewFavicon.className = 'x-nt-folder-preview-favicon';
+          previewFavicon.width = 24;
+          previewFavicon.height = 24;
           const rotationSeed = stableHashCode(`${url}|${i}|${item.id || ''}`);
           const rotationDeg = ((rotationSeed % 13) - 6) * 0.5;
           previewFavicon.style.setProperty('--x-nt-folder-favicon-rot', `${rotationDeg.toFixed(2)}deg`);
@@ -567,6 +597,14 @@
           openBookmarkUrl(item.url, event);
         }
       });
+      card._xDisposeBookmarkCard = () => {
+        clearHoverIntentTimer();
+        if (card._xBookmarkSuppressClickTimer && windowObj &&
+            typeof windowObj.clearTimeout === 'function') {
+          windowObj.clearTimeout(card._xBookmarkSuppressClickTimer);
+          card._xBookmarkSuppressClickTimer = 0;
+        }
+      };
       return card;
     }
 
