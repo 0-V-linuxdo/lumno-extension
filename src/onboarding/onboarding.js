@@ -253,6 +253,7 @@
   const onboardingCopyHeadingApi = globalThis.LumnoOnboardingCopyHeading || {};
   const onboardingCursorLayerApi = globalThis.LumnoOnboardingCursorLayer || {};
   const onboardingInteractionsApi = globalThis.LumnoOnboardingInteractions || {};
+  const onboardingVisualSurfaceApi = globalThis.LumnoOnboardingVisualSurface || {};
   const pageStripController = pageStrip &&
       typeof onboardingPageStripApi.createPageStripController === 'function'
     ? onboardingPageStripApi.createPageStripController(pageStrip, {
@@ -310,6 +311,10 @@
   const cursorLayerController = cursorLayer &&
       typeof onboardingCursorLayerApi.createCursorLayerController === 'function'
     ? onboardingCursorLayerApi.createCursorLayerController(cursorLayer)
+    : null;
+  const visualSurfaceController = visualStage &&
+      typeof onboardingVisualSurfaceApi.createVisualSurfaceController === 'function'
+    ? onboardingVisualSurfaceApi.createVisualSurfaceController(visualStage)
     : null;
   let blueprint = null;
   let state = null;
@@ -3110,6 +3115,9 @@
     }
     stopLumnoOverlayHoverLoop();
     stopNewtabPreviewHoverLoop();
+    if (visualSurfaceController) {
+      visualSurfaceController.clear();
+    }
     visualStage.classList.remove('is-visual-exit');
     if (cursorLayer) {
       cursorLayer.classList.remove('is-visual-exit');
@@ -3122,20 +3130,60 @@
       cursorLayer.dataset.cursorMode = '';
     }
     if (slide.visual.visible) {
-      if (slide.visual.kind === 'bookmark-focus-surface') {
-        visualStage.appendChild(createBookmarkFocusSurface());
-      } else if (slide.visual.kind === 'lumno-web-wordmark-surface') {
-        visualStage.appendChild(createLumnoWebWordmarkSurface());
-      } else if (slide.visual.kind === 'newtab-preview-surface') {
-        const surface = createNewtabPreviewSurface();
-        visualStage.appendChild(surface);
-        startNewtabPreviewHoverLoop(surface);
-      } else if (slide.visual.kind === 'site-search-demo-surface') {
-        visualStage.appendChild(createSiteSearchDemoSurface());
-      } else if (slide.visual.kind === 'feature-cards-surface') {
-        visualStage.appendChild(createFeatureCardsSurface());
-      } else {
-        visualStage.appendChild(createGenericVisualSurface());
+      const renderedByReact = visualSurfaceController
+        ? visualSurfaceController.render({
+          ariaLabel: 'Lumno',
+          butterflyDValues: LUMNO_WEB_BUTTERFLY_D_VALUES,
+          butterflyRestPath: LUMNO_WEB_BUTTERFLY_REST_PATH,
+          featureAwards: getFeatureAwards(),
+          featureCardAriaJoiner: getRuntimeMiscText('featureCardAriaJoiner', ', '),
+          featureCards: getFeatureCards(),
+          homepagePipArtSrc: HOMEPAGE_PIP_ART_SRC,
+          kind: slide.visual.kind,
+          newtabFiltersArtSrc: NEWTAB_FILTERS_ART_SRC,
+          practicalFeaturesAriaLabel: getRuntimeMiscText(
+            'practicalFeaturesAriaLabel',
+            'Lumno practical features'
+          ),
+          principlesAriaLabel: getRuntimeMiscText(
+            'principlesAriaLabel',
+            'Lumno principles'
+          ),
+          siteSearchCases: getSiteSearchDemoCases().map((item) => (
+            Object.assign({}, item, { theme: getSiteSearchDemoTheme(item) })
+          )),
+          siteSearchDemoAriaLabel: getRuntimeMiscText(
+            'siteSearchDemoAriaLabel',
+            'Lumno site search demo'
+          ),
+          siteSearchOpenLabel: getRuntimeMiscText('openLabel', 'Open'),
+          siteSearchSettingsLabel: getRuntimeMiscText(
+            'settingsLabel',
+            'Settings'
+          ),
+          siteSearchTabHintTemplate: String(
+            getRuntimeSection('siteSearchDemo').tabHintTemplate ||
+              'Search with {provider}'
+          ),
+          wordmarkSrc: LUMNO_WEB_WORDMARK_SRC
+        })
+        : false;
+      if (!renderedByReact) {
+        if (slide.visual.kind === 'bookmark-focus-surface') {
+          visualStage.appendChild(createBookmarkFocusSurface());
+        } else if (slide.visual.kind === 'lumno-web-wordmark-surface') {
+          visualStage.appendChild(createLumnoWebWordmarkSurface());
+        } else if (slide.visual.kind === 'newtab-preview-surface') {
+          const surface = createNewtabPreviewSurface();
+          visualStage.appendChild(surface);
+          startNewtabPreviewHoverLoop(surface);
+        } else if (slide.visual.kind === 'site-search-demo-surface') {
+          visualStage.appendChild(createSiteSearchDemoSurface());
+        } else if (slide.visual.kind === 'feature-cards-surface') {
+          visualStage.appendChild(createFeatureCardsSurface());
+        } else {
+          visualStage.appendChild(createGenericVisualSurface());
+        }
       }
     }
     renderCursor(slide);

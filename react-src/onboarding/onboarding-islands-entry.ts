@@ -4,6 +4,7 @@ import { createCopyHeadingApi } from './copy-heading';
 import { createCursorLayerApi } from './cursor-layer';
 import { createInteractionsApi } from './interactions';
 import { createPageStripApi } from './page-strip';
+import { createVisualSurfaceApi } from './visual-surface';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoOnboardingActions?: ReturnType<typeof createActionButtonsApi>;
@@ -18,6 +19,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOnboardingInteractionsReact?: ReturnType<typeof createInteractionsApi>;
   LumnoOnboardingPageStrip?: ReturnType<typeof createPageStripApi>;
   LumnoOnboardingPageStripReact?: ReturnType<typeof createPageStripApi>;
+  LumnoOnboardingVisualSurface?: ReturnType<typeof createVisualSurfaceApi>;
+  LumnoOnboardingVisualSurfaceReact?: ReturnType<typeof createVisualSurfaceApi>;
   LumnoOnboardingReactBootstrap?: {
     allowReactUpgrade: boolean;
     reactReady: boolean;
@@ -29,6 +32,7 @@ const runtime = globalThis as typeof globalThis & {
     cursorLayer: ReturnType<typeof createCursorLayerApi>;
     interactions: ReturnType<typeof createInteractionsApi>;
     pageStrip: ReturnType<typeof createPageStripApi>;
+    visualSurface: ReturnType<typeof createVisualSurfaceApi>;
   };
 };
 
@@ -41,6 +45,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const cursorLayerApi = createCursorLayerApi();
   const interactionsApi = createInteractionsApi();
   const pageStripApi = createPageStripApi();
+  const visualSurfaceApi = createVisualSurfaceApi();
 
   runtime.LumnoOnboardingActionsReact = actionsApi;
   runtime.LumnoOnboardingActions = actionsApi;
@@ -54,13 +59,16 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOnboardingInteractions = interactionsApi;
   runtime.LumnoOnboardingPageStripReact = pageStripApi;
   runtime.LumnoOnboardingPageStrip = pageStripApi;
+  runtime.LumnoOnboardingVisualSurfaceReact = visualSurfaceApi;
+  runtime.LumnoOnboardingVisualSurface = visualSurfaceApi;
   runtime.LumnoOnboardingReactIslands = Object.freeze({
     actions: actionsApi,
     bodyCopy: bodyCopyApi,
     copyHeading: copyHeadingApi,
     cursorLayer: cursorLayerApi,
     interactions: interactionsApi,
-    pageStrip: pageStripApi
+    pageStrip: pageStripApi,
+    visualSurface: visualSurfaceApi
   });
 
   if (bootstrapState) {

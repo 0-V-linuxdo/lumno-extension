@@ -178,13 +178,13 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    276 * 1024,
-  'all shared React artifacts and three page entries should stay within their 276 KiB package budget'
+    288 * 1024,
+  'all shared React artifacts and three page entries should stay within their 288 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    84 * 1024,
-  'all shared React artifacts and three page entries should stay within their 84 KiB gzip budget'
+    87 * 1024,
+  'all shared React artifacts and three page entries should stay within their 87 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -219,6 +219,7 @@ assert(
     onboardingBundle.includes('LumnoOnboardingCopyHeadingReact') &&
     onboardingBundle.includes('LumnoOnboardingCursorLayerReact') &&
     onboardingBundle.includes('LumnoOnboardingInteractionsReact') &&
+    onboardingBundle.includes('LumnoOnboardingVisualSurfaceReact') &&
     onboardingBundle.includes('LumnoOnboardingReactIslands') &&
     onboardingBundle.includes('onboarding-page-strip') &&
     onboardingBundle.includes('onboarding-actions') &&
@@ -226,6 +227,9 @@ assert(
     onboardingBundle.includes('onboarding-title-copy') &&
     onboardingBundle.includes('onboarding-cursor-layer') &&
     onboardingBundle.includes('onboarding-interactions') &&
+    onboardingBundle.includes('onboarding-lumno-wordmark-surface') &&
+    onboardingBundle.includes('onboarding-feature-cards-surface') &&
+    onboardingBundle.includes('onboarding-site-search-demo-surface') &&
     onboardingSource.includes('onboardingPageStripApi.createPageStripController') &&
     onboardingSource.includes('pageStripController.render') &&
     onboardingSource.includes('onboardingActionsApi.createActionButtonsController') &&
@@ -237,8 +241,10 @@ assert(
     onboardingSource.includes('onboardingCursorLayerApi.createCursorLayerController') &&
     onboardingSource.includes('cursorLayerController.render') &&
     onboardingSource.includes('onboardingInteractionsApi.createInteractionsController') &&
-    onboardingSource.includes('interactionSlotsController.render'),
-  'Onboarding should expose and consume its React page-strip, action, body-copy, copy-heading, cursor-layer, and interaction islands'
+    onboardingSource.includes('interactionSlotsController.render') &&
+    onboardingSource.includes('onboardingVisualSurfaceApi.createVisualSurfaceController') &&
+    onboardingSource.includes('visualSurfaceController.render'),
+  'Onboarding should expose and consume its React page-strip, action, body-copy, copy-heading, cursor-layer, interaction, and visual-surface islands'
 );
 assert(
   !bundle.includes('process.env.NODE_ENV') &&

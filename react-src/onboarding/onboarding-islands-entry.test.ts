@@ -37,6 +37,12 @@ type OnboardingRuntime = typeof globalThis & {
   LumnoOnboardingPageStripReact?: {
     implementation?: string;
   };
+  LumnoOnboardingVisualSurface?: {
+    implementation?: string;
+  };
+  LumnoOnboardingVisualSurfaceReact?: {
+    implementation?: string;
+  };
   LumnoOnboardingReactBootstrap?: {
     allowReactUpgrade: boolean;
     reactReady: boolean;
@@ -59,6 +65,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOnboardingInteractionsReact;
   delete runtime.LumnoOnboardingPageStrip;
   delete runtime.LumnoOnboardingPageStripReact;
+  delete runtime.LumnoOnboardingVisualSurface;
+  delete runtime.LumnoOnboardingVisualSurfaceReact;
   delete runtime.LumnoOnboardingReactBootstrap;
   delete runtime.LumnoOnboardingReactIslands;
 }
@@ -81,6 +89,10 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingPageStrip?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingPageStripReact).toBe(
       runtime.LumnoOnboardingPageStrip
+    );
+    expect(runtime.LumnoOnboardingVisualSurface?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingVisualSurfaceReact).toBe(
+      runtime.LumnoOnboardingVisualSurface
     );
     expect(runtime.LumnoOnboardingActions?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingActionsReact).toBe(
@@ -108,7 +120,8 @@ describe('Onboarding React islands entry', () => {
       copyHeading: runtime.LumnoOnboardingCopyHeading,
       cursorLayer: runtime.LumnoOnboardingCursorLayer,
       interactions: runtime.LumnoOnboardingInteractions,
-      pageStrip: runtime.LumnoOnboardingPageStrip
+      pageStrip: runtime.LumnoOnboardingPageStrip,
+      visualSurface: runtime.LumnoOnboardingVisualSurface
     });
   });
 
@@ -127,6 +140,7 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingCursorLayer).toBeUndefined();
     expect(runtime.LumnoOnboardingInteractions).toBeUndefined();
     expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
+    expect(runtime.LumnoOnboardingVisualSurface).toBeUndefined();
     expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
   });
 });
