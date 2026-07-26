@@ -242,8 +242,6 @@
   const onboardingCursorLayerApi = globalThis.LumnoOnboardingCursorLayer || {};
   const onboardingInteractionsApi = globalThis.LumnoOnboardingInteractions || {};
   const onboardingVisualSurfaceApi = globalThis.LumnoOnboardingVisualSurface || {};
-  const onboardingInfoTooltipContentApi =
-    globalThis.LumnoOnboardingInfoTooltipContent || {};
   const pageStripController = pageStrip &&
       typeof onboardingPageStripApi.createPageStripController === 'function'
     ? onboardingPageStripApi.createPageStripController(pageStrip, {
@@ -872,11 +870,23 @@
     element.style.setProperty('top', `${Math.round(top)}px`);
   }
 
-  function renderInfoTooltipContent(element, infoTooltip, browserAvatars, text) {
+  function renderInfoTooltipContent(element, infoTooltip, browserAvatars) {
     if (!element) {
       return;
     }
-    onboardingInfoTooltipContentApi.render(element, {
+    const tooltipView = globalThis.LumnoTooltipView || {};
+    const isBrowserAvatarTooltip =
+      infoTooltip && infoTooltip.type === 'browser-avatars';
+    element.classList.toggle(
+      'onboarding-browser-tooltip',
+      isBrowserAvatarTooltip
+    );
+    if (!isBrowserAvatarTooltip ||
+        typeof tooltipView.renderBrowserAvatarTooltip !== 'function') {
+      return;
+    }
+    element.dataset.reactIsland = 'onboarding-info-tooltip-content';
+    tooltipView.renderBrowserAvatarTooltip(element, {
       browsers: browserAvatars && Array.isArray(browserAvatars.browsers)
         ? browserAvatars.browsers
         : [],
@@ -887,9 +897,7 @@
       browserAvatarSuffix: getRuntimeMiscText(
         'browserAvatarSuffix',
         'and more'
-      ),
-      text,
-      type: infoTooltip && infoTooltip.type
+      )
     });
   }
 
@@ -904,7 +912,7 @@
       spacing: infoTooltip && infoTooltip.type === 'browser-avatars' ? 24 : 8
     };
     const element = onboardingInfoTooltipController.show(button, text, options);
-    renderInfoTooltipContent(element, infoTooltip, browserAvatars, text);
+    renderInfoTooltipContent(element, infoTooltip, browserAvatars);
     if (infoTooltip && infoTooltip.type === 'browser-avatars') {
       positionBrowserAvatarTooltip(element, button);
     } else if (globalThis.LumnoTooltip && typeof globalThis.LumnoTooltip.position === 'function') {

@@ -43,12 +43,6 @@ type OnboardingRuntime = typeof globalThis & {
   LumnoOnboardingVisualSurfaceReact?: {
     implementation?: string;
   };
-  LumnoOnboardingInfoTooltipContent?: {
-    implementation?: string;
-  };
-  LumnoOnboardingInfoTooltipContentReact?: {
-    implementation?: string;
-  };
   LumnoOnboardingReactBootstrap?: {
     reactReady: boolean;
   };
@@ -72,8 +66,6 @@ function clearRuntime(): void {
   delete runtime.LumnoOnboardingPageStripReact;
   delete runtime.LumnoOnboardingVisualSurface;
   delete runtime.LumnoOnboardingVisualSurfaceReact;
-  delete runtime.LumnoOnboardingInfoTooltipContent;
-  delete runtime.LumnoOnboardingInfoTooltipContentReact;
   delete runtime.LumnoOnboardingReactBootstrap;
   delete runtime.LumnoOnboardingReactIslands;
 }
@@ -99,12 +91,6 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingVisualSurface?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingVisualSurfaceReact).toBe(
       runtime.LumnoOnboardingVisualSurface
-    );
-    expect(runtime.LumnoOnboardingInfoTooltipContent?.implementation).toBe(
-      'react'
-    );
-    expect(runtime.LumnoOnboardingInfoTooltipContentReact).toBe(
-      runtime.LumnoOnboardingInfoTooltipContent
     );
     expect(runtime.LumnoOnboardingActions?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingActionsReact).toBe(
@@ -133,8 +119,7 @@ describe('Onboarding React islands entry', () => {
       cursorLayer: runtime.LumnoOnboardingCursorLayer,
       interactions: runtime.LumnoOnboardingInteractions,
       pageStrip: runtime.LumnoOnboardingPageStrip,
-      visualSurface: runtime.LumnoOnboardingVisualSurface,
-      infoTooltipContent: runtime.LumnoOnboardingInfoTooltipContent
+      visualSurface: runtime.LumnoOnboardingVisualSurface
     });
   });
 

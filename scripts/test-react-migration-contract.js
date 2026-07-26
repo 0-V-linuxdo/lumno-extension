@@ -291,6 +291,8 @@ assert(
 );
 assert(
   sharedBundle.includes('shared-search-input') &&
+    sharedBundle.includes('_x_lumnoTooltipRenderReact_2026_unique_') &&
+    overlayBundle.includes('_x_lumnoTooltipRenderReact_2026_unique_') &&
     searchInputReactSource.includes('createSearchInput') &&
     searchInputReactSource.includes(
       "container.dataset.reactIsland = 'shared-search-input'"
@@ -340,9 +342,9 @@ assert(
     'LumnoOnboardingCursorLayerReact',
     'LumnoOnboardingInteractionsReact',
     'LumnoOnboardingVisualSurfaceReact',
-    'LumnoOnboardingInfoTooltipContentReact',
     'LumnoOnboardingReactIslands'
   ].every((name) => onboardingBundle.includes(name)) &&
+    sharedBundle.includes('renderBrowserAvatarTooltip') &&
     [
       'onboardingPageStripApi.createPageStripController',
       'onboardingActionsApi.createActionButtonsController',
@@ -351,7 +353,7 @@ assert(
       'onboardingCursorLayerApi.createCursorLayerController',
       'onboardingInteractionsApi.createInteractionsController',
       'onboardingVisualSurfaceApi.createVisualSurfaceController',
-      'onboardingInfoTooltipContentApi.render('
+      'tooltipView.renderBrowserAvatarTooltip('
     ].every((contract) => onboardingSource.includes(contract)),
   'Onboarding should install and consume every migrated React controller'
 );

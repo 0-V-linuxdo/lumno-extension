@@ -5,7 +5,6 @@ import { createCursorLayerApi } from './cursor-layer';
 import { createInteractionsApi } from './interactions';
 import { createPageStripApi } from './page-strip';
 import { createVisualSurfaceApi } from './visual-surface';
-import { createInfoTooltipContentApi } from './info-tooltip-content';
 import { createTooltipViewApi } from '../shared/tooltip-view';
 
 const runtime = globalThis as typeof globalThis & {
@@ -23,8 +22,6 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOnboardingPageStripReact?: ReturnType<typeof createPageStripApi>;
   LumnoOnboardingVisualSurface?: ReturnType<typeof createVisualSurfaceApi>;
   LumnoOnboardingVisualSurfaceReact?: ReturnType<typeof createVisualSurfaceApi>;
-  LumnoOnboardingInfoTooltipContent?: ReturnType<typeof createInfoTooltipContentApi>;
-  LumnoOnboardingInfoTooltipContentReact?: ReturnType<typeof createInfoTooltipContentApi>;
   LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
   LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
   LumnoOnboardingReactBootstrap?: {
@@ -38,7 +35,6 @@ const runtime = globalThis as typeof globalThis & {
     interactions: ReturnType<typeof createInteractionsApi>;
     pageStrip: ReturnType<typeof createPageStripApi>;
     visualSurface: ReturnType<typeof createVisualSurfaceApi>;
-    infoTooltipContent: ReturnType<typeof createInfoTooltipContentApi>;
   };
 };
 
@@ -52,7 +48,6 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   const interactionsApi = createInteractionsApi();
   const pageStripApi = createPageStripApi();
   const visualSurfaceApi = createVisualSurfaceApi();
-  const infoTooltipContentApi = createInfoTooltipContentApi();
   const tooltipViewApi = createTooltipViewApi();
 
   runtime.LumnoOnboardingActionsReact = actionsApi;
@@ -69,8 +64,6 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoOnboardingPageStrip = pageStripApi;
   runtime.LumnoOnboardingVisualSurfaceReact = visualSurfaceApi;
   runtime.LumnoOnboardingVisualSurface = visualSurfaceApi;
-  runtime.LumnoOnboardingInfoTooltipContentReact = infoTooltipContentApi;
-  runtime.LumnoOnboardingInfoTooltipContent = infoTooltipContentApi;
   runtime.LumnoTooltipViewReact = tooltipViewApi;
   runtime.LumnoTooltipView = tooltipViewApi;
   runtime.LumnoOnboardingReactIslands = Object.freeze({
@@ -80,8 +73,7 @@ if (!bootstrapState || !bootstrapState.reactReady) {
     cursorLayer: cursorLayerApi,
     interactions: interactionsApi,
     pageStrip: pageStripApi,
-    visualSurface: visualSurfaceApi,
-    infoTooltipContent: infoTooltipContentApi
+    visualSurface: visualSurfaceApi
   });
 
   if (bootstrapState) {

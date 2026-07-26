@@ -21,6 +21,11 @@ renderer.
 - Background and content scripts stay framework-free unless they host one of the
   React surfaces above.
 
+Shared Tooltip elements keep their owning React renderer on the element itself.
+This lets the Onboarding page coexist with the self-contained Overlay bundle
+without a later global API registration taking over or orphaning an existing
+React root.
+
 The page bootstrap imports the relevant React entry first and starts its classic
 adapter only after the React API is ready. A missing React entry is a startup
 error; there is no timed legacy-renderer fallback.

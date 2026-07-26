@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTooltipElement,
   destroyTooltipElement,
+  renderBrowserAvatarTooltip,
   renderCursorTag,
   renderTooltipText
 } from './tooltip-view';
@@ -49,6 +50,11 @@ describe('Tooltip React view', () => {
     expect(tooltipElement.dataset.reactIsland).toBe('tooltip');
     expect(tooltipElement.dataset.tooltipKind).toBe('cursor');
     expect(
+      typeof (
+        tooltipElement as HTMLDivElement & Record<string, unknown>
+      )._x_lumnoTooltipRenderReact_2026_unique_
+    ).toBe('function');
+    expect(
       tooltipElement.querySelectorAll(
         '._x_extension_tooltip_line_2026_unique_'
       )
@@ -68,5 +74,18 @@ describe('Tooltip React view', () => {
         '._x_extension_cursor_tooltip_tag_label_2026_unique_'
       )?.textContent
     ).toBe('Open in background');
+
+    act(() => {
+      renderBrowserAvatarTooltip(tooltipElement, {
+        browsers: [
+          { id: 'chrome', name: 'Chrome', src: '/chrome.svg' },
+          { id: 'dia', name: 'Dia' }
+        ],
+        browserAvatarSuffix: 'and more'
+      });
+    });
+    expect(tooltipElement.querySelectorAll('.browser-avatar')).toHaveLength(2);
+    expect(tooltipElement.querySelector('[role="img"]')?.getAttribute('aria-label'))
+      .toBe('Chrome, Dia and more');
   });
 });

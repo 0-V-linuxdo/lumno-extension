@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 const TOOLTIP_CLASS = '_x_extension_tooltip_2026_unique_';
 const LINE_CLASS = '_x_extension_tooltip_line_2026_unique_';
@@ -15,6 +15,10 @@ const WINDOWS_LOGO_CLASS =
 const WINDOWS_LOGO_PANE_CLASS =
   '_x_extension_cursor_tooltip_windows_logo_pane_2026_unique_';
 const DIVIDER_MARKER = '────────';
+const TOOLTIP_RENDER_HOOK =
+  '_x_lumnoTooltipRenderReact_2026_unique_';
+const TOOLTIP_DESTROY_HOOK =
+  '_x_lumnoTooltipDestroyReact_2026_unique_';
 
 interface TooltipElementOptions {
   className?: string;
@@ -30,12 +34,35 @@ interface CursorTagModel {
   windowsLogo?: boolean;
 }
 
+interface BrowserAvatar {
+  id?: string;
+  name?: string;
+  src?: string;
+}
+
+interface BrowserAvatarTooltipModel {
+  browsers?: BrowserAvatar[];
+  browserNameSeparator?: string;
+  browserAvatarSuffix?: string;
+}
+
 interface TooltipRootState {
   destroyed: boolean;
   root: Root;
 }
 
+type TooltipElementWithOwner = HTMLElement & {
+  [TOOLTIP_DESTROY_HOOK]?: () => void;
+  [TOOLTIP_RENDER_HOOK]?: (content: ReactNode) => void;
+};
+
 const roots = new WeakMap<HTMLElement, TooltipRootState>();
+const browserClassById: Record<string, string> = {
+  chrome: 'browser-avatar--chrome',
+  edge: 'browser-avatar--edge',
+  dia: 'browser-avatar--dia',
+  comet: 'browser-avatar--comet'
+};
 
 function TooltipLines({ text }: { text: string }) {
   const lines = String(text || '')
@@ -88,15 +115,82 @@ function CursorTag({ model }: { model: CursorTagModel }) {
   );
 }
 
+function BrowserAvatarItem({ browser }: { browser: BrowserAvatar }) {
+  const id = String(browser.id || '').trim().toLowerCase();
+  const name = String(browser.name || '').trim();
+  const src = String(browser.src || '').trim();
+  const [failed, setFailed] = useState(false);
+  const fallback = (name || id || '?').slice(0, 1).toUpperCase();
+  return (
+    <span
+      aria-hidden="true"
+      className={`browser-avatar ${
+        browserClassById[id] || 'browser-avatar--fallback'
+      }`}
+      title={name || undefined}
+    >
+      {src && !failed ? (
+        <img
+          alt=""
+          aria-hidden="true"
+          className="browser-avatar-image"
+          decoding="async"
+          onError={() => setFailed(true)}
+          src={src}
+        />
+      ) : fallback}
+    </span>
+  );
+}
+
+function BrowserAvatarTooltip({
+  model
+}: {
+  model: BrowserAvatarTooltipModel;
+}) {
+  const browsers = Array.isArray(model.browsers) ? model.browsers : [];
+  const names = browsers
+    .map((browser) => String(browser.name || '').trim())
+    .filter(Boolean);
+  const separator = String(model.browserNameSeparator || ', ');
+  const suffix = String(model.browserAvatarSuffix || 'and more');
+  return (
+    <span
+      aria-label={
+        names.length > 0
+          ? `${names.join(separator)} ${suffix}`.trim()
+          : undefined
+      }
+      className="browser-avatar-group"
+      role="img"
+    >
+      {browsers.map((browser, index) => (
+        <BrowserAvatarItem
+          browser={browser}
+          key={`${String(browser.id || '')}:${index}`}
+        />
+      ))}
+      <span aria-hidden="true" className="browser-avatar-ellipsis">…</span>
+    </span>
+  );
+}
+
 function renderInto(
   element: HTMLElement,
   content: ReactNode
 ): boolean {
   const state = roots.get(element);
-  if (!state || state.destroyed) {
+  if (state && !state.destroyed) {
+    flushSync(() => state.root.render(content));
+    return true;
+  }
+  const ownerRender = (element as TooltipElementWithOwner)[
+    TOOLTIP_RENDER_HOOK
+  ];
+  if (typeof ownerRender !== 'function') {
     return false;
   }
-  flushSync(() => state.root.render(content));
+  ownerRender(content);
   return true;
 }
 
@@ -134,6 +228,31 @@ export function createTooltipElement(
   }
   const root = createRoot(element);
   roots.set(element, { destroyed: false, root });
+  const ownedElement = element as TooltipElementWithOwner;
+  Object.defineProperty(ownedElement, TOOLTIP_RENDER_HOOK, {
+    configurable: true,
+    value(content: ReactNode) {
+      const state = roots.get(element);
+      if (!state || state.destroyed) {
+        return;
+      }
+      flushSync(() => state.root.render(content));
+    }
+  });
+  Object.defineProperty(ownedElement, TOOLTIP_DESTROY_HOOK, {
+    configurable: true,
+    value() {
+      const state = roots.get(element);
+      if (!state || state.destroyed) {
+        return;
+      }
+      state.destroyed = true;
+      flushSync(() => state.root.unmount());
+      roots.delete(element);
+      delete ownedElement[TOOLTIP_RENDER_HOOK];
+      delete ownedElement[TOOLTIP_DESTROY_HOOK];
+    }
+  });
   renderInto(element, null);
   return element;
 }
@@ -152,6 +271,16 @@ export function renderCursorTag(
   return renderTooltipContent(element, <CursorTag model={model} />);
 }
 
+export function renderBrowserAvatarTooltip(
+  element: HTMLElement,
+  model: BrowserAvatarTooltipModel
+): HTMLElement {
+  return renderTooltipContent(
+    element,
+    <BrowserAvatarTooltip model={model} />
+  );
+}
+
 export function destroyTooltipElement(
   element: HTMLElement | null
 ): void {
@@ -159,12 +288,21 @@ export function destroyTooltipElement(
     return;
   }
   const state = roots.get(element);
-  if (!state || state.destroyed) {
+  if (state && !state.destroyed) {
+    const ownerDestroy = (element as TooltipElementWithOwner)[
+      TOOLTIP_DESTROY_HOOK
+    ];
+    if (typeof ownerDestroy === 'function') {
+      ownerDestroy();
+    }
     return;
   }
-  state.destroyed = true;
-  flushSync(() => state.root.unmount());
-  roots.delete(element);
+  const ownerDestroy = (element as TooltipElementWithOwner)[
+    TOOLTIP_DESTROY_HOOK
+  ];
+  if (typeof ownerDestroy === 'function') {
+    ownerDestroy();
+  }
 }
 
 export function createTooltipViewApi() {
@@ -172,6 +310,7 @@ export function createTooltipViewApi() {
     implementation: 'react',
     createTooltipElement,
     destroyTooltipElement,
+    renderBrowserAvatarTooltip,
     renderCursorTag,
     renderTooltipText
   });
