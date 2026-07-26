@@ -1,5 +1,5 @@
 import { act } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createVisualSurfaceApi,
   createVisualSurfaceController,
@@ -23,12 +23,68 @@ function createModel(
 ): VisualSurfaceRenderModel {
   return {
     ariaLabel: 'Lumno',
+    bookmarkFocus: {
+      hoverLeadMs: 1040,
+      hoverStartMs: 3200,
+      hoverStepMs: 1600,
+      hoverWrapStepMs: 1600,
+      openLabel: 'Open',
+      overlayAriaLabel: 'Lumno overlay demo',
+      panelId: 'onboarding-overlay-demo',
+      query: 'extension',
+      reducedMotion: false,
+      removeHistoryLabel: 'Remove history item',
+      results: [],
+      searchAriaLabel: 'Search Lumno demo',
+      settingsLabel: 'Settings'
+    },
     butterflyDValues: 'flutter;rest;flutter',
     butterflyRestPath: 'M4 17 L10 20 Z',
     featureAwards: [],
     featureCards: [],
     homepagePipArtSrc: '/assets/onboarding-auto-pip.svg',
     kind: 'lumno-web-wordmark-surface',
+    newtabPreview: {
+      ariaLabel: 'Lumno new tab preview',
+      bookmarkManagerLabel: 'Open bookmark manager',
+      bookmarks: [
+        {
+          previewUrls: [
+            'https://developer.chrome.com/',
+            'https://github.com/'
+          ],
+          title: 'Workbench',
+          type: 'folder'
+        }
+      ],
+      bookmarksSectionTitle: 'Bookmarks',
+      hoverHoldMs: 1200,
+      hoverMoveMs: 520,
+      hoverSettleMs: 1140,
+      hoverStartMs: 1500,
+      nextLabelTemplate: '{label}, next',
+      openItemAriaTemplate: 'Open {title}',
+      previousLabelTemplate: '{label}, previous',
+      query: '',
+      recentSectionTitle: 'Recent',
+      recentSites: [
+        {
+          accentRgb: [66, 133, 244],
+          siteName: 'Chrome Web Store',
+          title: 'Lumno extension',
+          url: 'https://chromewebstore.google.com/',
+          urlText: 'chromewebstore.google.com'
+        }
+      ],
+      reducedMotion: false,
+      searchAriaLabel: 'Lumno new tab search preview',
+      searchPlaceholder: 'Search or enter URL...',
+      sectionModeBookmarksLabel: 'Bookmarks display mode',
+      sectionModeRecentLabel: 'Recent display mode',
+      settingsLabel: 'Settings',
+      visitLabel: 'Visit',
+      wordmarkSrc: '/assets/lumno-wordmark.svg'
+    },
     newtabFiltersArtSrc: '/assets/onboarding-newtab-filters.webp',
     siteSearchCases: [],
     siteSearchDemoAriaLabel: 'Site search demo',
@@ -46,6 +102,7 @@ afterEach(() => {
   });
   controllers = [];
   document.body.textContent = '';
+  vi.useRealTimers();
 });
 
 describe('Onboarding visual surface React island', () => {
@@ -87,12 +144,99 @@ describe('Onboarding visual surface React island', () => {
     act(() => {
       controller.render(createModel());
       handled = controller.render(
-        createModel({ kind: 'newtab-preview-surface' })
+        createModel({ kind: 'generic-visual-surface' })
       );
     });
 
     expect(handled).toBe(false);
     expect(stage.childElementCount).toBe(0);
+  });
+
+  it('renders the localized newtab preview and owns its hover loop', () => {
+    vi.useFakeTimers();
+    const { controller, stage } = createFixture();
+    act(() => {
+      controller.render(createModel({
+        kind: 'newtab-preview-surface'
+      }));
+    });
+
+    const surface = stage.querySelector<HTMLElement>(
+      '.newtab-preview-surface'
+    );
+    expect(surface?.dataset.reactIsland).toBe(
+      'onboarding-newtab-preview-surface'
+    );
+    expect(surface?.dataset.previewHover).toBe('idle');
+    expect(surface?.getAttribute('aria-label')).toBe(
+      'Lumno new tab preview'
+    );
+    expect(
+      surface?.querySelectorAll('.browser-window-clip')
+    ).toHaveLength(2);
+    const search = surface?.querySelector<HTMLInputElement>(
+      '#_x_extension_newtab_search_input_2024_unique_'
+    );
+    expect(search?.readOnly).toBe(true);
+    expect(search?.placeholder).toBe('Search or enter URL...');
+    expect(
+      surface?.querySelectorAll('.x-nt-bookmark-card')
+    ).toHaveLength(1);
+    expect(
+      surface?.querySelectorAll('.x-nt-recent-card')
+    ).toHaveLength(1);
+    expect(
+      surface?.querySelectorAll('[data-folder-layer]')
+    ).toHaveLength(3);
+    expect(
+      surface?.querySelector<HTMLElement>('.x-nt-recent-card')
+        ?.style.getPropertyValue('--x-nt-recent-card-color')
+    ).toBe('rgb(221, 233, 253)');
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(surface?.dataset.previewHover).toBe('recent');
+    expect(
+      surface?.querySelector('.x-nt-recent-card--hover')
+    ).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1720);
+    });
+    expect(surface?.dataset.previewHover).toBe('bookmark');
+    expect(
+      surface?.querySelector('.x-nt-bookmark-card--hover')
+    ).not.toBeNull();
+
+    act(() => {
+      controller.clear();
+    });
+    expect(stage.childElementCount).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the newtab preview idle when motion is reduced', () => {
+    vi.useFakeTimers();
+    const { controller, stage } = createFixture();
+    const model = createModel({
+      kind: 'newtab-preview-surface'
+    });
+    act(() => {
+      controller.render({
+        ...model,
+        newtabPreview: {
+          ...model.newtabPreview!,
+          reducedMotion: true
+        }
+      });
+    });
+
+    expect(
+      stage.querySelector<HTMLElement>('.newtab-preview-surface')
+        ?.dataset.previewHover
+    ).toBe('idle');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('renders localized feature awards, cards, delays, and artwork variants', () => {
@@ -270,5 +414,132 @@ describe('Onboarding visual surface React island', () => {
     expect(
       cards?.[1]?.querySelector('.site-search-demo-mode-prefix__icon')
     ).not.toBeNull();
+  });
+
+  it('renders bookmark focus UI and owns the result highlight loop', () => {
+    vi.useFakeTimers();
+    const { controller, stage } = createFixture();
+    act(() => {
+      controller.render(createModel({
+        bookmarkFocus: {
+          hoverLeadMs: 1040,
+          hoverStartMs: 3200,
+          hoverStepMs: 1600,
+          hoverWrapStepMs: 1600,
+          openLabel: 'Open',
+          overlayAriaLabel: 'Overlay demo',
+          panelId: 'overlay-demo-panel',
+          query: 'extension',
+          reducedMotion: false,
+          removeHistoryLabel: 'Remove this history item',
+          results: [
+            {
+              actionTagKey: 'Enter',
+              actionTagLabel: 'New tab',
+              favicon: '/assets/store.png',
+              sourceTag: 'Top site',
+              title: 'Chrome extension store',
+              type: 'topSite',
+              visitButtonLabel: 'Open'
+            },
+            {
+              detail: 'Bookmarks / Development',
+              sourceTag: 'Bookmark',
+              sourceTagKind: 'bookmark',
+              title: 'Extension API reference',
+              type: 'bookmark',
+              visitButtonLabel: 'Open'
+            },
+            {
+              historyDeletable: true,
+              title: 'Extension documentation',
+              type: 'history',
+              visitButtonLabel: 'Open'
+            }
+          ],
+          searchAriaLabel: 'Search demo',
+          settingsLabel: 'Demo settings'
+        },
+        kind: 'bookmark-focus-surface'
+      }));
+    });
+
+    const surface = stage.querySelector<HTMLElement>('.bookmark-focus-ui');
+    expect(surface?.dataset.reactIsland).toBe(
+      'onboarding-bookmark-focus-surface'
+    );
+    expect(surface?.querySelectorAll('.surface-rail-dot')).toHaveLength(3);
+    expect(surface?.querySelectorAll('.browser-page-row')).toHaveLength(4);
+    expect(surface?.querySelectorAll('.lumno-overlay-result')).toHaveLength(3);
+    expect(
+      surface?.querySelectorAll('.lumno-overlay-query-text .onboarding-typing-char')
+    ).toHaveLength(9);
+    expect(
+      surface?.querySelector('#overlay-demo-panel')?.getAttribute('aria-label')
+    ).toBe('Overlay demo');
+    const rows = () => surface?.querySelectorAll<HTMLElement>(
+      '.lumno-overlay-result'
+    );
+    expect(rows()?.[0]?.dataset.active).toBe('false');
+
+    act(() => {
+      vi.advanceTimersByTime(3200);
+    });
+    expect(rows()?.[0]?.dataset.active).toBe('true');
+    expect(
+      rows()?.[0]?.querySelector('.x-ov-suggestion-action-tags')
+        ?.getAttribute('data-visible')
+    ).toBe('true');
+    expect(
+      rows()?.[0]?.querySelector('.x-ov-suggestion-visit-button')
+        ?.getAttribute('data-visible')
+    ).toBe('false');
+
+    act(() => {
+      vi.advanceTimersByTime(2640);
+    });
+    expect(rows()?.[0]?.dataset.active).toBe('false');
+    expect(rows()?.[1]?.dataset.active).toBe('true');
+
+    act(() => {
+      controller.clear();
+    });
+    expect(stage.childElementCount).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('pins the first bookmark-focus result when motion is reduced', () => {
+    vi.useFakeTimers();
+    const { controller, stage } = createFixture();
+    act(() => {
+      controller.render(createModel({
+        bookmarkFocus: {
+          hoverLeadMs: 1040,
+          hoverStartMs: 3200,
+          hoverStepMs: 1600,
+          hoverWrapStepMs: 1600,
+          openLabel: 'Open',
+          overlayAriaLabel: 'Overlay demo',
+          panelId: 'overlay-demo-panel',
+          query: 'extension',
+          reducedMotion: true,
+          removeHistoryLabel: 'Remove history',
+          results: [
+            { title: 'First', type: 'topSite' },
+            { title: 'Second', type: 'bookmark' }
+          ],
+          searchAriaLabel: 'Search demo',
+          settingsLabel: 'Settings'
+        },
+        kind: 'bookmark-focus-surface'
+      }));
+    });
+
+    const rows = stage.querySelectorAll<HTMLElement>(
+      '.lumno-overlay-result'
+    );
+    expect(rows[0]?.dataset.active).toBe('true');
+    expect(rows[1]?.dataset.active).toBe('false');
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -134,6 +134,7 @@
   const confirmCancel = document.getElementById('_x_extension_confirm_cancel_2024_unique_');
   const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
+  const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
     ? optionsToastApi.createToastController(toastElement, {
         windowObj: window,
@@ -1678,42 +1679,114 @@
 
   function closeActivePopconfirm() {
     if (activePopconfirm) {
-      activePopconfirm.setAttribute('data-open', 'false');
-      activePopconfirm = null;
+      const popconfirm = activePopconfirm;
+      const closePopconfirm = popconfirm._xOptionsClosePopconfirm;
+      if (typeof closePopconfirm === 'function') {
+        closePopconfirm();
+      } else {
+        popconfirm.setAttribute('data-open', 'false');
+        activePopconfirm = null;
+      }
     }
   }
 
-  function attachPopconfirm(trigger, messageKey, fallbackMessage, onConfirm) {
-    if (!trigger || !trigger.parentNode) {
-      return;
+  function initializePopconfirmWrap(wrap, trigger, messageKey, fallbackMessage, onConfirm) {
+    if (!wrap || !trigger) {
+      return null;
     }
-    const wrap = document.createElement('div');
+    const reactApi = typeof optionsPopconfirmApi !== 'undefined'
+      ? optionsPopconfirmApi
+      : {};
     wrap.className = '_x_extension_popconfirm_wrap_2024_unique_';
     const popconfirm = document.createElement('div');
     popconfirm.className = '_x_extension_popconfirm_2024_unique_';
     popconfirm.setAttribute('data-open', 'false');
-    const popText = document.createElement('div');
-    popText.className = '_x_extension_popconfirm_text_2024_unique_';
-    popText.setAttribute('data-i18n', messageKey);
-    popText.textContent = getMessage(messageKey, fallbackMessage);
-    const popActions = document.createElement('div');
-    popActions.className = '_x_extension_popconfirm_actions_2024_unique_';
-    const popCancel = document.createElement('button');
-    popCancel.className = SECONDARY_BUTTON_CLASS_NAME;
-    popCancel.setAttribute('data-i18n', 'confirm_cancel');
-    popCancel.textContent = getMessage('confirm_cancel', '取消');
-    const popOk = document.createElement('button');
-    popOk.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-    popOk.setAttribute('data-i18n', 'confirm_ok');
-    popOk.textContent = getMessage('confirm_ok', '确认');
-    popActions.appendChild(popCancel);
-    popActions.appendChild(popOk);
-    popconfirm.appendChild(popText);
-    popconfirm.appendChild(popActions);
-    const parent = trigger.parentNode;
-    parent.insertBefore(wrap, trigger);
     wrap.appendChild(trigger);
     wrap.appendChild(popconfirm);
+
+    let popconfirmController = null;
+
+    function getPopconfirmRenderModel(open) {
+      return {
+        open: Boolean(open),
+        messageKey,
+        message: getMessage(messageKey, fallbackMessage),
+        cancelLabel: getMessage('confirm_cancel', '取消'),
+        confirmLabel: getMessage('confirm_ok', '确认')
+      };
+    }
+
+    function setPopconfirmOpen(open) {
+      if (popconfirmController &&
+          typeof popconfirmController.render === 'function') {
+        popconfirmController.render(getPopconfirmRenderModel(open));
+        return;
+      }
+      popconfirm.setAttribute('data-open', open ? 'true' : 'false');
+    }
+
+    function closePopconfirm() {
+      setPopconfirmOpen(false);
+      if (activePopconfirm === popconfirm) {
+        activePopconfirm = null;
+      }
+    }
+    popconfirm._xOptionsClosePopconfirm = closePopconfirm;
+
+    if (typeof reactApi.createPopconfirmController === 'function') {
+      popconfirmController = reactApi.createPopconfirmController(popconfirm, {
+        onCancel() {
+          closePopconfirm();
+        },
+        onConfirm() {
+          closePopconfirm();
+          if (typeof onConfirm === 'function') {
+            onConfirm();
+          }
+        }
+      });
+      popconfirm._xOptionsDestroyPopconfirm = () => {
+        closePopconfirm();
+        if (popconfirmController &&
+            typeof popconfirmController.destroy === 'function') {
+          popconfirmController.destroy();
+        }
+        popconfirmController = null;
+      };
+      setPopconfirmOpen(false);
+    } else {
+      const popText = document.createElement('div');
+      popText.className = '_x_extension_popconfirm_text_2024_unique_';
+      popText.setAttribute('data-i18n', messageKey);
+      popText.textContent = getMessage(messageKey, fallbackMessage);
+      const popActions = document.createElement('div');
+      popActions.className = '_x_extension_popconfirm_actions_2024_unique_';
+      const popCancel = document.createElement('button');
+      popCancel.className = SECONDARY_BUTTON_CLASS_NAME;
+      popCancel.setAttribute('data-i18n', 'confirm_cancel');
+      popCancel.textContent = getMessage('confirm_cancel', '取消');
+      const popOk = document.createElement('button');
+      popOk.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
+      popOk.setAttribute('data-i18n', 'confirm_ok');
+      popOk.textContent = getMessage('confirm_ok', '确认');
+      popActions.appendChild(popCancel);
+      popActions.appendChild(popOk);
+      popconfirm.appendChild(popText);
+      popconfirm.appendChild(popActions);
+
+      popCancel.addEventListener('click', (event) => {
+        event.stopPropagation();
+        closePopconfirm();
+      });
+
+      popOk.addEventListener('click', (event) => {
+        event.stopPropagation();
+        closePopconfirm();
+        if (typeof onConfirm === 'function') {
+          onConfirm();
+        }
+      });
+    }
 
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -1722,32 +1795,40 @@
       }
       const isOpen = popconfirm.getAttribute('data-open') === 'true';
       if (isOpen) {
-        popconfirm.setAttribute('data-open', 'false');
-        activePopconfirm = null;
+        closePopconfirm();
       } else {
-        popconfirm.setAttribute('data-open', 'true');
+        setPopconfirmOpen(true);
         activePopconfirm = popconfirm;
       }
     });
+    return wrap;
+  }
 
-    popCancel.addEventListener('click', (event) => {
-      event.stopPropagation();
-      popconfirm.setAttribute('data-open', 'false');
-      if (activePopconfirm === popconfirm) {
-        activePopconfirm = null;
+  function createPopconfirmWrap(trigger, messageKey, fallbackMessage, onConfirm) {
+    const wrap = document.createElement('div');
+    return initializePopconfirmWrap(wrap, trigger, messageKey, fallbackMessage, onConfirm);
+  }
+
+  function destroyPopconfirmControllersWithin(container) {
+    if (!container || typeof container.querySelectorAll !== 'function') {
+      return;
+    }
+    container.querySelectorAll('._x_extension_popconfirm_2024_unique_').forEach((popconfirm) => {
+      const destroyPopconfirm = popconfirm._xOptionsDestroyPopconfirm;
+      if (typeof destroyPopconfirm === 'function') {
+        destroyPopconfirm();
       }
     });
+  }
 
-    popOk.addEventListener('click', (event) => {
-      event.stopPropagation();
-      popconfirm.setAttribute('data-open', 'false');
-      if (activePopconfirm === popconfirm) {
-        activePopconfirm = null;
-      }
-      if (typeof onConfirm === 'function') {
-        onConfirm();
-      }
-    });
+  function attachPopconfirm(trigger, messageKey, fallbackMessage, onConfirm) {
+    if (!trigger || !trigger.parentNode) {
+      return;
+    }
+    const parent = trigger.parentNode;
+    const wrap = document.createElement('div');
+    parent.insertBefore(wrap, trigger);
+    initializePopconfirmWrap(wrap, trigger, messageKey, fallbackMessage, onConfirm);
   }
 
   function removeSiteSearchItem(key, isBuiltin) {
@@ -4042,9 +4123,12 @@
     if (!siteSearchCustomList || !siteSearchBuiltinList) {
       return;
     }
+    destroyPopconfirmControllersWithin(siteSearchCustomList);
+    destroyPopconfirmControllersWithin(siteSearchBuiltinList);
     siteSearchCustomList.innerHTML = '';
     siteSearchBuiltinList.innerHTML = '';
     if (siteSearchAiBuiltinList) {
+      destroyPopconfirmControllersWithin(siteSearchAiBuiltinList);
       siteSearchAiBuiltinList.innerHTML = '';
     }
     const builtinRowByTemplate = new Map();
@@ -4174,30 +4258,12 @@
       removeButton.className = '_x_extension_shortcut_remove_2024_unique_';
       removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
       removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      actions.appendChild(removeButton);
-      const popconfirm = document.createElement('div');
-      popconfirm.className = '_x_extension_popconfirm_2024_unique_';
-      popconfirm.setAttribute('data-open', 'false');
-      const popText = document.createElement('div');
-      popText.className = '_x_extension_popconfirm_text_2024_unique_';
-      popText.textContent = getMessage('confirm_remove_item', '确认移除该项？');
-      const popActions = document.createElement('div');
-      popActions.className = '_x_extension_popconfirm_actions_2024_unique_';
-      const popCancel = document.createElement('button');
-      popCancel.className = SECONDARY_BUTTON_CLASS_NAME;
-      popCancel.textContent = getMessage('confirm_cancel', '取消');
-      const popOk = document.createElement('button');
-      popOk.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-      popOk.textContent = getMessage('confirm_ok', '确认');
-      popActions.appendChild(popCancel);
-      popActions.appendChild(popOk);
-      popconfirm.appendChild(popText);
-      popconfirm.appendChild(popActions);
-      const popWrap = document.createElement('div');
-      popWrap.className = '_x_extension_popconfirm_wrap_2024_unique_';
-      popWrap.appendChild(removeButton);
-      popWrap.appendChild(popconfirm);
-      actions.appendChild(popWrap);
+      actions.appendChild(createPopconfirmWrap(
+        removeButton,
+        'confirm_remove_item',
+        '确认移除该项？',
+        () => removeSiteSearchItem(item.key || '', !item._xIsCustom)
+      ));
       header.appendChild(info);
       header.appendChild(actions);
       row.appendChild(header);
@@ -4369,35 +4435,6 @@
       editor.appendChild(aliasField);
       editor.appendChild(editorActions);
       row.appendChild(editor);
-      removeButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (activePopconfirm && activePopconfirm !== popconfirm) {
-          closeActivePopconfirm();
-        }
-        const isOpen = popconfirm.getAttribute('data-open') === 'true';
-        if (isOpen) {
-          popconfirm.setAttribute('data-open', 'false');
-          activePopconfirm = null;
-        } else {
-          popconfirm.setAttribute('data-open', 'true');
-          activePopconfirm = popconfirm;
-        }
-      });
-      popCancel.addEventListener('click', (event) => {
-        event.stopPropagation();
-        popconfirm.setAttribute('data-open', 'false');
-        if (activePopconfirm === popconfirm) {
-          activePopconfirm = null;
-        }
-      });
-      popOk.addEventListener('click', (event) => {
-        event.stopPropagation();
-        popconfirm.setAttribute('data-open', 'false');
-        if (activePopconfirm === popconfirm) {
-          activePopconfirm = null;
-        }
-        removeSiteSearchItem(item.key || '', !item._xIsCustom);
-      });
       list.appendChild(row);
     };
     if (customSiteSearchProviders.length === 0) {
@@ -4604,6 +4641,7 @@
     if (!faviconBlacklistList) {
       return;
     }
+    destroyPopconfirmControllersWithin(faviconBlacklistList);
     faviconBlacklistList.innerHTML = '';
     (Array.isArray(faviconRequestBlacklistItems) ? faviconRequestBlacklistItems : []).forEach((item) => {
       const itemKey = buildBlacklistItemKey(item);
@@ -4630,16 +4668,21 @@
       removeButton.type = 'button';
       removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
       removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      removeButton.addEventListener('click', () => {
-        const nextItems = faviconRequestBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
-        saveFaviconRequestBlacklistItems(nextItems).then((savedItems) => {
-          faviconRequestBlacklistItems = savedItems;
-          renderFaviconRequestBlacklistList();
-          showToast(getMessage('favicon_blacklist_removed_toast', '已移除排除规则'), false);
-        }).catch(() => showToast(getMessage('toast_error', '操作失败，请重试'), true));
-      });
+      const popWrap = createPopconfirmWrap(
+        removeButton,
+        'confirm_remove_item',
+        '确认移除该项？',
+        () => {
+          const nextItems = faviconRequestBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
+          saveFaviconRequestBlacklistItems(nextItems).then((savedItems) => {
+            faviconRequestBlacklistItems = savedItems;
+            renderFaviconRequestBlacklistList();
+            showToast(getMessage('favicon_blacklist_removed_toast', '已移除排除规则'), false);
+          }).catch(() => showToast(getMessage('toast_error', '操作失败，请重试'), true));
+        }
+      );
       header.appendChild(info);
-      header.appendChild(removeButton);
+      header.appendChild(popWrap);
       row.appendChild(header);
       faviconBlacklistList.appendChild(row);
     });
@@ -4649,6 +4692,7 @@
     if (!blacklistList) {
       return;
     }
+    destroyPopconfirmControllersWithin(blacklistList);
     blacklistList.innerHTML = '';
     if (!Array.isArray(searchBlacklistItems) || searchBlacklistItems.length === 0) {
       // 保留输入区域即可，和站内搜索空状态保持一致
@@ -4685,28 +4729,25 @@
       removeButton.className = '_x_extension_shortcut_remove_2024_unique_';
       removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
       removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      const popconfirm = document.createElement('div');
-      popconfirm.className = '_x_extension_popconfirm_2024_unique_';
-      popconfirm.setAttribute('data-open', 'false');
-      const popText = document.createElement('div');
-      popText.className = '_x_extension_popconfirm_text_2024_unique_';
-      popText.textContent = getMessage('confirm_remove_item', '确认移除该项？');
-      const popActions = document.createElement('div');
-      popActions.className = '_x_extension_popconfirm_actions_2024_unique_';
-      const popCancel = document.createElement('button');
-      popCancel.className = SECONDARY_BUTTON_CLASS_NAME;
-      popCancel.textContent = getMessage('confirm_cancel', '取消');
-      const popOk = document.createElement('button');
-      popOk.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-      popOk.textContent = getMessage('confirm_ok', '确认');
-      popActions.appendChild(popCancel);
-      popActions.appendChild(popOk);
-      popconfirm.appendChild(popText);
-      popconfirm.appendChild(popActions);
-      const popWrap = document.createElement('div');
-      popWrap.className = '_x_extension_popconfirm_wrap_2024_unique_';
-      popWrap.appendChild(removeButton);
-      popWrap.appendChild(popconfirm);
+      const popWrap = createPopconfirmWrap(
+        removeButton,
+        'confirm_remove_item',
+        '确认移除该项？',
+        () => {
+          const nextItems = searchBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
+          saveSearchBlacklistItems(nextItems).then((savedItems) => {
+            searchBlacklistItems = savedItems;
+            renderSearchBlacklistList();
+            notifyNewtabSectionsRefresh('recent');
+            showToast(getMessage('blacklist_removed_toast', '已从黑名单移除'), false);
+            if (blacklistUrlInput) {
+              blacklistUrlInput.focus();
+            }
+          }).catch(() => {
+            showToast(getMessage('toast_error', '操作失败，请重试'), true);
+          });
+        }
+      );
       actions.appendChild(editButton);
       actions.appendChild(popWrap);
       header.appendChild(info);
@@ -4902,46 +4943,6 @@
       editButton.addEventListener('click', (event) => {
         event.stopPropagation();
         row.setAttribute('data-expanded', row.getAttribute('data-expanded') === 'true' ? 'false' : 'true');
-      });
-      removeButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (activePopconfirm && activePopconfirm !== popconfirm) {
-          closeActivePopconfirm();
-        }
-        const isOpen = popconfirm.getAttribute('data-open') === 'true';
-        if (isOpen) {
-          popconfirm.setAttribute('data-open', 'false');
-          activePopconfirm = null;
-        } else {
-          popconfirm.setAttribute('data-open', 'true');
-          activePopconfirm = popconfirm;
-        }
-      });
-      popCancel.addEventListener('click', (event) => {
-        event.stopPropagation();
-        popconfirm.setAttribute('data-open', 'false');
-        if (activePopconfirm === popconfirm) {
-          activePopconfirm = null;
-        }
-      });
-      popOk.addEventListener('click', (event) => {
-        event.stopPropagation();
-        popconfirm.setAttribute('data-open', 'false');
-        if (activePopconfirm === popconfirm) {
-          activePopconfirm = null;
-        }
-        const nextItems = searchBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
-        saveSearchBlacklistItems(nextItems).then((savedItems) => {
-          searchBlacklistItems = savedItems;
-          renderSearchBlacklistList();
-          notifyNewtabSectionsRefresh('recent');
-          showToast(getMessage('blacklist_removed_toast', '已从黑名单移除'), false);
-          if (blacklistUrlInput) {
-            blacklistUrlInput.focus();
-          }
-        }).catch(() => {
-          showToast(getMessage('toast_error', '操作失败，请重试'), true);
-        });
       });
       blacklistList.appendChild(row);
     });

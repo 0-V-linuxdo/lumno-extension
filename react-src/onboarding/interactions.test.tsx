@@ -44,6 +44,26 @@ afterEach(() => {
 });
 
 describe('Onboarding interactions React island', () => {
+  it('removes an empty interaction host from the page layout', () => {
+    const { controller, host } = createFixture();
+
+    renderSlots(controller, []);
+
+    expect(host.hidden).toBe(true);
+    expect(host.dataset.visible).toBe('false');
+
+    renderSlots(controller, [
+      {
+        id: 'intro-trust',
+        kind: 'trust-row',
+        label: 'Open source'
+      }
+    ]);
+
+    expect(host.hidden).toBe(false);
+    expect(host.dataset.visible).toBe('true');
+  });
+
   it('renders information rows, icons, and external affordances', () => {
     const { controller, host } = createFixture();
     renderSlots(controller, [

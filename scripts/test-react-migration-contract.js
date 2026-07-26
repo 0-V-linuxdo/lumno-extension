@@ -178,13 +178,13 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    288 * 1024,
-  'all shared React artifacts and three page entries should stay within their 288 KiB package budget'
+    312 * 1024,
+  'all shared React artifacts and three page entries should stay within their 312 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    87 * 1024,
-  'all shared React artifacts and three page entries should stay within their 87 KiB gzip budget'
+    94 * 1024,
+  'all shared React artifacts and three page entries should stay within their 94 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -207,10 +207,16 @@ assert(
 );
 assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&
+    optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
     optionsBundle.includes('LumnoOptionsReactIslands') &&
+    optionsBundle.includes('options-popconfirm') &&
+    optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
+    optionsSource.includes('reactApi.createPopconfirmController') &&
+    optionsSource.includes('createPopconfirmWrap(') &&
+    optionsSource.includes('destroyPopconfirmControllersWithin(') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Toast island'
+  'Options should expose and consume its React Popconfirm and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&
@@ -230,6 +236,8 @@ assert(
     onboardingBundle.includes('onboarding-lumno-wordmark-surface') &&
     onboardingBundle.includes('onboarding-feature-cards-surface') &&
     onboardingBundle.includes('onboarding-site-search-demo-surface') &&
+    onboardingBundle.includes('onboarding-newtab-preview-surface') &&
+    onboardingBundle.includes('onboarding-bookmark-focus-surface') &&
     onboardingSource.includes('onboardingPageStripApi.createPageStripController') &&
     onboardingSource.includes('pageStripController.render') &&
     onboardingSource.includes('onboardingActionsApi.createActionButtonsController') &&

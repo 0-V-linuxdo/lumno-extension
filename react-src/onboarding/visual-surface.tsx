@@ -2,6 +2,14 @@ import type { CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  BookmarkFocusDemo,
+  type BookmarkFocusModel
+} from './bookmark-focus-demo';
+import {
+  NewtabPreview,
+  type NewtabPreviewModel
+} from './newtab-preview';
+import {
   SiteSearchDemoSurface,
   type SiteSearchCaseModel
 } from './site-search-demo';
@@ -23,6 +31,7 @@ interface FeatureAwardModel {
 
 export interface VisualSurfaceRenderModel {
   ariaLabel: string;
+  bookmarkFocus?: BookmarkFocusModel;
   butterflyDValues: string;
   butterflyRestPath: string;
   featureAwards?: FeatureAwardModel[];
@@ -30,6 +39,7 @@ export interface VisualSurfaceRenderModel {
   featureCards?: FeatureCardModel[];
   homepagePipArtSrc?: string;
   kind: string;
+  newtabPreview?: NewtabPreviewModel;
   newtabFiltersArtSrc?: string;
   practicalFeaturesAriaLabel?: string;
   principlesAriaLabel?: string;
@@ -320,49 +330,87 @@ export function createVisualSurfaceController(
     if (
       model.kind !== 'lumno-web-wordmark-surface' &&
       model.kind !== 'feature-cards-surface' &&
-      model.kind !== 'site-search-demo-surface'
+      model.kind !== 'site-search-demo-surface' &&
+      model.kind !== 'bookmark-focus-surface' &&
+      model.kind !== 'newtab-preview-surface'
+    ) {
+      clear();
+      return false;
+    }
+    if (
+      model.kind === 'newtab-preview-surface' &&
+      !model.newtabPreview
     ) {
       clear();
       return false;
     }
     clear();
-    currentHost = document.createElement('div');
+    const hostElement = document.createElement('div');
+    currentHost = hostElement;
     const isWordmark = model.kind === 'lumno-web-wordmark-surface';
     const isFeatureCards = model.kind === 'feature-cards-surface';
-    currentHost.className = isWordmark
+    const isSiteSearch = model.kind === 'site-search-demo-surface';
+    const isNewtabPreview = model.kind === 'newtab-preview-surface';
+    hostElement.className = isWordmark
       ? 'lumno-web-wordmark-surface'
       : (
           isFeatureCards
             ? 'feature-cards-surface'
-            : 'site-search-demo-surface'
+            : (
+                isSiteSearch
+                  ? 'site-search-demo-surface'
+                  : (
+                      isNewtabPreview
+                        ? 'newtab-preview-surface'
+                        : 'bookmark-focus-ui'
+                    )
+              )
         );
-    currentHost.setAttribute(
-      'aria-label',
-      isWordmark
-        ? String(model.ariaLabel || 'Lumno')
-        : (
-            isFeatureCards
-              ? String(
-                  model.practicalFeaturesAriaLabel ||
-                    'Lumno practical features'
-                )
-              : String(
-                  model.siteSearchDemoAriaLabel || 'Lumno site search demo'
-                )
-          )
-    );
-    currentHost.setAttribute(
+    if (isWordmark || isFeatureCards || isSiteSearch || isNewtabPreview) {
+      hostElement.setAttribute(
+        'aria-label',
+        isWordmark
+          ? String(model.ariaLabel || 'Lumno')
+          : (
+              isFeatureCards
+                ? String(
+                    model.practicalFeaturesAriaLabel ||
+                      'Lumno practical features'
+                  )
+                : (
+                    isSiteSearch
+                      ? String(
+                          model.siteSearchDemoAriaLabel ||
+                            'Lumno site search demo'
+                        )
+                      : String(
+                          model.newtabPreview?.ariaLabel ||
+                            'Lumno new tab preview'
+                        )
+                  )
+            )
+      );
+    }
+    hostElement.setAttribute(
       'data-react-island',
       isWordmark
         ? 'onboarding-lumno-wordmark-surface'
         : (
             isFeatureCards
               ? 'onboarding-feature-cards-surface'
-              : 'onboarding-site-search-demo-surface'
+              : (
+                  isSiteSearch
+                    ? 'onboarding-site-search-demo-surface'
+                    : (
+                        isNewtabPreview
+                          ? 'onboarding-newtab-preview-surface'
+                          : 'onboarding-bookmark-focus-surface'
+                      )
+                )
           )
     );
-    stage.appendChild(currentHost);
-    currentRoot = createRoot(currentHost);
+    stage.appendChild(hostElement);
+    currentRoot = createRoot(hostElement);
     flushSync(() => {
       currentRoot?.render(
         isWordmark
@@ -371,23 +419,42 @@ export function createVisualSurfaceController(
               isFeatureCards
                 ? <FeatureCardsSurface model={model} />
                 : (
-                    <SiteSearchDemoSurface
-                      model={{
-                        cases: Array.isArray(model.siteSearchCases)
-                          ? model.siteSearchCases
-                          : [],
-                        openLabel: String(
-                          model.siteSearchOpenLabel || 'Open'
-                        ),
-                        settingsLabel: String(
-                          model.siteSearchSettingsLabel || 'Settings'
-                        ),
-                        tabHintTemplate: String(
-                          model.siteSearchTabHintTemplate ||
-                            'Search with {provider}'
+                    isSiteSearch
+                      ? (
+                          <SiteSearchDemoSurface
+                            model={{
+                              cases: Array.isArray(model.siteSearchCases)
+                                ? model.siteSearchCases
+                                : [],
+                              openLabel: String(
+                                model.siteSearchOpenLabel || 'Open'
+                              ),
+                              settingsLabel: String(
+                                model.siteSearchSettingsLabel || 'Settings'
+                              ),
+                              tabHintTemplate: String(
+                                model.siteSearchTabHintTemplate ||
+                                  'Search with {provider}'
+                              )
+                            }}
+                          />
                         )
-                      }}
-                    />
+                      : isNewtabPreview && model.newtabPreview
+                        ? (
+                            <NewtabPreview
+                              model={model.newtabPreview}
+                              surface={hostElement}
+                            />
+                          )
+                        : (
+                            model.bookmarkFocus
+                              ? (
+                                  <BookmarkFocusDemo
+                                    model={model.bookmarkFocus}
+                                  />
+                                )
+                              : null
+                          )
                   )
             )
       );

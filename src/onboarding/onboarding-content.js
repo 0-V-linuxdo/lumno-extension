@@ -1268,7 +1268,6 @@
         }),
         visualKind: 'newtab-preview-surface',
         visualVisible: true,
-        interactionKinds: Object.freeze(['segmented-control', 'inline-action']),
         cursorEnabled: true,
         actions: Object.freeze({
           primary: Object.freeze({
@@ -1288,7 +1287,6 @@
         }),
         visualKind: 'site-search-demo-surface',
         visualVisible: true,
-        interactionKinds: Object.freeze(['choice-list', 'inline-action']),
         cursorEnabled: true,
         actions: Object.freeze({
           primary: Object.freeze({

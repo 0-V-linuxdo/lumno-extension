@@ -263,7 +263,7 @@ function SearchInput({
   );
 }
 
-function HighlightedText({
+export function HighlightedText({
   query,
   text
 }: {

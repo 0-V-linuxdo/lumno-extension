@@ -44,6 +44,7 @@
   const NEWTAB_PREVIEW_HOVER_HOLD_MS = 1200;
   const NEWTAB_PREVIEW_HOVER_MOVE_MS = 520;
   const NEWTAB_PREVIEW_HOVER_SETTLE_MS = 1140;
+  const NEWTAB_PREVIEW_WORDMARK_SRC = '../../assets/images/lumno-wordmark.svg';
   const HOMEPAGE_PIP_ART_SRC = '../../assets/images/onboarding-auto-pip.svg';
   const NEWTAB_FILTERS_ART_SRC = '../../assets/images/onboarding-newtab-filters.webp';
   const ONBOARDING_FRAME_WIDTH = 1240;
@@ -1333,17 +1334,22 @@
       return;
     }
     hideOnboardingInfoTooltip();
-    const hasAccordion = slide.left.interactionSlots.some((slot) => slot.accordion && slot.accordion.text);
+    const slots = Array.isArray(slide.left.interactionSlots)
+      ? slide.left.interactionSlots
+      : [];
+    const hasAccordion = slots.some((slot) => slot.accordion && slot.accordion.text);
+    interactionSlots.hidden = slots.length === 0;
+    interactionSlots.dataset.visible = slots.length > 0 ? 'true' : 'false';
     interactionSlots.dataset.accordion = hasAccordion ? 'true' : 'false';
     if (interactionSlotsController) {
       interactionSlotsController.render({
-        slots: slide.left.interactionSlots,
+        slots,
         expandedAccordionId: expandedInteractionAccordionId
       });
       return;
     }
     interactionSlots.textContent = '';
-    slide.left.interactionSlots.forEach((slot) => {
+    slots.forEach((slot) => {
       interactionSlots.appendChild(createInteractionSlot(slot));
     });
   }
@@ -3133,6 +3139,24 @@
       const renderedByReact = visualSurfaceController
         ? visualSurfaceController.render({
           ariaLabel: 'Lumno',
+          bookmarkFocus: {
+            hoverLeadMs: LUMNO_OVERLAY_HOVER_LEAD_MS,
+            hoverStartMs: LUMNO_OVERLAY_HOVER_START_MS,
+            hoverStepMs: LUMNO_OVERLAY_HOVER_STEP_MS,
+            hoverWrapStepMs: LUMNO_OVERLAY_HOVER_WRAP_STEP_MS,
+            openLabel: getRuntimeMiscText('openLabel', 'Open'),
+            overlayAriaLabel: 'Lumno overlay demo',
+            panelId: ONBOARDING_OVERLAY_DEMO_PANEL_ID,
+            query: getLumnoOverlayQuery(),
+            reducedMotion: prefersReducedMotion(),
+            removeHistoryLabel: getRuntimeMiscText(
+              'removeHistoryLabel',
+              'Remove history item'
+            ),
+            results: getLumnoOverlayResults(),
+            searchAriaLabel: 'Search Lumno demo',
+            settingsLabel: getRuntimeMiscText('settingsLabel', 'Settings')
+          },
           butterflyDValues: LUMNO_WEB_BUTTERFLY_D_VALUES,
           butterflyRestPath: LUMNO_WEB_BUTTERFLY_REST_PATH,
           featureAwards: getFeatureAwards(),
@@ -3140,6 +3164,63 @@
           featureCards: getFeatureCards(),
           homepagePipArtSrc: HOMEPAGE_PIP_ART_SRC,
           kind: slide.visual.kind,
+          newtabPreview: {
+            ariaLabel: getRuntimeMiscText(
+              'newtabPreviewAriaLabel',
+              'Lumno new tab preview'
+            ),
+            bookmarkManagerLabel: getRuntimeMiscText(
+              'bookmarkManagerLabel',
+              'Open bookmark manager'
+            ),
+            bookmarks: getNewtabPreviewBookmarks(),
+            bookmarksSectionTitle: getNewtabPreviewSectionTitle(
+              'bookmarks',
+              'Bookmarks'
+            ),
+            hoverHoldMs: NEWTAB_PREVIEW_HOVER_HOLD_MS,
+            hoverMoveMs: NEWTAB_PREVIEW_HOVER_MOVE_MS,
+            hoverSettleMs: NEWTAB_PREVIEW_HOVER_SETTLE_MS,
+            hoverStartMs: NEWTAB_PREVIEW_HOVER_START_MS,
+            nextLabelTemplate: getRuntimeMiscText(
+              'nextLabelTemplate',
+              '{label} next'
+            ),
+            openItemAriaTemplate: getRuntimeMiscText(
+              'openItemAriaTemplate',
+              'Open {title}'
+            ),
+            previousLabelTemplate: getRuntimeMiscText(
+              'previousLabelTemplate',
+              '{label} previous'
+            ),
+            query: getNewtabPreviewQuery(),
+            recentSectionTitle: getNewtabPreviewSectionTitle(
+              'recent',
+              'Recent'
+            ),
+            recentSites: getNewtabPreviewRecentSites(),
+            reducedMotion: prefersReducedMotion(),
+            searchAriaLabel: getRuntimeMiscText(
+              'newtabSearchPreviewAriaLabel',
+              'Lumno new tab search preview'
+            ),
+            searchPlaceholder: getRuntimeMiscText(
+              'newtabSearchPlaceholder',
+              'Search or enter URL...'
+            ),
+            sectionModeBookmarksLabel: getRuntimeMiscText(
+              'sectionModeBookmarksLabel',
+              'Bookmarks display mode'
+            ),
+            sectionModeRecentLabel: getRuntimeMiscText(
+              'sectionModeRecentLabel',
+              'Recent display mode'
+            ),
+            settingsLabel: getRuntimeMiscText('settingsLabel', 'Settings'),
+            visitLabel: getRuntimeMiscText('goLabel', 'Visit'),
+            wordmarkSrc: NEWTAB_PREVIEW_WORDMARK_SRC
+          },
           newtabFiltersArtSrc: NEWTAB_FILTERS_ART_SRC,
           practicalFeaturesAriaLabel: getRuntimeMiscText(
             'practicalFeaturesAriaLabel',

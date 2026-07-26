@@ -6,6 +6,12 @@ type OptionsRuntime = typeof globalThis & {
     reactReady: boolean;
   };
   LumnoOptionsReactIslands?: unknown;
+  LumnoOptionsPopconfirm?: {
+    implementation?: string;
+  };
+  LumnoOptionsPopconfirmReact?: {
+    implementation?: string;
+  };
   LumnoOptionsToast?: {
     implementation?: string;
   };
@@ -19,6 +25,8 @@ const runtime = globalThis as OptionsRuntime;
 function clearRuntime(): void {
   delete runtime.LumnoOptionsReactBootstrap;
   delete runtime.LumnoOptionsReactIslands;
+  delete runtime.LumnoOptionsPopconfirm;
+  delete runtime.LumnoOptionsPopconfirmReact;
   delete runtime.LumnoOptionsToast;
   delete runtime.LumnoOptionsToastReact;
 }
@@ -29,7 +37,7 @@ afterEach(() => {
 });
 
 describe('Options React islands entry', () => {
-  it('installs the Toast API and marks the bootstrap ready', async () => {
+  it('installs the Popconfirm and Toast APIs and marks the bootstrap ready', async () => {
     runtime.LumnoOptionsReactBootstrap = {
       allowReactUpgrade: true,
       reactReady: false
@@ -38,9 +46,14 @@ describe('Options React islands entry', () => {
     await import('./options-islands-entry');
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(true);
+    expect(runtime.LumnoOptionsPopconfirm?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsPopconfirmReact).toBe(
+      runtime.LumnoOptionsPopconfirm
+    );
     expect(runtime.LumnoOptionsToast?.implementation).toBe('react');
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
     expect(runtime.LumnoOptionsReactIslands).toEqual({
+      popconfirm: runtime.LumnoOptionsPopconfirm,
       toast: runtime.LumnoOptionsToast
     });
   });
@@ -54,6 +67,7 @@ describe('Options React islands entry', () => {
     await import('./options-islands-entry');
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(false);
+    expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
     expect(runtime.LumnoOptionsToast).toBeUndefined();
     expect(runtime.LumnoOptionsReactIslands).toBeUndefined();
   });

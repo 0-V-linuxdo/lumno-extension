@@ -31,6 +31,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      favicon, custom-icon, tooltip, context-menu, and adaptive-tone metadata.
    - Toast as the sixth island, preserving synchronous message updates, error
      styling, auto-hide timers, and the existing controller contract.
+   - Options Popconfirm as the first Options leaf island, preserving the existing
+     trigger wrapper, outside-click close behavior, localization hooks, and
+     destructive-action callbacks across static controls and dynamic settings
+     lists.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard
@@ -43,8 +47,11 @@ React replaces bounded UI surfaces behind their current public contracts.
      implementations as fallbacks.
    - Keep data stores and browser adapters outside React and inject their results.
    - Avoid the recently changed wallpaper, theme, and layout paths until they settle.
-4. **Full-page roots**
-   - Move Options and Onboarding after extracting their storage and browser adapters.
+4. **Full-page roots — active**
+   - Onboarding copy, actions, interactions, cursor, navigation, and visual scenes
+     now render through React controllers while the browser adapter remains outside.
+   - Options starts with bounded Popconfirm and Toast leaves before extracting its
+     storage and browser adapters.
    - Share typed UI primitives only after at least two islands need the same behavior.
 5. **High-coupling surfaces**
    - Migrate New Tab orchestration and overlay search last.

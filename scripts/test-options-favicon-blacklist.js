@@ -317,6 +317,9 @@ function createOptionsBehaviorHarness(initialRules) {
     'setInlineError',
     'buildBlacklistRuleDraft',
     'closeActivePopconfirm',
+    'initializePopconfirmWrap',
+    'createPopconfirmWrap',
+    'destroyPopconfirmControllersWithin',
     'attachPopconfirm',
     'loadFaviconRequestBlacklistItems',
     'saveFaviconRequestBlacklistItems',
@@ -452,8 +455,11 @@ async function testOptionsFaviconBlacklistBehavior() {
   );
   assert.strictEqual(harness.elements.list.children.length, 2, 'add handler should rerender the saved list');
 
-  const firstRemoveButton = harness.elements.list.children[0].children[0].children[1];
+  const firstRemoveWrap = harness.elements.list.children[0].children[0].children[1];
+  const firstRemoveButton = firstRemoveWrap.children[0];
   firstRemoveButton.click();
+  const firstRemoveActions = firstRemoveWrap.children[1].children[1];
+  firstRemoveActions.children[1].click();
   await flushPromises();
   assert.deepStrictEqual(harness.data[harness.storageKey], [legacyRule], 'remove handler should persist the remaining rule');
   assert.strictEqual(harness.elements.list.children.length, 1, 'remove handler should rerender the remaining rule');

@@ -294,6 +294,11 @@ assert.strictEqual(thirdSlide.visual.kind, 'newtab-preview-surface');
 assert.strictEqual(thirdSlide.visual.visible, true);
 assert.strictEqual(thirdSlide.cursor.enabled, true);
 assert.deepStrictEqual(
+  thirdSlide.left.interactionSlots,
+  [],
+  'third page should not render nonexistent placeholder interaction rows'
+);
+assert.deepStrictEqual(
   thirdSlide.actions,
   {
     primary: {
@@ -321,6 +326,11 @@ assert.deepStrictEqual(
 assert.strictEqual(fourthSlide.visual.kind, 'site-search-demo-surface');
 assert.strictEqual(fourthSlide.visual.visible, true);
 assert.strictEqual(fourthSlide.cursor.enabled, true);
+assert.deepStrictEqual(
+  fourthSlide.left.interactionSlots,
+  [],
+  'fourth page should not render nonexistent placeholder interaction rows'
+);
 assert.deepStrictEqual(
   fourthSlide.actions,
   {

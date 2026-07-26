@@ -449,6 +449,8 @@ export function createInteractionsController(
       slots: Array.isArray(model.slots) ? model.slots : []
     };
     options.onHideInfoTooltip();
+    hostElement.hidden = currentModel.slots.length === 0;
+    hostElement.dataset.visible = currentModel.slots.length > 0 ? 'true' : 'false';
     hostElement.dataset.accordion = currentModel.slots.some(
       (slot) => Boolean(slot.accordion?.text)
     ) ? 'true' : 'false';

@@ -18,7 +18,7 @@ const ALLOWLIST = [
   'debug-only score reason strings when the debug flag is disabled by default',
   'Chinese search-intent tokens in src/shared/search-utils.js scoring dictionaries'
 ];
-const I18N_CALL_RE = /(?:^|[^\w])(?:t|baseT|getMessage|formatMessage|updateSyncStatusText|attachPopconfirm|createModeOption)\s*\(/;
+const I18N_CALL_RE = /(?:^|[^\w])(?:t|baseT|getMessage|formatMessage|updateSyncStatusText|attachPopconfirm|createPopconfirmWrap|createModeOption)\s*\(/;
 
 function walk(root) {
   if (!fs.existsSync(root)) {
