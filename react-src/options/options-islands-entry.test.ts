@@ -30,6 +30,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsSettingsNavigationReact?: {
     implementation?: string;
   };
+  LumnoOptionsSettingsControls?: {
+    implementation?: string;
+  };
+  LumnoOptionsSettingsControlsReact?: {
+    implementation?: string;
+  };
   LumnoOptionsShortcutReference?: {
     implementation?: string;
   };
@@ -69,6 +75,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsSegmentedControlReact;
   delete runtime.LumnoOptionsSettingsNavigation;
   delete runtime.LumnoOptionsSettingsNavigationReact;
+  delete runtime.LumnoOptionsSettingsControls;
+  delete runtime.LumnoOptionsSettingsControlsReact;
   delete runtime.LumnoOptionsShortcutReference;
   delete runtime.LumnoOptionsShortcutReferenceReact;
   delete runtime.LumnoOptionsSiteSearchList;
@@ -110,6 +118,10 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsSettingsNavigationReact).toBe(
       runtime.LumnoOptionsSettingsNavigation
     );
+    expect(runtime.LumnoOptionsSettingsControls?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsSettingsControlsReact).toBe(
+      runtime.LumnoOptionsSettingsControls
+    );
     expect(runtime.LumnoOptionsShortcutReference?.implementation).toBe('react');
     expect(runtime.LumnoOptionsShortcutReferenceReact).toBe(
       runtime.LumnoOptionsShortcutReference
@@ -129,6 +141,7 @@ describe('Options React islands entry', () => {
       popconfirm: runtime.LumnoOptionsPopconfirm,
       segmentedControl: runtime.LumnoOptionsSegmentedControl,
       settingsNavigation: runtime.LumnoOptionsSettingsNavigation,
+      settingsControls: runtime.LumnoOptionsSettingsControls,
       shortcutReference: runtime.LumnoOptionsShortcutReference,
       siteSearchList: runtime.LumnoOptionsSiteSearchList,
       themePicker: runtime.LumnoOptionsThemePicker,
@@ -149,6 +162,7 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
     expect(runtime.LumnoOptionsSegmentedControl).toBeUndefined();
     expect(runtime.LumnoOptionsSettingsNavigation).toBeUndefined();
+    expect(runtime.LumnoOptionsSettingsControls).toBeUndefined();
     expect(runtime.LumnoOptionsShortcutReference).toBeUndefined();
     expect(runtime.LumnoOptionsSiteSearchList).toBeUndefined();
     expect(runtime.LumnoOptionsThemePicker).toBeUndefined();

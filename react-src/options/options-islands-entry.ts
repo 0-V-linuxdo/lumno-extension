@@ -6,6 +6,7 @@ import { createBlacklistListApi } from './blacklist-list';
 import { createPopconfirmApi } from './popconfirm';
 import { createSegmentedControlApi } from './segmented-control';
 import { createSettingsNavigationApi } from './settings-navigation';
+import { createSettingsControlsApi } from './settings-controls';
 import { createShortcutReferenceApi } from './shortcut-reference';
 import { createSiteSearchListApi } from './site-search-list';
 import { createThemePickerApi } from './theme-picker';
@@ -20,6 +21,7 @@ const runtime = globalThis as typeof globalThis & {
     popconfirm: ReturnType<typeof createPopconfirmApi>;
     segmentedControl: ReturnType<typeof createSegmentedControlApi>;
     settingsNavigation: ReturnType<typeof createSettingsNavigationApi>;
+    settingsControls: ReturnType<typeof createSettingsControlsApi>;
     shortcutReference: ReturnType<typeof createShortcutReferenceApi>;
     siteSearchList: ReturnType<typeof createSiteSearchListApi>;
     themePicker: ReturnType<typeof createThemePickerApi>;
@@ -33,6 +35,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsSegmentedControlReact?: ReturnType<typeof createSegmentedControlApi>;
   LumnoOptionsSettingsNavigation?: ReturnType<typeof createSettingsNavigationApi>;
   LumnoOptionsSettingsNavigationReact?: ReturnType<typeof createSettingsNavigationApi>;
+  LumnoOptionsSettingsControls?: ReturnType<typeof createSettingsControlsApi>;
+  LumnoOptionsSettingsControlsReact?: ReturnType<typeof createSettingsControlsApi>;
   LumnoOptionsShortcutReference?: ReturnType<typeof createShortcutReferenceApi>;
   LumnoOptionsShortcutReferenceReact?: ReturnType<typeof createShortcutReferenceApi>;
   LumnoOptionsSiteSearchList?: ReturnType<typeof createSiteSearchListApi>;
@@ -50,6 +54,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const popconfirmApi = createPopconfirmApi();
   const segmentedControlApi = createSegmentedControlApi();
   const settingsNavigationApi = createSettingsNavigationApi();
+  const settingsControlsApi = createSettingsControlsApi();
   const shortcutReferenceApi = createShortcutReferenceApi();
   const siteSearchListApi = createSiteSearchListApi();
   const themePickerApi = createThemePickerApi();
@@ -63,6 +68,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOptionsSegmentedControl = segmentedControlApi;
   runtime.LumnoOptionsSettingsNavigationReact = settingsNavigationApi;
   runtime.LumnoOptionsSettingsNavigation = settingsNavigationApi;
+  runtime.LumnoOptionsSettingsControlsReact = settingsControlsApi;
+  runtime.LumnoOptionsSettingsControls = settingsControlsApi;
   runtime.LumnoOptionsShortcutReferenceReact = shortcutReferenceApi;
   runtime.LumnoOptionsShortcutReference = shortcutReferenceApi;
   runtime.LumnoOptionsSiteSearchListReact = siteSearchListApi;
@@ -76,6 +83,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     popconfirm: popconfirmApi,
     segmentedControl: segmentedControlApi,
     settingsNavigation: settingsNavigationApi,
+    settingsControls: settingsControlsApi,
     shortcutReference: shortcutReferenceApi,
     siteSearchList: siteSearchListApi,
     themePicker: themePickerApi,

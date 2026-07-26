@@ -973,7 +973,7 @@ assert.match(
 );
 assert.match(
   optionsSource,
-  /storageArea\.get\(\[TAB_SWITCHER_ENABLED_STORAGE_KEY\][\s\S]*tabSwitcherToggle\.checked = stored[\s\S]*storageArea\.set\(\{ \[TAB_SWITCHER_ENABLED_STORAGE_KEY\]: stored \}\)/,
+  /storageArea\.get\(\[TAB_SWITCHER_ENABLED_STORAGE_KEY\][\s\S]*setOptionsToggleState\(tabSwitcherToggle, stored\)[\s\S]*storageArea\.set\(\{ \[TAB_SWITCHER_ENABLED_STORAGE_KEY\]: stored \}\)/,
   'settings page should default missing tab switcher storage to enabled for all users'
 );
 assert.strictEqual(

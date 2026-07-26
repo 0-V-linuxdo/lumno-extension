@@ -48,6 +48,7 @@
   const newtabShortcutsToggle = document.getElementById('_x_extension_newtab_shortcuts_toggle_2026_unique_');
   const restrictedActionSelect = document.getElementById('_x_extension_restricted_action_select_2024_unique_');
   const searchResultPrioritySelect = document.getElementById('_x_extension_search_result_priority_select_2026_unique_');
+  const searchResultSourceTypeGroupHost = document.getElementById('_x_extension_search_result_source_types_2026_unique_');
   const searchResultSourceTypeInputs = Array.from(document.querySelectorAll('input[data-search-result-source-type]'));
   const overlayOpenTabsDefaultVisibleToggle = document.getElementById('_x_extension_overlay_open_tabs_default_visible_toggle_2026_unique_');
   const faviconEnhancedFetchToggle = document.getElementById('_x_extension_favicon_enhanced_fetch_toggle_2026_unique_');
@@ -137,6 +138,7 @@
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
   const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
+  const optionsSettingsControlsApi = globalThis.LumnoOptionsSettingsControls || {};
   const optionsSettingsNavigationApi = globalThis.LumnoOptionsSettingsNavigation || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
   const optionsSiteSearchListApi = globalThis.LumnoOptionsSiteSearchList || {};
@@ -194,6 +196,112 @@
     'search-result-priority',
     handleSearchResultPrioritySelection
   );
+  const optionsToggleControlRecords = new Map();
+  function registerOptionsToggleControl(input, kind) {
+    if (!input ||
+        typeof optionsSettingsControlsApi.createToggleControlController !== 'function') {
+      return null;
+    }
+    const host = input.closest('._x_extension_switch_2024_unique_');
+    if (!host) {
+      return null;
+    }
+    const model = {
+      ariaLabel: input.getAttribute('aria-label') || undefined,
+      ariaLabelKey: input.getAttribute('data-i18n-aria-label') || undefined,
+      checked: Boolean(input.checked),
+      disabled: Boolean(input.disabled),
+      id: input.id
+    };
+    const controller = optionsSettingsControlsApi.createToggleControlController(host, {
+      kind,
+      onChange(next) {
+        input.checked = Boolean(next);
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+    const record = { controller, model };
+    optionsToggleControlRecords.set(input, record);
+    controller.render(model);
+    return controller;
+  }
+  function setOptionsToggleState(input, checked, disabled) {
+    if (!input) {
+      return;
+    }
+    input.checked = Boolean(checked);
+    if (typeof disabled === 'boolean') {
+      input.disabled = disabled;
+    }
+    const record = optionsToggleControlRecords.get(input);
+    if (!record) {
+      return;
+    }
+    record.model = Object.assign({}, record.model, {
+      checked: Boolean(checked),
+      disabled: Boolean(input.disabled)
+    });
+    record.controller.render(record.model);
+  }
+  [
+    [updateNoticeToggle, 'update-notice'],
+    [autoPipToggle, 'auto-pip'],
+    [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
+    [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
+    [overlayTabQuickSwitchToggle, 'overlay-tab-quick-switch'],
+    [newtabWordmarkToggle, 'newtab-wordmark'],
+    [newtabShortcutsToggle, 'newtab-shortcuts'],
+    [faviconEnhancedFetchToggle, 'favicon-enhanced-fetch'],
+    [tabSwitcherToggle, 'tab-switcher'],
+    [documentPipToggle, 'document-pip'],
+    [pinnedTabRecoveryToggle, 'pinned-tab-recovery']
+  ].forEach(([input, kind]) => registerOptionsToggleControl(input, kind));
+
+  const searchResultSourceTypeItems = searchResultSourceTypeInputs.map((input) => {
+    const label = input.closest('label');
+    const text = label ? label.querySelector('span[data-i18n]') : null;
+    return {
+      checked: Boolean(input.checked),
+      id: input.id,
+      label: text ? text.textContent : '',
+      labelKey: text ? text.getAttribute('data-i18n') : '',
+      value: input.getAttribute('data-search-result-source-type') || ''
+    };
+  }).filter((item) => item.value);
+  const searchResultSourceTypeController =
+    typeof optionsSettingsControlsApi.createRequiredCheckboxGroupController === 'function'
+      ? optionsSettingsControlsApi.createRequiredCheckboxGroupController(
+          searchResultSourceTypeGroupHost,
+          {
+            kind: 'search-result-sources',
+            onChange(values) {
+              const selected = new Set(values);
+              let changedInput = null;
+              searchResultSourceTypeInputs.forEach((input) => {
+                const next = selected.has(input.getAttribute('data-search-result-source-type'));
+                if (input.checked !== next && !changedInput) {
+                  changedInput = input;
+                }
+                input.checked = next;
+              });
+              if (changedInput) {
+                changedInput.dispatchEvent(new Event('change'));
+              }
+            }
+          }
+        )
+      : null;
+  function renderSearchResultSourceTypeControl(value) {
+    if (!searchResultSourceTypeController) {
+      return;
+    }
+    const selected = new Set(normalizeSearchResultSourceTypes(value));
+    searchResultSourceTypeController.render({
+      items: searchResultSourceTypeItems.map((item) => Object.assign({}, item, {
+        checked: selected.has(item.value)
+      }))
+    });
+  }
   const settingsNavigationController =
     typeof optionsSettingsNavigationApi.createSettingsNavigationController === 'function'
       ? optionsSettingsNavigationApi.createSettingsNavigationController(tabsContainer, {
@@ -310,6 +418,11 @@
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
   const SETTINGS = globalThis.LumnoSettings || {};
+  if (searchResultSourceTypeController) {
+    renderSearchResultSourceTypeControl(
+      searchResultSourceTypeItems.filter((item) => item.checked).map((item) => item.value)
+    );
+  }
   const CHECKBOX = globalThis.LumnoCheckbox || {};
   const CHECKBOX_CLASS_NAME = CHECKBOX.className || '_x_extension_checkbox_2026_unique_';
   const CHECKBOX_GROUP_CLASS_NAME = CHECKBOX.groupClassName || '_x_extension_checkbox_group_2026_unique_';
@@ -1089,6 +1202,7 @@
     const normalized = normalizeSearchResultSourceTypes(value);
     if (searchResultSourceTypeGroup && typeof searchResultSourceTypeGroup.setValue === 'function') {
       searchResultSourceTypeGroup.setValue(normalized);
+      renderSearchResultSourceTypeControl(normalized);
       return;
     }
     const selected = new Set(normalized);
@@ -1096,6 +1210,7 @@
       const type = input.getAttribute('data-search-result-source-type');
       input.checked = selected.has(type);
     });
+    renderSearchResultSourceTypeControl(normalized);
   }
 
   function persistSearchResultSourceTypes(value) {
@@ -3642,7 +3757,7 @@
   if (overlayOpenTabsDefaultVisibleToggle) {
     overlayOpenTabsDefaultVisibleToggle.addEventListener('change', () => {
       const next = normalizeOverlayOpenTabsDefaultVisible(overlayOpenTabsDefaultVisibleToggle.checked);
-      overlayOpenTabsDefaultVisibleToggle.checked = next;
+      setOptionsToggleState(overlayOpenTabsDefaultVisibleToggle, next);
       if (!storageArea) {
         return;
       }
@@ -3652,7 +3767,7 @@
   if (faviconEnhancedFetchToggle) {
     faviconEnhancedFetchToggle.addEventListener('change', () => {
       const next = normalizeFaviconEnhancedFetchEnabled(faviconEnhancedFetchToggle.checked);
-      faviconEnhancedFetchToggle.checked = next;
+      setOptionsToggleState(faviconEnhancedFetchToggle, next);
       setFaviconBlacklistEditorEnabled(next);
       if (!storageArea) {
         return;
@@ -3803,7 +3918,7 @@
   if (bookmarkFolderIconsVisibleToggle) {
     bookmarkFolderIconsVisibleToggle.addEventListener('change', () => {
       const next = normalizeBookmarkFolderIconsVisible(bookmarkFolderIconsVisibleToggle.checked);
-      bookmarkFolderIconsVisibleToggle.checked = next;
+      setOptionsToggleState(bookmarkFolderIconsVisibleToggle, next);
       if (!storageArea) {
         return;
       }
@@ -4283,7 +4398,7 @@
       const rawValue = result[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY];
       const stored = normalizeOverlayOpenTabsDefaultVisible(rawValue);
       if (overlayOpenTabsDefaultVisibleToggle) {
-        overlayOpenTabsDefaultVisibleToggle.checked = stored;
+        setOptionsToggleState(overlayOpenTabsDefaultVisibleToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]: stored });
@@ -4293,7 +4408,7 @@
       const rawValue = result[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY];
       const stored = normalizeFaviconEnhancedFetchEnabled(rawValue);
       if (faviconEnhancedFetchToggle) {
-        faviconEnhancedFetchToggle.checked = stored;
+        setOptionsToggleState(faviconEnhancedFetchToggle, stored);
       }
       setFaviconBlacklistEditorEnabled(stored);
       if (rawValue !== stored) {
@@ -4340,7 +4455,7 @@
       const raw = result[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY];
       const next = normalizeBookmarkFolderIconsVisible(raw);
       if (bookmarkFolderIconsVisibleToggle) {
-        bookmarkFolderIconsVisibleToggle.checked = next;
+        setOptionsToggleState(bookmarkFolderIconsVisibleToggle, next);
       }
       if (raw !== next) {
         storageArea.set({ [BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY]: next });
@@ -4350,7 +4465,7 @@
       const rawValue = result[OVERLAY_TAB_PRIORITY_STORAGE_KEY];
       const stored = normalizeOverlayTabQuickSwitch(rawValue);
       if (overlayTabQuickSwitchToggle) {
-        overlayTabQuickSwitchToggle.checked = stored;
+        setOptionsToggleState(overlayTabQuickSwitchToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [OVERLAY_TAB_PRIORITY_STORAGE_KEY]: stored });
@@ -4361,7 +4476,7 @@
       const rawValue = result[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY];
       const stored = normalizeNewtabWordmarkVisible(rawValue);
       if (newtabWordmarkToggle) {
-        newtabWordmarkToggle.checked = stored;
+        setOptionsToggleState(newtabWordmarkToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: stored });
@@ -4372,7 +4487,7 @@
       const rawValue = result[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
       const stored = normalizeNewtabShortcutsVisible(rawValue);
       if (newtabShortcutsToggle) {
-        newtabShortcutsToggle.checked = stored;
+        setOptionsToggleState(newtabShortcutsToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: stored });
@@ -4383,7 +4498,7 @@
       const rawValue = result[UPDATE_NOTICE_ENABLED_STORAGE_KEY];
       const stored = normalizeUpdateNoticeEnabled(rawValue);
       if (updateNoticeToggle) {
-        updateNoticeToggle.checked = stored;
+        setOptionsToggleState(updateNoticeToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [UPDATE_NOTICE_ENABLED_STORAGE_KEY]: stored });
@@ -4394,7 +4509,7 @@
       const rawValue = result[AUTO_PIP_ENABLED_STORAGE_KEY];
       const stored = normalizeAutoPipEnabled(rawValue);
       if (autoPipToggle) {
-        autoPipToggle.checked = stored;
+        setOptionsToggleState(autoPipToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [AUTO_PIP_ENABLED_STORAGE_KEY]: stored });
@@ -4405,7 +4520,7 @@
       const rawValue = result[TAB_SWITCHER_ENABLED_STORAGE_KEY];
       const stored = normalizeTabSwitcherEnabled(rawValue);
       if (tabSwitcherToggle) {
-        tabSwitcherToggle.checked = stored;
+        setOptionsToggleState(tabSwitcherToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [TAB_SWITCHER_ENABLED_STORAGE_KEY]: stored });
@@ -4416,7 +4531,7 @@
       const rawValue = result[DOCUMENT_PIP_ENABLED_STORAGE_KEY];
       const stored = normalizeDocumentPipEnabled(rawValue);
       if (documentPipToggle) {
-        documentPipToggle.checked = stored;
+        setOptionsToggleState(documentPipToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [DOCUMENT_PIP_ENABLED_STORAGE_KEY]: stored });
@@ -4427,7 +4542,7 @@
       const rawValue = result[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY];
       const stored = normalizePinnedTabRecoveryEnabled(rawValue);
       if (pinnedTabRecoveryToggle) {
-        pinnedTabRecoveryToggle.checked = stored;
+        setOptionsToggleState(pinnedTabRecoveryToggle, stored);
       }
       if (rawValue !== stored) {
         storageArea.set({ [PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY]: stored });
@@ -6040,7 +6155,7 @@
     if (changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY] && overlayOpenTabsDefaultVisibleToggle) {
       const raw = changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY].newValue;
       const next = normalizeOverlayOpenTabsDefaultVisible(raw);
-      overlayOpenTabsDefaultVisibleToggle.checked = next;
+      setOptionsToggleState(overlayOpenTabsDefaultVisibleToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]: next });
       }
@@ -6048,7 +6163,7 @@
     if (changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] && faviconEnhancedFetchToggle) {
       const raw = changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeFaviconEnhancedFetchEnabled(raw);
-      faviconEnhancedFetchToggle.checked = next;
+      setOptionsToggleState(faviconEnhancedFetchToggle, next);
       setFaviconBlacklistEditorEnabled(next);
       if (raw !== next && storageArea) {
         storageArea.set({ [FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY]: next });
@@ -6075,14 +6190,14 @@
     if (changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] && bookmarkFolderIconsVisibleToggle) {
       const raw = changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY].newValue;
       const next = normalizeBookmarkFolderIconsVisible(raw);
-      bookmarkFolderIconsVisibleToggle.checked = next;
+      setOptionsToggleState(bookmarkFolderIconsVisibleToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY]: next });
       }
     }
     if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] && overlayTabQuickSwitchToggle) {
       const next = normalizeOverlayTabQuickSwitch(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
-      overlayTabQuickSwitchToggle.checked = next;
+      setOptionsToggleState(overlayTabQuickSwitchToggle, next);
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue !== next && storageArea) {
         storageArea.set({ [OVERLAY_TAB_PRIORITY_STORAGE_KEY]: next });
       }
@@ -6091,7 +6206,7 @@
     if (changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY] && newtabWordmarkToggle) {
       const raw = changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY].newValue;
       const next = normalizeNewtabWordmarkVisible(raw);
-      newtabWordmarkToggle.checked = next;
+      setOptionsToggleState(newtabWordmarkToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: next });
       }
@@ -6100,7 +6215,7 @@
     if (changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] && newtabShortcutsToggle) {
       const raw = changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY].newValue;
       const next = normalizeNewtabShortcutsVisible(raw);
-      newtabShortcutsToggle.checked = next;
+      setOptionsToggleState(newtabShortcutsToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: next });
       }
@@ -6109,7 +6224,7 @@
     if (changes[UPDATE_NOTICE_ENABLED_STORAGE_KEY] && updateNoticeToggle) {
       const raw = changes[UPDATE_NOTICE_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeUpdateNoticeEnabled(raw);
-      updateNoticeToggle.checked = next;
+      setOptionsToggleState(updateNoticeToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [UPDATE_NOTICE_ENABLED_STORAGE_KEY]: next });
       }
@@ -6118,7 +6233,7 @@
     if (changes[AUTO_PIP_ENABLED_STORAGE_KEY] && autoPipToggle) {
       const raw = changes[AUTO_PIP_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeAutoPipEnabled(raw);
-      autoPipToggle.checked = next;
+      setOptionsToggleState(autoPipToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [AUTO_PIP_ENABLED_STORAGE_KEY]: next });
       }
@@ -6127,7 +6242,7 @@
     if (changes[TAB_SWITCHER_ENABLED_STORAGE_KEY] && tabSwitcherToggle) {
       const raw = changes[TAB_SWITCHER_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeTabSwitcherEnabled(raw);
-      tabSwitcherToggle.checked = next;
+      setOptionsToggleState(tabSwitcherToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [TAB_SWITCHER_ENABLED_STORAGE_KEY]: next });
       }
@@ -6136,7 +6251,7 @@
     if (changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY] && documentPipToggle) {
       const raw = changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeDocumentPipEnabled(raw);
-      documentPipToggle.checked = next;
+      setOptionsToggleState(documentPipToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [DOCUMENT_PIP_ENABLED_STORAGE_KEY]: next });
       }
@@ -6145,7 +6260,7 @@
     if (changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY] && pinnedTabRecoveryToggle) {
       const raw = changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY].newValue;
       const next = normalizePinnedTabRecoveryEnabled(raw);
-      pinnedTabRecoveryToggle.checked = next;
+      setOptionsToggleState(pinnedTabRecoveryToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY]: next });
       }

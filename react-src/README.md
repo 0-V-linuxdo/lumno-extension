@@ -57,6 +57,9 @@ React replaces bounded UI surfaces behind their current public contracts.
      built-in AI provider views. React owns provider rows, inline editors, duplicate
      affordances, empty states, and confirmations while the adapter keeps provider
      normalization, persistence, localization mapping, and remote refreshes.
+   - Options Settings Controls for the eleven persisted switch rows and the required
+     search-result source checkbox group. React owns input state and interaction while
+     the Options adapter keeps normalization, storage writes, and cross-page refreshes.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

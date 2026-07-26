@@ -378,6 +378,9 @@ function createOptionsBehaviorHarness(initialRules) {
     const getRiSvg = () => '<svg></svg>';
     const showToast = deps.showToast;
     const renderBlacklistListWithReact = () => false;
+    const setOptionsToggleState = (input, checked) => {
+      input.checked = Boolean(checked);
+    };
 
     ${functionSource}
     ${addHandlerSource}
