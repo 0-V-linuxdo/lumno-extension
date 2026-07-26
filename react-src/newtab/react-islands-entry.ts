@@ -20,6 +20,7 @@ import { createWordmarkApi } from './wordmark';
 import { createPageStructureApi } from './page-structure';
 import { createBookmarksTopbarApi } from './bookmarks-topbar';
 import { createPageNoticeApi } from './page-notice';
+import { createBookmarkCascadeViewApi } from './bookmark-cascade-view';
 import { createSearchInputApi } from '../shared/search-input';
 
 const runtime = globalThis as typeof globalThis & {
@@ -42,6 +43,7 @@ const runtime = globalThis as typeof globalThis & {
     pageStructure: ReturnType<typeof createPageStructureApi>;
     bookmarksTopbar: ReturnType<typeof createBookmarksTopbarApi>;
     pageNotice: ReturnType<typeof createPageNoticeApi>;
+    bookmarkCascadeView: ReturnType<typeof createBookmarkCascadeViewApi>;
   };
   LumnoNewtabBookmarksView?: LegacyBookmarksApi;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
@@ -69,6 +71,12 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabBookmarksTopbarReact?: ReturnType<typeof createBookmarksTopbarApi>;
   LumnoNewtabPageNotice?: ReturnType<typeof createPageNoticeApi>;
   LumnoNewtabPageNoticeReact?: ReturnType<typeof createPageNoticeApi>;
+  LumnoNewtabBookmarkCascadeView?: ReturnType<
+    typeof createBookmarkCascadeViewApi
+  >;
+  LumnoNewtabBookmarkCascadeViewReact?: ReturnType<
+    typeof createBookmarkCascadeViewApi
+  >;
   LumnoSearchInputUI?: ReturnType<typeof createSearchInputApi>;
   LumnoSearchInputUIReact?: ReturnType<typeof createSearchInputApi>;
   _x_extension_createSearchInput_2024_unique_?: ReturnType<
@@ -97,6 +105,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const pageStructureApi = createPageStructureApi();
   const bookmarksTopbarApi = createBookmarksTopbarApi();
   const pageNoticeApi = createPageNoticeApi();
+  const bookmarkCascadeViewApi = createBookmarkCascadeViewApi();
   const searchInputApi = createSearchInputApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
@@ -125,6 +134,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabBookmarksTopbar = bookmarksTopbarApi;
   runtime.LumnoNewtabPageNoticeReact = pageNoticeApi;
   runtime.LumnoNewtabPageNotice = pageNoticeApi;
+  runtime.LumnoNewtabBookmarkCascadeViewReact = bookmarkCascadeViewApi;
+  runtime.LumnoNewtabBookmarkCascadeView = bookmarkCascadeViewApi;
   runtime.LumnoSearchInputUIReact = searchInputApi;
   runtime.LumnoSearchInputUI = searchInputApi;
   runtime._x_extension_createSearchInput_2024_unique_ =
@@ -143,7 +154,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     wordmark: wordmarkApi,
     pageStructure: pageStructureApi,
     bookmarksTopbar: bookmarksTopbarApi,
-    pageNotice: pageNoticeApi
+    pageNotice: pageNoticeApi,
+    bookmarkCascadeView: bookmarkCascadeViewApi
   });
 
   if (bootstrapState) {

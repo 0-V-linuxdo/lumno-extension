@@ -45,6 +45,7 @@
     const debugStorageKey = String(getOption(config, 'debugStorageKey', '') || '');
     const positionUtils = getOption(config, 'positionUtils', {});
     const menuSurface = getOption(config, 'menuSurface', null);
+    const view = getOption(config, 'view', null);
     const t = getFunction(config, 't', function(_key, fallback) {
       return fallback || '';
     });
@@ -933,6 +934,9 @@
           entry.triggerElement.setAttribute('aria-expanded', 'false');
         }
         if (shouldRemove && entry.levelElement && entry.levelElement.parentNode) {
+          if (entry.viewController && typeof entry.viewController.destroy === 'function') {
+            entry.viewController.destroy();
+          }
           entry.levelElement.parentNode.removeChild(entry.levelElement);
         }
         return !shouldRemove;
@@ -1341,12 +1345,12 @@
       return titleElement;
     }
 
-    function createBookmarkCascadeCopyTrigger(itemRow, item, activateLeafItem) {
+    function createBookmarkCascadeCopyTrigger(itemRow, item, activateLeafItem, existingButton) {
       if (!documentObj || !itemRow || !item || !item.url) {
         return null;
       }
       const copyLabel = t('bookmarks_copy_url', 'Copy link');
-      const copyButton = documentObj.createElement('button');
+      const copyButton = existingButton || documentObj.createElement('button');
       const showCopyTooltip = () => {
         cancelBookmarkCascadeHoverIntent();
         hideCursorTooltip();
@@ -1365,11 +1369,13 @@
         }
       };
 
-      copyButton.type = 'button';
-      copyButton.className = 'x-nt-bookmark-cascade-copy-trigger';
-      copyButton.innerHTML = getRiSvg('ri-file-copy-line', 'ri-size-16');
-      copyButton.setAttribute('aria-label', copyLabel);
-      copyButton.setAttribute('data-tooltip', copyLabel);
+      if (!existingButton) {
+        copyButton.type = 'button';
+        copyButton.className = 'x-nt-bookmark-cascade-copy-trigger';
+        copyButton.innerHTML = getRiSvg('ri-file-copy-line', 'ri-size-16');
+        copyButton.setAttribute('aria-label', copyLabel);
+        copyButton.setAttribute('data-tooltip', copyLabel);
+      }
       copyButton.addEventListener('pointerenter', showCopyTooltip);
       copyButton.addEventListener('pointerleave', hideCopyTooltip);
       copyButton.addEventListener('focus', showCopyTooltip);
@@ -1384,7 +1390,9 @@
         hideCopyTooltip();
         Promise.resolve().then(() => copyUrl(item.url)).catch(noop);
       });
-      itemRow.appendChild(copyButton);
+      if (copyButton.parentNode !== itemRow) {
+        itemRow.appendChild(copyButton);
+      }
       return copyButton;
     }
 
@@ -1394,22 +1402,47 @@
       }
       const safeLevelIndex = Math.max(0, Number.parseInt(levelIndex, 10) || 0);
       clearBookmarkCascadeLevelsFrom(safeLevelIndex);
-      const levelElement = documentObj.createElement('div');
-      levelElement.className = 'x-nt-bookmark-cascade-level';
+      const items = getBookmarkCascadeItems(folderId).filter((item) => {
+        return Boolean(item && (item.url || item.type === 'folder'));
+      });
+      const viewController = view && typeof view.createLevel === 'function'
+        ? view.createLevel({
+          documentObj,
+          levelIndex: safeLevelIndex,
+          folderId,
+          folderTitle,
+          items,
+          sanitizeDisplayText,
+          getFigmaFolderSvg,
+          getRiSvg,
+          getUrlDisplay,
+          copyLabel: t('bookmarks_copy_url', 'Copy link'),
+          emptyLabel: t('bookmarks_empty_folder', 'No content'),
+          siteIconAlt: t('site_icon_alt', '站点')
+        })
+        : null;
+      const levelElement = viewController
+        ? viewController.element
+        : documentObj.createElement('div');
+      if (!viewController) {
+        levelElement.className = 'x-nt-bookmark-cascade-level';
+      }
       applyBookmarkCascadeLevelSurface(levelElement);
-      if (safeLevelIndex > 0) {
+      if (!viewController && safeLevelIndex > 0) {
         levelElement.classList.add('x-nt-bookmark-cascade-submenu');
       }
       levelElement.setAttribute('data-level', String(safeLevelIndex));
       levelElement.setAttribute('role', 'menu');
-      const contentElement = documentObj.createElement('div');
-      contentElement.className = 'x-nt-bookmark-cascade-content';
-      contentElement.setAttribute('role', 'none');
-      levelElement.appendChild(contentElement);
-
-      appendBookmarkCascadeLevelTitle(contentElement, folderTitle);
-      const items = getBookmarkCascadeItems(folderId);
-      if (items.length === 0) {
+      const contentElement = viewController
+        ? viewController.content
+        : documentObj.createElement('div');
+      if (!viewController) {
+        contentElement.className = 'x-nt-bookmark-cascade-content';
+        contentElement.setAttribute('role', 'none');
+        levelElement.appendChild(contentElement);
+        appendBookmarkCascadeLevelTitle(contentElement, folderTitle);
+      }
+      if (!viewController && items.length === 0) {
         const emptyItem = documentObj.createElement('div');
         emptyItem.className = 'x-nt-bookmark-cascade-empty';
         emptyItem.textContent = t('bookmarks_empty_folder', 'No content');
@@ -1422,32 +1455,37 @@
         }
         const isFolder = item.type === 'folder';
         const titleText = item.title || (item.url ? getUrlDisplay(item.url) : t('bookmarks_heading', 'Bookmarks'));
-        const itemRow = documentObj.createElement('div');
-        itemRow.className = 'x-nt-bookmark-cascade-row';
-        itemRow.setAttribute('role', 'none');
-        const itemButton = documentObj.createElement('button');
-        itemButton.type = 'button';
-        itemButton.className = 'x-nt-bookmark-cascade-item';
-        itemButton.tabIndex = -1;
-        itemButton.setAttribute('role', 'menuitem');
-        itemButton.setAttribute('data-type', isFolder ? 'folder' : 'bookmark');
-        itemButton.setAttribute('data-bookmark-id', String(item.id || ''));
-        itemButton.setAttribute('data-bookmark-parent-id', String(item.parentId || folderId || ''));
-        itemButton.setAttribute(
-          'data-bookmark-index',
-          Number.isFinite(Number(item.index)) ? String(item.index) : ''
-        );
-        itemButton.setAttribute(
-          'data-bookmark-draggable',
-          item.id && (item.parentId || folderId) && Number.isFinite(Number(item.index)) ? 'true' : 'false'
-        );
-        if (isFolder) {
-          itemButton.setAttribute('data-bookmark-drop-folder-id', String(item.id || ''));
-          itemButton.setAttribute('data-bookmark-drop-folder-title', titleText);
+        const itemView = viewController && viewController.items
+          ? viewController.items[index]
+          : null;
+        const itemRow = itemView ? itemView.row : documentObj.createElement('div');
+        const itemButton = itemView ? itemView.button : documentObj.createElement('button');
+        if (!itemView) {
+          itemRow.className = 'x-nt-bookmark-cascade-row';
+          itemRow.setAttribute('role', 'none');
+          itemButton.type = 'button';
+          itemButton.className = 'x-nt-bookmark-cascade-item';
+          itemButton.tabIndex = -1;
+          itemButton.setAttribute('role', 'menuitem');
+          itemButton.setAttribute('data-type', isFolder ? 'folder' : 'bookmark');
+          itemButton.setAttribute('data-bookmark-id', String(item.id || ''));
+          itemButton.setAttribute('data-bookmark-parent-id', String(item.parentId || folderId || ''));
+          itemButton.setAttribute(
+            'data-bookmark-index',
+            Number.isFinite(Number(item.index)) ? String(item.index) : ''
+          );
+          itemButton.setAttribute(
+            'data-bookmark-draggable',
+            item.id && (item.parentId || folderId) && Number.isFinite(Number(item.index)) ? 'true' : 'false'
+          );
+          if (isFolder) {
+            itemButton.setAttribute('data-bookmark-drop-folder-id', String(item.id || ''));
+            itemButton.setAttribute('data-bookmark-drop-folder-title', titleText);
+          }
+          itemButton.setAttribute('aria-label', titleText);
+          itemButton.title = titleText;
+          itemButton.draggable = false;
         }
-        itemButton.setAttribute('aria-label', titleText);
-        itemButton.title = titleText;
-        itemButton.draggable = false;
         itemButton.addEventListener('dragstart', (event) => {
           event.preventDefault();
         });
@@ -1469,15 +1507,31 @@
           });
         });
 
-        const icon = createBookmarkCascadeItemIcon(item, index);
-        const label = documentObj.createElement('span');
-        label.className = 'x-nt-bookmark-cascade-label';
-        label.textContent = sanitizeDisplayText(titleText);
-        if (icon) {
-          itemButton.appendChild(icon);
+        const icon = itemView ? itemView.icon : createBookmarkCascadeItemIcon(item, index);
+        if (itemView && icon) {
+          if (isFolder) {
+            initFolderPathMorph(icon);
+          } else {
+            const themeUrl = item.themeUrl || item.url || '';
+            const host = item.host || getHostFromUrl(themeUrl) || '';
+            const siteName = getSiteDisplayName(host, item.title);
+            icon.alt = siteName || t('site_icon_alt', '站点');
+            attachFaviconWithFallbacks(icon, item.url, host, {
+              primaryUrl: getPrimaryFaviconCandidateForBookmark(item.url),
+              browserUrl: getBrowserFaviconCandidateForBookmark(item.url, host)
+            });
+          }
         }
-        itemButton.appendChild(label);
-        itemRow.appendChild(itemButton);
+        if (!itemView) {
+          const label = documentObj.createElement('span');
+          label.className = 'x-nt-bookmark-cascade-label';
+          label.textContent = sanitizeDisplayText(titleText);
+          if (icon) {
+            itemButton.appendChild(icon);
+          }
+          itemButton.appendChild(label);
+          itemRow.appendChild(itemButton);
+        }
 
         const openNestedLevel = (openOptions) => {
           if (!isFolder) {
@@ -1531,11 +1585,13 @@
           itemButton.classList.add('x-nt-bookmark-cascade-item--folder');
           itemButton.setAttribute('aria-haspopup', 'menu');
           itemButton.setAttribute('aria-expanded', 'false');
-          const arrow = documentObj.createElement('span');
-          arrow.className = 'x-nt-bookmark-cascade-arrow';
-          arrow.innerHTML = getRiSvg('ri-arrow-right-s-line', 'ri-size-16');
-          arrow.setAttribute('aria-hidden', 'true');
-          itemButton.appendChild(arrow);
+          if (!itemView) {
+            const arrow = documentObj.createElement('span');
+            arrow.className = 'x-nt-bookmark-cascade-arrow';
+            arrow.innerHTML = getRiSvg('ri-arrow-right-s-line', 'ri-size-16');
+            arrow.setAttribute('aria-hidden', 'true');
+            itemButton.appendChild(arrow);
+          }
           itemButton.addEventListener('pointerenter', (event) => {
             clearBookmarkCascadePointerActiveItem(levelElement, itemButton, event);
             scheduleBookmarkCascadeHoverIntent({
@@ -1575,7 +1631,12 @@
             }
           });
         } else {
-          createBookmarkCascadeCopyTrigger(itemRow, item, activateLeafItem);
+          createBookmarkCascadeCopyTrigger(
+            itemRow,
+            item,
+            activateLeafItem,
+            itemView ? itemView.copyButton : null
+          );
           bindCursorTooltip(itemButton, () => titleText, {
             maxWidth: 460,
             shouldShow: (_target, event) => shouldOpenUrlInBackground(event)
@@ -1627,7 +1688,9 @@
             navigateLeafItem(event);
           });
         }
-        contentElement.appendChild(itemRow);
+        if (itemRow.parentNode !== contentElement) {
+          contentElement.appendChild(itemRow);
+        }
       });
 
       bookmarkCascadeMenu.appendChild(levelElement);
@@ -1638,7 +1701,8 @@
         levelIndex: safeLevelIndex,
         levelElement,
         triggerElement: safeLevelIndex > 0 ? triggerElement : bookmarkCascadeAnchor,
-        parentLevelElement: safeLevelIndex > 0 ? parentLevelElement : null
+        parentLevelElement: safeLevelIndex > 0 ? parentLevelElement : null,
+        viewController
       };
       bookmarkCascadeLevels.push(entry);
       positionBookmarkCascadeLevel(entry);
@@ -1683,8 +1747,12 @@
         if (typeof bookmarkCascadeAnchor._xSetBookmarkMenuVisualActive === 'function') {
           bookmarkCascadeAnchor._xSetBookmarkMenuVisualActive(true);
         }
-        bookmarkCascadeMenu = documentObj.createElement('div');
-        bookmarkCascadeMenu.className = 'x-nt-bookmark-cascade-menu';
+        bookmarkCascadeMenu = view && typeof view.createMenu === 'function'
+          ? view.createMenu(documentObj)
+          : documentObj.createElement('div');
+        if (!bookmarkCascadeMenu.className) {
+          bookmarkCascadeMenu.className = 'x-nt-bookmark-cascade-menu';
+        }
         bookmarkCascadeMenu.setAttribute('role', 'menu');
         setBookmarkCascadeDragMode(dragMode);
         documentObj.body.appendChild(bookmarkCascadeMenu);

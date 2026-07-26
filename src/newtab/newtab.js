@@ -201,6 +201,8 @@
   const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
   const NEWTAB_WORDMARK = globalThis.LumnoNewtabWordmark || {};
   const NEWTAB_PAGE_STRUCTURE = globalThis.LumnoNewtabPageStructure || {};
+  const NEWTAB_BOOKMARK_CASCADE_VIEW =
+    globalThis.LumnoNewtabBookmarkCascadeView || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -248,7 +250,9 @@
       typeof NEWTAB_WALLPAPER_ADAPTIVE_TONE.createWallpaperAdaptiveTone !== 'function' ||
       typeof NEWTAB_WALLPAPER_EFFECTS.createWallpaperEffects !== 'function' ||
       typeof NEWTAB_WALLPAPER.createWallpaperRuntime !== 'function' ||
-      typeof NEWTAB_PAGE_STRUCTURE.createPageStructure !== 'function') {
+      typeof NEWTAB_PAGE_STRUCTURE.createPageStructure !== 'function' ||
+      typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createMenu !== 'function' ||
+      typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createLevel !== 'function') {
     console.warn('Lumno: newtab helpers not available.');
     return;
   }
@@ -8341,7 +8345,8 @@
     onItemPointerDown: handleBookmarkCascadeItemPointerDown,
     onItemContextMenu: handleBookmarkItemContextMenu,
     shouldKeepOpenForExternalNode: isBookmarkContextMenuNode,
-    getViewportTopPadding: getBookmarkCascadeViewportTopPaddingPx
+    getViewportTopPadding: getBookmarkCascadeViewportTopPaddingPx,
+    view: NEWTAB_BOOKMARK_CASCADE_VIEW
   });
   bookmarkTopbarRuntime = NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar({
     documentObj: document,
