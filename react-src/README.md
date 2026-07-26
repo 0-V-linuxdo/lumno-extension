@@ -40,6 +40,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      controller contract, portal geometry, keyboard behavior, action rows, and
      native `change` bridge while allowing the browser adapter to retain data
      mutations and card-specific actions.
+   - Bottom Dock and Wordmark as structural React islands. React creates the
+     scroll shell, safe corridor, interactive brand mark, and image layers;
+     the existing layout controller, visibility timing, wallpaper tone sampler,
+     and navigation adapter continue to operate on stable element references.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings

@@ -2,6 +2,7 @@ import {
   createBookmarksViewApi,
   type LegacyBookmarksApi
 } from './bookmarks';
+import { createDockApi } from './dock';
 import { createFeedbackControlApi } from './feedback';
 import { createRecentSitesViewApi, type LegacyRecentSitesApi } from './recent-sites';
 import { createSelectMenuApi } from './select-menu';
@@ -15,6 +16,7 @@ import {
   type LegacySuggestionsApi
 } from './suggestions';
 import { createToastApi, type LegacyToastApi } from './toast';
+import { createWordmarkApi } from './wordmark';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoNewtabReactBootstrap?: {
@@ -23,6 +25,7 @@ const runtime = globalThis as typeof globalThis & {
   };
   LumnoNewtabReactIslands?: {
     bookmarks: ReturnType<typeof createBookmarksViewApi>;
+    dock: ReturnType<typeof createDockApi>;
     feedback: ReturnType<typeof createFeedbackControlApi>;
     shortcutDialog: ReturnType<typeof createShortcutDialogApi>;
     recentSites: ReturnType<typeof createRecentSitesViewApi>;
@@ -30,11 +33,14 @@ const runtime = globalThis as typeof globalThis & {
     shortcuts: ReturnType<typeof createShortcutsViewApi>;
     suggestions: ReturnType<typeof createSuggestionsViewApi>;
     toast: ReturnType<typeof createToastApi>;
+    wordmark: ReturnType<typeof createWordmarkApi>;
   };
   LumnoNewtabBookmarksView?: LegacyBookmarksApi;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
   LumnoNewtabFeedbackControl?: ReturnType<typeof createFeedbackControlApi>;
   LumnoNewtabFeedbackControlReact?: ReturnType<typeof createFeedbackControlApi>;
+  LumnoNewtabDock?: ReturnType<typeof createDockApi>;
+  LumnoNewtabDockReact?: ReturnType<typeof createDockApi>;
   LumnoNewtabShortcutDialog?: ReturnType<typeof createShortcutDialogApi>;
   LumnoNewtabShortcutDialogReact?: ReturnType<typeof createShortcutDialogApi>;
   LumnoNewtabShortcutsView?: LegacyShortcutsApi;
@@ -47,6 +53,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabSuggestionsViewReact?: ReturnType<typeof createSuggestionsViewApi>;
   LumnoNewtabToast?: LegacyToastApi;
   LumnoNewtabToastReact?: ReturnType<typeof createToastApi>;
+  LumnoNewtabWordmark?: ReturnType<typeof createWordmarkApi>;
+  LumnoNewtabWordmarkReact?: ReturnType<typeof createWordmarkApi>;
 };
 
 const bootstrapState = runtime.LumnoNewtabReactBootstrap;
@@ -58,6 +66,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const legacySuggestionsApi = runtime.LumnoNewtabSuggestionsView || null;
   const legacyToastApi = runtime.LumnoNewtabToast || null;
   const bookmarksApi = createBookmarksViewApi(legacyBookmarksApi);
+  const dockApi = createDockApi();
   const feedbackApi = createFeedbackControlApi();
   const shortcutDialogApi = createShortcutDialogApi();
   const recentSitesApi = createRecentSitesViewApi(legacyRecentSitesApi);
@@ -65,9 +74,12 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const shortcutsApi = createShortcutsViewApi(legacyShortcutsApi);
   const suggestionsApi = createSuggestionsViewApi(legacySuggestionsApi);
   const toastApi = createToastApi(legacyToastApi);
+  const wordmarkApi = createWordmarkApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
   runtime.LumnoNewtabBookmarksView = bookmarksApi;
+  runtime.LumnoNewtabDockReact = dockApi;
+  runtime.LumnoNewtabDock = dockApi;
   runtime.LumnoNewtabFeedbackControlReact = feedbackApi;
   runtime.LumnoNewtabFeedbackControl = feedbackApi;
   runtime.LumnoNewtabShortcutDialogReact = shortcutDialogApi;
@@ -82,15 +94,19 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabSuggestionsView = suggestionsApi;
   runtime.LumnoNewtabToastReact = toastApi;
   runtime.LumnoNewtabToast = toastApi;
+  runtime.LumnoNewtabWordmarkReact = wordmarkApi;
+  runtime.LumnoNewtabWordmark = wordmarkApi;
   runtime.LumnoNewtabReactIslands = Object.freeze({
     bookmarks: bookmarksApi,
+    dock: dockApi,
     feedback: feedbackApi,
     shortcutDialog: shortcutDialogApi,
     recentSites: recentSitesApi,
     selectMenu: selectMenuApi,
     shortcuts: shortcutsApi,
     suggestions: suggestionsApi,
-    toast: toastApi
+    toast: toastApi,
+    wordmark: wordmarkApi
   });
 
   if (bootstrapState) {

@@ -199,6 +199,7 @@
   const NEWTAB_WALLPAPER = globalThis.LumnoNewtabWallpaper || {};
   const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
   const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
+  const NEWTAB_WORDMARK = globalThis.LumnoNewtabWordmark || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -365,6 +366,7 @@
   let tabRankScoreDebugEnabled = false;
   let searchLayer = null;
   let wordmarkContainer = null;
+  let wordmarkController = null;
   let wordmarkImageEl = null;
   let wordmarkSolidEl = null;
   let wordmarkVisibilityTransitionTimer = 0;
@@ -14304,98 +14306,125 @@
   const searchInput = inputParts.input;
   searchInputRef = searchInput;
   const rightIcon = inputParts.rightIcon;
-  wordmarkContainer = document.createElement('div');
-  wordmarkContainer.id = '_x_extension_newtab_wordmark_2026_unique_';
-  wordmarkContainer.setAttribute('aria-hidden', 'true');
-  wordmarkContainer.style.cssText = `
-    all: unset;
-    width: 90vw;
-    max-width: var(--x-nt-search-max-width, 720px);
-    max-height: 74px;
-    min-height: 0;
-    margin: 0 0 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    position: relative;
-    z-index: 3;
-    overflow: hidden;
-    pointer-events: auto;
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    transition: ${WORDMARK_VISIBILITY_TRANSITION_CSS};
-    user-select: none;
-  `;
-  const wordmarkButton = document.createElement('button');
-  wordmarkButton.type = 'button';
-  wordmarkButton.setAttribute('aria-label', 'Lumno Chrome Web Store');
-  wordmarkButton.style.cssText = `
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    cursor: pointer;
-    line-height: 0;
-    pointer-events: auto;
-  `;
   function openWordmarkUrl(event) {
-    event.preventDefault();
-    event.stopPropagation();
+    if (event && typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    if (event && typeof event.stopPropagation === 'function') {
+      event.stopPropagation();
+    }
     openExternalNewTabUrl(LUMNO_CHROME_WEB_STORE_URL, event);
   }
-  wordmarkButton.addEventListener('click', openWordmarkUrl);
-  wordmarkButton.addEventListener('auxclick', (event) => {
-    if (!isMiddleClick(event)) {
-      return;
-    }
-    openWordmarkUrl(event);
-  });
   const shouldAnimateWordmarkEntry = !window.matchMedia ||
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  wordmarkContainer.setAttribute('data-enter', shouldAnimateWordmarkEntry ? 'run' : 'done');
-  if (shouldAnimateWordmarkEntry) {
-    wordmarkButton.addEventListener('animationend', (event) => {
-      if (!event || event.animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
-        finishWordmarkEntryAnimation();
+  wordmarkContainer = document.createElement('div');
+  if (typeof NEWTAB_WORDMARK.createWordmarkController === 'function') {
+    wordmarkController = NEWTAB_WORDMARK.createWordmarkController(
+      wordmarkContainer,
+      {
+        onActivate(disposition) {
+          openWordmarkUrl(disposition);
+        },
+        onEntryAnimationComplete(animationName) {
+          if (!animationName || animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
+            finishWordmarkEntryAnimation();
+          }
+        }
       }
+    );
+    wordmarkController.render({
+      animateEntry: shouldAnimateWordmarkEntry,
+      ariaLabel: 'Lumno Chrome Web Store',
+      imageSrc: '../../assets/images/lumno-wordmark.svg'
     });
-    wordmarkButton.addEventListener('animationcancel', finishWordmarkEntryAnimation);
+    wordmarkImageEl = wordmarkController.getImage();
+    wordmarkSolidEl = wordmarkController.getSolid();
+  } else {
+    wordmarkContainer.id = '_x_extension_newtab_wordmark_2026_unique_';
+    wordmarkContainer.setAttribute('aria-hidden', 'true');
+    wordmarkContainer.style.cssText = `
+      all: unset;
+      width: 90vw;
+      max-width: var(--x-nt-search-max-width, 720px);
+      max-height: 74px;
+      min-height: 0;
+      margin: 0 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      position: relative;
+      z-index: 3;
+      overflow: hidden;
+      pointer-events: auto;
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      transition: ${WORDMARK_VISIBILITY_TRANSITION_CSS};
+      user-select: none;
+    `;
+    const wordmarkButton = document.createElement('button');
+    wordmarkButton.type = 'button';
+    wordmarkButton.setAttribute('aria-label', 'Lumno Chrome Web Store');
+    wordmarkButton.style.cssText = `
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      line-height: 0;
+      pointer-events: auto;
+    `;
+    wordmarkButton.addEventListener('click', openWordmarkUrl);
+    wordmarkButton.addEventListener('auxclick', (event) => {
+      if (!isMiddleClick(event)) {
+        return;
+      }
+      openWordmarkUrl(event);
+    });
+    wordmarkContainer.setAttribute('data-enter', shouldAnimateWordmarkEntry ? 'run' : 'done');
+    if (shouldAnimateWordmarkEntry) {
+      wordmarkButton.addEventListener('animationend', (event) => {
+        if (!event || event.animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
+          finishWordmarkEntryAnimation();
+        }
+      });
+      wordmarkButton.addEventListener('animationcancel', finishWordmarkEntryAnimation);
+    }
+    wordmarkSolidEl = document.createElement('span');
+    wordmarkSolidEl.setAttribute('aria-hidden', 'true');
+    wordmarkSolidEl.style.cssText = `
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: var(--x-nt-wordmark-solid-fill, rgb(31 41 55));
+      -webkit-mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
+      mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
+      contain: paint;
+      transition: background-color 180ms ease, opacity 180ms ease;
+    `;
+    wordmarkImageEl = document.createElement('img');
+    wordmarkImageEl.src = '../../assets/images/lumno-wordmark.svg';
+    wordmarkImageEl.alt = '';
+    wordmarkImageEl.draggable = false;
+    wordmarkImageEl.style.cssText = `
+      width: 180px;
+      max-width: 52%;
+      height: auto;
+      display: block;
+      position: relative;
+      z-index: 1;
+      object-fit: contain;
+      opacity: 0.82;
+      filter: none;
+      transform: translateY(0);
+      transition: opacity 180ms ease;
+    `;
+    wordmarkButton.appendChild(wordmarkSolidEl);
+    wordmarkButton.appendChild(wordmarkImageEl);
+    wordmarkContainer.appendChild(wordmarkButton);
   }
-  wordmarkSolidEl = document.createElement('span');
-  wordmarkSolidEl.setAttribute('aria-hidden', 'true');
-  wordmarkSolidEl.style.cssText = `
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0;
-    background: var(--x-nt-wordmark-solid-fill, rgb(31 41 55));
-    -webkit-mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
-    mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
-    contain: paint;
-    transition: background-color 180ms ease, opacity 180ms ease;
-  `;
-  wordmarkImageEl = document.createElement('img');
-  wordmarkImageEl.src = '../../assets/images/lumno-wordmark.svg';
-  wordmarkImageEl.alt = '';
-  wordmarkImageEl.draggable = false;
-  wordmarkImageEl.style.cssText = `
-    width: 180px;
-    max-width: 52%;
-    height: auto;
-    display: block;
-    position: relative;
-    z-index: 1;
-    object-fit: contain;
-    opacity: 0.82;
-    filter: none;
-    transform: translateY(0);
-    transition: opacity 180ms ease;
-  `;
-  wordmarkButton.appendChild(wordmarkSolidEl);
-  wordmarkButton.appendChild(wordmarkImageEl);
-  wordmarkContainer.appendChild(wordmarkButton);
   applyNewtabWordmarkVisibility();
   applyWordmarkThemeAppearance();
   searchLayer = document.createElement('div');
