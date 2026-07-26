@@ -197,6 +197,7 @@
   const NEWTAB_WALLPAPER_ADAPTIVE_TONE = globalThis.LumnoNewtabWallpaperAdaptiveTone || {};
   const NEWTAB_WALLPAPER_EFFECTS = globalThis.LumnoNewtabWallpaperEffects || {};
   const NEWTAB_WALLPAPER = globalThis.LumnoNewtabWallpaper || {};
+  const NEWTAB_WALLPAPER_VIEW = globalThis.LumnoNewtabWallpaperView || {};
   const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
   const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
   const NEWTAB_WORDMARK = globalThis.LumnoNewtabWordmark || {};
@@ -252,7 +253,8 @@
       typeof NEWTAB_WALLPAPER.createWallpaperRuntime !== 'function' ||
       typeof NEWTAB_PAGE_STRUCTURE.createPageStructure !== 'function' ||
       typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createMenu !== 'function' ||
-      typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createLevel !== 'function') {
+      typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createLevel !== 'function' ||
+      typeof NEWTAB_WALLPAPER_VIEW.createController !== 'function') {
     console.warn('Lumno: newtab helpers not available.');
     return;
   }
@@ -2488,7 +2490,8 @@
     setSearchWidth: (value, options) => {
       setNewtabSearchWidth(value, options);
     },
-    getAdaptiveToneTargets: createWallpaperAdaptiveToneTargets
+    getAdaptiveToneTargets: createWallpaperAdaptiveToneTargets,
+    view: NEWTAB_WALLPAPER_VIEW
   });
 
   function updateWallpaperLanguageStrings() {

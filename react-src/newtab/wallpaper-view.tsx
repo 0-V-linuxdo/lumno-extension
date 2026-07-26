@@ -1,0 +1,715 @@
+import { flushSync } from 'react-dom';
+import { createRoot, type Root } from 'react-dom/client';
+import type { CSSProperties } from 'react';
+
+type WallpaperItem = {
+  id: string;
+  path?: string;
+  thumbnailUrl: string;
+};
+
+type FaviconItem = {
+  id: string;
+  inlineSvg?: string;
+  previewUrl?: string;
+};
+
+const ref = (name: string) => ({ 'data-wallpaper-ref': name });
+
+function Switch({ name }: { name: string }) {
+  return (
+    <label className="x-nt-wallpaper-switch">
+      <input {...ref(name)} role="switch" type="checkbox" />
+      <span
+        aria-hidden="true"
+        className="x-nt-wallpaper-switch-slider"
+      />
+    </label>
+  );
+}
+
+function Scale({
+  className = '',
+  ticks
+}: {
+  className?: string;
+  ticks: Array<{
+    align?: string;
+    key?: string;
+    label: string;
+    percent?: number;
+    searchKey?: string;
+  }>;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`x-nt-overlay-scale${className ? ` ${className}` : ''}`}
+    >
+      {ticks.map((tick, index) => (
+        <span
+          className={`x-nt-overlay-tick${
+            tick.searchKey ? ' x-nt-search-width-tick' : ''
+          }`}
+          data-align={tick.align || 'center'}
+          data-overlay-tick={tick.key}
+          data-search-width-tick={tick.searchKey}
+          key={`${tick.key || tick.searchKey || index}-${index}`}
+          style={
+            typeof tick.percent === 'number'
+              ? ({
+                  '--x-nt-search-width-tick-percent': `${tick.percent}%`
+                } as CSSProperties)
+              : undefined
+          }
+        >
+          {tick.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SliderControl({
+  controlClass = 'x-nt-effect-slider-control',
+  controlRef,
+  labelClass = 'x-nt-effect-slider-label',
+  labelRef,
+  sliderClass = 'x-nt-overlay-slider x-nt-effect-slider',
+  sliderRef,
+  ticks,
+  visible = true,
+  wrapClass = 'x-nt-overlay-slider-wrap x-nt-effect-slider-wrap'
+}: {
+  controlClass?: string;
+  controlRef: string;
+  labelClass?: string;
+  labelRef: string;
+  sliderClass?: string;
+  sliderRef: string;
+  ticks: Array<{ align?: string; key?: string; label: string }>;
+  visible?: boolean;
+  wrapClass?: string;
+}) {
+  return (
+    <div
+      {...ref(controlRef)}
+      aria-hidden={visible ? 'false' : 'true'}
+      className={controlClass}
+      data-visible={visible ? 'true' : 'false'}
+    >
+      <div className="x-nt-overlay-control-header">
+        <span {...ref(labelRef)} className={labelClass} />
+      </div>
+      <div className={wrapClass}>
+        <input
+          {...ref(sliderRef)}
+          className={sliderClass}
+          max="100"
+          min="0"
+          step="1"
+          type="range"
+        />
+        <Scale ticks={ticks} />
+      </div>
+    </div>
+  );
+}
+
+function WallpaperTile({
+  checkIcon,
+  item
+}: {
+  checkIcon: string;
+  item: WallpaperItem;
+}) {
+  return (
+    <button
+      aria-pressed="false"
+      className="x-nt-wallpaper-tile"
+      data-selected="false"
+      data-wallpaper-id={item.id}
+      data-wallpaper-path={item.path}
+      type="button"
+    >
+      <span className="x-nt-wallpaper-thumb">
+        <img
+          alt=""
+          decoding="async"
+          draggable={false}
+          loading="lazy"
+          src={item.thumbnailUrl}
+        />
+      </span>
+      <span
+        className="x-nt-wallpaper-check"
+        dangerouslySetInnerHTML={{
+          __html: checkIcon
+        }}
+      />
+    </button>
+  );
+}
+
+function FaviconTile({
+  checkIcon,
+  item
+}: {
+  checkIcon: string;
+  item: FaviconItem;
+}) {
+  return (
+    <button
+      aria-pressed="false"
+      className="x-nt-wallpaper-tile x-nt-favicon-option"
+      data-newtab-favicon-id={item.id}
+      data-selected="false"
+      type="button"
+    >
+      <span className="x-nt-wallpaper-thumb x-nt-favicon-thumb">
+        {item.inlineSvg ? (
+          <span
+            aria-hidden="true"
+            className="x-nt-favicon-image x-nt-favicon-svg-preview"
+            dangerouslySetInnerHTML={{ __html: item.inlineSvg }}
+          />
+        ) : (
+          <img
+            alt=""
+            className="x-nt-favicon-image"
+            draggable={false}
+            src={item.previewUrl}
+          />
+        )}
+      </span>
+      <span
+        className="x-nt-wallpaper-check"
+        dangerouslySetInnerHTML={{ __html: checkIcon }}
+      />
+    </button>
+  );
+}
+
+function WallpaperPanel({ model }: { model: Record<string, any> }) {
+  const defaultTicks = [
+    { align: 'start', label: '0' },
+    { key: 'default', label: 'Default' },
+    { align: 'end', label: '100%' }
+  ];
+  const checkIcon = String(model.icons?.check || '');
+  return (
+    <>
+      <div
+        {...ref('panel')}
+        aria-modal="false"
+        className="x-nt-wallpaper-panel"
+        data-open="false"
+        role="dialog"
+      >
+        <div className="x-nt-appearance-header">
+          <div className="x-nt-appearance-title-group">
+            <div
+              {...ref('appearanceTitle')}
+              className="x-nt-wallpaper-panel-title"
+            />
+            <button
+              {...ref('appearanceInfoButton')}
+              className="x-nt-appearance-info-button"
+              dangerouslySetInnerHTML={{
+                __html: String(model.icons?.help || '')
+              }}
+              type="button"
+            />
+          </div>
+          <div
+            {...ref('appearanceScopeTabs')}
+            className="x-nt-appearance-scope-tabs"
+            role="group"
+          >
+            {['global', 'home'].map((scope) => (
+              <button
+                aria-pressed="false"
+                className="x-nt-appearance-scope-tab"
+                data-selected="false"
+                data-theme-scope={scope}
+                key={scope}
+                type="button"
+              >
+                {scope === 'home' ? 'New Tab' : 'Global'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="x-nt-wallpaper-panel-scroll">
+          <div className="x-nt-appearance-section">
+            <div
+              {...ref('appearanceOptions')}
+              className="x-nt-appearance-options"
+            >
+              {model.appearanceOptions.map(
+                (item: { imageUrl: string; mode: string }) => (
+                  <button
+                    aria-pressed="false"
+                    className="x-nt-appearance-option"
+                    data-selected="false"
+                    data-theme-mode={item.mode}
+                    key={item.mode}
+                    type="button"
+                  >
+                    <span className="x-nt-appearance-option-content">
+                      <span className="x-nt-appearance-preview">
+                        <img alt="" draggable={false} src={item.imageUrl} />
+                        <span
+                          className="x-nt-appearance-check"
+                          dangerouslySetInnerHTML={{ __html: checkIcon }}
+                        />
+                      </span>
+                      <span className="x-nt-appearance-label" />
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+            <div
+              {...ref('searchWidthControl')}
+              aria-hidden="true"
+              className="x-nt-overlay-control x-nt-search-width-control"
+              data-visible="false"
+            >
+              <div className="x-nt-overlay-control-header">
+                <span
+                  {...ref('searchWidthLabel')}
+                  className="x-nt-overlay-label"
+                />
+                <span
+                  {...ref('searchWidthValue')}
+                  className="x-nt-overlay-value"
+                />
+              </div>
+              <div className="x-nt-overlay-slider-wrap x-nt-search-width-slider-wrap">
+                <input
+                  {...ref('searchWidthSlider')}
+                  className="x-nt-overlay-slider x-nt-search-width-slider"
+                  data-value-suffix=" px"
+                  max={String(model.searchWidth.max)}
+                  min={String(model.searchWidth.min)}
+                  step="1"
+                  type="range"
+                />
+                <Scale
+                  className="x-nt-search-width-scale"
+                  ticks={model.searchWidth.ticks}
+                />
+              </div>
+              <a
+                {...ref('moreSettingsLink')}
+                className="x-nt-appearance-more-settings"
+                href={model.moreSettingsUrl}
+              >
+                <span
+                  {...ref('moreSettingsText')}
+                  className="x-nt-appearance-more-settings-text"
+                />
+                <span
+                  aria-hidden="true"
+                  className="x-nt-appearance-more-settings-icon"
+                  dangerouslySetInnerHTML={{
+                    __html: String(model.icons?.arrow || '')
+                  }}
+                />
+              </a>
+            </div>
+          </div>
+          <div className="x-nt-panel-divider" />
+          <div className="x-nt-wallpaper-section">
+            <div
+              {...ref('panelHeader')}
+              className="x-nt-wallpaper-panel-header"
+            >
+              <div
+                {...ref('panelTitle')}
+                className="x-nt-wallpaper-panel-title"
+              />
+              <Switch name="enabledToggle" />
+            </div>
+            <input
+              {...ref('customInput')}
+              accept="image/*"
+              className="x-nt-wallpaper-file-input"
+              tabIndex={-1}
+              type="file"
+            />
+            <div
+              {...ref('body')}
+              aria-hidden="false"
+              className="x-nt-wallpaper-body"
+              data-active-tab={model.activeTab || 'built-in'}
+              data-visible="true"
+            >
+              <div className="x-nt-wallpaper-mode-sync">
+                <span
+                  {...ref('modeSyncTitle')}
+                  className="x-nt-wallpaper-mode-sync-title"
+                />
+                <Switch name="modeSyncToggle" />
+              </div>
+              <div className="x-nt-wallpaper-tab-group">
+                <div
+                  {...ref('modeTabs')}
+                  aria-hidden="true"
+                  className="x-nt-wallpaper-tabs x-nt-wallpaper-mode-tabs"
+                  data-visible="false"
+                  role="tablist"
+                >
+                  <span
+                    {...ref('modeTabsIndicator')}
+                    aria-hidden="true"
+                    className="x-nt-wallpaper-tabs-indicator x-nt-wallpaper-mode-tabs-indicator"
+                  />
+                  {['light', 'dark'].map((mode) => (
+                    <button
+                      {...ref(mode === 'light' ? 'lightModeTab' : 'darkModeTab')}
+                      aria-selected="false"
+                      className="x-nt-wallpaper-tab x-nt-wallpaper-mode-tab"
+                      data-active="false"
+                      data-wallpaper-mode={mode}
+                      key={mode}
+                      role="tab"
+                      type="button"
+                    >
+                      {mode === 'light' ? 'Light' : 'Dark'}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  {...ref('modeHint')}
+                  aria-hidden="true"
+                  className="x-nt-wallpaper-mode-hint"
+                  data-visible="false"
+                />
+                <div
+                  {...ref('tabs')}
+                  className="x-nt-wallpaper-tabs"
+                  role="tablist"
+                >
+                  <span
+                    {...ref('tabsIndicator')}
+                    aria-hidden="true"
+                    className="x-nt-wallpaper-tabs-indicator"
+                  />
+                  {['built-in', 'local'].map((tab) => (
+                    <button
+                      {...ref(tab === 'built-in' ? 'builtInTab' : 'localTab')}
+                      aria-selected="false"
+                      className="x-nt-wallpaper-tab"
+                      data-active="false"
+                      data-wallpaper-tab={tab}
+                      key={tab}
+                      role="tab"
+                      type="button"
+                    >
+                      {tab === 'built-in' ? 'Built-in' : 'Local'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div
+                {...ref('builtInGrid')}
+                className="x-nt-wallpaper-grid x-nt-wallpaper-grid--built-in"
+                data-wallpaper-panel="built-in"
+                role="tabpanel"
+              >
+                {model.wallpapers.map((item: WallpaperItem) => (
+                  <WallpaperTile
+                    checkIcon={checkIcon}
+                    item={item}
+                    key={item.id}
+                  />
+                ))}
+              </div>
+              <div
+                {...ref('localGrid')}
+                className="x-nt-wallpaper-grid x-nt-wallpaper-grid--local"
+                data-wallpaper-panel="local"
+                role="tabpanel"
+              >
+                <div
+                  {...ref('uploadTile')}
+                  aria-pressed="false"
+                  className="x-nt-wallpaper-tile x-nt-wallpaper-upload-tile"
+                  data-loading="false"
+                  data-selected="false"
+                  data-upload="true"
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span className="x-nt-wallpaper-thumb x-nt-wallpaper-upload-thumb">
+                    <span
+                      className="x-nt-wallpaper-upload-placeholder"
+                      dangerouslySetInnerHTML={{
+                        __html: String(model.icons?.add || '')
+                      }}
+                    />
+                  </span>
+                </div>
+                <span
+                  {...ref('customItemsHost')}
+                  data-wallpaper-custom-items=""
+                  style={{ display: 'contents' }}
+                />
+              </div>
+              <div className="x-nt-effect-control">
+                <SliderControl
+                  controlClass="x-nt-overlay-control x-nt-overlay-control--effect"
+                  controlRef="overlayControl"
+                  labelClass="x-nt-overlay-label"
+                  labelRef="overlayLabel"
+                  sliderClass="x-nt-overlay-slider"
+                  sliderRef="overlaySlider"
+                  ticks={[
+                    {
+                      align: 'start',
+                      key: 'transparent',
+                      label: 'Transparent'
+                    },
+                    { key: 'default', label: 'Default' },
+                    { align: 'end', key: 'cover', label: 'Cover' }
+                  ]}
+                  wrapClass="x-nt-overlay-slider-wrap"
+                />
+                <div className="x-nt-overlay-control-header x-nt-effect-control-header">
+                  <span
+                    {...ref('effectLabel')}
+                    className="x-nt-effect-label"
+                  />
+                </div>
+                <div
+                  {...ref('effectOptions')}
+                  className="x-nt-effect-options"
+                  role="tablist"
+                >
+                  <span
+                    {...ref('effectTabsIndicator')}
+                    aria-hidden="true"
+                    className="x-nt-effect-indicator"
+                  />
+                  {model.effectTypes.map(
+                    (item: { fallback: string; type: string }) => (
+                      <button
+                        aria-pressed="false"
+                        className="x-nt-effect-option"
+                        data-active="false"
+                        data-selected="false"
+                        data-wallpaper-effect-type={item.type}
+                        key={item.type}
+                        type="button"
+                      >
+                        {item.fallback}
+                      </button>
+                    )
+                  )}
+                </div>
+                <SliderControl
+                  controlRef="effectStrengthControl"
+                  labelRef="effectStrengthLabel"
+                  sliderRef="effectStrengthSlider"
+                  ticks={defaultTicks}
+                />
+                <SliderControl
+                  controlRef="effectSizeControl"
+                  labelRef="effectSizeLabel"
+                  sliderRef="effectSizeSlider"
+                  ticks={defaultTicks}
+                />
+                <SliderControl
+                  controlRef="effectSpacingControl"
+                  labelRef="effectSpacingLabel"
+                  sliderRef="effectSpacingSlider"
+                  ticks={defaultTicks}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="x-nt-panel-divider" />
+          <div className="x-nt-wallpaper-section">
+            <div className="x-nt-wallpaper-panel-header">
+              <div
+                {...ref('logoTitle')}
+                className="x-nt-wallpaper-panel-title"
+              />
+              <Switch name="logoToggle" />
+            </div>
+            <div className="x-nt-favicon-group">
+              <div
+                {...ref('faviconTitle')}
+                className="x-nt-wallpaper-panel-title x-nt-favicon-title"
+              />
+              <div
+                {...ref('faviconOptions')}
+                className="x-nt-favicon-options"
+                role="group"
+              >
+                {model.favicons.map((item: FaviconItem) => (
+                  <FaviconTile
+                    checkIcon={checkIcon}
+                    item={item}
+                    key={item.id}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button
+        {...ref('button')}
+        aria-expanded="false"
+        aria-haspopup="dialog"
+        className="x-nt-wallpaper-button"
+        data-active="false"
+        data-open="false"
+        dangerouslySetInnerHTML={{
+          __html: String(model.icons?.wallpaper || '')
+        }}
+        type="button"
+      />
+    </>
+  );
+}
+
+function CustomWallpapers({
+  checkIcon,
+  deleteIcon,
+  items
+}: {
+  checkIcon: string;
+  deleteIcon: string;
+  items: WallpaperItem[];
+}) {
+  return (
+    <>
+      {items.map((item) => (
+        <div
+          aria-pressed="false"
+          className="x-nt-wallpaper-tile x-nt-wallpaper-custom-tile"
+          data-custom-wallpaper="true"
+          data-selected="false"
+          data-wallpaper-id={item.id}
+          key={item.id}
+          role="button"
+          tabIndex={0}
+        >
+          <span className="x-nt-wallpaper-thumb">
+            <img
+              alt=""
+              className="x-nt-wallpaper-custom-image"
+              decoding="async"
+              draggable={false}
+              loading="lazy"
+              src={item.thumbnailUrl}
+            />
+          </span>
+          <span
+            className="x-nt-wallpaper-check"
+            dangerouslySetInnerHTML={{ __html: checkIcon }}
+          />
+          <button
+            className="x-nt-wallpaper-delete-button"
+            dangerouslySetInnerHTML={{ __html: deleteIcon }}
+            type="button"
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
+export interface WallpaperViewController {
+  button: HTMLButtonElement;
+  control: HTMLDivElement;
+  destroy(): void;
+  getRefs(): Record<string, HTMLElement>;
+  panel: HTMLDivElement;
+  renderCustomWallpapers(items: WallpaperItem[]): HTMLElement[];
+}
+
+export function createWallpaperViewController(
+  config: Record<string, any>
+): WallpaperViewController {
+  const documentObj: Document = config.documentObj || document;
+  const model = config.model || {};
+  const control = documentObj.createElement('div');
+  control.className = 'x-nt-wallpaper-control';
+  control.dataset.panelOpen = 'false';
+  control.dataset.reactIsland = 'newtab-wallpaper';
+  const root: Root = createRoot(control);
+  flushSync(() => root.render(<WallpaperPanel model={model} />));
+  const panel = control.querySelector<HTMLDivElement>(
+    '[data-wallpaper-ref="panel"]'
+  );
+  const button = control.querySelector<HTMLButtonElement>(
+    '[data-wallpaper-ref="button"]'
+  );
+  const customItemsHost = control.querySelector<HTMLElement>(
+    '[data-wallpaper-ref="customItemsHost"]'
+  );
+  if (!panel || !button || !customItemsHost) {
+    flushSync(() => root.unmount());
+    throw new Error('Lumno React wallpaper view did not mount.');
+  }
+  const customRoot: Root = createRoot(customItemsHost);
+  let destroyed = false;
+  const getRefs = () => {
+    const refs: Record<string, HTMLElement> = {};
+    control
+      .querySelectorAll<HTMLElement>('[data-wallpaper-ref]')
+      .forEach((element) => {
+        const name = element.dataset.wallpaperRef;
+        if (name) {
+          refs[name] = element;
+        }
+      });
+    return refs;
+  };
+  const controller: WallpaperViewController = {
+    button,
+    control,
+    destroy() {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      flushSync(() => customRoot.unmount());
+      flushSync(() => root.unmount());
+    },
+    getRefs,
+    panel,
+    renderCustomWallpapers(items: WallpaperItem[]) {
+      if (destroyed) {
+        return [];
+      }
+      flushSync(() =>
+        customRoot.render(
+          <CustomWallpapers
+            checkIcon={String(model.icons?.check || '')}
+            deleteIcon={String(model.icons?.delete || '')}
+            items={Array.isArray(items) ? items : []}
+          />
+        )
+      );
+      return Array.from(
+        customItemsHost.querySelectorAll<HTMLElement>(
+          '.x-nt-wallpaper-custom-tile'
+        )
+      );
+    }
+  };
+  return Object.freeze(controller);
+}
+
+export function createWallpaperViewApi() {
+  return Object.freeze({
+    implementation: 'react',
+    createController: createWallpaperViewController
+  });
+}

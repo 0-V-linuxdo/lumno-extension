@@ -21,6 +21,7 @@ import { createPageStructureApi } from './page-structure';
 import { createBookmarksTopbarApi } from './bookmarks-topbar';
 import { createPageNoticeApi } from './page-notice';
 import { createBookmarkCascadeViewApi } from './bookmark-cascade-view';
+import { createWallpaperViewApi } from './wallpaper-view';
 import { createSearchInputApi } from '../shared/search-input';
 
 const runtime = globalThis as typeof globalThis & {
@@ -44,6 +45,7 @@ const runtime = globalThis as typeof globalThis & {
     bookmarksTopbar: ReturnType<typeof createBookmarksTopbarApi>;
     pageNotice: ReturnType<typeof createPageNoticeApi>;
     bookmarkCascadeView: ReturnType<typeof createBookmarkCascadeViewApi>;
+    wallpaperView: ReturnType<typeof createWallpaperViewApi>;
   };
   LumnoNewtabBookmarksView?: LegacyBookmarksApi;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
@@ -77,6 +79,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabBookmarkCascadeViewReact?: ReturnType<
     typeof createBookmarkCascadeViewApi
   >;
+  LumnoNewtabWallpaperView?: ReturnType<typeof createWallpaperViewApi>;
+  LumnoNewtabWallpaperViewReact?: ReturnType<typeof createWallpaperViewApi>;
   LumnoSearchInputUI?: ReturnType<typeof createSearchInputApi>;
   LumnoSearchInputUIReact?: ReturnType<typeof createSearchInputApi>;
   _x_extension_createSearchInput_2024_unique_?: ReturnType<
@@ -106,6 +110,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const bookmarksTopbarApi = createBookmarksTopbarApi();
   const pageNoticeApi = createPageNoticeApi();
   const bookmarkCascadeViewApi = createBookmarkCascadeViewApi();
+  const wallpaperViewApi = createWallpaperViewApi();
   const searchInputApi = createSearchInputApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
@@ -136,6 +141,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabPageNotice = pageNoticeApi;
   runtime.LumnoNewtabBookmarkCascadeViewReact = bookmarkCascadeViewApi;
   runtime.LumnoNewtabBookmarkCascadeView = bookmarkCascadeViewApi;
+  runtime.LumnoNewtabWallpaperViewReact = wallpaperViewApi;
+  runtime.LumnoNewtabWallpaperView = wallpaperViewApi;
   runtime.LumnoSearchInputUIReact = searchInputApi;
   runtime.LumnoSearchInputUI = searchInputApi;
   runtime._x_extension_createSearchInput_2024_unique_ =
@@ -155,7 +162,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     pageStructure: pageStructureApi,
     bookmarksTopbar: bookmarksTopbarApi,
     pageNotice: pageNoticeApi,
-    bookmarkCascadeView: bookmarkCascadeViewApi
+    bookmarkCascadeView: bookmarkCascadeViewApi,
+    wallpaperView: wallpaperViewApi
   });
 
   if (bootstrapState) {
