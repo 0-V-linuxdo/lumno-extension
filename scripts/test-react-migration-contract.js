@@ -190,15 +190,15 @@ assert(
   fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    294 * 1024,
-  'the New Tab React route should stay within its 294 KiB uncompressed budget'
+    300 * 1024,
+  'the New Tab React route should stay within its 300 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(newtabBundle).length <=
-    90 * 1024,
-  'the New Tab React route should stay within its 90 KiB gzip budget'
+    92 * 1024,
+  'the New Tab React route should stay within its 92 KiB gzip budget'
 );
 assert(
     fs.statSync(runtimeBundlePath).size +
@@ -215,22 +215,22 @@ assert(
   'the Options React route should stay within its 70 KiB gzip budget'
 );
 assert(
-  fs.statSync(overlayBundlePath).size <= 205 * 1024,
-  'the injected Overlay React route should stay within its 205 KiB uncompressed budget'
+  fs.statSync(overlayBundlePath).size <= 240 * 1024,
+  'the injected Overlay React route should stay within its 240 KiB uncompressed budget'
 );
 assert(
-  zlib.gzipSync(overlayBundle).length <= 65 * 1024,
-  'the injected Overlay React route should stay within its 65 KiB gzip budget'
+  zlib.gzipSync(overlayBundle).length <= 75 * 1024,
+  'the injected Overlay React route should stay within its 75 KiB gzip budget'
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    580 * 1024,
-  'all shared React artifacts and four page entries should stay within their 580 KiB package budget'
+    620 * 1024,
+  'all shared React artifacts and four page entries should stay within their 620 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    175 * 1024,
-  'all shared React artifacts and four page entries should stay within their 175 KiB gzip budget'
+    188 * 1024,
+  'all shared React artifacts and four page entries should stay within their 188 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -243,10 +243,12 @@ assert(
 assert(
   overlayBundle.includes('LumnoOverlayReactBootstrap') &&
     overlayBundle.includes('LumnoOverlayShellReact') &&
+    overlayBundle.includes('LumnoOverlaySuggestionsViewReact') &&
     overlayBundle.includes('LumnoSearchInputUIReact') &&
     overlayBundle.includes('overlay-shell') &&
+    overlayBundle.includes('suggestions') &&
     overlayBundle.includes('shared-search-input'),
-  'the injected Overlay IIFE should install React shell and search-input APIs'
+  'the injected Overlay IIFE should install React shell, suggestions, and search-input APIs'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&

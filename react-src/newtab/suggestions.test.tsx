@@ -391,4 +391,60 @@ describe('Suggestions React island', () => {
     expect(container.childElementCount).toBe(0);
     expect(setSuggestionsVisible).toHaveBeenLastCalledWith(false);
   });
+
+  it('maps shared rows onto the Overlay class and state contract', () => {
+    const { view, container, items } = createView({
+      surface: 'overlay',
+      enterAction: 'openNewTab',
+      autoHighlightFirstTab: true,
+      getHighlightColors: () => ({
+        bg: '#eef',
+        border: '#bbf'
+      }),
+      actionModel: {
+        createSearchActionModel: () => ({
+          actionTags: [{
+            action: 'openNewTab',
+            keyLabel: 'Enter'
+          }],
+          visitButtonAction: 'openNewTab',
+          alwaysHideVisitButton: false,
+          hasActionTags: true,
+          hasSwitchAction: false
+        })
+      }
+    });
+
+    render(view, [{
+      type: 'history',
+      title: 'Overlay result',
+      url: 'https://example.com/'
+    }]);
+
+    expect(container.dataset.reactIsland).toBe('suggestions');
+    expect(items[0].className).toBe('x-ov-suggestion-item');
+    expect(items[0].id).toBe(
+      '_x_extension_suggestion_item_0_2024_unique_'
+    );
+    expect(items[0].style.getPropertyValue(
+      '--x-ov-suggestion-row-bg'
+    )).toBe('#eef');
+    expect(
+      items[0].querySelector('.x-ov-suggestion-source-tag')
+    ).not.toBeNull();
+    expect(
+      items[0].querySelector('.x-ov-action-tag__label')
+    ).not.toBeNull();
+
+    act(() => {
+      view.renderTabs([{
+        id: 9,
+        title: 'Overlay tab',
+        url: 'https://example.com/tab'
+      }]);
+    });
+    expect(items[0]._xIsAutocompleteTop).toBe(true);
+    expect(items[0]._xTagContainer?.dataset.visible).toBe('true');
+    expect(items[0]._xSwitchButton?.dataset.visible).toBe('false');
+  });
 });

@@ -11,6 +11,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 type ThemeValue = Record<string, unknown> | null;
 type Translate = (key: string, fallback: string) => string;
+export type SuggestionsSurface = 'newtab' | 'overlay';
 
 export interface Suggestion {
   type?: string;
@@ -119,6 +120,7 @@ export interface SuggestionElement extends HTMLDivElement {
   _xHistoryTag?: SuggestionActionTagElement | null;
   _xBookmarkTag?: SuggestionActionTagElement | null;
   _xTopSiteTag?: SuggestionActionTagElement | null;
+  _xOpenTabTag?: SuggestionActionTagElement | null;
   _xTagContainer?: HTMLDivElement | null;
   _xActionModel?: SuggestionActionModelResult;
   _xHasActionTags?: boolean;
@@ -133,6 +135,7 @@ export interface SuggestionElement extends HTMLDivElement {
   _xHistoryDeleteSlot?: HTMLDivElement | null;
   _xHasHistoryDeleteButton?: boolean;
   _xIsHovering?: boolean;
+  _xTabId?: number | null;
 }
 
 export interface SuggestionsRenderPayload {
@@ -149,6 +152,7 @@ export interface SuggestionsRenderPayload {
 }
 
 export interface SuggestionsViewOptions {
+  surface?: SuggestionsSurface;
   document?: Document;
   container?: HTMLElement | null;
   items?: SuggestionElement[];
@@ -180,6 +184,9 @@ export interface SuggestionsViewOptions {
   ) => boolean;
   getThemeForMode?: (theme: ThemeValue) => ModeTheme;
   getHoverColors?: (
+    theme: ThemeValue
+  ) => { bg?: string; border?: string };
+  getHighlightColors?: (
     theme: ThemeValue
   ) => { bg?: string; border?: string };
   getNeutralHoverActionColors?: () => {
@@ -266,6 +273,8 @@ export interface SuggestionsViewOptions {
   defaultTheme?: ThemeValue;
   urlHighlightTheme?: ThemeValue;
   openTabSuggestionLimit?: number;
+  enterAction?: string;
+  autoHighlightFirstTab?: boolean;
 }
 
 export interface SuggestionsViewController {
@@ -289,6 +298,7 @@ export interface LegacySuggestionsApi {
 }
 
 interface NormalizedOptions {
+  surface: SuggestionsSurface;
   document: Document;
   container: HTMLElement;
   items: SuggestionElement[];
@@ -329,6 +339,9 @@ interface NormalizedOptions {
   >;
   getThemeForMode: NonNullable<SuggestionsViewOptions['getThemeForMode']>;
   getHoverColors: NonNullable<SuggestionsViewOptions['getHoverColors']>;
+  getHighlightColors: NonNullable<
+    SuggestionsViewOptions['getHighlightColors']
+  >;
   getNeutralHoverActionColors: NonNullable<
     SuggestionsViewOptions['getNeutralHoverActionColors']
   >;
@@ -401,6 +414,8 @@ interface NormalizedOptions {
   defaultTheme: ThemeValue;
   urlHighlightTheme: ThemeValue;
   openTabSuggestionLimit: number;
+  enterAction: string;
+  autoHighlightFirstTab: boolean;
 }
 
 interface ModifierState {
@@ -416,6 +431,89 @@ interface SuggestionsRuntime {
 }
 
 function noop(): void {}
+
+const OVERLAY_CLASS_OVERRIDES: Record<string, string> = {
+  'x-nt-suggestion-tag': 'x-ov-suggestion-source-tag',
+  'x-nt-suggestion-action-tag': 'x-ov-action-tag',
+  'x-nt-suggestion-action-tag__label': 'x-ov-action-tag__label',
+  'x-nt-suggestion-action-tag__key': 'x-ov-action-tag__key',
+  'x-nt-suggestion-action-button__label': 'x-ov-inline-label',
+  'x-nt-suggestion-action-button__icon': 'x-ov-inline-icon',
+  'x-nt-tab-switch-button':
+    'x-ov-suggestion-action-button x-ov-suggestion-switch-button'
+};
+
+const OVERLAY_VARIABLE_OVERRIDES: Record<string, string> = {
+  '--x-nt-suggestion-active-bg': '--x-ov-suggestion-row-bg',
+  '--x-nt-suggestion-active-border': '--x-ov-suggestion-row-border',
+  '--x-nt-suggestion-hover-bg': '--x-ov-suggestion-row-bg',
+  '--x-nt-suggestion-hover-border': '--x-ov-suggestion-row-border',
+  '--x-nt-suggestion-tag-bg': '--x-ov-suggestion-source-tag-bg',
+  '--x-nt-suggestion-tag-text': '--x-ov-suggestion-source-tag-text',
+  '--x-nt-suggestion-tag-border': '--x-ov-suggestion-source-tag-border',
+  '--x-nt-history-delete-color': '--x-ov-history-delete-text',
+  '--x-nt-history-delete-hover-color': '--x-ov-history-delete-text',
+  '--x-nt-history-delete-hover-bg': '--x-ov-history-delete-bg',
+  '--x-nt-history-delete-hover-border': '--x-ov-history-delete-border',
+  '--x-nt-suggestion-icon-color': 'color'
+};
+
+function surfaceClass(
+  options: NormalizedOptions,
+  value: string
+): string {
+  if (options.surface !== 'overlay') {
+    return value;
+  }
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) =>
+      OVERLAY_CLASS_OVERRIDES[token] ||
+      token.replace(/^x-nt-/, 'x-ov-')
+    )
+    .join(' ');
+}
+
+function surfaceVariable(
+  options: NormalizedOptions,
+  value: string
+): string {
+  if (options.surface !== 'overlay') {
+    return value;
+  }
+  return (
+    OVERLAY_VARIABLE_OVERRIDES[value] ||
+    value.replace(/^--x-nt-/, '--x-ov-')
+  );
+}
+
+function surfaceCssValue(
+  options: NormalizedOptions,
+  value: unknown
+): string {
+  const text = String(value || '');
+  if (options.surface !== 'overlay') {
+    return text;
+  }
+  return Object.entries(OVERLAY_VARIABLE_OVERRIDES).reduce(
+    (next, [newtabName, overlayName]) =>
+      next.replaceAll(newtabName, overlayName),
+    text.replaceAll('--x-nt-', '--x-ov-')
+  );
+}
+
+function setSurfaceStyle(
+  options: NormalizedOptions,
+  target: HTMLElement,
+  property: string,
+  value: unknown
+): void {
+  target.style.setProperty(
+    surfaceVariable(options, property),
+    surfaceCssValue(options, value)
+  );
+}
 
 function fallbackFormatMessage(
   key: string,
@@ -461,7 +559,16 @@ function normalizeOptions(
   const getChromeFaviconUrl = raw.getChromeFaviconUrl || (() => '');
   const getBrowserPageFaviconUrl =
     raw.getBrowserPageFaviconUrl || (() => '');
+  const getHoverColors =
+    raw.getHoverColors ||
+    (() => ({
+      bg: raw.surface === 'overlay'
+        ? 'var(--x-ov-hover-bg, #F3F4F6)'
+        : 'var(--x-nt-hover-bg, #F3F4F6)',
+      border: 'transparent'
+    }));
   return {
+    surface: raw.surface === 'overlay' ? 'overlay' : 'newtab',
     document: documentRef,
     container: raw.container,
     items: Array.isArray(raw.items) ? raw.items : [],
@@ -490,12 +597,8 @@ function normalizeOptions(
       raw.shouldUseUrlFallbackThemeForSuggestion || (() => false),
     getThemeForMode:
       raw.getThemeForMode || ((theme) => (theme || defaultTheme) as ModeTheme),
-    getHoverColors:
-      raw.getHoverColors ||
-      (() => ({
-        bg: 'var(--x-nt-hover-bg, #F3F4F6)',
-        border: 'transparent'
-      })),
+    getHoverColors,
+    getHighlightColors: raw.getHighlightColors || getHoverColors,
     getNeutralHoverActionColors:
       raw.getNeutralHoverActionColors ||
       (() => ({
@@ -558,7 +661,9 @@ function normalizeOptions(
     openTabSuggestionLimit:
       Number(raw.openTabSuggestionLimit) > 0
         ? Number(raw.openTabSuggestionLimit)
-        : 3
+        : 3,
+    enterAction: String(raw.enterAction || 'go'),
+    autoHighlightFirstTab: Boolean(raw.autoHighlightFirstTab)
   };
 }
 
@@ -601,7 +706,7 @@ function HighlightedText({
     part.highlighted ? (
       <mark
         key={`${index}:${part.text}`}
-        className="x-nt-suggestion-mark"
+        className={surfaceClass(options, 'x-nt-suggestion-mark')}
       >
         {part.text}
       </mark>
@@ -621,7 +726,10 @@ function renderHighlightedText(
   getHighlightedParts(options, text, query).forEach((part) => {
     if (part.highlighted) {
       const mark = options.document.createElement('mark');
-      mark.className = 'x-nt-suggestion-mark';
+      mark.className = surfaceClass(
+        options,
+        'x-nt-suggestion-mark'
+      );
       mark.textContent = part.text;
       target.appendChild(mark);
     } else {
@@ -767,6 +875,8 @@ function getActionLabel(
     openNewTab: ['action_open_new_tab', '新开'],
     go: ['action_go_current_tab', '前往'],
     commandNewTab: ['command_newtab', '新建标签页'],
+    commandOpenTabs: ['command_tabs_action', '搜索标签页'],
+    commandCopyUrl: ['command_copy_action', '复制链接'],
     commandDocumentPip: ['document_pip_command_action', '开始剪裁']
   };
   if (action === 'commandSettings') {
@@ -820,26 +930,34 @@ function setIconEmphasis(
 }
 
 function setPalette(
+  options: NormalizedOptions,
   button: HTMLElement,
   text?: unknown,
   bg?: unknown,
   border?: unknown
 ): void {
-  button.style.setProperty(
+  setSurfaceStyle(
+    options,
+    button,
     '--x-nt-suggestion-action-button-text',
-    String(text || 'var(--x-nt-subtext, #9CA3AF)')
+    text || 'var(--x-nt-subtext, #9CA3AF)'
   );
-  button.style.setProperty(
+  setSurfaceStyle(
+    options,
+    button,
     '--x-nt-suggestion-action-button-bg',
-    String(bg || 'transparent')
+    bg || 'transparent'
   );
-  button.style.setProperty(
+  setSurfaceStyle(
+    options,
+    button,
     '--x-nt-suggestion-action-button-border',
-    String(border || 'transparent')
+    border || 'transparent'
   );
 }
 
 function applyTagStyle(
+  options: NormalizedOptions,
   tag: SuggestionActionTagElement | null | undefined,
   theme: ModeTheme,
   active: boolean
@@ -847,25 +965,31 @@ function applyTagStyle(
   if (!tag) {
     return;
   }
-  tag.style.setProperty(
+  setSurfaceStyle(
+    options,
+    tag,
     '--x-nt-suggestion-tag-bg',
-    String(
+    (
       active
         ? theme.tagBg || ''
         : tag._xDefaultBg || 'var(--x-nt-tag-bg, #F3F4F6)'
     )
   );
-  tag.style.setProperty(
+  setSurfaceStyle(
+    options,
+    tag,
     '--x-nt-suggestion-tag-text',
-    String(
+    (
       active
         ? theme.tagText || ''
         : tag._xDefaultText || 'var(--x-nt-tag-text, #6B7280)'
     )
   );
-  tag.style.setProperty(
+  setSurfaceStyle(
+    options,
+    tag,
     '--x-nt-suggestion-tag-border',
-    String(
+    (
       active
         ? theme.tagBorder || ''
         : tag._xDefaultBorder || 'transparent'
@@ -906,18 +1030,35 @@ function applySearchActionStyles(
     );
     if (active) {
       setPalette(
+        options,
         item._xVisitButton,
         theme.buttonText,
         theme.buttonBg,
         theme.buttonBorder
       );
     } else {
-      setPalette(item._xVisitButton);
+      setPalette(options, item._xVisitButton);
     }
   }
-  applyTagStyle(item._xHistoryTag, theme, active);
-  applyTagStyle(item._xBookmarkTag, theme, active);
-  applyTagStyle(item._xTopSiteTag, theme, active);
+  applyTagStyle(options, item._xHistoryTag, theme, active);
+  applyTagStyle(options, item._xBookmarkTag, theme, active);
+  applyTagStyle(options, item._xTopSiteTag, theme, active);
+  applyTagStyle(options, item._xOpenTabTag, theme, active);
+  const showSourceTags = !item._xHasSwitchAction;
+  [
+    item._xHistoryTag,
+    item._xBookmarkTag,
+    item._xTopSiteTag
+  ].forEach((tag) => {
+    tag?.setAttribute(
+      'data-visible',
+      showSourceTags ? 'true' : 'false'
+    );
+  });
+  item._xOpenTabTag?.setAttribute(
+    'data-visible',
+    item._xHasSwitchAction ? 'true' : 'false'
+  );
   item._xTagContainer?.setAttribute(
     'data-visible',
     active && item._xHasActionTags ? 'true' : 'false'
@@ -930,21 +1071,35 @@ function applySearchActionStyles(
       'data-history-delete-visible',
       visible ? 'true' : 'false'
     );
-    item._xHistoryDeleteButton.style.setProperty(
+    item._xHistoryDeleteSlot?.setAttribute(
+      'data-visible',
+      visible ? 'true' : 'false'
+    );
+    item._xHistoryDeleteButton.setAttribute(
+      'data-visible',
+      visible ? 'true' : 'false'
+    );
+    setSurfaceStyle(
+      options,
+      item._xHistoryDeleteButton,
       '--x-nt-history-delete-color',
-      String(
+      (
         visible && active
           ? theme.buttonText || ''
           : 'var(--x-nt-subtext, #6B7280)'
       )
     );
-    item._xHistoryDeleteButton.style.setProperty(
+    setSurfaceStyle(
+      options,
+      item._xHistoryDeleteButton,
       '--x-nt-history-delete-bg',
-      String(visible && active ? theme.buttonBg || '' : 'transparent')
+      visible && active ? theme.buttonBg || '' : 'transparent'
     );
-    item._xHistoryDeleteButton.style.setProperty(
+    setSurfaceStyle(
+      options,
+      item._xHistoryDeleteButton,
       '--x-nt-history-delete-border',
-      String(
+      (
         visible && active ? theme.buttonBorder || '' : 'transparent'
       )
     );
@@ -968,8 +1123,45 @@ function updateSelectionForRuntime(
     const theme = item._xTheme || options.defaultTheme;
     if (highlighted) {
       item.setAttribute('data-row-state', 'active');
+      if (options.surface === 'overlay') {
+        const highlight = options.getHighlightColors(theme);
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-bg',
+          highlight.bg || 'transparent'
+        );
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-border',
+          highlight.border || 'transparent'
+        );
+      }
     } else {
       item.removeAttribute('data-row-state');
+      if (options.surface === 'overlay') {
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-bg',
+          item._xIsHovering
+            ? 'var(--x-ov-hover-bg, #F3F4F6)'
+            : 'transparent'
+        );
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-border',
+          'transparent'
+        );
+      }
+    }
+    if (item._xTitle && options.surface === 'overlay') {
+      item._xTitle.style.setProperty(
+        '--x-ov-suggestion-title-weight',
+        highlighted ? '600' : '400'
+      );
     }
     setIconEmphasis(
       item,
@@ -979,32 +1171,60 @@ function updateSelectionForRuntime(
       applySearchActionStyles(runtime, item, theme, highlighted);
       if (item._xDirectIconWrap) {
         const modeTheme = options.getThemeForMode(theme);
-        item._xDirectIconWrap.style.setProperty(
+        setSurfaceStyle(
+          options,
+          item._xDirectIconWrap,
           '--x-nt-suggestion-icon-color',
-          String(
+          (
             highlighted && theme?._xIsBrand
               ? modeTheme.accent || ''
               : 'var(--x-nt-subtext, #6B7280)'
           )
         );
       }
-    } else if (selected && theme?._xIsBrand) {
-      const hover = options.getHoverColors(theme);
-      item.style.setProperty(
-        '--x-nt-suggestion-active-bg',
-        String(hover.bg || '')
-      );
-      item.style.setProperty(
-        '--x-nt-suggestion-active-border',
-        String(hover.border || '')
-      );
+    } else {
+      if (selected && theme?._xIsBrand) {
+        const hover = options.getHoverColors(theme);
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-bg',
+          hover.bg || ''
+        );
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-active-border',
+          hover.border || ''
+        );
+      }
+      if (options.surface === 'overlay') {
+        const active = highlighted;
+        item._xTagContainer?.setAttribute(
+          'data-visible',
+          active && item._xHasActionTags ? 'true' : 'false'
+        );
+        if (item._xSwitchButton) {
+          item._xSwitchButton.setAttribute(
+            'data-visible',
+            active && item._xHasActionTags ? 'false' : 'true'
+          );
+          setPalette(
+            options,
+            item._xSwitchButton,
+            active
+              ? 'var(--x-ov-text, #1F2937)'
+              : 'var(--x-ov-subtext, #9CA3AF)'
+          );
+        }
+      }
     }
   });
 }
 
 function syncModifierLabels(runtime: SuggestionsRuntime): void {
   runtime.options.items.forEach((item) => {
-    if (!item._xIsSearchSuggestion || !item._xSuggestion) {
+    if (!item._xSuggestion) {
       return;
     }
     if (
@@ -1181,7 +1401,10 @@ function InlineIcon({
 }) {
   return (
     <span
-      className="x-nt-suggestion-inline-icon"
+      className={surfaceClass(
+        options,
+        'x-nt-suggestion-inline-icon'
+      )}
       data-tone={tone || undefined}
       dangerouslySetInnerHTML={{
         __html: options.getRiSvg(name, 'ri-size-16')
@@ -1234,14 +1457,25 @@ function SuggestionIcon({
   return (
     <span
       ref={iconSlotRef}
-      className="x-nt-suggestion-icon-slot"
+      className={surfaceClass(
+        options,
+        'x-nt-suggestion-icon-slot'
+      )}
       data-favicon={isFavicon ? 'true' : 'false'}
     >
       {isFavicon ? (
         <img
           ref={imageRef}
-          data-x-nt-suggestion-icon="1"
-          className="x-nt-suggestion-favicon"
+          data-x-nt-suggestion-icon={
+            options.surface === 'newtab' ? '1' : undefined
+          }
+          data-x-ov-suggestion-icon={
+            options.surface === 'overlay' ? '1' : undefined
+          }
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-favicon'
+          )}
           decoding="async"
           loading="eager"
           referrerPolicy="no-referrer"
@@ -1314,6 +1548,7 @@ function SearchSuggestionRow({
   const historyTagRef = useRef<SuggestionActionTagElement>(null);
   const bookmarkTagRef = useRef<SuggestionActionTagElement>(null);
   const topSiteTagRef = useRef<SuggestionActionTagElement>(null);
+  const openTabTagRef = useRef<SuggestionActionTagElement>(null);
   const actionTagsRef = useRef<HTMLDivElement>(null);
   const visitButtonRef = useRef<HTMLButtonElement>(null);
   const visitLabelRef = useRef<HTMLSpanElement>(null);
@@ -1356,6 +1591,16 @@ function SearchSuggestionRow({
     [options, suggestion]
   );
   const command = Boolean(suggestion.commandText);
+  const shouldSwitchMatchedTab =
+    isPrimary &&
+    (
+      primaryHighlightReason === 'openTab' ||
+      primaryHighlightReason === 'currentOpenTab'
+    ) &&
+    options.shouldSwitchMatchedTabSuggestion(
+      suggestion,
+      index
+    );
   const actionModel = useMemo(
     () => createActionModel(options, {
       suggestion,
@@ -1368,17 +1613,8 @@ function SearchSuggestionRow({
         primarySuggestion === suggestion &&
         isPrimary
       ),
-      shouldSwitchMatchedTab:
-        isPrimary &&
-        (
-          primaryHighlightReason === 'openTab' ||
-          primaryHighlightReason === 'currentOpenTab'
-        ) &&
-        options.shouldSwitchMatchedTabSuggestion(
-          suggestion,
-          index
-        ),
-      enterAction: 'go'
+      shouldSwitchMatchedTab,
+      enterAction: options.enterAction
     }),
     [
       index,
@@ -1389,6 +1625,7 @@ function SearchSuggestionRow({
       primaryHighlightReason,
       primarySearch,
       primarySuggestion,
+      shouldSwitchMatchedTab,
       suggestion
     ]
   );
@@ -1424,26 +1661,56 @@ function SearchSuggestionRow({
     item._xHistoryTag = historyTagRef.current;
     item._xBookmarkTag = bookmarkTagRef.current;
     item._xTopSiteTag = topSiteTagRef.current;
+    item._xOpenTabTag = openTabTagRef.current;
     if (item._xHistoryTag) {
       item._xHistoryTag._xDefaultBg =
-        'var(--x-nt-tag-bg, #F3F4F6)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-tag-bg, #F3F4F6)'
+        );
       item._xHistoryTag._xDefaultText =
-        'var(--x-nt-tag-text, #6B7280)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-tag-text, #6B7280)'
+        );
       item._xHistoryTag._xDefaultBorder = 'transparent';
     }
     if (item._xTopSiteTag) {
       item._xTopSiteTag._xDefaultBg =
-        'var(--x-nt-tag-bg, #F3F4F6)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-tag-bg, #F3F4F6)'
+        );
       item._xTopSiteTag._xDefaultText =
-        'var(--x-nt-tag-text, #6B7280)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-tag-text, #6B7280)'
+        );
       item._xTopSiteTag._xDefaultBorder = 'transparent';
     }
     if (item._xBookmarkTag) {
       item._xBookmarkTag._xDefaultBg =
-        'var(--x-nt-bookmark-tag-bg, #FEF3C7)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-bookmark-tag-bg, #FEF3C7)'
+        );
       item._xBookmarkTag._xDefaultText =
-        'var(--x-nt-bookmark-tag-text, #D97706)';
+        surfaceCssValue(
+          options,
+          'var(--x-nt-bookmark-tag-text, #D97706)'
+        );
       item._xBookmarkTag._xDefaultBorder = 'transparent';
+    }
+    if (item._xOpenTabTag) {
+      item._xOpenTabTag._xDefaultBg = surfaceCssValue(
+        options,
+        'var(--x-nt-tag-bg, #F3F4F6)'
+      );
+      item._xOpenTabTag._xDefaultText = surfaceCssValue(
+        options,
+        'var(--x-nt-tag-text, #6B7280)'
+      );
+      item._xOpenTabTag._xDefaultBorder = 'transparent';
     }
     item._xTagContainer = actionTagsRef.current;
     item._xActionModel = actionModel;
@@ -1454,7 +1721,10 @@ function SearchSuggestionRow({
     item._xActionTags = actionTagRefs.current;
     item._xActionTags.forEach((tag) => {
       tag._xActionLabel = tag.querySelector<HTMLSpanElement>(
-        '.x-nt-suggestion-action-tag__label'
+        `.${surfaceClass(
+          options,
+          'x-nt-suggestion-action-tag__label'
+        )}`
       );
     });
     item._xSuggestion = suggestion;
@@ -1472,7 +1742,7 @@ function SearchSuggestionRow({
       query
     );
     const urlLine = item.querySelector<HTMLElement>(
-      '.x-nt-suggestion-url-line'
+      `.${surfaceClass(options, 'x-nt-suggestion-url-line')}`
     );
     bindTextTooltip(options, urlLine, suggestion.url || '');
 
@@ -1586,17 +1856,23 @@ function SearchSuggestionRow({
       : options.getNeutralHoverActionColors();
     showDeleteTooltip();
     button.style.removeProperty('transform');
-    button.style.setProperty(
+    setSurfaceStyle(
+      options,
+      button,
       '--x-nt-history-delete-hover-bg',
-      String(hover.bg || '')
+      hover.bg || ''
     );
-    button.style.setProperty(
+    setSurfaceStyle(
+      options,
+      button,
       '--x-nt-history-delete-hover-border',
-      String(hover.border || '')
+      hover.border || ''
     );
-    button.style.setProperty(
+    setSurfaceStyle(
+      options,
+      button,
       '--x-nt-history-delete-hover-color',
-      String(
+      (
         useTheme
           ? modeTheme.buttonText || ''
           : 'text' in hover
@@ -1605,11 +1881,13 @@ function SearchSuggestionRow({
       )
     );
     button.setAttribute('data-hover', 'true');
+    button.setAttribute('data-hover-active', 'true');
   };
 
   const resetDelete = (): void => {
     options.hideTopActionTooltip();
     deleteButtonRef.current?.removeAttribute('data-hover');
+    deleteButtonRef.current?.removeAttribute('data-hover-active');
     deleteButtonRef.current?.style.removeProperty('transform');
   };
 
@@ -1620,8 +1898,8 @@ function SearchSuggestionRow({
   return (
     <div
       ref={itemRef}
-      id={`_x_extension_newtab_suggestion_item_${index}_2024_unique_`}
-      className="x-nt-suggestion-item"
+      id={`_x_extension_${options.surface === 'overlay' ? '' : 'newtab_'}suggestion_item_${index}_2024_unique_`}
+      className={surfaceClass(options, 'x-nt-suggestion-item')}
       data-last={last ? 'true' : 'false'}
       data-row-state={isPrimary ? 'active' : undefined}
       data-command-row={command ? 'true' : undefined}
@@ -1635,18 +1913,34 @@ function SearchSuggestionRow({
       onClick={activate}
       onAuxClick={handleAuxClick}
     >
-      <div className="x-nt-suggestion-left">
+      <div
+        className={surfaceClass(
+          options,
+          'x-nt-suggestion-left'
+        )}
+        data-motion={
+          options.surface === 'overlay' ? 'true' : undefined
+        }
+      >
         <SuggestionIcon
           spec={iconSpec}
           index={index}
           options={options}
           iconSlotRef={iconSlotRef}
         />
-        <div className="x-nt-suggestion-text">
+        <div
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-text'
+          )}
+        >
           {command && (
             <span
               ref={commandRef}
-              className="x-nt-suggestion-command"
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-command'
+              )}
             >
               <HighlightedText
                 options={options}
@@ -1657,11 +1951,12 @@ function SearchSuggestionRow({
           )}
           <span
             ref={titleRef}
-            className={
+            className={surfaceClass(
+              options,
               command
                 ? 'x-nt-suggestion-title x-nt-suggestion-command-description'
                 : 'x-nt-suggestion-title'
-            }
+            )}
           >
             {command ? (
               options.sanitizeDisplayText(suggestion.title || '')
@@ -1678,7 +1973,12 @@ function SearchSuggestionRow({
             suggestion.reasons
               .map((reason) => String(reason || '').trim())
               .filter(Boolean).length > 0 && (
-              <span className="x-nt-suggestion-reason">
+              <span
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-reason'
+                )}
+              >
                 {suggestion.reasons
                   .map((reason) => String(reason || '').trim())
                   .filter(Boolean)
@@ -1686,7 +1986,12 @@ function SearchSuggestionRow({
               </span>
             )}
           {showUrl && (
-            <span className="x-nt-suggestion-url-line">
+            <span
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-url-line'
+              )}
+            >
               {String(suggestion.url || '')}
             </span>
           )}
@@ -1694,7 +1999,11 @@ function SearchSuggestionRow({
             !suggestion.isTopSite && (
             <span
               ref={historyTagRef}
-              className="x-nt-suggestion-tag"
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-tag'
+              )}
+              data-visible="true"
               data-tag-type="history"
             >
               {options.t('search_tag_history', '历史')}
@@ -1703,7 +2012,11 @@ function SearchSuggestionRow({
           {isTopSite(suggestion) && (
             <span
               ref={topSiteTagRef}
-              className="x-nt-suggestion-tag"
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-tag'
+              )}
+              data-visible="true"
               data-tag-type="top-site"
             >
               {options.t('search_tag_top_site', '常用')}
@@ -1712,23 +2025,49 @@ function SearchSuggestionRow({
           {suggestion.type === 'bookmark' && (
             <>
               {suggestion.path && (
-                <span className="x-nt-suggestion-bookmark-path">
+                <span
+                  className={surfaceClass(
+                    options,
+                    'x-nt-suggestion-bookmark-path'
+                  )}
+                >
                   {String(suggestion.path)}
                 </span>
               )}
               <span
                 ref={bookmarkTagRef}
-                className="x-nt-suggestion-tag"
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-tag'
+                )}
+                data-visible="true"
                 data-tag-type="bookmark"
               >
                 {options.t('search_tag_bookmark', '书签')}
               </span>
             </>
           )}
+          {options.surface === 'overlay' &&
+            shouldSwitchMatchedTab && (
+            <span
+              ref={openTabTagRef}
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-tag'
+              )}
+              data-visible="true"
+              data-tag-type="open-tab"
+            >
+              {options.t('search_tag_open_tab', '已打开')}
+            </span>
+          )}
         </div>
       </div>
       <div
-        className="x-nt-suggestion-right"
+        className={surfaceClass(
+          options,
+          'x-nt-suggestion-right'
+        )}
         data-action-column={
           !actionModel.alwaysHideVisitButton ||
           actionModel.hasActionTags
@@ -1738,7 +2077,10 @@ function SearchSuggestionRow({
       >
         <div
           ref={actionTagsRef}
-          className="x-nt-suggestion-action-tags"
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-action-tags'
+          )}
           data-visible="false"
         >
           {actionModel.actionTags.map((tag, tagIndex) => (
@@ -1751,14 +2093,23 @@ function SearchSuggestionRow({
                   actionTag._xAction = tag.action;
                   actionTag._xSuggestion = suggestion;
                   actionTag._xDefaultBg =
-                    'var(--x-nt-tag-bg, #F3F4F6)';
+                    surfaceCssValue(
+                      options,
+                      'var(--x-nt-tag-bg, #F3F4F6)'
+                    );
                   actionTag._xDefaultText =
-                    'var(--x-nt-tag-text, #6B7280)';
+                    surfaceCssValue(
+                      options,
+                      'var(--x-nt-tag-text, #6B7280)'
+                    );
                   actionTag._xDefaultBorder = 'transparent';
                 }
               }}
               key={`${tag.action}:${tag.keyLabel || 'Enter'}`}
-              className="x-nt-suggestion-action-tag"
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-action-tag'
+              )}
             >
               <span
                 ref={(node) => {
@@ -1768,7 +2119,10 @@ function SearchSuggestionRow({
                     tagNode._xActionLabel = node;
                   }
                 }}
-                className="x-nt-suggestion-action-tag__label"
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-action-tag__label'
+                )}
               >
                 {getActionLabel(
                   runtime,
@@ -1776,7 +2130,12 @@ function SearchSuggestionRow({
                   suggestion
                 )}
               </span>
-              <span className="x-nt-suggestion-action-tag__key">
+              <span
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-action-tag__key'
+                )}
+              >
                 {tag.keyLabel || 'Enter'}
               </span>
             </span>
@@ -1785,7 +2144,10 @@ function SearchSuggestionRow({
         <button
           ref={visitButtonRef}
           type="button"
-          className="x-nt-suggestion-action-button x-nt-suggestion-visit-button"
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-action-button x-nt-suggestion-visit-button'
+          )}
           data-visible={
             actionModel.alwaysHideVisitButton ? 'false' : 'true'
           }
@@ -1812,7 +2174,10 @@ function SearchSuggestionRow({
         >
           <span
             ref={visitLabelRef}
-            className="x-nt-suggestion-action-button__label"
+            className={surfaceClass(
+              options,
+              'x-nt-suggestion-action-button__label'
+            )}
           >
             {getActionLabel(
               runtime,
@@ -1824,7 +2189,10 @@ function SearchSuggestionRow({
             )}
           </span>
           <span
-            className="x-nt-suggestion-action-button__icon"
+            className={surfaceClass(
+              options,
+              'x-nt-suggestion-action-button__icon'
+            )}
             dangerouslySetInnerHTML={{
               __html: options.getRiSvg(
                 'ri-arrow-right-line',
@@ -1836,12 +2204,20 @@ function SearchSuggestionRow({
         {removable && (
           <div
             ref={deleteSlotRef}
-            className="x-nt-history-delete-slot"
+            className={surfaceClass(
+              options,
+              'x-nt-history-delete-slot'
+            )}
+            data-visible="false"
           >
             <button
               ref={deleteButtonRef}
               type="button"
-              className="x-nt-history-delete-button"
+              className={surfaceClass(
+                options,
+                'x-nt-history-delete-button'
+              )}
+              data-visible="false"
               aria-label={deleteTooltip}
               dangerouslySetInnerHTML={{
                 __html: options.getRiSvg(
@@ -1898,6 +2274,10 @@ function OpenTabRow({
   const iconSlotRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLSpanElement>(null);
   const switchButtonRef = useRef<HTMLButtonElement>(null);
+  const switchButtonLabelRef = useRef<HTMLSpanElement>(null);
+  const actionTagsRef = useRef<HTMLDivElement>(null);
+  const switchActionTagRef =
+    useRef<SuggestionActionTagElement>(null);
   let host = '';
   try {
     host = tab.url ? new URL(tab.url).hostname : '';
@@ -1940,6 +2320,17 @@ function OpenTabRow({
   const titleText = options.sanitizeDisplayText(
     tab.title || options.t('untitled', '无标题')
   );
+  const tabSuggestion = useMemo<Suggestion>(
+    () => ({
+      type: 'openTab',
+      title: titleText,
+      url: tab.url || '',
+      favicon: tab.favIconUrl || '',
+      _xMatchedTabId:
+        typeof tab.id === 'number' ? tab.id : null
+    }),
+    [tab.favIconUrl, tab.id, tab.url, titleText]
+  );
 
   useLayoutEffect(() => {
     const item = itemRef.current;
@@ -1947,7 +2338,8 @@ function OpenTabRow({
       return;
     }
     item._xIsSearchSuggestion = false;
-    item._xIsAutocompleteTop = false;
+    item._xIsAutocompleteTop =
+      options.autoHighlightFirstTab && index === 0;
     item._xTheme = immediateTheme;
     item._xThemeHost =
       options.getThemeHostForSuggestion(themeSuggestion);
@@ -1955,6 +2347,28 @@ function OpenTabRow({
     item._xIconIsFavicon = !fallback;
     item._xTitle = titleRef.current;
     item._xSwitchButton = switchButtonRef.current;
+    item._xVisitButton = switchButtonRef.current;
+    item._xVisitButtonLabel = switchButtonLabelRef.current;
+    item._xVisitButtonAction = 'switch';
+    item._xSuggestion = tabSuggestion;
+    item._xTabId = typeof tab.id === 'number' ? tab.id : null;
+    item._xTagContainer = actionTagsRef.current;
+    item._xActionTags = switchActionTagRef.current
+      ? [switchActionTagRef.current]
+      : [];
+    item._xHasActionTags =
+      options.surface === 'overlay';
+    if (switchActionTagRef.current) {
+      switchActionTagRef.current._xAction = 'switch';
+      switchActionTagRef.current._xSuggestion = tabSuggestion;
+      switchActionTagRef.current._xActionLabel =
+        switchActionTagRef.current.querySelector<HTMLSpanElement>(
+          `.${surfaceClass(
+            options,
+            'x-nt-suggestion-action-tag__label'
+          )}`
+        );
+    }
     options.applyThemeVariables(item, immediateTheme);
     bindTextTooltip(options, titleRef.current, titleText);
     let active = true;
@@ -1982,6 +2396,8 @@ function OpenTabRow({
     localFallback,
     options,
     runtime,
+    tab.id,
+    tabSuggestion,
     themeSuggestion,
     titleText
   ]);
@@ -2006,8 +2422,8 @@ function OpenTabRow({
   return (
     <div
       ref={itemRef}
-      id={`_x_extension_newtab_suggestion_item_${index}_2024_unique_`}
-      className="x-nt-suggestion-item"
+      id={`_x_extension_${options.surface === 'overlay' ? '' : 'newtab_'}suggestion_item_${index}_2024_unique_`}
+      className={surfaceClass(options, 'x-nt-suggestion-item')}
       data-last={last ? 'true' : 'false'}
       onMouseEnter={() => {
         const item = itemRef.current;
@@ -2028,13 +2444,30 @@ function OpenTabRow({
         const theme = item._xTheme;
         if (theme?._xIsBrand) {
           const hover = options.getHoverColors(theme);
-          item.style.setProperty(
+          setSurfaceStyle(
+            options,
+            item,
             '--x-nt-suggestion-hover-bg',
-            String(hover.bg || '')
+            hover.bg || ''
           );
-          item.style.setProperty(
+          setSurfaceStyle(
+            options,
+            item,
             '--x-nt-suggestion-hover-border',
-            String(hover.border || '')
+            hover.border || ''
+          );
+        } else if (options.surface === 'overlay') {
+          setSurfaceStyle(
+            options,
+            item,
+            '--x-nt-suggestion-hover-bg',
+            'var(--x-ov-hover-bg, #F3F4F6)'
+          );
+          setSurfaceStyle(
+            options,
+            item,
+            '--x-nt-suggestion-hover-border',
+            'transparent'
           );
         }
         item.setAttribute('data-row-state', 'hover');
@@ -2052,7 +2485,12 @@ function OpenTabRow({
       onClick={activate}
       onAuxClick={handleAuxClick}
     >
-      <div className="x-nt-suggestion-left">
+      <div
+        className={surfaceClass(
+          options,
+          'x-nt-suggestion-left'
+        )}
+      >
         <SuggestionIcon
           spec={iconSpec}
           index={index}
@@ -2061,32 +2499,106 @@ function OpenTabRow({
         />
         <span
           ref={titleRef}
-          className="x-nt-suggestion-title"
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-title'
+          )}
         >
           {titleText}
         </span>
         {options.isTabRankScoreDebugEnabled() && (
-          <span className="x-nt-tab-rank-debug">
+          <span
+            className={surfaceClass(
+              options,
+              'x-nt-tab-rank-debug'
+            )}
+          >
             {options.formatTabRankDebugText(tab)}
           </span>
         )}
       </div>
       <div
-        className="x-nt-suggestion-right"
+        className={surfaceClass(
+          options,
+          'x-nt-suggestion-right'
+        )}
         data-action-column="true"
       >
+        {options.surface === 'overlay' && (
+          <div
+            ref={actionTagsRef}
+            className={surfaceClass(
+              options,
+              'x-nt-suggestion-action-tags'
+            )}
+            data-visible="false"
+          >
+            <span
+              ref={switchActionTagRef}
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-action-tag'
+              )}
+            >
+              <span
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-action-tag__label'
+                )}
+              >
+                {getActionLabel(
+                  runtime,
+                  getModifierAction(runtime, 'switch'),
+                  tabSuggestion
+                )}
+              </span>
+              <span
+                className={surfaceClass(
+                  options,
+                  'x-nt-suggestion-action-tag__key'
+                )}
+              >
+                Enter
+              </span>
+            </span>
+          </div>
+        )}
         <button
           ref={switchButtonRef}
           type="button"
-          className="x-nt-tab-switch-button"
+          className={surfaceClass(
+            options,
+            'x-nt-tab-switch-button'
+          )}
+          data-visible="true"
           onClick={(event) => {
             event.stopPropagation();
             activate(event);
           }}
           onAuxClick={handleAuxClick}
         >
-          {options.t('switch_to_tab', '切换到标签页')}{' '}
           <span
+            ref={switchButtonLabelRef}
+            className={
+              options.surface === 'overlay'
+                ? 'x-ov-inline-label'
+                : undefined
+            }
+          >
+            {options.surface === 'overlay'
+              ? getActionLabel(
+                  runtime,
+                  getModifierAction(runtime, 'switch'),
+                  tabSuggestion
+                )
+              : options.t('switch_to_tab', '切换到标签页')}
+          </span>{' '}
+          <span
+            className={
+              options.surface === 'overlay'
+                ? 'x-ov-inline-icon'
+                : undefined
+            }
             dangerouslySetInnerHTML={{
               __html: options.getRiSvg(
                 'ri-arrow-right-line',
@@ -2108,9 +2620,21 @@ function EmptyState({
   message: string;
 }) {
   return (
-    <div className="x-nt-empty-state">
+    <div
+      className={surfaceClass(options, 'x-nt-empty-state')}
+      data-theme={
+        options.surface === 'overlay'
+          ? options.container
+              .closest<HTMLElement>('[data-theme]')
+              ?.getAttribute('data-theme') || undefined
+          : undefined
+      }
+    >
       <span
-        className="x-nt-empty-state__icon"
+        className={surfaceClass(
+          options,
+          'x-nt-empty-state__icon'
+        )}
         dangerouslySetInnerHTML={{
           __html: options.getRiSvg(
             'ri-file-3-line',
@@ -2118,7 +2642,12 @@ function EmptyState({
           )
         }}
       />
-      <span className="x-nt-empty-state__text">
+      <span
+        className={surfaceClass(
+          options,
+          'x-nt-empty-state__text'
+        )}
+      >
         {options.sanitizeDisplayText(message)}
       </span>
     </div>
@@ -2128,7 +2657,9 @@ function EmptyState({
 function syncItems(options: NormalizedOptions): void {
   options.items.length = 0;
   options.container
-    .querySelectorAll<SuggestionElement>('.x-nt-suggestion-item')
+    .querySelectorAll<SuggestionElement>(
+      `.${surfaceClass(options, 'x-nt-suggestion-item')}`
+    )
     .forEach((item) => options.items.push(item));
 }
 

@@ -52,6 +52,11 @@ React replaces bounded UI surfaces behind their current public contracts.
      injection. React now owns the hostile-page mount panel and shared search input
      inside the existing Shadow DOM boundary while the overlay adapter retains
      browser messaging, lifecycle, result orchestration, and no-Shadow-DOM fallback.
+   - Shared Suggestions now renders both New Tab and Overlay result rows from one
+     typed React component. The Overlay surface preserves its class and CSS-variable
+     contract, stable keyed rows for delayed completion, favicon/theme continuity,
+     keyboard selection, modifier-aware actions, history removal, and open-tab rows
+     while the injected adapter retains query ranking and browser navigation.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings
@@ -106,8 +111,8 @@ React replaces bounded UI surfaces behind their current public contracts.
      storage and browser adapters.
    - Share typed UI primitives only after at least two islands need the same behavior.
 5. **High-coupling surfaces**
-   - Overlay shell ownership is established; migrate its result list and tab switcher
-     behind their existing controller contracts before removing legacy renderers.
+   - Overlay shell and result ownership are established; migrate its tab switcher
+     behind the existing controller contract before removing legacy renderers.
    - Migrate remaining New Tab orchestration and wallpaper controls last.
    - Preserve hotkeys, IME handling, Picture-in-Picture ownership, and page-bridge
      boundaries with end-to-end tests before switching ownership to React.

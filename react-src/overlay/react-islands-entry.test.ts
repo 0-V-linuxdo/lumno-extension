@@ -5,6 +5,7 @@ type OverlayRuntime = typeof globalThis & {
   LumnoOverlayReactIslands?: {
     searchInput?: { implementation?: string };
     shell?: { implementation?: string };
+    suggestions?: { implementation?: string };
   };
   LumnoOverlayShell?: {
     createOverlayMount?(): unknown;
@@ -20,6 +21,12 @@ type OverlayRuntime = typeof globalThis & {
   LumnoSearchInputUIReact?: {
     implementation?: string;
   };
+  LumnoOverlaySuggestionsView?: {
+    implementation?: string;
+  };
+  LumnoOverlaySuggestionsViewReact?: {
+    implementation?: string;
+  };
   _x_extension_createSearchInput_2024_unique_?: unknown;
 };
 
@@ -32,6 +39,8 @@ afterEach(() => {
   delete runtime.LumnoOverlayShellReact;
   delete runtime.LumnoSearchInputUI;
   delete runtime.LumnoSearchInputUIReact;
+  delete runtime.LumnoOverlaySuggestionsView;
+  delete runtime.LumnoOverlaySuggestionsViewReact;
   delete runtime._x_extension_createSearchInput_2024_unique_;
   vi.resetModules();
 });
@@ -54,7 +63,14 @@ describe('Overlay React islands entry', () => {
     expect(runtime.LumnoOverlayShellReact).toBe(runtime.LumnoOverlayShell);
     expect(runtime.LumnoOverlayReactIslands).toEqual({
       searchInput: runtime.LumnoSearchInputUI,
-      shell: runtime.LumnoOverlayShell
+      shell: runtime.LumnoOverlayShell,
+      suggestions: runtime.LumnoOverlaySuggestionsView
     });
+    expect(
+      runtime.LumnoOverlaySuggestionsView?.implementation
+    ).toBe('react');
+    expect(runtime.LumnoOverlaySuggestionsViewReact).toBe(
+      runtime.LumnoOverlaySuggestionsView
+    );
   });
 });
