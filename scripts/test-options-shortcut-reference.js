@@ -70,6 +70,16 @@ assert.match(
 );
 assert.match(
   optionsJs,
+  /optionsShortcutReferenceApi\.createShortcutReferenceController\(shortcutReferenceList\)/,
+  'options should hand the read-only shortcut reference list to its React controller'
+);
+assert.match(
+  optionsJs,
+  /function renderShortcutReferenceGroups\(groups\)[\s\S]*shortcutReferenceController\.render/,
+  'options should render grouped shortcut reference models through React when available'
+);
+assert.match(
+  optionsJs,
   /function createShortcutReferenceGroupTitle\(\w+\)[\s\S]*_x_extension_shortcut_reference_group_title_2026_unique_/,
   'options should render subtle group titles inside the shortcut reference list'
 );

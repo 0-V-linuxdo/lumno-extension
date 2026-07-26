@@ -12,6 +12,18 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsPopconfirmReact?: {
     implementation?: string;
   };
+  LumnoOptionsShortcutReference?: {
+    implementation?: string;
+  };
+  LumnoOptionsShortcutReferenceReact?: {
+    implementation?: string;
+  };
+  LumnoOptionsThemePicker?: {
+    implementation?: string;
+  };
+  LumnoOptionsThemePickerReact?: {
+    implementation?: string;
+  };
   LumnoOptionsToast?: {
     implementation?: string;
   };
@@ -27,6 +39,10 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsReactIslands;
   delete runtime.LumnoOptionsPopconfirm;
   delete runtime.LumnoOptionsPopconfirmReact;
+  delete runtime.LumnoOptionsShortcutReference;
+  delete runtime.LumnoOptionsShortcutReferenceReact;
+  delete runtime.LumnoOptionsThemePicker;
+  delete runtime.LumnoOptionsThemePickerReact;
   delete runtime.LumnoOptionsToast;
   delete runtime.LumnoOptionsToastReact;
 }
@@ -50,10 +66,20 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsPopconfirmReact).toBe(
       runtime.LumnoOptionsPopconfirm
     );
+    expect(runtime.LumnoOptionsShortcutReference?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsShortcutReferenceReact).toBe(
+      runtime.LumnoOptionsShortcutReference
+    );
+    expect(runtime.LumnoOptionsThemePicker?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsThemePickerReact).toBe(
+      runtime.LumnoOptionsThemePicker
+    );
     expect(runtime.LumnoOptionsToast?.implementation).toBe('react');
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
     expect(runtime.LumnoOptionsReactIslands).toEqual({
       popconfirm: runtime.LumnoOptionsPopconfirm,
+      shortcutReference: runtime.LumnoOptionsShortcutReference,
+      themePicker: runtime.LumnoOptionsThemePicker,
       toast: runtime.LumnoOptionsToast
     });
   });
@@ -68,6 +94,8 @@ describe('Options React islands entry', () => {
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(false);
     expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
+    expect(runtime.LumnoOptionsShortcutReference).toBeUndefined();
+    expect(runtime.LumnoOptionsThemePicker).toBeUndefined();
     expect(runtime.LumnoOptionsToast).toBeUndefined();
     expect(runtime.LumnoOptionsReactIslands).toBeUndefined();
   });

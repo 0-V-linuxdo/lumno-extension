@@ -135,6 +135,8 @@
   const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
+  const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
+  const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
     ? optionsToastApi.createToastController(toastElement, {
         windowObj: window,
@@ -142,6 +144,19 @@
         errorBackground: 'rgba(153, 27, 27, 0.92)'
       })
     : null;
+  const shortcutReferenceController =
+    typeof optionsShortcutReferenceApi.createShortcutReferenceController === 'function'
+      ? optionsShortcutReferenceApi.createShortcutReferenceController(shortcutReferenceList)
+      : null;
+  const themePickerController =
+    typeof optionsThemePickerApi.createThemePickerController === 'function'
+      ? optionsThemePickerApi.createThemePickerController(themePicker, {
+          onSelect(mode, button) {
+            playThemeOptionClickEffect(button);
+            setThemeMode(mode);
+          }
+        })
+      : null;
 
   // 使用系统字体，避免外链字体依赖。
   if (!panel || themeButtons.length === 0 || tabButtons.length === 0) {
@@ -322,6 +337,7 @@
 
   let currentMessages = null;
   let currentLanguageMode = 'system';
+  let currentThemeMode = 'system';
 
   function normalizeBlacklistMatchModes(value, fallbackMode) {
     if (BLACKLIST_UTILS.normalizeMatchModes) {
@@ -1978,6 +1994,7 @@
       refreshSyncStatus();
       refreshShortcutsStatus();
       renderShortcutReferenceList();
+      updateThemeButtons(currentThemeMode);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
       renderSiteSearchList();
@@ -2534,14 +2551,39 @@
     if (!shortcutReferenceList) {
       return;
     }
+    const visibleGroups = groups.map((group) => ({
+      ...group,
+      items: (group.items || []).filter((item) => !(item && item.commandName === 'show-search'))
+    })).filter((group) => group.items.length > 0);
+    if (shortcutReferenceController &&
+        typeof shortcutReferenceController.render === 'function') {
+      shortcutReferenceController.render({
+        groups: visibleGroups.map((group) => ({
+          id: group && group.id ? String(group.id) : '',
+          titleKey: group && group.titleKey ? String(group.titleKey) : '',
+          title: getMessage(group.titleKey, group.titleFallback || ''),
+          items: group.items.map((item) => {
+            const parts = getShortcutReferenceParts(item.shortcut || '');
+            return {
+              id: item && item.id ? String(item.id) : '',
+              commandName: item && item.commandName ? String(item.commandName) : '',
+              editable: Boolean(item && item.editable),
+              titleKey: item && item.titleKey ? String(item.titleKey) : '',
+              title: getMessage(item.titleKey, item.titleFallback || ''),
+              shortcutEmpty: parts.length === 0,
+              shortcutLabel: parts.length > 0
+                ? parts.join(' / ')
+                : getMessage('shortcut_reference_unset', '未设置')
+            };
+          })
+        }))
+      });
+      return;
+    }
     shortcutReferenceList.innerHTML = '';
-    groups.forEach((group) => {
-      const items = (group.items || []).filter((item) => !(item && item.commandName === 'show-search'));
-      if (items.length === 0) {
-        return;
-      }
+    visibleGroups.forEach((group) => {
       shortcutReferenceList.appendChild(createShortcutReferenceGroupTitle(group));
-      items.forEach((item) => {
+      group.items.forEach((item) => {
         shortcutReferenceList.appendChild(createShortcutReferenceItem(item));
       });
     });
@@ -2764,11 +2806,40 @@
   }
 
   function updateThemeButtons(mode) {
-    themeButtons.forEach((button) => {
-      const isActive = button.getAttribute('data-mode') === mode;
-      button.setAttribute('data-active', isActive ? 'true' : 'false');
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
+    const nextMode = mode === 'dark' || mode === 'light' ? mode : 'system';
+    currentThemeMode = nextMode;
+    if (themePickerController &&
+        typeof themePickerController.render === 'function') {
+      themePickerController.render({
+        activeMode: nextMode,
+        options: [
+          {
+            mode: 'system',
+            labelKey: 'settings_theme_system',
+            label: getMessage('settings_theme_system', '跟随系统/网站'),
+            previewSrc: '../../assets/images/system.svg'
+          },
+          {
+            mode: 'light',
+            labelKey: 'settings_theme_light',
+            label: getMessage('settings_theme_light', '浅色'),
+            previewSrc: '../../assets/images/light.svg'
+          },
+          {
+            mode: 'dark',
+            labelKey: 'settings_theme_dark',
+            label: getMessage('settings_theme_dark', '深色'),
+            previewSrc: '../../assets/images/dark.svg'
+          }
+        ]
+      });
+    } else {
+      themeButtons.forEach((button) => {
+        const isActive = button.getAttribute('data-mode') === nextMode;
+        button.setAttribute('data-active', isActive ? 'true' : 'false');
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
     requestAnimationFrame(updateThemeIndicator);
   }
 

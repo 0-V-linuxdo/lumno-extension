@@ -35,6 +35,12 @@ React replaces bounded UI surfaces behind their current public contracts.
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings
      lists.
+   - Options Shortcut Reference as a read-only list island, preserving grouped
+     command metadata, platform-specific key labels, localization refreshes, and
+     the existing browser command adapter.
+   - Options Theme Picker as a controlled visual island, preserving the existing
+     preview gallery and click feedback while leaving storage, system-theme
+     listeners, and document theme application in the browser adapter.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

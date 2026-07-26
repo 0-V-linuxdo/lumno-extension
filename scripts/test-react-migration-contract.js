@@ -177,14 +177,28 @@ assert(
   'the New Tab React route should stay within its 80 KiB gzip budget'
 );
 assert(
+  fs.statSync(runtimeBundlePath).size +
+      fs.statSync(sharedBundlePath).size +
+      fs.statSync(optionsBundlePath).size <=
+    200 * 1024,
+  'the Options React route should stay within its 200 KiB uncompressed budget'
+);
+assert(
+  zlib.gzipSync(runtimeBundle).length +
+      zlib.gzipSync(sharedBundle).length +
+      zlib.gzipSync(optionsBundle).length <=
+    64 * 1024,
+  'the Options React route should stay within its 64 KiB gzip budget'
+);
+assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    312 * 1024,
-  'all shared React artifacts and three page entries should stay within their 312 KiB package budget'
+    316 * 1024,
+  'all shared React artifacts and three page entries should stay within their 316 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    94 * 1024,
-  'all shared React artifacts and three page entries should stay within their 94 KiB gzip budget'
+    96 * 1024,
+  'all shared React artifacts and three page entries should stay within their 96 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -208,15 +222,23 @@ assert(
 assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&
     optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
+    optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
+    optionsBundle.includes('LumnoOptionsThemePickerReact') &&
     optionsBundle.includes('LumnoOptionsReactIslands') &&
     optionsBundle.includes('options-popconfirm') &&
+    optionsBundle.includes('options-shortcut-reference') &&
+    optionsBundle.includes('options-theme-picker') &&
     optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
     optionsSource.includes('reactApi.createPopconfirmController') &&
     optionsSource.includes('createPopconfirmWrap(') &&
     optionsSource.includes('destroyPopconfirmControllersWithin(') &&
+    optionsSource.includes('optionsShortcutReferenceApi.createShortcutReferenceController') &&
+    optionsSource.includes('shortcutReferenceController.render') &&
+    optionsSource.includes('optionsThemePickerApi.createThemePickerController') &&
+    optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Popconfirm and Toast islands'
+  'Options should expose and consume its React Popconfirm, Shortcut Reference, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&
