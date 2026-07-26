@@ -51,6 +51,10 @@ const feedbackReactSource = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/feedback.tsx'),
   'utf8'
 );
+const selectMenuReactSource = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/select-menu.tsx'),
+  'utf8'
+);
 const toastReactSource = fs.readFileSync(
   path.join(repoRoot, 'react-src/shared/toast.tsx'),
   'utf8'
@@ -170,15 +174,15 @@ assert(
   fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    276 * 1024,
-  'the New Tab React route should stay within its 276 KiB uncompressed budget'
+    286 * 1024,
+  'the New Tab React route should stay within its 286 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(newtabBundle).length <=
-    83 * 1024,
-  'the New Tab React route should stay within its 83 KiB gzip budget'
+    86 * 1024,
+  'the New Tab React route should stay within its 86 KiB gzip budget'
 );
 assert(
     fs.statSync(runtimeBundlePath).size +
@@ -196,13 +200,13 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    354 * 1024,
-  'all shared React artifacts and three page entries should stay within their 354 KiB package budget'
+    364 * 1024,
+  'all shared React artifacts and three page entries should stay within their 364 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    102 * 1024,
-  'all shared React artifacts and three page entries should stay within their 102 KiB gzip budget'
+    105 * 1024,
+  'all shared React artifacts and three page entries should stay within their 105 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -220,10 +224,14 @@ assert(
     newtabBundle.includes('LumnoNewtabShortcutsViewReact') &&
     newtabBundle.includes('LumnoNewtabToastReact') &&
     newtabBundle.includes('LumnoNewtabFeedbackControlReact') &&
+    newtabBundle.includes('LumnoNewtabSelectMenuReact') &&
     newtabBundle.includes('LumnoNewtabReactIslands') &&
     newtabBundle.includes('newtab-feedback-control') &&
+    newtabBundle.includes('newtab-select-menu') &&
     feedbackReactSource.includes('createFeedbackControlController') &&
     feedbackReactSource.includes("host.dataset.reactIsland = 'newtab-feedback-control'") &&
+    selectMenuReactSource.includes('createSelectMenuController') &&
+    selectMenuReactSource.includes("host.dataset.reactIsland = 'newtab-select-menu'") &&
     sharedBundle.includes('data-react-island'),
   'the compiled islands should expose diagnostic APIs and host markers'
 );

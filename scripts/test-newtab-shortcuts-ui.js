@@ -1663,8 +1663,14 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'const shortcutContextMenuSelectController = globalThis.LumnoCustomSelect &&',
-  'shortcut context menu should reuse the shared custom select controller'
+  'const shortcutContextMenuSelectFactory =',
+  'shortcut context menu should resolve a reusable select-menu controller'
+);
+
+assertContains(
+  newtabJs,
+  'typeof NEWTAB_SELECT_MENU.createController',
+  'shortcut context menu should prefer the React select-menu controller'
 );
 
 assertContains(

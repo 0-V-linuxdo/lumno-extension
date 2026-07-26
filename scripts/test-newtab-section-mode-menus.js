@@ -781,8 +781,13 @@ assertContains(
 );
 assertContains(
   newtabJs,
-  'LumnoCustomSelect.createController',
-  'new tab should initialize section mode dropdowns through the shared component runtime'
+  'typeof NEWTAB_SELECT_MENU.createController',
+  'new tab should prefer the React select-menu controller'
+);
+assertContains(
+  newtabJs,
+  ': globalThis.LumnoCustomSelect',
+  'new tab should retain the shared custom-select fallback while the React route boots'
 );
 assertContains(
   newtabJs,

@@ -198,6 +198,7 @@
   const NEWTAB_WALLPAPER_EFFECTS = globalThis.LumnoNewtabWallpaperEffects || {};
   const NEWTAB_WALLPAPER = globalThis.LumnoNewtabWallpaper || {};
   const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
+  const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -447,18 +448,26 @@
     storageArea: localStorageArea,
     storageKey: NEWTAB_SHORTCUT_ICONS_STORAGE_KEY
   });
-  const sectionModeSelectController = globalThis.LumnoCustomSelect &&
-      typeof globalThis.LumnoCustomSelect.createController === 'function'
-    ? globalThis.LumnoCustomSelect.createController({
+  const sectionModeSelectFactory =
+    typeof NEWTAB_SELECT_MENU.createController === 'function'
+      ? NEWTAB_SELECT_MENU
+      : globalThis.LumnoCustomSelect;
+  const sectionModeSelectController = sectionModeSelectFactory &&
+      typeof sectionModeSelectFactory.createController === 'function'
+    ? sectionModeSelectFactory.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: hideTopActionTooltip,
       getViewportTopInset: getNewtabViewportTopPaddingPx
     })
     : null;
-  const shortcutContextMenuSelectController = globalThis.LumnoCustomSelect &&
-      typeof globalThis.LumnoCustomSelect.createController === 'function'
-    ? globalThis.LumnoCustomSelect.createController({
+  const shortcutContextMenuSelectFactory =
+    typeof NEWTAB_SELECT_MENU.createController === 'function'
+      ? NEWTAB_SELECT_MENU
+      : globalThis.LumnoCustomSelect;
+  const shortcutContextMenuSelectController = shortcutContextMenuSelectFactory &&
+      typeof shortcutContextMenuSelectFactory.createController === 'function'
+    ? shortcutContextMenuSelectFactory.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: () => {
@@ -468,9 +477,13 @@
       getViewportTopInset: getNewtabViewportTopPaddingPx
     })
     : null;
-  const bookmarkContextMenuSelectController = globalThis.LumnoCustomSelect &&
-      typeof globalThis.LumnoCustomSelect.createController === 'function'
-    ? globalThis.LumnoCustomSelect.createController({
+  const bookmarkContextMenuSelectFactory =
+    typeof NEWTAB_SELECT_MENU.createController === 'function'
+      ? NEWTAB_SELECT_MENU
+      : globalThis.LumnoCustomSelect;
+  const bookmarkContextMenuSelectController = bookmarkContextMenuSelectFactory &&
+      typeof bookmarkContextMenuSelectFactory.createController === 'function'
+    ? bookmarkContextMenuSelectFactory.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: () => {

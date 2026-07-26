@@ -4,6 +4,7 @@ import {
 } from './bookmarks';
 import { createFeedbackControlApi } from './feedback';
 import { createRecentSitesViewApi, type LegacyRecentSitesApi } from './recent-sites';
+import { createSelectMenuApi } from './select-menu';
 import { createShortcutDialogApi } from './shortcut-dialog';
 import {
   createShortcutsViewApi,
@@ -25,6 +26,7 @@ const runtime = globalThis as typeof globalThis & {
     feedback: ReturnType<typeof createFeedbackControlApi>;
     shortcutDialog: ReturnType<typeof createShortcutDialogApi>;
     recentSites: ReturnType<typeof createRecentSitesViewApi>;
+    selectMenu: ReturnType<typeof createSelectMenuApi>;
     shortcuts: ReturnType<typeof createShortcutsViewApi>;
     suggestions: ReturnType<typeof createSuggestionsViewApi>;
     toast: ReturnType<typeof createToastApi>;
@@ -39,6 +41,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabShortcutsViewReact?: ReturnType<typeof createShortcutsViewApi>;
   LumnoNewtabRecentSitesView?: LegacyRecentSitesApi;
   LumnoNewtabRecentSitesViewReact?: ReturnType<typeof createRecentSitesViewApi>;
+  LumnoNewtabSelectMenu?: ReturnType<typeof createSelectMenuApi>;
+  LumnoNewtabSelectMenuReact?: ReturnType<typeof createSelectMenuApi>;
   LumnoNewtabSuggestionsView?: LegacySuggestionsApi;
   LumnoNewtabSuggestionsViewReact?: ReturnType<typeof createSuggestionsViewApi>;
   LumnoNewtabToast?: LegacyToastApi;
@@ -57,6 +61,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const feedbackApi = createFeedbackControlApi();
   const shortcutDialogApi = createShortcutDialogApi();
   const recentSitesApi = createRecentSitesViewApi(legacyRecentSitesApi);
+  const selectMenuApi = createSelectMenuApi();
   const shortcutsApi = createShortcutsViewApi(legacyShortcutsApi);
   const suggestionsApi = createSuggestionsViewApi(legacySuggestionsApi);
   const toastApi = createToastApi(legacyToastApi);
@@ -69,6 +74,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabShortcutDialog = shortcutDialogApi;
   runtime.LumnoNewtabRecentSitesViewReact = recentSitesApi;
   runtime.LumnoNewtabRecentSitesView = recentSitesApi;
+  runtime.LumnoNewtabSelectMenuReact = selectMenuApi;
+  runtime.LumnoNewtabSelectMenu = selectMenuApi;
   runtime.LumnoNewtabShortcutsViewReact = shortcutsApi;
   runtime.LumnoNewtabShortcutsView = shortcutsApi;
   runtime.LumnoNewtabSuggestionsViewReact = suggestionsApi;
@@ -80,6 +87,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     feedback: feedbackApi,
     shortcutDialog: shortcutDialogApi,
     recentSites: recentSitesApi,
+    selectMenu: selectMenuApi,
     shortcuts: shortcutsApi,
     suggestions: suggestionsApi,
     toast: toastApi

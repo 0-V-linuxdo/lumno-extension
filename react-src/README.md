@@ -35,6 +35,11 @@ React replaces bounded UI surfaces behind their current public contracts.
      channel menu, WeChat detail, QR refresh state, focus restoration, and
      outside/Escape dismissal while the adapter keeps remote-link loading,
      navigation disposition, localization, and shared tooltip placement.
+   - Select Menu as the shared React controller for bookmark/recent display
+     modes and shortcut/bookmark context menus. It preserves the legacy
+     controller contract, portal geometry, keyboard behavior, action rows, and
+     native `change` bridge while allowing the browser adapter to retain data
+     mutations and card-specific actions.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings
