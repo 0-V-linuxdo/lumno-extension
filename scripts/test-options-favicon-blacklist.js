@@ -371,11 +371,13 @@ function createOptionsBehaviorHarness(initialRules) {
     const faviconBlacklistCancelButton = deps.elements.cancelButton;
     const faviconBlacklistError = deps.elements.error;
     const faviconEnhancedFetchToggle = deps.elements.enhancedToggle;
+    const faviconBlacklistListController = null;
     let faviconRequestBlacklistItems = [];
     let faviconBlacklistFormExpanded = false;
     let activePopconfirm = null;
     const getRiSvg = () => '<svg></svg>';
     const showToast = deps.showToast;
+    const renderBlacklistListWithReact = () => false;
 
     ${functionSource}
     ${addHandlerSource}

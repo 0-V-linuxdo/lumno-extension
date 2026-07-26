@@ -49,6 +49,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      hash routing, sticky layout, scroll resets, localized labels, and the sliding
      indicator while the adapter continues to own content visibility and data
      refreshes.
+   - Options Blacklist Lists as controlled search-result and favicon-rule views,
+     including row actions, inline editing, match-mode feedback, and confirmation
+     states. URL normalization, persistence, and New Tab refresh notifications
+     remain in the Options adapter.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

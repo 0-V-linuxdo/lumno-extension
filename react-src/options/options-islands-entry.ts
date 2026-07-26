@@ -2,6 +2,7 @@ import {
   createToastApi,
   type LegacyToastApi
 } from '../shared/toast';
+import { createBlacklistListApi } from './blacklist-list';
 import { createPopconfirmApi } from './popconfirm';
 import { createSegmentedControlApi } from './segmented-control';
 import { createSettingsNavigationApi } from './settings-navigation';
@@ -14,6 +15,7 @@ const runtime = globalThis as typeof globalThis & {
     reactReady: boolean;
   };
   LumnoOptionsReactIslands?: {
+    blacklistList: ReturnType<typeof createBlacklistListApi>;
     popconfirm: ReturnType<typeof createPopconfirmApi>;
     segmentedControl: ReturnType<typeof createSegmentedControlApi>;
     settingsNavigation: ReturnType<typeof createSettingsNavigationApi>;
@@ -21,6 +23,8 @@ const runtime = globalThis as typeof globalThis & {
     themePicker: ReturnType<typeof createThemePickerApi>;
     toast: ReturnType<typeof createToastApi>;
   };
+  LumnoOptionsBlacklistList?: ReturnType<typeof createBlacklistListApi>;
+  LumnoOptionsBlacklistListReact?: ReturnType<typeof createBlacklistListApi>;
   LumnoOptionsPopconfirm?: ReturnType<typeof createPopconfirmApi>;
   LumnoOptionsPopconfirmReact?: ReturnType<typeof createPopconfirmApi>;
   LumnoOptionsSegmentedControl?: ReturnType<typeof createSegmentedControlApi>;
@@ -38,6 +42,7 @@ const runtime = globalThis as typeof globalThis & {
 const bootstrapState = runtime.LumnoOptionsReactBootstrap;
 
 if (!bootstrapState || bootstrapState.allowReactUpgrade) {
+  const blacklistListApi = createBlacklistListApi();
   const popconfirmApi = createPopconfirmApi();
   const segmentedControlApi = createSegmentedControlApi();
   const settingsNavigationApi = createSettingsNavigationApi();
@@ -45,6 +50,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const themePickerApi = createThemePickerApi();
   const toastApi = createToastApi(runtime.LumnoOptionsToast || null);
 
+  runtime.LumnoOptionsBlacklistListReact = blacklistListApi;
+  runtime.LumnoOptionsBlacklistList = blacklistListApi;
   runtime.LumnoOptionsPopconfirmReact = popconfirmApi;
   runtime.LumnoOptionsPopconfirm = popconfirmApi;
   runtime.LumnoOptionsSegmentedControlReact = segmentedControlApi;
@@ -58,6 +65,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOptionsToastReact = toastApi;
   runtime.LumnoOptionsToast = toastApi;
   runtime.LumnoOptionsReactIslands = Object.freeze({
+    blacklistList: blacklistListApi,
     popconfirm: popconfirmApi,
     segmentedControl: segmentedControlApi,
     settingsNavigation: settingsNavigationApi,

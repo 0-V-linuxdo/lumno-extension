@@ -177,23 +177,23 @@ assert(
   'the New Tab React route should stay within its 80 KiB gzip budget'
 );
 assert(
-  fs.statSync(runtimeBundlePath).size +
+    fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    200 * 1024,
-  'the Options React route should stay within its 200 KiB uncompressed budget'
+    208 * 1024,
+  'the Options React route should stay within its 208 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(optionsBundle).length <=
-    64 * 1024,
-  'the Options React route should stay within its 64 KiB gzip budget'
+    66 * 1024,
+  'the Options React route should stay within its 66 KiB gzip budget'
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    316 * 1024,
-  'all shared React artifacts and three page entries should stay within their 316 KiB package budget'
+    324 * 1024,
+  'all shared React artifacts and three page entries should stay within their 324 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
@@ -221,18 +221,25 @@ assert(
 );
 assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&
+    optionsBundle.includes('LumnoOptionsBlacklistListReact') &&
     optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
     optionsBundle.includes('LumnoOptionsSegmentedControlReact') &&
     optionsBundle.includes('LumnoOptionsSettingsNavigationReact') &&
     optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
     optionsBundle.includes('LumnoOptionsThemePickerReact') &&
     optionsBundle.includes('LumnoOptionsReactIslands') &&
+    optionsBundle.includes('options-blacklist-list') &&
     optionsBundle.includes('options-popconfirm') &&
     optionsBundle.includes('options-segmented-control') &&
     optionsBundle.includes('options-settings-navigation') &&
     optionsBundle.includes('options-shortcut-reference') &&
     optionsBundle.includes('options-theme-picker') &&
     optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
+    optionsSource.includes('globalThis.LumnoOptionsBlacklistList') &&
+    optionsSource.includes('optionsBlacklistListApi.createBlacklistListController') &&
+    optionsSource.includes('renderBlacklistListWithReact(') &&
+    optionsSource.includes('searchBlacklistListController') &&
+    optionsSource.includes('faviconBlacklistListController') &&
     optionsSource.includes('reactApi.createPopconfirmController') &&
     optionsSource.includes('createPopconfirmWrap(') &&
     optionsSource.includes('destroyPopconfirmControllersWithin(') &&
@@ -252,7 +259,7 @@ assert(
     optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Popconfirm, Segmented Control, Settings Navigation, Shortcut Reference, Theme Picker, and Toast islands'
+  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Settings Navigation, Shortcut Reference, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&

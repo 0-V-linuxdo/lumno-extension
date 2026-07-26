@@ -6,6 +6,12 @@ type OptionsRuntime = typeof globalThis & {
     reactReady: boolean;
   };
   LumnoOptionsReactIslands?: unknown;
+  LumnoOptionsBlacklistList?: {
+    implementation?: string;
+  };
+  LumnoOptionsBlacklistListReact?: {
+    implementation?: string;
+  };
   LumnoOptionsPopconfirm?: {
     implementation?: string;
   };
@@ -49,6 +55,8 @@ const runtime = globalThis as OptionsRuntime;
 function clearRuntime(): void {
   delete runtime.LumnoOptionsReactBootstrap;
   delete runtime.LumnoOptionsReactIslands;
+  delete runtime.LumnoOptionsBlacklistList;
+  delete runtime.LumnoOptionsBlacklistListReact;
   delete runtime.LumnoOptionsPopconfirm;
   delete runtime.LumnoOptionsPopconfirmReact;
   delete runtime.LumnoOptionsSegmentedControl;
@@ -78,6 +86,10 @@ describe('Options React islands entry', () => {
     await import('./options-islands-entry');
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(true);
+    expect(runtime.LumnoOptionsBlacklistList?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsBlacklistListReact).toBe(
+      runtime.LumnoOptionsBlacklistList
+    );
     expect(runtime.LumnoOptionsPopconfirm?.implementation).toBe('react');
     expect(runtime.LumnoOptionsPopconfirmReact).toBe(
       runtime.LumnoOptionsPopconfirm
@@ -101,6 +113,7 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsToast?.implementation).toBe('react');
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
     expect(runtime.LumnoOptionsReactIslands).toEqual({
+      blacklistList: runtime.LumnoOptionsBlacklistList,
       popconfirm: runtime.LumnoOptionsPopconfirm,
       segmentedControl: runtime.LumnoOptionsSegmentedControl,
       settingsNavigation: runtime.LumnoOptionsSettingsNavigation,
@@ -119,6 +132,7 @@ describe('Options React islands entry', () => {
     await import('./options-islands-entry');
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(false);
+    expect(runtime.LumnoOptionsBlacklistList).toBeUndefined();
     expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
     expect(runtime.LumnoOptionsSegmentedControl).toBeUndefined();
     expect(runtime.LumnoOptionsSettingsNavigation).toBeUndefined();
