@@ -215,12 +215,12 @@ assert(
   'the Options React route should stay within its 70 KiB gzip budget'
 );
 assert(
-  fs.statSync(overlayBundlePath).size <= 240 * 1024,
-  'the injected Overlay React route should stay within its 240 KiB uncompressed budget'
+  fs.statSync(overlayBundlePath).size <= 250 * 1024,
+  'the injected Overlay React route should stay within its 250 KiB uncompressed budget'
 );
 assert(
-  zlib.gzipSync(overlayBundle).length <= 75 * 1024,
-  'the injected Overlay React route should stay within its 75 KiB gzip budget'
+  zlib.gzipSync(overlayBundle).length <= 78 * 1024,
+  'the injected Overlay React route should stay within its 78 KiB gzip budget'
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
@@ -244,8 +244,10 @@ assert(
   overlayBundle.includes('LumnoOverlayReactBootstrap') &&
     overlayBundle.includes('LumnoOverlayShellReact') &&
     overlayBundle.includes('LumnoOverlaySuggestionsViewReact') &&
+    overlayBundle.includes('LumnoOverlayTabSwitcherViewReact') &&
     overlayBundle.includes('LumnoSearchInputUIReact') &&
     overlayBundle.includes('overlay-shell') &&
+    overlayBundle.includes('overlay-tab-switcher') &&
     overlayBundle.includes('suggestions') &&
     overlayBundle.includes('shared-search-input'),
   'the injected Overlay IIFE should install React shell, suggestions, and search-input APIs'

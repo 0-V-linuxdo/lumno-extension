@@ -3809,7 +3809,10 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
   const runDynamicSwitcherScript = (switcherContext) => {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
-      files: ['src/overlay/tab-switcher.js']
+      files: [
+        'src/react/overlay-islands.js',
+        'src/overlay/tab-switcher.js'
+      ]
     }, () => {
       if (chrome.runtime && chrome.runtime.lastError) {
         const errorMessage = chrome.runtime.lastError.message || 'unknown';

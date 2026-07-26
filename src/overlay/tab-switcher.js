@@ -5,6 +5,7 @@
   const PANEL_ID = '_x_extension_tab_switcher_panel_2026_unique_';
   const TAB_SWITCHER_ADVANCE_EVENT = '_x_extension_tab_switcher_advance_command_2026_unique_';
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
+  const TAB_SWITCHER_REACT_VIEW = window.LumnoOverlayTabSwitcherView || {};
   const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
   const switcherThemeMediaQuery = typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-color-scheme: dark)')
@@ -995,12 +996,51 @@
     style.textContent = buildStyles();
     shadow.appendChild(style);
 
-    const panel = createElement(document, 'div', '');
-    panel.id = PANEL_ID;
-    panel.setAttribute('role', 'listbox');
-    panel.setAttribute('aria-label', getMessage('tab_switcher_title', 'Recent tabs'));
-    panel.setAttribute('data-visible', 'true');
-    panel.style.setProperty('--x-tab-count', String(Math.max(1, Math.min(5, tabs.length))));
+    const buttons = [];
+    const tabById = new Map();
+    tabs.forEach((tab) => tabById.set(tab.id, tab));
+    let selectedIndex = clampSelectedIndex(context.selectedIndex, tabs.length);
+    let tabSwitcherReactView = null;
+    let panel = null;
+    let list = null;
+    if (typeof TAB_SWITCHER_REACT_VIEW.createTabSwitcherView === 'function') {
+      tabSwitcherReactView = TAB_SWITCHER_REACT_VIEW.createTabSwitcherView({
+        document,
+        root: shadow,
+        panelId: PANEL_ID,
+        tabs,
+        selectedIndex,
+        ariaLabel: getMessage('tab_switcher_title', 'Recent tabs'),
+        sanitizeText,
+        getHostLabel,
+        getMessage,
+        normalizeAccentCss,
+        getThumbnailStatus,
+        onSelect(index) {
+          selectedIndex = index;
+          renderSelection();
+        },
+        onActivate(index, event) {
+          stopHandledKeyEvent(event);
+          selectedIndex = index;
+          switchToSelected();
+        }
+      });
+      panel = tabSwitcherReactView && tabSwitcherReactView.panel
+        ? tabSwitcherReactView.panel
+        : null;
+    }
+    if (!panel) {
+      tabSwitcherReactView = null;
+      panel = createElement(document, 'div', '');
+      panel.id = PANEL_ID;
+      panel.setAttribute('role', 'listbox');
+      panel.setAttribute('aria-label', getMessage('tab_switcher_title', 'Recent tabs'));
+      panel.setAttribute('data-visible', 'true');
+      panel.style.setProperty('--x-tab-count', String(Math.max(1, Math.min(5, tabs.length))));
+      list = createElement(document, 'div', 'x-tab-switcher-list');
+      panel.appendChild(list);
+    }
     applySwitcherViewportPlacement(panel, window);
     applySwitcherZoomCompensation(panel, context.tabZoomFactor, getSwitcherVisualViewportScale(window));
 
@@ -1012,15 +1052,14 @@
     const switcherThemeController = createSwitcherThemeController(panel);
     switcherThemeController.start();
 
-    const list = createElement(document, 'div', 'x-tab-switcher-list');
-    panel.appendChild(list);
-    const buttons = [];
-    const tabById = new Map();
-    let selectedIndex = clampSelectedIndex(context.selectedIndex, tabs.length);
     let didRequestSwitch = false;
     let suppressInitialShortcutAdvanceUntilQKeyup = context.suppressInitialShortcutAdvance === true;
 
     function renderSelection() {
+      if (tabSwitcherReactView) {
+        tabSwitcherReactView.updateSelection(selectedIndex);
+        return;
+      }
       buttons.forEach((button, index) => {
         setButtonActive(button, index === selectedIndex);
       });
@@ -1216,6 +1255,9 @@
     }
 
     host._lumnoTabSwitcherUpdateThumbnail = function(update) {
+      if (tabSwitcherReactView) {
+        return tabSwitcherReactView.updateThumbnail(update);
+      }
       const tabId = Number(update && update.tabId);
       if (!Number.isInteger(tabId)) {
         return { ok: false, reason: 'invalid-tab' };
@@ -1230,7 +1272,8 @@
       };
     };
 
-    tabs.forEach((tab, index) => {
+    if (!tabSwitcherReactView) {
+      tabs.forEach((tab, index) => {
       const card = createElement(document, 'button', 'x-tab-switcher-card');
       tabById.set(tab.id, tab);
       const accentCss = normalizeAccentCss(tab.accentRgb);
@@ -1302,10 +1345,13 @@
         switchToSelected();
       });
       buttons.push(card);
-      list.appendChild(card);
-    });
+        list.appendChild(card);
+      });
+    }
 
-    shadow.appendChild(panel);
+    if (!tabSwitcherReactView) {
+      shadow.appendChild(panel);
+    }
     document.documentElement.appendChild(host);
 
     const switcherVisualViewport = window.visualViewport && typeof window.visualViewport.addEventListener === 'function'
@@ -1321,6 +1367,10 @@
       document.removeEventListener('pointerdown', handlePointerDown, true);
       document.removeEventListener(TAB_SWITCHER_ADVANCE_EVENT, handleExternalAdvance, true);
       switcherThemeController.destroy();
+      if (tabSwitcherReactView) {
+        tabSwitcherReactView.destroy();
+        tabSwitcherReactView = null;
+      }
       delete host._lumnoTabSwitcherUpdateThumbnail;
     };
     window.addEventListener('keydown', handleKeydown, true);

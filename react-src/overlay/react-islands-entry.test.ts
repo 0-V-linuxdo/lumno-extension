@@ -6,6 +6,7 @@ type OverlayRuntime = typeof globalThis & {
     searchInput?: { implementation?: string };
     shell?: { implementation?: string };
     suggestions?: { implementation?: string };
+    tabSwitcher?: { implementation?: string };
   };
   LumnoOverlayShell?: {
     createOverlayMount?(): unknown;
@@ -27,6 +28,12 @@ type OverlayRuntime = typeof globalThis & {
   LumnoOverlaySuggestionsViewReact?: {
     implementation?: string;
   };
+  LumnoOverlayTabSwitcherView?: {
+    implementation?: string;
+  };
+  LumnoOverlayTabSwitcherViewReact?: {
+    implementation?: string;
+  };
   _x_extension_createSearchInput_2024_unique_?: unknown;
 };
 
@@ -41,6 +48,8 @@ afterEach(() => {
   delete runtime.LumnoSearchInputUIReact;
   delete runtime.LumnoOverlaySuggestionsView;
   delete runtime.LumnoOverlaySuggestionsViewReact;
+  delete runtime.LumnoOverlayTabSwitcherView;
+  delete runtime.LumnoOverlayTabSwitcherViewReact;
   delete runtime._x_extension_createSearchInput_2024_unique_;
   vi.resetModules();
 });
@@ -64,7 +73,8 @@ describe('Overlay React islands entry', () => {
     expect(runtime.LumnoOverlayReactIslands).toEqual({
       searchInput: runtime.LumnoSearchInputUI,
       shell: runtime.LumnoOverlayShell,
-      suggestions: runtime.LumnoOverlaySuggestionsView
+      suggestions: runtime.LumnoOverlaySuggestionsView,
+      tabSwitcher: runtime.LumnoOverlayTabSwitcherView
     });
     expect(
       runtime.LumnoOverlaySuggestionsView?.implementation
@@ -72,5 +82,34 @@ describe('Overlay React islands entry', () => {
     expect(runtime.LumnoOverlaySuggestionsViewReact).toBe(
       runtime.LumnoOverlaySuggestionsView
     );
+    expect(
+      runtime.LumnoOverlayTabSwitcherView?.implementation
+    ).toBe('react');
+    expect(runtime.LumnoOverlayTabSwitcherViewReact).toBe(
+      runtime.LumnoOverlayTabSwitcherView
+    );
+  });
+
+  it('reuses installed APIs when the injected bundle runs again', async () => {
+    runtime.LumnoOverlayShell = {
+      createOverlayMount: vi.fn()
+    };
+    await import('./react-islands-entry');
+    const firstIslands = runtime.LumnoOverlayReactIslands;
+    const firstShell = runtime.LumnoOverlayShell;
+
+    vi.resetModules();
+    await import('./react-islands-entry');
+
+    expect(runtime.LumnoOverlayReactIslands?.searchInput).toBe(
+      firstIslands?.searchInput
+    );
+    expect(runtime.LumnoOverlayReactIslands?.suggestions).toBe(
+      firstIslands?.suggestions
+    );
+    expect(runtime.LumnoOverlayReactIslands?.tabSwitcher).toBe(
+      firstIslands?.tabSwitcher
+    );
+    expect(runtime.LumnoOverlayShell).toBe(firstShell);
   });
 });

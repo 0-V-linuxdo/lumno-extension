@@ -57,6 +57,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      contract, stable keyed rows for delayed completion, favicon/theme continuity,
      keyboard selection, modifier-aware actions, history removal, and open-tab rows
      while the injected adapter retains query ranking and browser navigation.
+   - Overlay Tab Switcher now renders its recent-tab cards, thumbnail/fallback
+     layers, favicons, labels, selection state, and live thumbnail crossfades in
+     React. The browser adapter retains command-key timing, viewport/zoom placement,
+     theme detection, outside dismissal, and tab activation messaging.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings
@@ -111,8 +115,8 @@ React replaces bounded UI surfaces behind their current public contracts.
      storage and browser adapters.
    - Share typed UI primitives only after at least two islands need the same behavior.
 5. **High-coupling surfaces**
-   - Overlay shell and result ownership are established; migrate its tab switcher
-     behind the existing controller contract before removing legacy renderers.
+   - Overlay shell, result, and tab-switcher ownership are established; remove their
+     proven legacy render branches after the remaining New Tab surface migration.
    - Migrate remaining New Tab orchestration and wallpaper controls last.
    - Preserve hotkeys, IME handling, Picture-in-Picture ownership, and page-bridge
      boundaries with end-to-end tests before switching ownership to React.
