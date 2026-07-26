@@ -53,6 +53,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      including row actions, inline editing, match-mode feedback, and confirmation
      states. URL normalization, persistence, and New Tab refresh notifications
      remain in the Options adapter.
+   - Options Site Search Lists as three controlled custom, built-in search, and
+     built-in AI provider views. React owns provider rows, inline editors, duplicate
+     affordances, empty states, and confirmations while the adapter keeps provider
+     normalization, persistence, localization mapping, and remote refreshes.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

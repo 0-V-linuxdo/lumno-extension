@@ -36,6 +36,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsShortcutReferenceReact?: {
     implementation?: string;
   };
+  LumnoOptionsSiteSearchList?: {
+    implementation?: string;
+  };
+  LumnoOptionsSiteSearchListReact?: {
+    implementation?: string;
+  };
   LumnoOptionsThemePicker?: {
     implementation?: string;
   };
@@ -65,6 +71,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsSettingsNavigationReact;
   delete runtime.LumnoOptionsShortcutReference;
   delete runtime.LumnoOptionsShortcutReferenceReact;
+  delete runtime.LumnoOptionsSiteSearchList;
+  delete runtime.LumnoOptionsSiteSearchListReact;
   delete runtime.LumnoOptionsThemePicker;
   delete runtime.LumnoOptionsThemePickerReact;
   delete runtime.LumnoOptionsToast;
@@ -106,6 +114,10 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsShortcutReferenceReact).toBe(
       runtime.LumnoOptionsShortcutReference
     );
+    expect(runtime.LumnoOptionsSiteSearchList?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsSiteSearchListReact).toBe(
+      runtime.LumnoOptionsSiteSearchList
+    );
     expect(runtime.LumnoOptionsThemePicker?.implementation).toBe('react');
     expect(runtime.LumnoOptionsThemePickerReact).toBe(
       runtime.LumnoOptionsThemePicker
@@ -118,6 +130,7 @@ describe('Options React islands entry', () => {
       segmentedControl: runtime.LumnoOptionsSegmentedControl,
       settingsNavigation: runtime.LumnoOptionsSettingsNavigation,
       shortcutReference: runtime.LumnoOptionsShortcutReference,
+      siteSearchList: runtime.LumnoOptionsSiteSearchList,
       themePicker: runtime.LumnoOptionsThemePicker,
       toast: runtime.LumnoOptionsToast
     });
@@ -137,6 +150,7 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsSegmentedControl).toBeUndefined();
     expect(runtime.LumnoOptionsSettingsNavigation).toBeUndefined();
     expect(runtime.LumnoOptionsShortcutReference).toBeUndefined();
+    expect(runtime.LumnoOptionsSiteSearchList).toBeUndefined();
     expect(runtime.LumnoOptionsThemePicker).toBeUndefined();
     expect(runtime.LumnoOptionsToast).toBeUndefined();
     expect(runtime.LumnoOptionsReactIslands).toBeUndefined();

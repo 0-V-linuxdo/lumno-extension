@@ -139,6 +139,7 @@
   const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
   const optionsSettingsNavigationApi = globalThis.LumnoOptionsSettingsNavigation || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
+  const optionsSiteSearchListApi = globalThis.LumnoOptionsSiteSearchList || {};
   const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
     ? optionsToastApi.createToastController(toastElement, {
@@ -214,6 +215,28 @@
           onRemove: handleFaviconBlacklistRemove
         })
       : null;
+  function createSiteSearchListController(host, kind) {
+    return typeof optionsSiteSearchListApi.createSiteSearchListController === 'function'
+      ? optionsSiteSearchListApi.createSiteSearchListController(host, {
+          kind,
+          onLocateDuplicate: locateBuiltinSiteSearchProvider,
+          onRemove: removeSiteSearchItem,
+          onSave: handleSiteSearchProviderSave
+        })
+      : null;
+  }
+  const siteSearchCustomListController = createSiteSearchListController(
+    siteSearchCustomList,
+    'custom'
+  );
+  const siteSearchBuiltinListController = createSiteSearchListController(
+    siteSearchBuiltinList,
+    'builtin-search'
+  );
+  const siteSearchAiBuiltinListController = createSiteSearchListController(
+    siteSearchAiBuiltinList,
+    'builtin-ai'
+  );
 
   // 使用系统字体，避免外链字体依赖。
   if (!panel || themeButtons.length === 0 || tabButtons.length === 0) {
@@ -2113,7 +2136,7 @@
   function removeSiteSearchItem(key, isBuiltin) {
     if (isBuiltin) {
       disabledSiteSearchKeys.add(key.toLowerCase());
-      saveDisabledSiteSearchKeys(disabledSiteSearchKeys).then(() => {
+      return saveDisabledSiteSearchKeys(disabledSiteSearchKeys).then(() => {
         refreshSiteSearchProviders();
         if (editingSiteSearchKey === key) {
           resetSiteSearchForm();
@@ -2122,10 +2145,9 @@
       }).catch(() => {
         showToast(getMessage('toast_error', '操作失败，请重试'), true);
       });
-      return;
     }
     customSiteSearchProviders = customSiteSearchProviders.filter((item) => String(item.key || '') !== key);
-    saveCustomSiteSearchProviders(customSiteSearchProviders).then(() => {
+    return saveCustomSiteSearchProviders(customSiteSearchProviders).then(() => {
       refreshSiteSearchProviders();
       if (editingSiteSearchKey === key) {
         resetSiteSearchForm();
@@ -4455,8 +4477,272 @@
   setSiteSearchFormExpanded(false);
   setBlacklistFormExpanded(false);
 
+  function getLocalizedBuiltinProviderName(item) {
+    if (!item || item._xIsCustom) {
+      return item && (item.name || item.key) ? (item.name || item.key) : '';
+    }
+    const mapping = typeof SEARCH_UTILS.getSiteSearchProviderDisplayNameMessage === 'function'
+      ? SEARCH_UTILS.getSiteSearchProviderDisplayNameMessage(item)
+      : null;
+    if (!mapping) {
+      return item.name || item.key;
+    }
+    return getMessage(mapping.messageKey, mapping.fallback);
+  }
+
+  function getSiteSearchItemIconUrl(item) {
+    if (!item) {
+      return '';
+    }
+    if (item.icon) {
+      return String(item.icon || '').trim();
+    }
+    if (item.iconUrl) {
+      return String(item.iconUrl || '').trim();
+    }
+    try {
+      const template = normalizeSiteSearchTemplate(String(item.template || '').trim());
+      const url = template.replace(/\{query\}/g, 'test');
+      const hostname = new URL(url).hostname;
+      return hostname
+        ? `https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=${encodeURIComponent(`https://${hostname}/`)}&size=64`
+        : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function getSiteSearchListCopy() {
+    return {
+      aliasLabel: getMessage('shortcuts_label_alias', '别名'),
+      aliasPlaceholder: getMessage('shortcuts_placeholder_alias', '选填，例如 小破站、油管等'),
+      cancelLabel: getMessage('shortcuts_cancel', '取消'),
+      confirmLabel: getMessage('confirm_ok', '确认'),
+      confirmMessage: getMessage('confirm_remove_item', '确认移除该项？'),
+      confirmMessageKey: 'confirm_remove_item',
+      editLabel: getMessage('shortcuts_edit', '编辑'),
+      keyLabel: getMessage('shortcuts_label_key', '触发词'),
+      keyPlaceholder: getMessage(
+        'shortcuts_placeholder_required',
+        '必填，如有多个用英文逗号分隔，如 jd,bili'
+      ),
+      nameLabel: getMessage('shortcuts_label_name', '显示名称'),
+      namePlaceholder: getMessage(
+        'shortcuts_placeholder_optional_default',
+        '选填，默认使用触发词'
+      ),
+      removeLabel: getMessage('shortcuts_remove', '移除'),
+      saveLabel: getMessage('shortcuts_save', '保存修改'),
+      templateHelp: getMessage(
+        'shortcuts_template_help',
+        '1.打开你想添加的网站\n2.输入任一搜索词，触发搜索\n3.将搜索结果页面 url 粘贴在此处\n4.将关键词替换为{query}'
+      ),
+      templateLabel: getMessage('shortcuts_label_template', '搜索模板')
+    };
+  }
+
+  function getSiteSearchProviderItemModel(item, builtinTemplateSet) {
+    const normalizedTemplate = normalizeSiteSearchTemplate(
+      String(item && item.template ? item.template : '').trim()
+    );
+    const isCustom = Boolean(item && item._xIsCustom);
+    const duplicate = isCustom && normalizedTemplate && builtinTemplateSet.has(normalizedTemplate);
+    return {
+      aliasesText: Array.isArray(item.aliases) ? item.aliases.join(',') : '',
+      badgeText: isCustom
+        ? getMessage('shortcuts_badge_custom', '自定义')
+        : isAiSiteSearchProvider(item)
+          ? getMessage('shortcuts_badge_ai', 'AI')
+          : getMessage('shortcuts_badge_builtin', '内置'),
+      duplicateLabel: duplicate
+        ? getMessage('shortcuts_duplicate_tag', '与内置重复')
+        : '',
+      duplicateTemplate: duplicate ? normalizedTemplate : '',
+      duplicateTooltip: duplicate
+        ? getMessage('shortcuts_duplicate_action', '定位内置项')
+        : '',
+      iconUrl: getSiteSearchItemIconUrl(item),
+      id: `${isCustom ? 'custom' : 'builtin'}:${String(item.key || '')}`,
+      isBuiltin: !isCustom,
+      key: String(item.key || ''),
+      meta: `${item.key || ''} · ${item.template || ''}`,
+      name: getLocalizedBuiltinProviderName(item),
+      normalizedTemplate,
+      template: String(item.template || ''),
+      templateEditable: isCustom
+    };
+  }
+
+  function renderSiteSearchListController(
+    controller,
+    items,
+    placeholder,
+    builtinTemplateSet
+  ) {
+    if (!controller || typeof controller.render !== 'function') {
+      return false;
+    }
+    controller.render({
+      copy: getSiteSearchListCopy(),
+      items: (Array.isArray(items) ? items : []).map(
+        (item) => getSiteSearchProviderItemModel(item, builtinTemplateSet)
+      ),
+      placeholder: placeholder || ''
+    });
+    return true;
+  }
+
+  function locateBuiltinSiteSearchProvider(normalizedTemplate) {
+    const targetRow = Array.from(document.querySelectorAll(
+      '[data-type="builtin"][data-template]'
+    )).find((row) => row.getAttribute('data-template') === normalizedTemplate);
+    if (!targetRow) {
+      return;
+    }
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetRow.removeAttribute('data-flash');
+    void targetRow.offsetWidth;
+    targetRow.setAttribute('data-flash', 'true');
+    const onFlashEnd = () => {
+      targetRow.removeAttribute('data-flash');
+      targetRow.removeEventListener('animationend', onFlashEnd);
+    };
+    targetRow.addEventListener('animationend', onFlashEnd);
+  }
+
+  function handleSiteSearchProviderSave(key, isBuiltin, draft) {
+    suspendSiteSearchRefresh(260);
+    const item = isBuiltin
+      ? defaultSiteSearchProviders.find((entry) => String(entry.key || '') === key)
+      : customSiteSearchProviders.find((entry) => String(entry.key || '') === key);
+    if (!item) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('toast_error', '操作失败，请重试')
+      });
+    }
+    const nextKeyRaw = String(draft && draft.key ? draft.key : '').trim();
+    if (!nextKeyRaw) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('shortcuts_error_key', '请填写触发词')
+      });
+    }
+    if (/\s/.test(nextKeyRaw)) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('shortcuts_error_key_space', '触发词不能包含空格')
+      });
+    }
+    const template = normalizeSiteSearchTemplate(
+      String(draft && draft.template ? draft.template : '').trim()
+    );
+    const isBuiltinAiProvider = isBuiltin && isAiSiteSearchProvider(item);
+    if (!template || (!isBuiltinAiProvider && !template.includes('{query}'))) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('toast_error_template', '搜索模板必须包含 {query}')
+      });
+    }
+    const aliases = normalizeAliases(draft && draft.aliases ? draft.aliases : '');
+    const normalizedKey = nextKeyRaw.toLowerCase();
+    let next = customSiteSearchProviders.filter(
+      (entry) => String(entry.key || '').toLowerCase() !== normalizedKey
+    );
+    const previousKey = String(item.key || '').toLowerCase();
+    if (previousKey && previousKey !== normalizedKey) {
+      next = next.filter(
+        (entry) => String(entry.key || '').toLowerCase() !== previousKey
+      );
+    }
+    const shouldDisable = !isBuiltin &&
+      isDuplicateTemplate(template, defaultSiteSearchProviders);
+    const nextItem = normalizeSiteSearchProvider({
+      ...item,
+      key: nextKeyRaw,
+      name: String(draft && draft.name ? draft.name : '').trim() || nextKeyRaw,
+      template,
+      aliases,
+      disabled: shouldDisable,
+      disabledReason: shouldDisable ? 'duplicate' : ''
+    });
+    if (!nextItem) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('toast_error', '操作失败，请重试')
+      });
+    }
+    next.unshift(nextItem);
+    disabledSiteSearchKeys.delete(normalizedKey);
+    return Promise.all([
+      saveCustomSiteSearchProviders(next),
+      saveDisabledSiteSearchKeys(disabledSiteSearchKeys)
+    ]).then(() => {
+      customSiteSearchProviders = next;
+      renderSiteSearchList();
+      setTimeout(() => {
+        showToast(getMessage('toast_saved', '已保存'), false);
+      }, 220);
+      return { ok: true };
+    }).catch(() => {
+      const error = getMessage('toast_error', '操作失败，请重试');
+      showToast(error, true);
+      return { ok: false, error };
+    });
+  }
+
   function renderSiteSearchList() {
     if (!siteSearchCustomList || !siteSearchBuiltinList) {
+      return;
+    }
+    const customKeys = new Set(customSiteSearchProviders.map((item) => String(item.key || '').toLowerCase()));
+    const displayDefaults = defaultSiteSearchProviders.filter((item) => {
+      const key = String(item.key || '').toLowerCase();
+      return key && !customKeys.has(key) && !disabledSiteSearchKeys.has(key);
+    });
+    const displayAiDefaults = displayDefaults.filter((item) => isAiSiteSearchProvider(item));
+    const displaySearchDefaults = displayDefaults.filter((item) => !isAiSiteSearchProvider(item));
+    const builtinTemplateSet = new Set(defaultSiteSearchProviders.map((item) => normalizeSiteSearchTemplate(String(item.template || '').trim())).filter(Boolean));
+    const customItems = customSiteSearchProviders.map((item) => ({
+      ...item,
+      _xIsCustom: true
+    }));
+    const searchItems = displaySearchDefaults.map((item) => ({
+      ...item,
+      _xIsCustom: false
+    }));
+    const aiItems = displayAiDefaults.map((item) => ({
+      ...item,
+      _xIsCustom: false
+    }));
+    const renderedWithReact = [
+      renderSiteSearchListController(
+        siteSearchCustomListController,
+        customItems,
+        '',
+        builtinTemplateSet
+      ),
+      renderSiteSearchListController(
+        siteSearchBuiltinListController,
+        searchItems,
+        getMessage('shortcuts_empty_builtin', '暂无内置站内搜索'),
+        builtinTemplateSet
+      ),
+      siteSearchAiBuiltinList
+        ? renderSiteSearchListController(
+            siteSearchAiBuiltinListController,
+            aiItems,
+            getMessage('shortcuts_empty_ai', '暂无内置 AI'),
+            builtinTemplateSet
+          )
+        : true
+    ].every(Boolean);
+    if (renderedWithReact) {
+      initTooltips();
+      if (pendingOptionsScrollTarget &&
+          scrollToOptionsTarget(pendingOptionsScrollTarget, { behavior: 'auto' })) {
+        pendingOptionsScrollTarget = '';
+      }
       return;
     }
     destroyPopconfirmControllersWithin(siteSearchCustomList);
@@ -4468,47 +4754,6 @@
       siteSearchAiBuiltinList.innerHTML = '';
     }
     const builtinRowByTemplate = new Map();
-    const customKeys = new Set(customSiteSearchProviders.map((item) => String(item.key || '').toLowerCase()));
-    const displayDefaults = defaultSiteSearchProviders.filter((item) => {
-      const key = String(item.key || '').toLowerCase();
-      return key && !customKeys.has(key) && !disabledSiteSearchKeys.has(key);
-    });
-    const displayAiDefaults = displayDefaults.filter((item) => isAiSiteSearchProvider(item));
-    const displaySearchDefaults = displayDefaults.filter((item) => !isAiSiteSearchProvider(item));
-    const builtinTemplateSet = new Set(defaultSiteSearchProviders.map((item) => normalizeSiteSearchTemplate(String(item.template || '').trim())).filter(Boolean));
-    function getLocalizedBuiltinProviderName(item) {
-      if (!item || item._xIsCustom) {
-        return item && (item.name || item.key) ? (item.name || item.key) : '';
-      }
-      const mapping = typeof SEARCH_UTILS.getSiteSearchProviderDisplayNameMessage === 'function'
-        ? SEARCH_UTILS.getSiteSearchProviderDisplayNameMessage(item)
-        : null;
-      if (!mapping) {
-        return item.name || item.key;
-      }
-      return getMessage(mapping.messageKey, mapping.fallback);
-    }
-    function getSiteSearchItemIconUrl(item) {
-      if (!item) {
-        return '';
-      }
-      if (item.icon) {
-        return String(item.icon || '').trim();
-      }
-      if (item.iconUrl) {
-        return String(item.iconUrl || '').trim();
-      }
-      try {
-        const template = normalizeSiteSearchTemplate(String(item.template || '').trim());
-        const url = template.replace(/\{query\}/g, 'test');
-        const hostname = new URL(url).hostname;
-        return hostname
-          ? `https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=${encodeURIComponent(`https://${hostname}/`)}&size=64`
-          : '';
-      } catch (error) {
-        return '';
-      }
-    }
     const renderItem = (item, list) => {
       const row = document.createElement('div');
       row.className = '_x_extension_shortcut_item_2024_unique_';
@@ -5491,6 +5736,10 @@
   }
 
   function handleSiteSearchListClick(event) {
+      if (event.currentTarget &&
+          event.currentTarget.getAttribute('data-react-island') === 'options-site-search-list') {
+        return;
+      }
       const target = event.target;
       if (!target) {
         return;

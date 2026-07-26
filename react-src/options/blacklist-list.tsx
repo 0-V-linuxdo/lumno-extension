@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   createReactRootController,
   type ReactRootController
 } from './root-controller';
+import { InlinePopconfirm } from './inline-popconfirm';
 
 export type BlacklistMatchMode = 'exact' | 'prefix' | 'suffix';
 
@@ -60,84 +61,6 @@ export interface BlacklistListControllerOptions {
 
 export type BlacklistListController =
   ReactRootController<BlacklistListRenderModel>;
-
-function DeleteAction({
-  copy,
-  itemKey,
-  onRemove
-}: {
-  copy: BlacklistListCopyModel;
-  itemKey: string;
-  onRemove(key: string): void | Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    const onDocumentPointerDown = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', onDocumentPointerDown);
-    return () => document.removeEventListener('pointerdown', onDocumentPointerDown);
-  }, [open]);
-
-  return (
-    <div className="_x_extension_popconfirm_wrap_2024_unique_" ref={wrapRef}>
-      <button
-        aria-label={copy.removeLabel}
-        className="_x_extension_shortcut_remove_2024_unique_"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen((value) => !value);
-        }}
-        type="button"
-      >
-        <i aria-hidden="true" className="ri-icon ri-size-14 ri-delete-bin-4-line" />
-      </button>
-      <div
-        className="_x_extension_popconfirm_2024_unique_"
-        data-open={open ? 'true' : 'false'}
-      >
-        <div
-          className="_x_extension_popconfirm_text_2024_unique_"
-          data-i18n={copy.confirmMessageKey}
-        >
-          {copy.confirmMessage}
-        </div>
-        <div className="_x_extension_popconfirm_actions_2024_unique_">
-          <button
-            className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
-            data-i18n="confirm_cancel"
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen(false);
-            }}
-            type="button"
-          >
-            {copy.cancelLabel}
-          </button>
-          <button
-            className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_"
-            data-i18n="confirm_ok"
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen(false);
-              void onRemove(itemKey);
-            }}
-            type="button"
-          >
-            {copy.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function getInputPresentation(
   modes: BlacklistMatchMode[],
@@ -335,10 +258,17 @@ function BlacklistList({
                     <i aria-hidden="true" className="ri-icon ri-size-14 ri-edit-line" />
                   </button>
                 ) : null}
-                <DeleteAction
-                  copy={model.copy}
-                  itemKey={item.key}
-                  onRemove={onRemove}
+                <InlinePopconfirm
+                  copy={{
+                    cancelLabel: model.copy.cancelLabel,
+                    confirmLabel: model.copy.confirmLabel,
+                    message: model.copy.confirmMessage,
+                    messageKey: model.copy.confirmMessageKey
+                  }}
+                  onConfirm={() => onRemove(item.key)}
+                  triggerAriaLabel={model.copy.removeLabel}
+                  triggerClassName="_x_extension_shortcut_remove_2024_unique_"
+                  triggerIconClass="ri-icon ri-size-14 ri-delete-bin-4-line"
                 />
               </div>
             </div>
