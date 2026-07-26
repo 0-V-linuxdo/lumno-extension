@@ -17,6 +17,7 @@ import {
 } from './suggestions';
 import { createToastApi, type LegacyToastApi } from './toast';
 import { createWordmarkApi } from './wordmark';
+import { createPageStructureApi } from './page-structure';
 import { createSearchInputApi } from '../shared/search-input';
 
 const runtime = globalThis as typeof globalThis & {
@@ -36,6 +37,7 @@ const runtime = globalThis as typeof globalThis & {
     suggestions: ReturnType<typeof createSuggestionsViewApi>;
     toast: ReturnType<typeof createToastApi>;
     wordmark: ReturnType<typeof createWordmarkApi>;
+    pageStructure: ReturnType<typeof createPageStructureApi>;
   };
   LumnoNewtabBookmarksView?: LegacyBookmarksApi;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
@@ -57,6 +59,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabToastReact?: ReturnType<typeof createToastApi>;
   LumnoNewtabWordmark?: ReturnType<typeof createWordmarkApi>;
   LumnoNewtabWordmarkReact?: ReturnType<typeof createWordmarkApi>;
+  LumnoNewtabPageStructure?: ReturnType<typeof createPageStructureApi>;
+  LumnoNewtabPageStructureReact?: ReturnType<typeof createPageStructureApi>;
   LumnoSearchInputUI?: ReturnType<typeof createSearchInputApi>;
   LumnoSearchInputUIReact?: ReturnType<typeof createSearchInputApi>;
   _x_extension_createSearchInput_2024_unique_?: ReturnType<
@@ -82,6 +86,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const suggestionsApi = createSuggestionsViewApi(legacySuggestionsApi);
   const toastApi = createToastApi(legacyToastApi);
   const wordmarkApi = createWordmarkApi();
+  const pageStructureApi = createPageStructureApi();
   const searchInputApi = createSearchInputApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
@@ -104,6 +109,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabToast = toastApi;
   runtime.LumnoNewtabWordmarkReact = wordmarkApi;
   runtime.LumnoNewtabWordmark = wordmarkApi;
+  runtime.LumnoNewtabPageStructureReact = pageStructureApi;
+  runtime.LumnoNewtabPageStructure = pageStructureApi;
   runtime.LumnoSearchInputUIReact = searchInputApi;
   runtime.LumnoSearchInputUI = searchInputApi;
   runtime._x_extension_createSearchInput_2024_unique_ =
@@ -119,7 +126,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     shortcuts: shortcutsApi,
     suggestions: suggestionsApi,
     toast: toastApi,
-    wordmark: wordmarkApi
+    wordmark: wordmarkApi,
+    pageStructure: pageStructureApi
   });
 
   if (bootstrapState) {

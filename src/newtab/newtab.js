@@ -200,6 +200,7 @@
   const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
   const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
   const NEWTAB_WORDMARK = globalThis.LumnoNewtabWordmark || {};
+  const NEWTAB_PAGE_STRUCTURE = globalThis.LumnoNewtabPageStructure || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -246,7 +247,8 @@
       typeof NEWTAB_WALLPAPER_LOCAL_STORE.createWallpaperLocalStore !== 'function' ||
       typeof NEWTAB_WALLPAPER_ADAPTIVE_TONE.createWallpaperAdaptiveTone !== 'function' ||
       typeof NEWTAB_WALLPAPER_EFFECTS.createWallpaperEffects !== 'function' ||
-      typeof NEWTAB_WALLPAPER.createWallpaperRuntime !== 'function') {
+      typeof NEWTAB_WALLPAPER.createWallpaperRuntime !== 'function' ||
+      typeof NEWTAB_PAGE_STRUCTURE.createPageStructure !== 'function') {
     console.warn('Lumno: newtab helpers not available.');
     return;
   }
@@ -6299,15 +6301,16 @@
     navigateToUrl(targetUrl);
   }
 
-  const suggestionsContainer = document.createElement('div');
-  suggestionsContainer.id = '_x_extension_newtab_suggestions_container_2024_unique_';
-  suggestionsContainer.setAttribute('data-visible', 'false');
-  const suggestionsSurface = document.createElement('div');
-  suggestionsSurface.id = '_x_extension_newtab_suggestions_surface_2026_unique_';
-  suggestionsSurface.setAttribute('data-visible', 'false');
-  const suggestionsOutline = document.createElement('div');
-  suggestionsOutline.id = '_x_extension_newtab_suggestions_outline_2026_unique_';
-  suggestionsOutline.setAttribute('data-visible', 'false');
+  const pageStructureRuntime = NEWTAB_PAGE_STRUCTURE.createPageStructure({
+    documentObj: document,
+    getRiSvg
+  });
+  const suggestionsContainer = pageStructureRuntime.suggestions.container;
+  const suggestionsSurface = pageStructureRuntime.suggestions.surface;
+  const suggestionsOutline = pageStructureRuntime.suggestions.outline;
+  const bookmarkSection = pageStructureRuntime.bookmark.section;
+  const recentSection = pageStructureRuntime.recent.section;
+  searchLayer = pageStructureRuntime.searchLayer;
   const topActionTooltipController = globalThis.LumnoTooltip &&
       typeof globalThis.LumnoTooltip.createController === 'function'
     ? globalThis.LumnoTooltip.createController({
@@ -8140,13 +8143,10 @@
   }
 
   function createShortcutsSection() {
-    shortcutSection = document.createElement('section');
-    shortcutSection.id = '_x_extension_newtab_shortcuts_2026_unique_';
-    shortcutSection.className = 'x-nt-shortcuts-section';
+    shortcutSection = pageStructureRuntime.shortcut.section;
     shortcutSection.setAttribute('aria-label', t('newtab_shortcuts_section_label', 'Shortcuts'));
 
-    shortcutGrid = document.createElement('div');
-    shortcutGrid.className = 'x-nt-shortcuts-grid';
+    shortcutGrid = pageStructureRuntime.shortcut.grid;
 
     shortcutsView = NEWTAB_SHORTCUTS_VIEW.createShortcutsView({
       grid: shortcutGrid,
@@ -8184,7 +8184,6 @@
     shortcutGrid.addEventListener('pointerup', handleShortcutDragPointerUp);
     shortcutGrid.addEventListener('pointercancel', handleShortcutDragPointerCancel);
     shortcutGrid.addEventListener('pointerleave', resetShortcutDockHover);
-    shortcutSection.appendChild(shortcutGrid);
     updateShortcutLanguageStrings();
   }
 
@@ -8211,18 +8210,12 @@
   createShortcutsSection();
   shortcutDialogController = createShortcutDialogComponent();
 
-  const bookmarkSection = document.createElement('section');
-  bookmarkSection.id = '_x_extension_newtab_bookmarks_2024_unique_';
   setContentSectionVisible(bookmarkSection, false);
-  const bookmarkHeader = document.createElement('div');
-  bookmarkHeader.className = 'x-nt-bookmarks-header';
-  bookmarkTitleWrap = document.createElement('div');
-  bookmarkTitleWrap.className = 'x-nt-bookmarks-title-wrap';
-  bookmarkHeading = document.createElement('div');
-  bookmarkHeading.className = 'x-nt-bookmarks-heading';
+  const bookmarkHeader = pageStructureRuntime.bookmark.header;
+  bookmarkTitleWrap = pageStructureRuntime.bookmark.titleWrap;
+  bookmarkHeading = pageStructureRuntime.bookmark.heading;
   updateBookmarkHeading();
-  bookmarkBreadcrumb = document.createElement('div');
-  bookmarkBreadcrumb.className = 'x-nt-bookmarks-breadcrumb';
+  bookmarkBreadcrumb = pageStructureRuntime.bookmark.breadcrumb;
   bookmarkBreadcrumb.style.setProperty('display', 'none');
   bookmarkModeMenu = createSectionModeSelect({
     id: '_x_extension_newtab_bookmark_mode_2026_unique_',
@@ -8233,23 +8226,10 @@
     onAction: handleBookmarkModeMenuAction,
     getOptions: getBookmarkViewModeOptions
   });
-  const bookmarkPager = document.createElement('div');
-  bookmarkPager.className = 'x-nt-bookmarks-pager';
-  bookmarkPagerPrevButton = document.createElement('button');
-  bookmarkPagerPrevButton.type = 'button';
-  bookmarkPagerPrevButton.className = 'x-nt-bookmarks-pager-btn';
-  bookmarkPagerPrevButton.innerHTML = getRiSvg('ri-arrow-left-s-line', 'ri-size-16');
-  bookmarkPagerNextButton = document.createElement('button');
-  bookmarkPagerNextButton.type = 'button';
-  bookmarkPagerNextButton.className = 'x-nt-bookmarks-pager-btn';
-  bookmarkPagerNextButton.innerHTML = getRiSvg('ri-arrow-right-s-line', 'ri-size-16');
-  bookmarkOpenManagerButton = document.createElement('button');
-  bookmarkOpenManagerButton.type = 'button';
-  bookmarkOpenManagerButton.className = 'x-nt-bookmarks-pager-btn';
-  bookmarkOpenManagerButton.innerHTML = getRiSvg('ri-bookmark-line', 'ri-size-16');
-  bookmarkPager.appendChild(bookmarkPagerPrevButton);
-  bookmarkPager.appendChild(bookmarkPagerNextButton);
-  bookmarkPager.appendChild(bookmarkOpenManagerButton);
+  const bookmarkPager = pageStructureRuntime.bookmark.pager;
+  bookmarkPagerPrevButton = pageStructureRuntime.bookmark.previousButton;
+  bookmarkPagerNextButton = pageStructureRuntime.bookmark.nextButton;
+  bookmarkOpenManagerButton = pageStructureRuntime.bookmark.managerButton;
   bindBookmarkPagerTooltip(
     bookmarkPagerPrevButton,
     () => bookmarkPagerPrevButton.getAttribute('data-tooltip') || t('bookmarks_page_prev', '上一页')
@@ -8262,13 +8242,9 @@
     bookmarkOpenManagerButton,
     () => bookmarkOpenManagerButton.getAttribute('data-tooltip') || t('bookmarks_open_manager', '打开书签管理页')
   );
-  bookmarkTitleWrap.appendChild(bookmarkHeading);
   if (bookmarkModeMenu) {
-    bookmarkTitleWrap.appendChild(bookmarkModeMenu.control);
+    bookmarkTitleWrap.insertBefore(bookmarkModeMenu.control, bookmarkBreadcrumb);
   }
-  bookmarkTitleWrap.appendChild(bookmarkBreadcrumb);
-  bookmarkHeader.appendChild(bookmarkTitleWrap);
-  bookmarkHeader.appendChild(bookmarkPager);
   bookmarkHeading.addEventListener('click', () => {
     if (!bookmarkHeading._xCanNavigateRoot) {
       return;
@@ -8287,8 +8263,7 @@
   });
   updateBookmarkPagerLabels();
   updateBookmarkBreadcrumb();
-  bookmarkGrid = document.createElement('div');
-  bookmarkGrid.id = '_x_extension_newtab_bookmarks_grid_2024_unique_';
+  bookmarkGrid = pageStructureRuntime.bookmark.grid;
   bookmarkGrid.setAttribute('data-view-mode', currentBookmarkViewMode);
   bookmarkGrid.addEventListener('pointerdown', handleBookmarkDragPointerDown, true);
   applyBookmarkGridColumns();
@@ -8368,8 +8343,6 @@
     shouldKeepOpenForExternalNode: isBookmarkContextMenuNode,
     getViewportTopPadding: getBookmarkCascadeViewportTopPaddingPx
   });
-  bookmarkSection.appendChild(bookmarkHeader);
-  bookmarkSection.appendChild(bookmarkGrid);
   bookmarkTopbarRuntime = NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar({
     documentObj: document,
     windowObj: window,
@@ -8386,8 +8359,6 @@
   let bookmarkDataDirty = true;
   let bookmarkLoadedOnce = false;
 
-  const recentSection = document.createElement('section');
-  recentSection.id = '_x_extension_newtab_recent_sites_2024_unique_';
   setContentSectionVisible(recentSection, false);
   recentSection.addEventListener('pointerenter', (event) => {
     if (!event || event.pointerType !== 'mouse') {
@@ -8408,10 +8379,8 @@
     recentMouseInsideSection = false;
     hideTopActionTooltip();
   });
-  recentHeader = document.createElement('div');
-  recentHeader.className = 'x-nt-recent-header-bar';
-  recentHeading = document.createElement('div');
-  recentHeading.className = 'x-nt-recent-heading';
+  recentHeader = pageStructureRuntime.recent.header;
+  recentHeading = pageStructureRuntime.recent.heading;
   updateRecentHeading();
   recentModeMenu = createSectionModeSelect({
     id: '_x_extension_newtab_recent_mode_2026_unique_',
@@ -8434,8 +8403,7 @@
       }
     ]
   });
-  recentGrid = document.createElement('div');
-  recentGrid.id = '_x_extension_newtab_recent_sites_grid_2024_unique_';
+  recentGrid = pageStructureRuntime.recent.grid;
   applyRecentGridColumns();
   recentSitesView = NEWTAB_RECENT_VIEW.createRecentSitesView({
     documentObj: document,
@@ -8474,12 +8442,9 @@
     togglePinned: togglePinnedRecentSite,
     hideTemporarily: hideRecentSiteTemporarily
   });
-  recentHeader.appendChild(recentHeading);
   if (recentModeMenu) {
     recentHeader.appendChild(recentModeMenu.control);
   }
-  recentSection.appendChild(recentHeader);
-  recentSection.appendChild(recentGrid);
   let recentRenderSignature = '';
   let recentLoadToken = 0;
   let recentDataDirty = true;
@@ -13645,6 +13610,12 @@
     inputId: '_x_extension_newtab_search_input_2024_unique_',
     iconId: '_x_extension_newtab_search_icon_2024_unique_',
     placeholder: t('search_placeholder', defaultPlaceholderText),
+    modeBadge: {
+      id: '_x_extension_newtab_mode_badge_2024_unique_',
+      className: 'x-lumno-search-input-mode__badge',
+      surface: 'newtab',
+      visible: false
+    },
     containerStyleOverrides: {
       'border-radius': '24px',
       'background': 'transparent',
@@ -14297,12 +14268,7 @@
     }
   }, true);
   window.addEventListener('pointerdown', handleBackgroundPointerFocus, true);
-  modeBadge = document.createElement('div');
-  modeBadge.id = '_x_extension_newtab_mode_badge_2024_unique_';
-  modeBadge.className = 'x-lumno-search-input-mode__badge';
-  modeBadge.setAttribute('data-surface', 'newtab');
-  modeBadge.setAttribute('data-visible', 'false');
-  inputParts.container.appendChild(modeBadge);
+  modeBadge = inputParts.modeBadge;
   const searchInput = inputParts.input;
   searchInputRef = searchInput;
   const rightIcon = inputParts.rightIcon;
@@ -14427,8 +14393,6 @@
   }
   applyNewtabWordmarkVisibility();
   applyWordmarkThemeAppearance();
-  searchLayer = document.createElement('div');
-  searchLayer.id = '_x_extension_newtab_search_layer_2024_unique_';
   updateNoticeController = typeof UPDATE_NOTICE.createUpdateNotice === 'function'
     ? UPDATE_NOTICE.createUpdateNotice({
       documentObj: document,

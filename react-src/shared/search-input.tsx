@@ -12,6 +12,12 @@ export interface SearchInputConfig {
   iconStyleOverrides?: StyleOverrides;
   inputId?: string;
   inputStyleOverrides?: StyleOverrides;
+  modeBadge?: {
+    className?: string;
+    id?: string;
+    surface?: string;
+    visible?: boolean;
+  };
   onBlur?(event: Event): void;
   onFocus?(event: Event): void;
   onInput?(event: Event): void;
@@ -35,6 +41,7 @@ export interface SearchInputParts {
   divider: HTMLDivElement;
   icon: HTMLDivElement;
   input: HTMLInputElement;
+  modeBadge: HTMLDivElement | null;
   rightIcon: HTMLButtonElement;
 }
 
@@ -214,6 +221,16 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
           type="button"
         />
       )}
+      {config.modeBadge ? (
+        <div
+          className={
+            config.modeBadge.className || 'x-lumno-search-input-mode__badge'
+          }
+          data-surface={config.modeBadge.surface || 'shared'}
+          data-visible={config.modeBadge.visible ? 'true' : 'false'}
+          id={config.modeBadge.id}
+        />
+      ) : null}
     </>
   );
 }
@@ -336,7 +353,10 @@ export function createSearchInput(
     root.unmount();
     throw new Error('Lumno React search input did not mount.');
   }
-  const parts = { container, divider, icon, input, rightIcon };
+  const modeBadge = container.querySelector<HTMLDivElement>(
+    '.x-lumno-search-input-mode__badge'
+  );
+  const parts = { container, divider, icon, input, modeBadge, rightIcon };
   (
     [
       [container, 'container', config.containerStyleOverrides],

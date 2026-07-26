@@ -6,6 +6,10 @@ const vm = require('vm');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const pageStructureReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/page-structure.tsx'),
+  'utf8'
+);
 const shortcutDialogJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/shortcut-dialog.js'), 'utf8');
 const shortcutDialogCss = fs.readFileSync(path.join(repoRoot, 'src/newtab/shortcut-dialog.css'), 'utf8');
 const wallpaperAdaptiveToneJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper-adaptive-tone.js'), 'utf8');
@@ -1013,9 +1017,15 @@ assertContains(
 );
 
 assertContains(
+  pageStructureReact,
+  "_x_extension_newtab_shortcuts_2026_unique_",
+  'React should create a shortcuts section under the search box'
+);
+
+assertContains(
   newtabJs,
-  "shortcutSection.id = '_x_extension_newtab_shortcuts_2026_unique_';",
-  'newtab runtime should create a shortcuts section under the search box'
+  'shortcutSection = pageStructureRuntime.shortcut.section;',
+  'newtab adapter should use the React-owned shortcuts section'
 );
 
 assertContains(
