@@ -44,6 +44,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      scroll shell, safe corridor, interactive brand mark, and image layers;
      the existing layout controller, visibility timing, wallpaper tone sampler,
      and navigation adapter continue to operate on stable element references.
+   - Shared Search Input as a React-owned field, icon, divider, and settings
+     affordance. It preserves stable element IDs, hostile-page inline style
+     fallback, isolated Shadow DOM styles, native event bridges, and direct
+     element references for both New Tab and the upcoming Overlay root.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings

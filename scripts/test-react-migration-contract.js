@@ -63,6 +63,10 @@ const wordmarkReactSource = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/wordmark.tsx'),
   'utf8'
 );
+const searchInputReactSource = fs.readFileSync(
+  path.join(repoRoot, 'react-src/shared/search-input.tsx'),
+  'utf8'
+);
 const toastReactSource = fs.readFileSync(
   path.join(repoRoot, 'react-src/shared/toast.tsx'),
   'utf8'
@@ -182,39 +186,39 @@ assert(
   fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    288 * 1024,
-  'the New Tab React route should stay within its 288 KiB uncompressed budget'
+    294 * 1024,
+  'the New Tab React route should stay within its 294 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(newtabBundle).length <=
-    87 * 1024,
-  'the New Tab React route should stay within its 87 KiB gzip budget'
+    90 * 1024,
+  'the New Tab React route should stay within its 90 KiB gzip budget'
 );
 assert(
     fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    230 * 1024,
-  'the Options React route should stay within its 230 KiB uncompressed budget'
+    234 * 1024,
+  'the Options React route should stay within its 234 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(optionsBundle).length <=
-    68 * 1024,
-  'the Options React route should stay within its 68 KiB gzip budget'
+    70 * 1024,
+  'the Options React route should stay within its 70 KiB gzip budget'
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    368 * 1024,
-  'all shared React artifacts and three page entries should stay within their 368 KiB package budget'
+    376 * 1024,
+  'all shared React artifacts and three page entries should stay within their 376 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    107 * 1024,
-  'all shared React artifacts and three page entries should stay within their 107 KiB gzip budget'
+    110 * 1024,
+  'all shared React artifacts and three page entries should stay within their 110 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -235,6 +239,7 @@ assert(
     newtabBundle.includes('LumnoNewtabSelectMenuReact') &&
     newtabBundle.includes('LumnoNewtabDockReact') &&
     newtabBundle.includes('LumnoNewtabWordmarkReact') &&
+    newtabBundle.includes('LumnoSearchInputUIReact') &&
     newtabBundle.includes('LumnoNewtabReactIslands') &&
     newtabBundle.includes('newtab-feedback-control') &&
     newtabBundle.includes('newtab-select-menu') &&
@@ -248,6 +253,14 @@ assert(
     wordmarkReactSource.includes("host.dataset.reactIsland = 'newtab-wordmark'") &&
     sharedBundle.includes('data-react-island'),
   'the compiled islands should expose diagnostic APIs and host markers'
+);
+assert(
+  sharedBundle.includes('shared-search-input') &&
+    searchInputReactSource.includes('createSearchInput') &&
+    searchInputReactSource.includes(
+      "container.dataset.reactIsland = 'shared-search-input'"
+    ),
+  'the shared React search input should keep a diagnostic host marker'
 );
 assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&

@@ -17,6 +17,7 @@ import {
 } from './suggestions';
 import { createToastApi, type LegacyToastApi } from './toast';
 import { createWordmarkApi } from './wordmark';
+import { createSearchInputApi } from '../shared/search-input';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoNewtabReactBootstrap?: {
@@ -29,6 +30,7 @@ const runtime = globalThis as typeof globalThis & {
     feedback: ReturnType<typeof createFeedbackControlApi>;
     shortcutDialog: ReturnType<typeof createShortcutDialogApi>;
     recentSites: ReturnType<typeof createRecentSitesViewApi>;
+    searchInput: ReturnType<typeof createSearchInputApi>;
     selectMenu: ReturnType<typeof createSelectMenuApi>;
     shortcuts: ReturnType<typeof createShortcutsViewApi>;
     suggestions: ReturnType<typeof createSuggestionsViewApi>;
@@ -55,6 +57,11 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabToastReact?: ReturnType<typeof createToastApi>;
   LumnoNewtabWordmark?: ReturnType<typeof createWordmarkApi>;
   LumnoNewtabWordmarkReact?: ReturnType<typeof createWordmarkApi>;
+  LumnoSearchInputUI?: ReturnType<typeof createSearchInputApi>;
+  LumnoSearchInputUIReact?: ReturnType<typeof createSearchInputApi>;
+  _x_extension_createSearchInput_2024_unique_?: ReturnType<
+    typeof createSearchInputApi
+  >['createSearchInput'];
 };
 
 const bootstrapState = runtime.LumnoNewtabReactBootstrap;
@@ -75,6 +82,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const suggestionsApi = createSuggestionsViewApi(legacySuggestionsApi);
   const toastApi = createToastApi(legacyToastApi);
   const wordmarkApi = createWordmarkApi();
+  const searchInputApi = createSearchInputApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
   runtime.LumnoNewtabBookmarksView = bookmarksApi;
@@ -96,12 +104,17 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabToast = toastApi;
   runtime.LumnoNewtabWordmarkReact = wordmarkApi;
   runtime.LumnoNewtabWordmark = wordmarkApi;
+  runtime.LumnoSearchInputUIReact = searchInputApi;
+  runtime.LumnoSearchInputUI = searchInputApi;
+  runtime._x_extension_createSearchInput_2024_unique_ =
+    searchInputApi.createSearchInput;
   runtime.LumnoNewtabReactIslands = Object.freeze({
     bookmarks: bookmarksApi,
     dock: dockApi,
     feedback: feedbackApi,
     shortcutDialog: shortcutDialogApi,
     recentSites: recentSitesApi,
+    searchInput: searchInputApi,
     selectMenu: selectMenuApi,
     shortcuts: shortcutsApi,
     suggestions: suggestionsApi,
