@@ -197,6 +197,7 @@
   const NEWTAB_WALLPAPER_ADAPTIVE_TONE = globalThis.LumnoNewtabWallpaperAdaptiveTone || {};
   const NEWTAB_WALLPAPER_EFFECTS = globalThis.LumnoNewtabWallpaperEffects || {};
   const NEWTAB_WALLPAPER = globalThis.LumnoNewtabWallpaper || {};
+  const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -371,6 +372,7 @@
   let wallpaperControl = null;
   let wallpaperRuntime = null;
   let feedbackControl = null;
+  let feedbackReactController = null;
   let feedbackButton = null;
   let feedbackPopover = null;
   let feedbackMenu = null;
@@ -1815,7 +1817,84 @@
     }
   }
 
+  function buildFeedbackReactModel() {
+    const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
+    const channel = getFeedbackCommunityChannel(links);
+    return {
+      buttonLabel: t('newtab_feedback_button_aria', 'Send feedback'),
+      channel,
+      chromeReviewLabel: t('newtab_feedback_chrome_review_label', 'Chrome rating'),
+      chromeReviewTooltip: t(
+        'newtab_feedback_chrome_review_tooltip',
+        'Rate on Chrome Web Store'
+      ),
+      chromeReviewUrl: links.chromeReview || LUMNO_FEEDBACK_LINKS_FALLBACK.chromeReview,
+      closeTooltip: t('newtab_feedback_wechat_close_tooltip', 'Close'),
+      communityLabel: channel === 'wechat'
+        ? t('newtab_feedback_wechat_label', 'WeChat')
+        : t('newtab_feedback_discord_label', 'Discord'),
+      communityTooltip: channel === 'wechat'
+        ? t('newtab_feedback_wechat_tooltip', 'Joining WeChat group')
+        : t('newtab_feedback_discord_tooltip', 'Joining Discord'),
+      discordUrl: links.discord || LUMNO_FEEDBACK_LINKS_FALLBACK.discord,
+      githubIssueLabel: t('newtab_feedback_github_issue_label', 'GitHub Issue'),
+      githubIssueTooltip: t(
+        'newtab_feedback_github_issue_tooltip',
+        'Opening a GitHub Issue'
+      ),
+      githubIssueUrl: links.githubIssue || LUMNO_FEEDBACK_LINKS_FALLBACK.githubIssue,
+      menuAriaLabel: t('newtab_feedback_menu_aria', 'Feedback channels'),
+      panelTitle: channel === 'wechat'
+        ? t('newtab_feedback_wechat_panel_title', 'Bug reports & feature requests')
+        : t('newtab_feedback_discord_label', 'Discord'),
+      qrAlt: t('newtab_feedback_wechat_qr_alt', 'Lumno WeChat group QR code'),
+      qrUrl: links.wechatQr || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr,
+      refreshTooltip: t('newtab_feedback_wechat_refresh_tooltip', 'Refresh QR code'),
+      xLabel: t('newtab_feedback_x_label', 'X'),
+      xTooltip: t('newtab_feedback_x_tooltip', 'Contacting on X'),
+      xUrl: links.x || LUMNO_FEEDBACK_LINKS_FALLBACK.x
+    };
+  }
+
+  function syncFeedbackReactElementReferences() {
+    if (!feedbackControl) {
+      return;
+    }
+    feedbackButton = feedbackControl.querySelector('.x-nt-feedback-button');
+    feedbackPopover = feedbackControl.querySelector('.x-nt-feedback-popover');
+    feedbackMenu = feedbackControl.querySelector('.x-nt-feedback-menu');
+    feedbackXLink = feedbackControl.querySelector('.x-nt-feedback-action[href*="x.com"]');
+    feedbackGithubIssueLink = feedbackControl.querySelector('.x-nt-feedback-action[href*="github.com"]');
+    feedbackChromeReviewLink = feedbackControl.querySelector(
+      '.x-nt-feedback-action[href*="chromewebstore.google.com"]'
+    );
+    feedbackCommunityButton = feedbackControl.querySelector(
+      '.x-nt-feedback-action-community'
+    );
+    feedbackDetail = feedbackControl.querySelector('.x-nt-feedback-detail');
+    feedbackDetailRefreshButton = feedbackControl.querySelector(
+      '.x-nt-feedback-detail-refresh'
+    );
+    feedbackDetailCloseButton = feedbackControl.querySelector(
+      '.x-nt-feedback-detail-close'
+    );
+    feedbackQrImage = feedbackControl.querySelector('.x-nt-feedback-qr-image');
+  }
+
+  function renderFeedbackControlWithReact() {
+    if (!feedbackReactController ||
+        typeof feedbackReactController.render !== 'function') {
+      return false;
+    }
+    feedbackReactController.render(buildFeedbackReactModel());
+    syncFeedbackReactElementReferences();
+    return true;
+  }
+
   function updateFeedbackContactUi() {
+    if (renderFeedbackControlWithReact()) {
+      return;
+    }
     const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
     const channel = getFeedbackCommunityChannel(links);
     if (feedbackXLink) {
@@ -1973,6 +2052,9 @@
   }
 
   function updateFeedbackLanguageStrings() {
+    if (renderFeedbackControlWithReact()) {
+      return;
+    }
     if (feedbackButton) {
       const label = t('newtab_feedback_button_aria', 'Send feedback');
       feedbackButton.setAttribute('aria-label', label);
@@ -1986,6 +2068,10 @@
   }
 
   function isFeedbackPopoverOpen() {
+    if (feedbackReactController &&
+        typeof feedbackReactController.isOpen === 'function') {
+      return feedbackReactController.isOpen();
+    }
     return Boolean(feedbackControl && feedbackControl.getAttribute('data-menu-open') === 'true');
   }
 
@@ -1994,6 +2080,19 @@
   }
 
   function setFeedbackPopoverOpen(open, options) {
+    if (feedbackReactController &&
+        typeof feedbackReactController.setOpen === 'function') {
+      if (!open) {
+        clearFeedbackRefreshResultTooltipTimer();
+        hideTopActionTooltip();
+      }
+      if (open) {
+        feedbackReactController.setOpen(true);
+      } else if (typeof feedbackReactController.close === 'function') {
+        feedbackReactController.close(options);
+      }
+      return;
+    }
     if (!feedbackControl || !feedbackButton || !feedbackPopover) {
       return;
     }
@@ -2067,6 +2166,68 @@
   }
 
   function createFeedbackControls() {
+    if (typeof NEWTAB_FEEDBACK_CONTROL.createFeedbackControlController === 'function') {
+      feedbackControl = document.createElement('div');
+      feedbackReactController =
+        NEWTAB_FEEDBACK_CONTROL.createFeedbackControlController(feedbackControl, {
+          onHideTooltip() {
+            clearFeedbackRefreshResultTooltipTimer();
+            hideTopActionTooltip();
+          },
+          onOpen() {
+            return loadFeedbackLinks({ force: true }).then(() => {
+              renderFeedbackControlWithReact();
+            });
+          },
+          onOpenExternal(url, disposition) {
+            openFeedbackExternalUrl(url, disposition);
+          },
+          async onRefreshQr() {
+            try {
+              const links = await loadFeedbackLinks({ force: true });
+              feedbackLinks = links || feedbackLinks;
+              const channel = getFeedbackCommunityChannel(feedbackLinks);
+              if (channel !== 'wechat') {
+                renderFeedbackControlWithReact();
+                return {};
+              }
+              const refreshedUrl = buildFreshFeedbackQrUrl(
+                feedbackLinks.wechatQr || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr
+              );
+              const loaded = await preloadFeedbackQrImage(refreshedUrl);
+              return loaded
+                ? {
+                    message: t(
+                      'newtab_feedback_wechat_refresh_success',
+                      'Latest QR code loaded'
+                    ),
+                    qrUrl: refreshedUrl
+                  }
+                : {
+                    message: t(
+                      'newtab_feedback_wechat_refresh_error',
+                      'Could not refresh. Try again.'
+                    )
+                  };
+            } catch (error) {
+              return {
+                message: t(
+                  'newtab_feedback_wechat_refresh_error',
+                  'Could not refresh. Try again.'
+                )
+              };
+            }
+          },
+          onShowTooltip(target, label) {
+            showTopActionTooltip(target, label, {
+              checkActive: false,
+              placement: 'top'
+            });
+          }
+        });
+      renderFeedbackControlWithReact();
+      return;
+    }
     feedbackControl = document.createElement('div');
     feedbackControl.className = 'x-nt-feedback-control';
     feedbackControl.setAttribute('data-menu-open', 'false');

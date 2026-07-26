@@ -2,6 +2,7 @@ import {
   createBookmarksViewApi,
   type LegacyBookmarksApi
 } from './bookmarks';
+import { createFeedbackControlApi } from './feedback';
 import { createRecentSitesViewApi, type LegacyRecentSitesApi } from './recent-sites';
 import { createShortcutDialogApi } from './shortcut-dialog';
 import {
@@ -21,6 +22,7 @@ const runtime = globalThis as typeof globalThis & {
   };
   LumnoNewtabReactIslands?: {
     bookmarks: ReturnType<typeof createBookmarksViewApi>;
+    feedback: ReturnType<typeof createFeedbackControlApi>;
     shortcutDialog: ReturnType<typeof createShortcutDialogApi>;
     recentSites: ReturnType<typeof createRecentSitesViewApi>;
     shortcuts: ReturnType<typeof createShortcutsViewApi>;
@@ -29,6 +31,8 @@ const runtime = globalThis as typeof globalThis & {
   };
   LumnoNewtabBookmarksView?: LegacyBookmarksApi;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
+  LumnoNewtabFeedbackControl?: ReturnType<typeof createFeedbackControlApi>;
+  LumnoNewtabFeedbackControlReact?: ReturnType<typeof createFeedbackControlApi>;
   LumnoNewtabShortcutDialog?: ReturnType<typeof createShortcutDialogApi>;
   LumnoNewtabShortcutDialogReact?: ReturnType<typeof createShortcutDialogApi>;
   LumnoNewtabShortcutsView?: LegacyShortcutsApi;
@@ -50,6 +54,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const legacySuggestionsApi = runtime.LumnoNewtabSuggestionsView || null;
   const legacyToastApi = runtime.LumnoNewtabToast || null;
   const bookmarksApi = createBookmarksViewApi(legacyBookmarksApi);
+  const feedbackApi = createFeedbackControlApi();
   const shortcutDialogApi = createShortcutDialogApi();
   const recentSitesApi = createRecentSitesViewApi(legacyRecentSitesApi);
   const shortcutsApi = createShortcutsViewApi(legacyShortcutsApi);
@@ -58,6 +63,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
   runtime.LumnoNewtabBookmarksView = bookmarksApi;
+  runtime.LumnoNewtabFeedbackControlReact = feedbackApi;
+  runtime.LumnoNewtabFeedbackControl = feedbackApi;
   runtime.LumnoNewtabShortcutDialogReact = shortcutDialogApi;
   runtime.LumnoNewtabShortcutDialog = shortcutDialogApi;
   runtime.LumnoNewtabRecentSitesViewReact = recentSitesApi;
@@ -70,6 +77,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabToast = toastApi;
   runtime.LumnoNewtabReactIslands = Object.freeze({
     bookmarks: bookmarksApi,
+    feedback: feedbackApi,
     shortcutDialog: shortcutDialogApi,
     recentSites: recentSitesApi,
     shortcuts: shortcutsApi,

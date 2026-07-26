@@ -31,6 +31,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      favicon, custom-icon, tooltip, context-menu, and adaptive-tone metadata.
    - Toast as the sixth island, preserving synchronous message updates, error
      styling, auto-hide timers, and the existing controller contract.
+   - Feedback Control as the seventh New Tab island. React owns its trigger,
+     channel menu, WeChat detail, QR refresh state, focus restoration, and
+     outside/Escape dismissal while the adapter keeps remote-link loading,
+     navigation disposition, localization, and shared tooltip placement.
    - Options Popconfirm as the first Options leaf island, preserving the existing
      trigger wrapper, outside-click close behavior, localization hooks, and
      destructive-action callbacks across static controls and dynamic settings
