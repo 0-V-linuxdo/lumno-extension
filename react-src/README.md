@@ -45,6 +45,10 @@ React replaces bounded UI surfaces behind their current public contracts.
      priority, restricted-page behavior, recent-site ordering, New Tab width, and
      overlay size. React owns the buttons, indicator, labels, and accessibility
      state while the Options adapter keeps persistence and refresh side effects.
+   - Options Settings Navigation as the controlled page-tab island, preserving
+     hash routing, sticky layout, scroll resets, localized labels, and the sliding
+     indicator while the adapter continues to own content visibility and data
+     refreshes.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

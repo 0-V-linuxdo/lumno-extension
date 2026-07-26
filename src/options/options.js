@@ -136,6 +136,7 @@
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
   const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
+  const optionsSettingsNavigationApi = globalThis.LumnoOptionsSettingsNavigation || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
   const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
@@ -191,6 +192,12 @@
     'search-result-priority',
     handleSearchResultPrioritySelection
   );
+  const settingsNavigationController =
+    typeof optionsSettingsNavigationApi.createSettingsNavigationController === 'function'
+      ? optionsSettingsNavigationApi.createSettingsNavigationController(tabsContainer, {
+          onSelect: handleSettingsTabSelection
+        })
+      : null;
 
   // 使用系统字体，避免外链字体依赖。
   if (!panel || themeButtons.length === 0 || tabButtons.length === 0) {
@@ -377,6 +384,14 @@
   let currentOverlaySizeMode = 'standard';
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
+  let currentActiveSettingsTab = 'appearance';
+  const SETTINGS_TAB_KEYS = Object.freeze([
+    'general',
+    'appearance',
+    'shortcuts',
+    'blacklist',
+    'labs'
+  ]);
 
   function normalizeBlacklistMatchModes(value, fallbackMode) {
     if (BLACKLIST_UTILS.normalizeMatchModes) {
@@ -2232,6 +2247,7 @@
       setSearchResultPriorityTabState(currentSearchResultPriority);
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
+      renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
       renderSiteSearchList();
@@ -2852,18 +2868,70 @@
     });
   }
 
+  function getSettingsNavigationItems() {
+    return [
+      {
+        key: 'general',
+        labelKey: 'settings_tab_general',
+        label: getMessage('settings_tab_general', '常规'),
+        iconClass: 'ri-icon ri-command-fill'
+      },
+      {
+        key: 'appearance',
+        labelKey: 'settings_tab_appearance',
+        label: getMessage('settings_tab_appearance', '外观'),
+        iconClass: 'ri-icon ri-moon-clear-fill'
+      },
+      {
+        key: 'shortcuts',
+        labelKey: 'settings_tab_shortcuts',
+        label: getMessage('settings_tab_shortcuts', '站内搜索/AI 搜索'),
+        iconClass: 'ri-icon ri-search-line'
+      },
+      {
+        key: 'blacklist',
+        labelKey: 'settings_tab_blacklist',
+        label: getMessage('settings_tab_blacklist', '黑名单'),
+        iconClass: 'ri-icon ri-forbid-2-fill'
+      },
+      {
+        key: 'labs',
+        labelKey: 'settings_tab_labs',
+        label: getMessage('settings_tab_labs', '实验室功能'),
+        iconClass: 'ri-icon ri-test-tube-fill'
+      }
+    ];
+  }
 
-  function setActiveTab(tabKey) {
+  function renderSettingsNavigation(tabKey) {
+    if (settingsNavigationController && typeof settingsNavigationController.render === 'function') {
+      settingsNavigationController.render({
+        activeKey: tabKey,
+        items: getSettingsNavigationItems()
+      });
+      return;
+    }
     tabButtons.forEach((button) => {
       const isActive = button.getAttribute('data-tab') === tabKey;
       button.setAttribute('data-active', isActive ? 'true' : 'false');
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+  }
+
+  function normalizeSettingsTabKey(tabKey) {
+    return SETTINGS_TAB_KEYS.includes(tabKey) ? tabKey : 'general';
+  }
+
+  function setActiveTab(tabKey) {
+    const nextTabKey = normalizeSettingsTabKey(tabKey);
+    currentActiveSettingsTab = nextTabKey;
+    renderSettingsNavigation(nextTabKey);
     tabContents.forEach((content) => {
-      const isActive = content.getAttribute('data-content') === tabKey;
+      const isActive = content.getAttribute('data-content') === nextTabKey;
       content.setAttribute('data-active', isActive ? 'true' : 'false');
     });
     requestAnimationFrame(updateTabIndicator);
-    if (tabKey === 'appearance') {
+    if (nextTabKey === 'appearance') {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           updateThemeIndicator();
@@ -2873,7 +2941,7 @@
         });
       });
     }
-    if (tabKey === 'general') {
+    if (nextTabKey === 'general') {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           updateRestrictedActionTabsIndicator();
@@ -2883,18 +2951,34 @@
         });
       });
     }
-    if (tabKey) {
-      const nextHash = `#${tabKey}`;
+    if (nextTabKey) {
+      const nextHash = `#${nextTabKey}`;
       if (window.location.hash !== nextHash) {
         window.history.replaceState(null, '', nextHash);
       }
     }
   }
 
+  function handleSettingsTabSelection(value) {
+    const tabKey = normalizeSettingsTabKey(value);
+    const currentTabKey = currentActiveSettingsTab;
+    setActiveTab(tabKey);
+    if (tabKey !== currentTabKey) {
+      resetPageScrollToDefault();
+    }
+    if (tabKey === 'shortcuts') {
+      refreshSiteSearchProviders();
+    }
+  }
+
   function measureTabIndicator() {
-    if (!tabsContainer || !tabsIndicator) return null;
-    const activeButton = tabButtons.find((button) => button.getAttribute('data-active') === 'true');
-    return measureTabsIndicator(tabsContainer, tabsIndicator, activeButton, 4, tabsContainer.clientLeft);
+    if (!tabsContainer) return null;
+    const liveIndicator = tabsContainer.querySelector('._x_extension_tabs_indicator_2024_unique_') || tabsIndicator;
+    if (!liveIndicator) return null;
+    const activeButton = tabsContainer.querySelector(
+      '._x_extension_settings_tab_button_2024_unique_[data-active="true"]'
+    );
+    return measureTabsIndicator(tabsContainer, liveIndicator, activeButton, 4, tabsContainer.clientLeft);
   }
 
   function updateTabIndicator() {
@@ -3195,8 +3279,7 @@
     if (!tabKey) {
       return 'general';
     }
-    const match = tabButtons.find((button) => button.getAttribute('data-tab') === tabKey);
-    return match ? tabKey : 'general';
+    return SETTINGS_TAB_KEYS.includes(tabKey) ? tabKey : 'general';
   }
 
   function getInitialOptionsTargetKey() {
@@ -3206,16 +3289,7 @@
 
   tabButtons.forEach((button) => {
     button.addEventListener('click', function() {
-      const tabKey = button.getAttribute('data-tab');
-      const activeButton = tabButtons.find((item) => item.getAttribute('data-active') === 'true');
-      const currentTabKey = activeButton ? activeButton.getAttribute('data-tab') : '';
-      setActiveTab(tabKey);
-      if (tabKey && tabKey !== currentTabKey) {
-        resetPageScrollToDefault();
-      }
-      if (tabKey === 'shortcuts') {
-        refreshSiteSearchProviders();
-      }
+      handleSettingsTabSelection(button.getAttribute('data-tab'));
     });
   });
 

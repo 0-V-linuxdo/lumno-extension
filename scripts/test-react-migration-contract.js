@@ -223,11 +223,13 @@ assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&
     optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
     optionsBundle.includes('LumnoOptionsSegmentedControlReact') &&
+    optionsBundle.includes('LumnoOptionsSettingsNavigationReact') &&
     optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
     optionsBundle.includes('LumnoOptionsThemePickerReact') &&
     optionsBundle.includes('LumnoOptionsReactIslands') &&
     optionsBundle.includes('options-popconfirm') &&
     optionsBundle.includes('options-segmented-control') &&
+    optionsBundle.includes('options-settings-navigation') &&
     optionsBundle.includes('options-shortcut-reference') &&
     optionsBundle.includes('options-theme-picker') &&
     optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
@@ -241,13 +243,16 @@ assert(
     optionsSource.includes('overlaySizeTabsController') &&
     optionsSource.includes('restrictedActionTabsController') &&
     optionsSource.includes('searchResultPriorityTabsController') &&
+    optionsSource.includes('optionsSettingsNavigationApi.createSettingsNavigationController') &&
+    optionsSource.includes('settingsNavigationController.render') &&
+    optionsSource.includes('handleSettingsTabSelection') &&
     optionsSource.includes('optionsShortcutReferenceApi.createShortcutReferenceController') &&
     optionsSource.includes('shortcutReferenceController.render') &&
     optionsSource.includes('optionsThemePickerApi.createThemePickerController') &&
     optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Popconfirm, Segmented Control, Shortcut Reference, Theme Picker, and Toast islands'
+  'Options should expose and consume its React Popconfirm, Segmented Control, Settings Navigation, Shortcut Reference, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&
