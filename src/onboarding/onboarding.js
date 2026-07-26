@@ -248,11 +248,26 @@
   const secondaryActionButton = document.querySelector('.onboarding-action-button--secondary');
   const ghostActionButton = document.querySelector('.onboarding-action-button--ghost');
   const onboardingPageStripApi = globalThis.LumnoOnboardingPageStrip || {};
+  const onboardingActionsApi = globalThis.LumnoOnboardingActions || {};
   const pageStripController = pageStrip &&
       typeof onboardingPageStripApi.createPageStripController === 'function'
     ? onboardingPageStripApi.createPageStripController(pageStrip, {
       onNavigate(slideIndex) {
         dispatch({ type: 'GOTO', index: slideIndex });
+      }
+    })
+    : null;
+  const copyActionsController = copyActions &&
+      typeof onboardingActionsApi.createActionButtonsController === 'function'
+    ? onboardingActionsApi.createActionButtonsController(copyActions, {
+      onAction(actionId, event) {
+        runExtensionAction(actionId, event);
+      },
+      onShowTooltip(button) {
+        showActionButtonTooltip(button);
+      },
+      onHideTooltip() {
+        hideActionButtonTooltip();
       }
     })
     : null;
@@ -3141,6 +3156,10 @@
       return;
     }
     const actions = slide.actions || {};
+    if (copyActionsController) {
+      copyActionsController.render(actions);
+      return;
+    }
     const hasPrimary = renderActionButton(primaryActionButton, actions.primary);
     const hasSecondary = renderActionButton(secondaryActionButton, actions.secondary);
     const hasGhost = renderActionButton(ghostActionButton, actions.ghost);
@@ -3936,7 +3955,9 @@
     initialChromeApi.runtime.onMessage.addListener(handleOnboardingCommandMessage);
   }
 
-  [primaryActionButton, secondaryActionButton, ghostActionButton].forEach(bindActionButtonTooltip);
+  if (!copyActionsController) {
+    [primaryActionButton, secondaryActionButton, ghostActionButton].forEach(bindActionButtonTooltip);
+  }
   scheduleTitleFitUpdate();
   scheduleVisualCanvasScaleUpdate();
   window.addEventListener('resize', () => {

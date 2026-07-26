@@ -214,11 +214,15 @@ assert(
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&
+    onboardingBundle.includes('LumnoOnboardingActionsReact') &&
     onboardingBundle.includes('LumnoOnboardingReactIslands') &&
     onboardingBundle.includes('onboarding-page-strip') &&
+    onboardingBundle.includes('onboarding-actions') &&
     onboardingSource.includes('onboardingPageStripApi.createPageStripController') &&
-    onboardingSource.includes('pageStripController.render'),
-  'Onboarding should expose and consume its React page-strip island'
+    onboardingSource.includes('pageStripController.render') &&
+    onboardingSource.includes('onboardingActionsApi.createActionButtonsController') &&
+    onboardingSource.includes('copyActionsController.render'),
+  'Onboarding should expose and consume its React page-strip and action islands'
 );
 assert(
   !bundle.includes('process.env.NODE_ENV') &&

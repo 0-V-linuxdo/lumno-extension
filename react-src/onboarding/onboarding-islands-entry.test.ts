@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 type OnboardingRuntime = typeof globalThis & {
+  LumnoOnboardingActions?: {
+    implementation?: string;
+  };
+  LumnoOnboardingActionsReact?: {
+    implementation?: string;
+  };
   LumnoOnboardingPageStrip?: {
     implementation?: string;
   };
@@ -17,6 +23,8 @@ type OnboardingRuntime = typeof globalThis & {
 const runtime = globalThis as OnboardingRuntime;
 
 function clearRuntime(): void {
+  delete runtime.LumnoOnboardingActions;
+  delete runtime.LumnoOnboardingActionsReact;
   delete runtime.LumnoOnboardingPageStrip;
   delete runtime.LumnoOnboardingPageStripReact;
   delete runtime.LumnoOnboardingReactBootstrap;
@@ -42,7 +50,12 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingPageStripReact).toBe(
       runtime.LumnoOnboardingPageStrip
     );
+    expect(runtime.LumnoOnboardingActions?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingActionsReact).toBe(
+      runtime.LumnoOnboardingActions
+    );
     expect(runtime.LumnoOnboardingReactIslands).toEqual({
+      actions: runtime.LumnoOnboardingActions,
       pageStrip: runtime.LumnoOnboardingPageStrip
     });
   });
@@ -56,6 +69,7 @@ describe('Onboarding React islands entry', () => {
     await import('./onboarding-islands-entry');
 
     expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(false);
+    expect(runtime.LumnoOnboardingActions).toBeUndefined();
     expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
     expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
   });
