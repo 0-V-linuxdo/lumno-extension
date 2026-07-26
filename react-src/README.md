@@ -60,6 +60,9 @@ React replaces bounded UI surfaces behind their current public contracts.
    - Options Settings Controls for the eleven persisted switch rows and the required
      search-result source checkbox group. React owns input state and interaction while
      the Options adapter keeps normalization, storage writes, and cross-page refreshes.
+   - Options Select Controls for language, recent-site count, bookmark count, and
+     bookmark columns. React owns menu state, keyboard-safe selection, and localized
+     labels while legacy select references remain adapter-only event bridges.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard

@@ -197,8 +197,8 @@ assert(
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    96 * 1024,
-  'all shared React artifacts and three page entries should stay within their 96 KiB gzip budget'
+    97 * 1024,
+  'all shared React artifacts and three page entries should stay within their 97 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -224,6 +224,7 @@ assert(
     optionsBundle.includes('LumnoOptionsBlacklistListReact') &&
     optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
     optionsBundle.includes('LumnoOptionsSegmentedControlReact') &&
+    optionsBundle.includes('LumnoOptionsSelectControlReact') &&
     optionsBundle.includes('LumnoOptionsSettingsNavigationReact') &&
     optionsBundle.includes('LumnoOptionsSettingsControlsReact') &&
     optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
@@ -233,6 +234,7 @@ assert(
     optionsBundle.includes('options-blacklist-list') &&
     optionsBundle.includes('options-popconfirm') &&
     optionsBundle.includes('options-segmented-control') &&
+    optionsBundle.includes('options-select-control') &&
     optionsBundle.includes('options-settings-navigation') &&
     optionsBundle.includes('options-toggle-control') &&
     optionsBundle.includes('options-required-checkbox-group') &&
@@ -255,6 +257,9 @@ assert(
     optionsSource.includes('overlaySizeTabsController') &&
     optionsSource.includes('restrictedActionTabsController') &&
     optionsSource.includes('searchResultPriorityTabsController') &&
+    optionsSource.includes('optionsSelectControlApi.createSelectControlController') &&
+    optionsSource.includes('setOptionsSelectState(') &&
+    optionsSource.includes('renderOptionsSelectControl(') &&
     optionsSource.includes('optionsSettingsNavigationApi.createSettingsNavigationController') &&
     optionsSource.includes('settingsNavigationController.render') &&
     optionsSource.includes('handleSettingsTabSelection') &&
@@ -273,7 +278,7 @@ assert(
     optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Settings Controls, Settings Navigation, Shortcut Reference, Site Search List, Theme Picker, and Toast islands'
+  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Select Control, Settings Controls, Settings Navigation, Shortcut Reference, Site Search List, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&

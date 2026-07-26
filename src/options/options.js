@@ -138,6 +138,7 @@
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
   const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
+  const optionsSelectControlApi = globalThis.LumnoOptionsSelectControl || {};
   const optionsSettingsControlsApi = globalThis.LumnoOptionsSettingsControls || {};
   const optionsSettingsNavigationApi = globalThis.LumnoOptionsSettingsNavigation || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
@@ -537,6 +538,65 @@
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
   let currentActiveSettingsTab = 'appearance';
+  const optionsSelectControlRecords = new Map();
+  function registerOptionsSelectControl(select, kind) {
+    if (!select ||
+        typeof optionsSelectControlApi.createSelectControlController !== 'function') {
+      return null;
+    }
+    const host = select.closest('._x_extension_custom_select_2024_unique_');
+    if (!host) {
+      return null;
+    }
+    const items = Array.from(select.options).map((option) => ({
+      fallback: option.textContent || option.value,
+      labelKey: option.getAttribute('data-i18n') || '',
+      value: option.value
+    }));
+    const controller = optionsSelectControlApi.createSelectControlController(host, {
+      kind,
+      onSelect(next) {
+        select.value = next;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    const record = { controller, items, select };
+    optionsSelectControlRecords.set(select, record);
+    return record;
+  }
+  function renderOptionsSelectControl(select) {
+    const record = optionsSelectControlRecords.get(select);
+    if (!record) {
+      return;
+    }
+    record.controller.render({
+      id: select.id,
+      items: record.items.map((item) => ({
+        label: item.labelKey ? getMessage(item.labelKey, item.fallback) : item.fallback,
+        labelKey: item.labelKey,
+        value: item.value
+      })),
+      value: select.value
+    });
+  }
+  function setOptionsSelectState(select, value) {
+    if (!select) {
+      return;
+    }
+    select.value = String(value);
+    renderOptionsSelectControl(select);
+  }
+  [
+    [languageSelect, 'language'],
+    [recentCountSelect, 'recent-count'],
+    [bookmarkCountSelect, 'bookmark-count'],
+    [bookmarkColumnsSelect, 'bookmark-columns']
+  ].forEach(([select, kind]) => {
+    const record = registerOptionsSelectControl(select, kind);
+    if (record) {
+      renderOptionsSelectControl(select);
+    }
+  });
   const SETTINGS_TAB_KEYS = Object.freeze([
     'general',
     'appearance',
@@ -1789,8 +1849,14 @@
   }
 
   function refreshCustomSelects() {
+    optionsSelectControlRecords.forEach((record, select) => {
+      renderOptionsSelectControl(select);
+    });
     if (customSelectController) {
-      customSelectController.refresh(customSelectWraps);
+      customSelectController.refresh(customSelectWraps.filter(
+        (wrapper) => wrapper.getAttribute('data-react-island') !== 'options-select-control'
+      ));
+      syncFallbackShortcutWrapWidth();
       return;
     }
     syncFallbackShortcutWrapWidth();
@@ -2379,9 +2445,9 @@
       }
       currentMessages = messages || {};
       if (languageSelect) {
-        languageSelect.value = normalizedMode;
+        setOptionsSelectState(languageSelect, normalizedMode);
         if (languageSelect.value !== normalizedMode) {
-          languageSelect.value = 'system';
+          setOptionsSelectState(languageSelect, 'system');
         }
       }
       applyI18n();
@@ -4345,7 +4411,7 @@
       const stored = result[RECENT_COUNT_STORAGE_KEY];
       const count = normalizeRecentCount(stored);
       if (recentCountSelect) {
-        recentCountSelect.value = String(count);
+        setOptionsSelectState(recentCountSelect, String(count));
       }
       updateRecentModeTabsVisibility(count);
       if (stored !== count) {
@@ -4432,7 +4498,7 @@
       const stored = result[BOOKMARK_COUNT_STORAGE_KEY];
       const count = normalizeBookmarkCount(stored);
       if (bookmarkCountSelect) {
-        bookmarkCountSelect.value = String(count);
+        setOptionsSelectState(bookmarkCountSelect, String(count));
       }
       updateBookmarkColumnsSelectVisibility(count);
       if (stored !== count) {
@@ -4444,7 +4510,7 @@
       const stored = result[BOOKMARK_COLUMNS_STORAGE_KEY];
       const columns = normalizeBookmarkColumns(stored);
       if (bookmarkColumnsSelect) {
-        bookmarkColumnsSelect.value = String(columns);
+        setOptionsSelectState(bookmarkColumnsSelect, String(columns));
       }
       if (stored !== columns) {
         storageArea.set({ [BOOKMARK_COLUMNS_STORAGE_KEY]: columns });
@@ -6126,7 +6192,7 @@
     }
     if (changes[RECENT_COUNT_STORAGE_KEY] && recentCountSelect) {
       const count = normalizeRecentCount(changes[RECENT_COUNT_STORAGE_KEY].newValue);
-      recentCountSelect.value = String(count);
+      setOptionsSelectState(recentCountSelect, String(count));
       updateRecentModeTabsVisibility(count);
       refreshCustomSelects();
     }
@@ -6178,13 +6244,13 @@
     }
     if (changes[BOOKMARK_COUNT_STORAGE_KEY] && bookmarkCountSelect) {
       const stored = normalizeBookmarkCount(changes[BOOKMARK_COUNT_STORAGE_KEY].newValue);
-      bookmarkCountSelect.value = String(stored);
+      setOptionsSelectState(bookmarkCountSelect, String(stored));
       updateBookmarkColumnsSelectVisibility(stored);
       refreshCustomSelects();
     }
     if (changes[BOOKMARK_COLUMNS_STORAGE_KEY] && bookmarkColumnsSelect) {
       const stored = normalizeBookmarkColumns(changes[BOOKMARK_COLUMNS_STORAGE_KEY].newValue);
-      bookmarkColumnsSelect.value = String(stored);
+      setOptionsSelectState(bookmarkColumnsSelect, String(stored));
       refreshCustomSelects();
     }
     if (changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] && bookmarkFolderIconsVisibleToggle) {
