@@ -1,0 +1,113 @@
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createSegmentedControlApi,
+  createSegmentedControlController,
+  type SegmentedControlController,
+  type SegmentedControlRenderModel
+} from './segmented-control';
+
+let controllers: SegmentedControlController[] = [];
+
+const model: SegmentedControlRenderModel = {
+  activeValue: 'latest',
+  dataAttribute: 'data-recent-mode',
+  items: [
+    {
+      iconClass: 'ri-icon ri-size-14 ri-time-line',
+      label: '最近访问',
+      labelKey: 'recent_mode_latest',
+      value: 'latest'
+    },
+    {
+      iconClass: 'ri-icon ri-size-14 ri-vip-diamond-line',
+      label: '最常访问',
+      labelKey: 'recent_mode_most',
+      value: 'most'
+    }
+  ],
+  select: {
+    id: '_x_extension_recent_mode_select_2024_unique_'
+  }
+};
+
+function createFixture() {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const onSelect = vi.fn();
+  const controller = createSegmentedControlController(host, {
+    kind: 'recent-mode',
+    onSelect
+  });
+  controllers.push(controller);
+  return { controller, host, onSelect };
+}
+
+afterEach(() => {
+  act(() => {
+    controllers.forEach((controller) => controller.destroy());
+  });
+  controllers = [];
+  document.body.textContent = '';
+});
+
+describe('Options segmented control React island', () => {
+  it('preserves indicator, data attributes, icons, and hidden select contracts', () => {
+    const { controller, host } = createFixture();
+    act(() => controller.render(model));
+
+    expect(createSegmentedControlApi().implementation).toBe('react');
+    expect(host.dataset.reactIsland).toBe('options-segmented-control');
+    expect(host.dataset.segmentedKind).toBe('recent-mode');
+    expect(host.querySelector('._x_extension_theme_indicator_2024_unique_'))
+      .not.toBeNull();
+    expect(host.querySelectorAll('[data-recent-mode]')).toHaveLength(2);
+    expect(host.querySelector('select')?.value).toBe('latest');
+  });
+
+  it('routes button and hidden-select changes through one adapter callback', () => {
+    const { controller, host, onSelect } = createFixture();
+    act(() => controller.render(model));
+    act(() => {
+      host.querySelector<HTMLButtonElement>('[data-recent-mode="most"]')?.click();
+      const select = host.querySelector<HTMLSelectElement>('select');
+      if (select) {
+        select.value = 'most';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+
+    expect(onSelect).toHaveBeenNthCalledWith(1, 'most');
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'most');
+  });
+
+  it('updates controlled state and localized copy without replacing the host', () => {
+    const { controller, host } = createFixture();
+    act(() => controller.render(model));
+    act(() => controller.render({
+      ...model,
+      activeValue: 'most',
+      items: model.items.map((item) => ({
+        ...item,
+        label: item.value === 'most' ? 'Most visited' : 'Latest'
+      }))
+    }));
+
+    expect(host.isConnected).toBe(true);
+    expect(host.querySelector('[data-recent-mode="most"]')?.getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(host.querySelector('select')?.value).toBe('most');
+    expect(host.querySelector('[data-recent-mode="most"]')?.textContent)
+      .toContain('Most visited');
+  });
+
+  it('unmounts cleanly', () => {
+    const { controller, host } = createFixture();
+    act(() => {
+      controller.render(model);
+      controller.destroy();
+    });
+
+    expect(host.childElementCount).toBe(0);
+  });
+});

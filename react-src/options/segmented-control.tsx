@@ -1,0 +1,109 @@
+import {
+  createReactRootController,
+  type ReactRootController
+} from './root-controller';
+
+export interface SegmentedControlItemModel {
+  iconClass?: string;
+  label: string;
+  labelKey: string;
+  value: string;
+}
+
+export interface SegmentedControlSelectModel {
+  id: string;
+}
+
+export interface SegmentedControlRenderModel {
+  activeValue: string;
+  dataAttribute: `data-${string}`;
+  items: SegmentedControlItemModel[];
+  select?: SegmentedControlSelectModel;
+}
+
+export interface SegmentedControlControllerOptions {
+  kind: string;
+  onSelect(value: string): void;
+}
+
+export type SegmentedControlController =
+  ReactRootController<SegmentedControlRenderModel>;
+
+function SegmentedControl({
+  model,
+  onSelect
+}: {
+  model: SegmentedControlRenderModel;
+  onSelect(value: string): void;
+}) {
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className="_x_extension_theme_indicator_2024_unique_"
+      />
+      {model.items.map((item) => {
+        const active = item.value === model.activeValue;
+        const dataProps = {
+          [model.dataAttribute]: item.value
+        };
+        return (
+          <button
+            {...dataProps}
+            aria-pressed={active}
+            className="_x_extension_theme_option_2024_unique_"
+            data-active={active ? 'true' : 'false'}
+            key={item.value}
+            onClick={() => onSelect(item.value)}
+            type="button"
+          >
+            {item.iconClass ? (
+              <i aria-hidden="true" className={item.iconClass} />
+            ) : null}
+            <span data-i18n={item.labelKey}>{item.label}</span>
+          </button>
+        );
+      })}
+      {model.select ? (
+        <select
+          aria-hidden="true"
+          className="_x_extension_select_2024_unique_"
+          id={model.select.id}
+          onChange={(event) => onSelect(event.currentTarget.value)}
+          style={{ display: 'none' }}
+          tabIndex={-1}
+          value={model.activeValue}
+        >
+          {model.items.map((item) => (
+            <option data-i18n={item.labelKey} key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </>
+  );
+}
+
+export function createSegmentedControlController(
+  host: HTMLElement | null,
+  options: SegmentedControlControllerOptions
+): SegmentedControlController {
+  if (host) {
+    host.dataset.reactIsland = 'options-segmented-control';
+    host.dataset.segmentedKind = options.kind;
+  }
+  return createReactRootController(
+    host,
+    (model: SegmentedControlRenderModel) => (
+      <SegmentedControl model={model} onSelect={options.onSelect} />
+    )
+  );
+}
+
+export function createSegmentedControlApi() {
+  return Object.freeze({
+    implementation: 'react',
+    createSegmentedControlController
+  });
+}

@@ -223,13 +223,18 @@ assert.match(
 );
 assert.match(
   optionsJs,
-  /restrictedActionSelect\.addEventListener\('change'[\s\S]*storageArea\.set\(createRestrictedActionStorageUpdate\(next\)\)/,
-  'select-based restricted-action changes should set the one-shot marker'
+  /function handleRestrictedActionSelection\(value\)[\s\S]*storageArea\.set\(createRestrictedActionStorageUpdate\(nextAction\)\)/,
+  'the shared restricted-action adapter should set the one-shot marker'
 );
 assert.match(
   optionsJs,
-  /button\.addEventListener\('click'[\s\S]*storageArea\.set\(createRestrictedActionStorageUpdate\(nextAction\)\)/,
-  'tab-button restricted-action changes should set the one-shot marker'
+  /restrictedActionSelect\.addEventListener\('change'[\s\S]*handleRestrictedActionSelection\(restrictedActionSelect\.value\)/,
+  'select-based restricted-action changes should route through the shared adapter'
+);
+assert.match(
+  optionsJs,
+  /restrictedActionTabButtons\.forEach\(\(button\)[\s\S]*handleRestrictedActionSelection\(button\.getAttribute\('data-restricted-action'\)\)/,
+  'tab-button restricted-action changes should route through the shared adapter'
 );
 
 console.log('options shortcut reference tests passed');

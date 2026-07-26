@@ -135,6 +135,7 @@
   const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
+  const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
   const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
@@ -157,6 +158,39 @@
           }
         })
       : null;
+  function createOptionsSegmentedControlController(host, kind, onSelect) {
+    return typeof optionsSegmentedControlApi.createSegmentedControlController === 'function'
+      ? optionsSegmentedControlApi.createSegmentedControlController(host, {
+          kind,
+          onSelect
+        })
+      : null;
+  }
+  const recentModeTabsController = createOptionsSegmentedControlController(
+    recentModeTabsWrap,
+    'recent-mode',
+    handleRecentModeSelection
+  );
+  const newtabWidthTabsController = createOptionsSegmentedControlController(
+    newtabWidthTabsWrap,
+    'newtab-width',
+    handleNewtabWidthSelection
+  );
+  const overlaySizeTabsController = createOptionsSegmentedControlController(
+    overlaySizeTabsWrap,
+    'overlay-size',
+    handleOverlaySizeSelection
+  );
+  const restrictedActionTabsController = createOptionsSegmentedControlController(
+    restrictedActionSelectWrap,
+    'restricted-action',
+    handleRestrictedActionSelection
+  );
+  const searchResultPriorityTabsController = createOptionsSegmentedControlController(
+    searchResultPriorityTabsWrap,
+    'search-result-priority',
+    handleSearchResultPrioritySelection
+  );
 
   // 使用系统字体，避免外链字体依赖。
   if (!panel || themeButtons.length === 0 || tabButtons.length === 0) {
@@ -338,6 +372,11 @@
   let currentMessages = null;
   let currentLanguageMode = 'system';
   let currentThemeMode = 'system';
+  let currentRecentMode = 'most';
+  let currentNewtabWidthMode = 'wide';
+  let currentOverlaySizeMode = 'standard';
+  let currentRestrictedAction = 'default';
+  let currentSearchResultPriority = 'autocomplete';
 
   function normalizeBlacklistMatchModes(value, fallbackMode) {
     if (BLACKLIST_UTILS.normalizeMatchModes) {
@@ -1057,11 +1096,15 @@
   }
 
   function measureInlineTabsIndicator(wrapper, indicator, activeSelector) {
-    if (!wrapper || !indicator) {
+    if (!wrapper) {
+      return null;
+    }
+    const liveIndicator = wrapper.querySelector('._x_extension_theme_indicator_2024_unique_') || indicator;
+    if (!liveIndicator) {
       return null;
     }
     const activeButton = wrapper.querySelector(activeSelector);
-    return measureTabsIndicator(wrapper, indicator, activeButton, 3, 0);
+    return measureTabsIndicator(wrapper, liveIndicator, activeButton, 3, 0);
   }
 
   function updateInlineTabsIndicator(wrapper, indicator, activeSelector) {
@@ -1163,36 +1206,119 @@
     tabsIndicatorsRefreshFrame = requestAnimationFrame(run);
   }
 
-  function setRecentModeTabState(mode) {
-    const nextMode = mode === 'most' ? 'most' : 'latest';
-    recentModeTabButtons.forEach((button) => {
-      const buttonMode = button.getAttribute('data-recent-mode') === 'most' ? 'most' : 'latest';
-      const active = buttonMode === nextMode;
+  function renderSegmentedControlState(
+    controller,
+    model,
+    legacyButtons,
+    dataAttribute,
+    normalizeValue
+  ) {
+    if (controller && typeof controller.render === 'function') {
+      controller.render(model);
+      return;
+    }
+    legacyButtons.forEach((button) => {
+      const buttonValue = normalizeValue(button.getAttribute(dataAttribute));
+      const active = buttonValue === model.activeValue;
       button.setAttribute('data-active', active ? 'true' : 'false');
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+  }
+
+  function setRecentModeTabState(mode) {
+    const nextMode = mode === 'most' ? 'most' : 'latest';
+    currentRecentMode = nextMode;
+    renderSegmentedControlState(
+      recentModeTabsController,
+      {
+        activeValue: nextMode,
+        dataAttribute: 'data-recent-mode',
+        items: [
+          {
+            value: 'latest',
+            labelKey: 'recent_mode_latest',
+            label: getMessage('recent_mode_latest', '最近访问'),
+            iconClass: 'ri-icon ri-size-14 ri-time-line'
+          },
+          {
+            value: 'most',
+            labelKey: 'recent_mode_most',
+            label: getMessage('recent_mode_most', '最常访问'),
+            iconClass: 'ri-icon ri-size-14 ri-vip-diamond-line'
+          }
+        ],
+        select: {
+          id: '_x_extension_recent_mode_select_2024_unique_'
+        }
+      },
+      recentModeTabButtons,
+      'data-recent-mode',
+      (value) => value === 'most' ? 'most' : 'latest'
+    );
     requestAnimationFrame(updateRecentModeTabsIndicator);
   }
 
   function setOverlaySizeTabState(mode) {
     const nextMode = normalizeOverlaySizeMode(mode);
-    overlaySizeTabButtons.forEach((button) => {
-      const buttonMode = normalizeOverlaySizeMode(button.getAttribute('data-overlay-size'));
-      const active = buttonMode === nextMode;
-      button.setAttribute('data-active', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    currentOverlaySizeMode = nextMode;
+    renderSegmentedControlState(
+      overlaySizeTabsController,
+      {
+        activeValue: nextMode,
+        dataAttribute: 'data-overlay-size',
+        items: [
+          {
+            value: 'compact',
+            labelKey: 'overlay_size_compact',
+            label: getMessage('overlay_size_compact', '小')
+          },
+          {
+            value: 'standard',
+            labelKey: 'overlay_size_standard',
+            label: getMessage('overlay_size_standard', '标准')
+          },
+          {
+            value: 'large',
+            labelKey: 'overlay_size_large',
+            label: getMessage('overlay_size_large', '大')
+          }
+        ]
+      },
+      overlaySizeTabButtons,
+      'data-overlay-size',
+      normalizeOverlaySizeMode
+    );
     requestAnimationFrame(updateOverlaySizeTabsIndicator);
   }
 
   function setNewtabWidthTabState(mode) {
     const nextMode = normalizeNewtabWidthMode(mode);
-    newtabWidthTabButtons.forEach((button) => {
-      const buttonMode = normalizeNewtabWidthMode(button.getAttribute('data-newtab-width'));
-      const active = buttonMode === nextMode;
-      button.setAttribute('data-active', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    currentNewtabWidthMode = nextMode;
+    renderSegmentedControlState(
+      newtabWidthTabsController,
+      {
+        activeValue: nextMode,
+        dataAttribute: 'data-newtab-width',
+        items: [
+          {
+            value: 'standard',
+            labelKey: 'newtab_width_standard',
+            label: getMessage('newtab_width_standard', '标准')
+          },
+          {
+            value: 'wide',
+            labelKey: 'newtab_width_wide',
+            label: getMessage('newtab_width_wide', '宽屏（推荐）')
+          }
+        ],
+        select: {
+          id: '_x_extension_newtab_width_select_2026_unique_'
+        }
+      },
+      newtabWidthTabButtons,
+      'data-newtab-width',
+      normalizeNewtabWidthMode
+    );
     requestAnimationFrame(updateNewtabWidthTabsIndicator);
   }
 
@@ -1213,12 +1339,33 @@
 
   function setRestrictedActionTabState(action) {
     const nextAction = action === 'none' ? 'none' : 'default';
-    restrictedActionTabButtons.forEach((button) => {
-      const buttonAction = button.getAttribute('data-restricted-action') === 'none' ? 'none' : 'default';
-      const active = buttonAction === nextAction;
-      button.setAttribute('data-active', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    currentRestrictedAction = nextAction;
+    renderSegmentedControlState(
+      restrictedActionTabsController,
+      {
+        activeValue: nextAction,
+        dataAttribute: 'data-restricted-action',
+        items: [
+          {
+            value: 'default',
+            labelKey: 'restricted_action_default',
+            label: getMessage('restricted_action_default', '前往 Lumno 新标签页'),
+            iconClass: 'ri-icon ri-size-14 ri-file-add-line'
+          },
+          {
+            value: 'none',
+            labelKey: 'restricted_action_none',
+            label: getMessage('restricted_action_none', '遵循浏览器设置')
+          }
+        ],
+        select: {
+          id: '_x_extension_restricted_action_select_2024_unique_'
+        }
+      },
+      restrictedActionTabButtons,
+      'data-restricted-action',
+      (value) => value === 'none' ? 'none' : 'default'
+    );
     requestAnimationFrame(updateRestrictedActionTabsIndicator);
   }
 
@@ -1231,14 +1378,99 @@
 
   function setSearchResultPriorityTabState(priority) {
     const nextPriority = normalizeSearchResultPriority(priority);
-    searchResultPriorityTabButtons.forEach((button) => {
-      const buttonPriority = normalizeSearchResultPriority(button.getAttribute('data-search-result-priority'));
-      const active = buttonPriority === nextPriority;
-      button.setAttribute('data-active', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    currentSearchResultPriority = nextPriority;
+    renderSegmentedControlState(
+      searchResultPriorityTabsController,
+      {
+        activeValue: nextPriority,
+        dataAttribute: 'data-search-result-priority',
+        items: [
+          {
+            value: 'autocomplete',
+            labelKey: 'search_result_priority_autocomplete',
+            label: getMessage('search_result_priority_autocomplete', '补全优先')
+          },
+          {
+            value: 'search',
+            labelKey: 'search_result_priority_search',
+            label: getMessage('search_result_priority_search', '搜索优先')
+          }
+        ],
+        select: {
+          id: '_x_extension_search_result_priority_select_2026_unique_'
+        }
+      },
+      searchResultPriorityTabButtons,
+      'data-search-result-priority',
+      normalizeSearchResultPriority
+    );
     requestAnimationFrame(updateSearchResultPriorityTabsIndicator);
   }
+
+  function handleNewtabWidthSelection(value) {
+    const nextMode = normalizeNewtabWidthMode(value);
+    setNewtabWidthTabState(nextMode);
+    if (newtabWidthSelect) {
+      newtabWidthSelect.value = nextMode;
+    }
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [NEWTAB_WIDTH_MODE_STORAGE_KEY]: nextMode });
+    notifyNewtabSectionsRefresh('all');
+  }
+
+  function handleOverlaySizeSelection(value) {
+    const nextMode = normalizeOverlaySizeMode(value);
+    setOverlaySizeTabState(nextMode);
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [OVERLAY_SIZE_MODE_STORAGE_KEY]: nextMode });
+  }
+
+  function handleSearchResultPrioritySelection(value) {
+    const nextPriority = normalizeSearchResultPriority(value);
+    setSearchResultPriorityTabState(nextPriority);
+    if (searchResultPrioritySelect) {
+      searchResultPrioritySelect.value = nextPriority;
+    }
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [SEARCH_RESULT_PRIORITY_STORAGE_KEY]: nextPriority });
+  }
+
+  function handleRecentModeSelection(value) {
+    const nextMode = value === 'most' ? 'most' : 'latest';
+    setRecentModeTabState(nextMode);
+    if (recentModeSelect) {
+      recentModeSelect.value = nextMode;
+    }
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [RECENT_MODE_STORAGE_KEY]: nextMode });
+    notifyNewtabSectionsRefresh('recent');
+  }
+
+  function handleRestrictedActionSelection(value) {
+    const nextAction = value === 'none' ? 'none' : 'default';
+    setRestrictedActionTabState(nextAction);
+    if (restrictedActionSelect) {
+      restrictedActionSelect.value = nextAction;
+    }
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set(createRestrictedActionStorageUpdate(nextAction));
+  }
+
+  setNewtabWidthTabState(currentNewtabWidthMode);
+  setOverlaySizeTabState(currentOverlaySizeMode);
+  setSearchResultPriorityTabState(currentSearchResultPriority);
+  setRecentModeTabState(currentRecentMode);
+  setRestrictedActionTabState(currentRestrictedAction);
 
   function storageGet(area, keys) {
     return new Promise((resolve) => {
@@ -1995,6 +2227,11 @@
       refreshShortcutsStatus();
       renderShortcutReferenceList();
       updateThemeButtons(currentThemeMode);
+      setNewtabWidthTabState(currentNewtabWidthMode);
+      setOverlaySizeTabState(currentOverlaySizeMode);
+      setSearchResultPriorityTabState(currentSearchResultPriority);
+      setRecentModeTabState(currentRecentMode);
+      setRestrictedActionTabState(currentRestrictedAction);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
       renderSiteSearchList();
@@ -3254,65 +3491,32 @@
   }
   if (newtabWidthSelect) {
     newtabWidthSelect.addEventListener('change', () => {
-      const nextMode = normalizeNewtabWidthMode(newtabWidthSelect.value);
-      setNewtabWidthTabState(nextMode);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [NEWTAB_WIDTH_MODE_STORAGE_KEY]: nextMode });
-      notifyNewtabSectionsRefresh('all');
+      handleNewtabWidthSelection(newtabWidthSelect.value);
     });
   }
   if (newtabWidthTabButtons.length > 0) {
     newtabWidthTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const nextMode = normalizeNewtabWidthMode(button.getAttribute('data-newtab-width'));
-        setNewtabWidthTabState(nextMode);
-        if (newtabWidthSelect) {
-          newtabWidthSelect.value = nextMode;
-        }
-        if (!storageArea) {
-          return;
-        }
-        storageArea.set({ [NEWTAB_WIDTH_MODE_STORAGE_KEY]: nextMode });
-        notifyNewtabSectionsRefresh('all');
+        handleNewtabWidthSelection(button.getAttribute('data-newtab-width'));
       });
     });
   }
   if (overlaySizeTabButtons.length > 0) {
     overlaySizeTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const nextMode = normalizeOverlaySizeMode(button.getAttribute('data-overlay-size'));
-        setOverlaySizeTabState(nextMode);
-        if (!storageArea) {
-          return;
-        }
-        storageArea.set({ [OVERLAY_SIZE_MODE_STORAGE_KEY]: nextMode });
+        handleOverlaySizeSelection(button.getAttribute('data-overlay-size'));
       });
     });
   }
   if (searchResultPrioritySelect) {
     searchResultPrioritySelect.addEventListener('change', () => {
-      const nextPriority = normalizeSearchResultPriority(searchResultPrioritySelect.value);
-      setSearchResultPriorityTabState(nextPriority);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [SEARCH_RESULT_PRIORITY_STORAGE_KEY]: nextPriority });
+      handleSearchResultPrioritySelection(searchResultPrioritySelect.value);
     });
   }
   if (searchResultPriorityTabButtons.length > 0) {
     searchResultPriorityTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const nextPriority = normalizeSearchResultPriority(button.getAttribute('data-search-result-priority'));
-        setSearchResultPriorityTabState(nextPriority);
-        if (searchResultPrioritySelect) {
-          searchResultPrioritySelect.value = nextPriority;
-        }
-        if (!storageArea) {
-          return;
-        }
-        storageArea.set({ [SEARCH_RESULT_PRIORITY_STORAGE_KEY]: nextPriority });
+        handleSearchResultPrioritySelection(button.getAttribute('data-search-result-priority'));
       });
     });
   }
@@ -3346,29 +3550,13 @@
   }
   if (recentModeSelect) {
     recentModeSelect.addEventListener('change', () => {
-      const rawMode = recentModeSelect.value;
-      const nextMode = rawMode === 'most' ? 'most' : 'latest';
-      setRecentModeTabState(nextMode);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [RECENT_MODE_STORAGE_KEY]: nextMode });
-      notifyNewtabSectionsRefresh('recent');
+      handleRecentModeSelection(recentModeSelect.value);
     });
   }
   if (recentModeTabButtons.length > 0) {
     recentModeTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const nextMode = button.getAttribute('data-recent-mode') === 'most' ? 'most' : 'latest';
-        setRecentModeTabState(nextMode);
-        if (recentModeSelect) {
-          recentModeSelect.value = nextMode;
-        }
-        if (!storageArea) {
-          return;
-        }
-        storageArea.set({ [RECENT_MODE_STORAGE_KEY]: nextMode });
-        notifyNewtabSectionsRefresh('recent');
+        handleRecentModeSelection(button.getAttribute('data-recent-mode'));
       });
     });
   }
@@ -3585,26 +3773,13 @@
 
   if (restrictedActionSelect) {
     restrictedActionSelect.addEventListener('change', () => {
-      const next = restrictedActionSelect.value || 'default';
-      setRestrictedActionTabState(next);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set(createRestrictedActionStorageUpdate(next));
+      handleRestrictedActionSelection(restrictedActionSelect.value);
     });
   }
   if (restrictedActionTabButtons.length > 0) {
     restrictedActionTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const nextAction = button.getAttribute('data-restricted-action') === 'none' ? 'none' : 'default';
-        setRestrictedActionTabState(nextAction);
-        if (restrictedActionSelect) {
-          restrictedActionSelect.value = nextAction;
-        }
-        if (!storageArea) {
-          return;
-        }
-        storageArea.set(createRestrictedActionStorageUpdate(nextAction));
+        handleRestrictedActionSelection(button.getAttribute('data-restricted-action'));
       });
     });
   }

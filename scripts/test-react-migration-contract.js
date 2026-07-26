@@ -222,23 +222,32 @@ assert(
 assert(
   optionsBundle.includes('LumnoOptionsToastReact') &&
     optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
+    optionsBundle.includes('LumnoOptionsSegmentedControlReact') &&
     optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
     optionsBundle.includes('LumnoOptionsThemePickerReact') &&
     optionsBundle.includes('LumnoOptionsReactIslands') &&
     optionsBundle.includes('options-popconfirm') &&
+    optionsBundle.includes('options-segmented-control') &&
     optionsBundle.includes('options-shortcut-reference') &&
     optionsBundle.includes('options-theme-picker') &&
     optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
     optionsSource.includes('reactApi.createPopconfirmController') &&
     optionsSource.includes('createPopconfirmWrap(') &&
     optionsSource.includes('destroyPopconfirmControllersWithin(') &&
+    optionsSource.includes('optionsSegmentedControlApi.createSegmentedControlController') &&
+    optionsSource.includes('renderSegmentedControlState(') &&
+    optionsSource.includes('recentModeTabsController') &&
+    optionsSource.includes('newtabWidthTabsController') &&
+    optionsSource.includes('overlaySizeTabsController') &&
+    optionsSource.includes('restrictedActionTabsController') &&
+    optionsSource.includes('searchResultPriorityTabsController') &&
     optionsSource.includes('optionsShortcutReferenceApi.createShortcutReferenceController') &&
     optionsSource.includes('shortcutReferenceController.render') &&
     optionsSource.includes('optionsThemePickerApi.createThemePickerController') &&
     optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Popconfirm, Shortcut Reference, Theme Picker, and Toast islands'
+  'Options should expose and consume its React Popconfirm, Segmented Control, Shortcut Reference, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&

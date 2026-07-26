@@ -12,6 +12,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsPopconfirmReact?: {
     implementation?: string;
   };
+  LumnoOptionsSegmentedControl?: {
+    implementation?: string;
+  };
+  LumnoOptionsSegmentedControlReact?: {
+    implementation?: string;
+  };
   LumnoOptionsShortcutReference?: {
     implementation?: string;
   };
@@ -39,6 +45,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsReactIslands;
   delete runtime.LumnoOptionsPopconfirm;
   delete runtime.LumnoOptionsPopconfirmReact;
+  delete runtime.LumnoOptionsSegmentedControl;
+  delete runtime.LumnoOptionsSegmentedControlReact;
   delete runtime.LumnoOptionsShortcutReference;
   delete runtime.LumnoOptionsShortcutReferenceReact;
   delete runtime.LumnoOptionsThemePicker;
@@ -66,6 +74,10 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsPopconfirmReact).toBe(
       runtime.LumnoOptionsPopconfirm
     );
+    expect(runtime.LumnoOptionsSegmentedControl?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsSegmentedControlReact).toBe(
+      runtime.LumnoOptionsSegmentedControl
+    );
     expect(runtime.LumnoOptionsShortcutReference?.implementation).toBe('react');
     expect(runtime.LumnoOptionsShortcutReferenceReact).toBe(
       runtime.LumnoOptionsShortcutReference
@@ -78,6 +90,7 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
     expect(runtime.LumnoOptionsReactIslands).toEqual({
       popconfirm: runtime.LumnoOptionsPopconfirm,
+      segmentedControl: runtime.LumnoOptionsSegmentedControl,
       shortcutReference: runtime.LumnoOptionsShortcutReference,
       themePicker: runtime.LumnoOptionsThemePicker,
       toast: runtime.LumnoOptionsToast
@@ -94,6 +107,7 @@ describe('Options React islands entry', () => {
 
     expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(false);
     expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
+    expect(runtime.LumnoOptionsSegmentedControl).toBeUndefined();
     expect(runtime.LumnoOptionsShortcutReference).toBeUndefined();
     expect(runtime.LumnoOptionsThemePicker).toBeUndefined();
     expect(runtime.LumnoOptionsToast).toBeUndefined();
