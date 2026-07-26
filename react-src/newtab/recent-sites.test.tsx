@@ -104,7 +104,7 @@ afterEach(() => {
 });
 
 describe('Recent Sites React island', () => {
-  it('preserves signatures and the legacy buildCard compatibility path', () => {
+  it('preserves signatures without a legacy renderer', () => {
     const items = [{
       title: 'Example',
       url: 'https://example.com/',
@@ -114,17 +114,10 @@ describe('Recent Sites React island', () => {
       '0::https://example.com/::Example::::::2'
     );
 
-    const legacyCard = document.createElement('div') as RecentCardElement;
-    const legacyApi = {
-      createRecentSitesView: () => ({
-        buildCard: () => legacyCard
-      })
-    };
     const options = createOptions();
-    const view = createRecentSitesView(options, legacyApi);
+    const view = createRecentSitesView(options);
     views.push(view);
-    expect(view.buildCard(items[0], 0)).toBe(legacyCard);
-    expect(createRecentSitesViewApi(legacyApi).implementation).toBe('react');
+    expect(createRecentSitesViewApi().implementation).toBe('react');
   });
 
   it('renders cards synchronously and keeps external card metadata intact', () => {

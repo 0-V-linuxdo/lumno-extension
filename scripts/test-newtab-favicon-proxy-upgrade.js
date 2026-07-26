@@ -2,10 +2,10 @@ const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 
-const suggestionsViewSource = fs.readFileSync('src/newtab/suggestions-view.js', 'utf8');
+const suggestionsViewSource = fs.readFileSync('react-src/newtab/suggestions.tsx', 'utf8');
 assert.match(
   suggestionsViewSource,
-  /preloadIcon\(tab\.favIconUrl,\s*tab\.url \|\| ''\)/,
+  /options\.preloadIcon\(\s*String\(tab\.favIconUrl\),\s*String\(tab\.url \|\| ''\)\s*\)/,
   'open-tab favicon preloads should include the page URL so path-specific exclusions are enforced'
 );
 

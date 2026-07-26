@@ -150,7 +150,6 @@ export interface RecentSitesRenderResult {
 }
 
 export interface RecentSitesViewController {
-  buildCard(item: RecentSiteItem, index: number): RecentCardElement | null;
   clear(): void;
   render(
     items: RecentSiteItem[],
@@ -158,19 +157,6 @@ export interface RecentSitesViewController {
   ): RecentSitesRenderResult;
   getSignature(items: RecentSiteItem[]): string;
   getCards(): RecentCardElement[];
-}
-
-interface LegacyRecentSitesView {
-  buildCard?: (
-    item: RecentSiteItem,
-    index: number
-  ) => RecentCardElement | null;
-}
-
-export interface LegacyRecentSitesApi {
-  createRecentSitesView?: (
-    options: RecentSitesViewOptions
-  ) => LegacyRecentSitesView;
 }
 
 interface NormalizedRecentSitesOptions {
@@ -916,7 +902,13 @@ function RecentSiteCard({
             onMouseLeave={options.hideTopActionTooltip}
             onFocus={showDismissTooltip}
             onBlur={options.hideTopActionTooltip}
-          />
+          >
+            <i
+              aria-hidden="true"
+              className="ri-icon ri-size-16 ri-subtract-line"
+              data-recent-dismiss-icon=""
+            />
+          </button>
         </div>
         <div ref={titleRef} className="x-nt-recent-title">
           {safeTitleText}
@@ -962,7 +954,15 @@ function RecentSiteCard({
           onMouseLeave={options.hideTopActionTooltip}
           onFocus={showPinTooltip}
           onBlur={options.hideTopActionTooltip}
-        />
+        >
+          <i
+            aria-hidden="true"
+            className={`ri-icon ri-size-16 ${
+              initiallyPinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'
+            }`}
+            data-recent-pin-icon=""
+          />
+        </button>
       </div>
     </div>
   );
@@ -988,15 +988,10 @@ function RecentSitesList({
 }
 
 function createNoopController(
-  rawOptions: RecentSitesViewOptions,
-  legacyApi?: LegacyRecentSitesApi | null
+  rawOptions: RecentSitesViewOptions
 ): RecentSitesViewController {
   const cards = Array.isArray(rawOptions.cards) ? rawOptions.cards : [];
-  const legacyView = legacyApi?.createRecentSitesView?.(rawOptions);
   return {
-    buildCard(item, index) {
-      return legacyView?.buildCard?.(item, index) || null;
-    },
     clear() {
       cards.length = 0;
     },
@@ -1016,15 +1011,13 @@ function createNoopController(
 }
 
 export function createRecentSitesView(
-  rawOptions: RecentSitesViewOptions = {},
-  legacyApi?: LegacyRecentSitesApi | null
+  rawOptions: RecentSitesViewOptions = {}
 ): RecentSitesViewController {
   const normalizedOptions = normalizeOptions(rawOptions);
   if (!normalizedOptions) {
-    return createNoopController(rawOptions, legacyApi);
+    return createNoopController(rawOptions);
   }
   const options: NormalizedRecentSitesOptions = normalizedOptions;
-  const legacyView = legacyApi?.createRecentSitesView?.(rawOptions);
   const reactRoot: Root = createRoot(options.grid);
   options.grid.setAttribute('data-react-island', 'recent-sites');
 
@@ -1075,9 +1068,6 @@ export function createRecentSitesView(
   }
 
   return {
-    buildCard(item, index) {
-      return legacyView?.buildCard?.(item, index) || null;
-    },
     clear,
     render,
     getSignature: getRecentSitesSignature,
@@ -1087,13 +1077,11 @@ export function createRecentSitesView(
   };
 }
 
-export function createRecentSitesViewApi(
-  legacyApi?: LegacyRecentSitesApi | null
-) {
+export function createRecentSitesViewApi() {
   return Object.freeze({
     implementation: 'react',
     createRecentSitesView(options?: RecentSitesViewOptions) {
-      return createRecentSitesView(options, legacyApi);
+      return createRecentSitesView(options);
     },
     getRecentSitesSignature
   });

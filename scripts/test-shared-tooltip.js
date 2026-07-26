@@ -10,6 +10,42 @@ const optionsHtmlPath = path.join(repoRoot, 'src/options/options.html');
 const overlayPanelPath = path.join(repoRoot, 'src/overlay/search-panel.js');
 const backgroundPath = path.join(repoRoot, 'src/background/background.js');
 
+global.LumnoTooltipView = {
+  implementation: 'react-test-double',
+  createTooltipElement(options) {
+    const element = options.documentObj.createElement('div');
+    element.id = options.id || '';
+    element.classList.add('_x_extension_tooltip_2026_unique_');
+    if (options.className) {
+      String(options.className).split(/\s+/).filter(Boolean)
+        .forEach((name) => element.classList.add(name));
+    }
+    element.setAttribute('data-react-island', 'tooltip');
+    element.setAttribute('data-visible', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('data-tooltip-position', options.positionMode === 'absolute' ? 'absolute' : 'fixed');
+    if (options.kind) {
+      element.setAttribute('data-tooltip-kind', options.kind);
+    }
+    return element;
+  },
+  destroyTooltipElement() {},
+  renderTooltipText(element, text) {
+    element.replaceChildren();
+    String(text || '').split('\n').forEach((line) => {
+      const child = element.ownerDocument.createElement('span');
+      child.classList.add(
+        line === '────────'
+          ? '_x_extension_tooltip_divider_2026_unique_'
+          : '_x_extension_tooltip_line_2026_unique_'
+      );
+      child.textContent = line === '────────' ? '' : line;
+      element.appendChild(child);
+    });
+    return element;
+  }
+};
+
 assert.ok(fs.existsSync(tooltipJsPath), 'shared tooltip behavior should live in src/shared/tooltip.js');
 assert.ok(fs.existsSync(tooltipCssPath), 'shared tooltip styling should live in src/shared/tooltip.css');
 

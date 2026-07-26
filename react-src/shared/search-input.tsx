@@ -27,6 +27,12 @@ export interface SearchInputConfig {
   rightIconHtml?: string;
   rightIconId?: string;
   rightIconStyleOverrides?: StyleOverrides;
+  secondaryAction?: {
+    ariaLabel?: string;
+    className?: string;
+    html?: string;
+    id: string;
+  };
   showRightIcon?: boolean;
   showUnderlineWhenEmpty?: boolean;
   styleMode?: string;
@@ -42,7 +48,14 @@ export interface SearchInputParts {
   icon: HTMLDivElement;
   input: HTMLInputElement;
   modeBadge: HTMLDivElement | null;
+  modePrefix: HTMLSpanElement;
+  modePrefixIcon: HTMLImageElement;
+  modePrefixText: HTMLSpanElement;
+  modeTabHint: HTMLSpanElement;
+  modeTabHintKey: HTMLSpanElement;
+  modeTabHintText: HTMLSpanElement;
   rightIcon: HTMLButtonElement;
+  secondaryAction: HTMLButtonElement | null;
 }
 
 const CLASSES = Object.freeze({
@@ -179,6 +192,16 @@ function noTranslateProps() {
 }
 
 function SearchInput({ config }: { config: SearchInputConfig }) {
+  const modeSurface =
+    config.modeBadge?.surface === 'overlay' ? 'overlay' : 'newtab';
+  const modePrefixId =
+    modeSurface === 'overlay'
+      ? '_x_extension_site_search_prefix_2024_unique_'
+      : '_x_extension_newtab_site_search_prefix_2024_unique_';
+  const modeTabHintId =
+    modeSurface === 'overlay'
+      ? '_x_extension_site_search_tab_hint_2026_unique_'
+      : '_x_extension_newtab_site_search_tab_hint_2026_unique_';
   return (
     <>
       <div
@@ -199,6 +222,40 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
         placeholder={config.placeholder || 'Search or enter URL...'}
         type="text"
       />
+      <span
+        {...noTranslateProps()}
+        className="x-lumno-search-input-mode__prefix"
+        data-search-input-mode-prefix=""
+        id={modePrefixId}
+      >
+        <img
+          alt=""
+          data-search-input-mode-prefix-icon=""
+          decoding="async"
+          referrerPolicy="no-referrer"
+          style={{ display: 'none' }}
+        />
+        <span
+          {...noTranslateProps()}
+          data-search-input-mode-prefix-text=""
+        />
+      </span>
+      <span
+        {...noTranslateProps()}
+        aria-hidden="true"
+        className="x-lumno-search-input-mode__tab-hint"
+        data-search-input-mode-tab-hint=""
+        id={modeTabHintId}
+      >
+        <span
+          {...noTranslateProps()}
+          data-search-input-mode-tab-key=""
+        />
+        <span
+          {...noTranslateProps()}
+          data-search-input-mode-tab-text=""
+        />
+      </span>
       <div
         {...noTranslateProps()}
         className={CLASSES.divider}
@@ -221,6 +278,18 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
           type="button"
         />
       )}
+      {config.secondaryAction ? (
+        <button
+          {...noTranslateProps()}
+          aria-label={config.secondaryAction.ariaLabel || ''}
+          className={config.secondaryAction.className || ''}
+          dangerouslySetInnerHTML={{
+            __html: config.secondaryAction.html || ''
+          }}
+          id={config.secondaryAction.id}
+          type="button"
+        />
+      ) : null}
       {config.modeBadge ? (
         <div
           className={
@@ -353,10 +422,60 @@ export function createSearchInput(
     root.unmount();
     throw new Error('Lumno React search input did not mount.');
   }
-  const modeBadge = container.querySelector<HTMLDivElement>(
-    '.x-lumno-search-input-mode__badge'
+  const modeBadge = config.modeBadge
+    ? container.querySelector<HTMLDivElement>(`#${config.modeBadge.id}`)
+    : container.querySelector<HTMLDivElement>(
+        '.x-lumno-search-input-mode__badge'
+      );
+  const secondaryAction = config.secondaryAction
+    ? container.querySelector<HTMLButtonElement>(
+        `#${config.secondaryAction.id}`
+      )
+    : null;
+  const modePrefix = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-prefix]'
   );
-  const parts = { container, divider, icon, input, modeBadge, rightIcon };
+  const modePrefixIcon = container.querySelector<HTMLImageElement>(
+    '[data-search-input-mode-prefix-icon]'
+  );
+  const modePrefixText = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-prefix-text]'
+  );
+  const modeTabHint = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-tab-hint]'
+  );
+  const modeTabHintKey = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-tab-key]'
+  );
+  const modeTabHintText = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-tab-text]'
+  );
+  if (
+    !modePrefix ||
+    !modePrefixIcon ||
+    !modePrefixText ||
+    !modeTabHint ||
+    !modeTabHintKey ||
+    !modeTabHintText
+  ) {
+    root.unmount();
+    throw new Error('Lumno React search input mode surface did not mount.');
+  }
+  const parts = {
+    container,
+    divider,
+    icon,
+    input,
+    modeBadge,
+    modePrefix,
+    modePrefixIcon,
+    modePrefixText,
+    modeTabHint,
+    modeTabHintKey,
+    modeTabHintText,
+    rightIcon,
+    secondaryAction
+  };
   (
     [
       [container, 'container', config.containerStyleOverrides],

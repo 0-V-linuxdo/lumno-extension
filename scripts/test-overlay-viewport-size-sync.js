@@ -6,7 +6,7 @@ require('../src/overlay/lifecycle.js');
 
 const lifecycle = globalThis.LumnoOverlayLifecycle;
 const lifecycleSource = fs.readFileSync('src/overlay/lifecycle.js', 'utf8');
-const shellSource = fs.readFileSync('src/overlay/shell.js', 'utf8');
+const shellSource = fs.readFileSync('react-src/overlay/shell.tsx', 'utf8');
 const searchPanelSource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 const suggestionsViewSource = fs.readFileSync(
   'src/overlay/suggestions-view.css',
@@ -143,7 +143,7 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const previousHeightState = captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?suggestionsContainer\.innerHTML = '';[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\(suggestionsContainer, previousHeightState\.height\);/,
+  /const previousHeightState = captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?reactView\.render\(\{[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\([\s\S]*?suggestionsContainer,[\s\S]*?previousHeightState\.height/,
   'overlay suggestion replacements should animate from the existing container height instead of restarting at zero'
 );
 assert.match(

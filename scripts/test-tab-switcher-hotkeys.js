@@ -4,6 +4,10 @@ const fs = require('fs');
 const contentHotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
 const switcherSource = fs.readFileSync('src/overlay/tab-switcher.js', 'utf8');
+const switcherViewReactSource = fs.readFileSync(
+  'react-src/overlay/tab-switcher.tsx',
+  'utf8'
+);
 const switcherBridgePath = 'src/overlay/tab-switcher-page-bridge.js';
 const switcherBridgeSource = fs.existsSync(switcherBridgePath)
   ? fs.readFileSync(switcherBridgePath, 'utf8')
@@ -81,20 +85,15 @@ assert.strictEqual(
   false,
   'tab switcher should not keep reload-time runtime version markers'
 );
-const setButtonActiveBlock = getFunctionBlock(
-  switcherSource,
-  'function setButtonActive(button, active)',
-  'function clampSelectedIndex(index, length)'
-);
 assert.match(
-  setButtonActiveBlock,
-  /button\.tabIndex = active \? 0 : -1;/,
-  'tab switcher should keep selected-card focusability in sync without forcing focus on every selection render'
+  switcherViewReactSource,
+  /data-active=\{active \? 'true' : 'false'\}[\s\S]*?tabIndex=\{active \? 0 : -1\}/,
+  'the React tab switcher should keep selected-card focusability in sync'
 );
 assert.strictEqual(
-  /\.focus\(/.test(setButtonActiveBlock),
+  /updateSelection\(index\)[\s\S]*?focus\(/.test(switcherViewReactSource),
   false,
-  'tab switcher selection rendering should not force card focus because it can cause visible jumpiness'
+  'React tab switcher selection updates should not force focus because it can cause visible jumpiness'
 );
 assert.strictEqual(
   /getTabSwitcherRuntimeVersion|tab_switcher_runtime_stale|runtimeVersion/.test(switcherBridgeSource),
@@ -400,9 +399,9 @@ assert.match(
   'tab switcher cards should use a pointer cursor for hover selection'
 );
 assert.match(
-  switcherSource,
-  /card\.addEventListener\('pointerenter'[\s\S]*selectedIndex = index[\s\S]*renderSelection\(\)/,
-  'tab switcher cards should select on pointer hover'
+  switcherViewReactSource,
+  /onPointerEnter=\{\(\) => options\.onSelect\(index\)\}/,
+  'React tab switcher cards should select on pointer hover'
 );
 assert.strictEqual(
   switcherSource.includes("createElement(document, 'div', 'x-tab-switcher-title')"),
@@ -520,10 +519,10 @@ assert.match(
   /#\$\{PANEL_ID\}\[data-visible="true"\]\s*\{[\s\S]*transform:\s*translate3d\(-50%,\s*-50%,\s*0\)\s*scale\(var\(--x-tab-switcher-visible-scale\)\);/,
   'tab switcher visible state should remain vertically centered'
 );
-assert.match(
-  switcherSource,
-  /panel\.setAttribute\('data-visible',\s*'true'\);[\s\S]*document\.documentElement\.appendChild\(host\)/,
-  'tab switcher should be visible on first paint instead of waiting two animation frames and flashing in'
+assert.ok(
+  switcherViewReactSource.includes('data-visible="true"') &&
+    switcherSource.includes('document.documentElement.appendChild(host)'),
+  'the React tab switcher should mount in its visible state on first paint'
 );
 assert.strictEqual(
   /requestAnimationFrame\(\(\) => \{\s*requestAnimationFrame\(\(\) => \{[\s\S]*data-visible/.test(switcherSource),
@@ -862,19 +861,19 @@ assert.strictEqual(
 );
 const fallbackFaviconBlock = getCssRuleBlock(switcherSource, '.x-tab-switcher-favicon');
 assert.match(
-  switcherSource,
-  /function prepareImage\(image\)[\s\S]*addEventListener\('error'[\s\S]*data-broken[\s\S]*removeAttribute\('src'\)/,
-  'tab switcher should mark broken favicon and thumbnail images instead of leaving visible broken-image icons'
+  switcherViewReactSource,
+  /onError=\{\(event\) => \{[\s\S]*?setAttribute\('data-broken', 'true'\)[\s\S]*?removeAttribute\('src'\)/,
+  'the React tab switcher should mark broken images instead of leaving visible broken-image icons'
+);
+assert.match(
+  switcherViewReactSource,
+  /updateThumbnail\(update\)[\s\S]*?_previousThumbnail:[\s\S]*?_thumbnailEntering:\s*true[\s\S]*?requestFrame\([\s\S]*?_thumbnailEntering:\s*false[\s\S]*?_previousThumbnail:\s*''/,
+  'the React tab switcher should transition fresh screenshots over cached thumbnails'
 );
 assert.match(
   switcherSource,
-  /function updateCardThumbnail\(card,\s*tab,\s*update\)[\s\S]*data-entering[\s\S]*requestAnimationFrame[\s\S]*removeAttribute\('data-entering'\)[\s\S]*remove\(\)/,
-  'tab switcher should transition fresh screenshot updates over the cached thumbnail without rerendering the card'
-);
-assert.match(
-  switcherSource,
-  /host\._lumnoTabSwitcherUpdateThumbnail = function\(update\)[\s\S]*updateCardThumbnail/,
-  'tab switcher should expose an in-page thumbnail update hook while it is open'
+  /host\._lumnoTabSwitcherUpdateThumbnail = function\(update\)[\s\S]*tabSwitcherReactView\.updateThumbnail\(update\)/,
+  'the tab switcher adapter should expose its React thumbnail update hook while open'
 );
 assert.match(
   switcherSource,
@@ -992,19 +991,19 @@ assert.strictEqual(
   'tab switcher cards without a screenshot should inherit base highlight motion instead of duplicating state-specific CSS'
 );
 assert.match(
-  switcherSource,
-  /function createPreparedImage\(doc,\s*className,\s*src,\s*altText\)[\s\S]*prepareImage\(createElement\(doc,\s*'img',\s*className\)\)[\s\S]*image\.alt = altText;/,
-  'tab switcher favicon and thumbnail image setup should use a shared prepared-image helper'
+  switcherViewReactSource,
+  /function PreparedImage\([\s\S]*?<img[\s\S]*?className=\{className\}[\s\S]*?src=\{src\}[\s\S]*?alt=\{alt\}/,
+  'React tab switcher favicon and thumbnail setup should use a shared prepared-image component'
 );
 assert.match(
-  switcherSource,
-  /function createTitleFavicon\(doc,\s*favIconUrl\)[\s\S]*x-tab-switcher-title-favicon[\s\S]*createPreparedImage\(doc,\s*'x-tab-switcher-title-favicon',\s*favIconUrl,\s*''\)/,
-  'tab switcher title favicon fallback should be encapsulated instead of patched into the render loop'
+  switcherViewReactSource,
+  /function TitleFavicon\([\s\S]*?x-tab-switcher-title-favicon[\s\S]*?<PreparedImage/,
+  'React tab switcher title favicon fallback should be encapsulated'
 );
 assert.match(
-  switcherSource,
-  /nameRow\.appendChild\(createTitleFavicon\(document,\s*tab\.favIconUrl\)\);/,
-  'tab switcher should render a title favicon before the title for inactive cards'
+  switcherViewReactSource,
+  /<TitleFavicon src=\{favicon\} \/>[\s\S]*?className="x-tab-switcher-name"/,
+  'React tab switcher should render a title favicon before the title'
 );
 assert.match(
   thumbBlock,
@@ -1051,14 +1050,14 @@ assert.match(
   'tab switcher host labels should tighten with the title stack'
 );
 assert.match(
-  switcherSource,
+  switcherViewReactSource,
   /data-thumbnail-status/,
-  'tab switcher thumbnails should expose their capture status for stable fallback rendering'
+  'React tab switcher thumbnails should expose their capture status for stable fallback rendering'
 );
 assert.match(
-  switcherSource,
-  /card\.setAttribute\('data-thumbnail-status',\s*thumbnailStatus\)/,
-  'tab switcher cards should expose thumbnail status so no-screenshot cards can disable animation'
+  switcherViewReactSource,
+  /data-thumbnail-status=\{thumbnailStatus\}/,
+  'React tab switcher cards should expose thumbnail status so no-screenshot cards can disable animation'
 );
 assert.match(
   switcherSource,
@@ -1426,9 +1425,9 @@ assert.match(
   'Alt+Q payload should include thumbnail capture failure reason'
 );
 assert.match(
-  switcherSource,
-  /const accentCss = normalizeAccentCss\(tab\.accentRgb\);[\s\S]*--x-tab-switcher-card-accent/,
-  'tab switcher cards should expose each tab accent as a per-card CSS variable'
+  switcherViewReactSource,
+  /const accent = options\.normalizeAccentCss\(tab\.accentRgb\);[\s\S]*?'--x-tab-switcher-card-accent': accent/,
+  'React tab switcher cards should expose each tab accent as a per-card CSS variable'
 );
 const scheduleThumbnailBlock = getFunctionBlock(
   backgroundSource,

@@ -6,11 +6,6 @@ const INCLUDED_EXTENSIONS = new Set(['.js', '.html', '.css']);
 const IGNORED_DIRS = new Set(['node_modules', 'dist', '.git']);
 const STYLE_DEBT_ALLOWLIST = [
   {
-    file: 'src/overlay/shell.js',
-    reason: 'overlay host fixed geometry, isolation, and panel entry/exit protections',
-    important: true
-  },
-  {
     file: 'src/overlay/lifecycle.js',
     reason: 'overlay viewport and zoom synchronization',
     setPropertyImportant: true

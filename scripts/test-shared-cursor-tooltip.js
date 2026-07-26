@@ -8,6 +8,60 @@ const cursorTooltipJsPath = path.join(repoRoot, 'src/shared/cursor-tooltip.js');
 const cursorTooltipCssPath = path.join(repoRoot, 'src/shared/cursor-tooltip.css');
 const newtabHtmlPath = path.join(repoRoot, 'src/newtab/newtab.html');
 
+global.LumnoTooltipView = {
+  implementation: 'react-test-double',
+  createTooltipElement(options) {
+    const element = options.documentObj.createElement('div');
+    element.id = options.id || '';
+    element.classList.add('_x_extension_tooltip_2026_unique_');
+    if (options.className) {
+      String(options.className).split(/\s+/).filter(Boolean)
+        .forEach((name) => element.classList.add(name));
+    }
+    element.setAttribute('data-react-island', 'tooltip');
+    element.setAttribute('data-visible', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('data-tooltip-position', options.positionMode === 'absolute' ? 'absolute' : 'fixed');
+    if (options.kind) {
+      element.setAttribute('data-tooltip-kind', options.kind);
+    }
+    return element;
+  },
+  destroyTooltipElement() {},
+  renderTooltipText(element, text) {
+    element.replaceChildren();
+    const child = element.ownerDocument.createElement('span');
+    child.classList.add('_x_extension_tooltip_line_2026_unique_');
+    child.textContent = String(text || '');
+    element.appendChild(child);
+    return element;
+  },
+  renderCursorTag(element, model) {
+    element.replaceChildren();
+    const key = element.ownerDocument.createElement('span');
+    key.classList.add('_x_extension_cursor_tooltip_tag_key_2026_unique_');
+    key.setAttribute('data-cursor-tooltip-tag-key', model.keyText);
+    if (model.windowsLogo) {
+      const logo = element.ownerDocument.createElement('span');
+      logo.classList.add('_x_extension_cursor_tooltip_windows_logo_2026_unique_');
+      for (let index = 0; index < 4; index += 1) {
+        const pane = element.ownerDocument.createElement('span');
+        pane.classList.add('_x_extension_cursor_tooltip_windows_logo_pane_2026_unique_');
+        logo.appendChild(pane);
+      }
+      key.appendChild(logo);
+    } else {
+      key.textContent = model.keyText;
+    }
+    const label = element.ownerDocument.createElement('span');
+    label.classList.add('_x_extension_cursor_tooltip_tag_label_2026_unique_');
+    label.textContent = model.label;
+    element.appendChild(key);
+    element.appendChild(label);
+    return element;
+  }
+};
+
 assert.ok(fs.existsSync(cursorTooltipJsPath), 'cursor-following tooltip should live in src/shared/cursor-tooltip.js');
 assert.ok(fs.existsSync(cursorTooltipCssPath), 'cursor-following tooltip styling should live in src/shared/cursor-tooltip.css');
 
@@ -237,24 +291,13 @@ assert.strictEqual(element.getAttribute('data-tooltip-kind'), 'cursor', 'cursor 
 assert.strictEqual(element.getAttribute('data-visible'), 'true', 'cursor show() should mark tooltip visible');
 assert.strictEqual(element.style.getPropertyValue('left'), '114px', 'cursor tooltip should offset from pointer x');
 assert.strictEqual(element.style.getPropertyValue('top'), '136px', 'cursor tooltip should offset from pointer y');
-let customRenderCalls = 0;
 controller.show(target, '我觉得完整标题', { clientX: 100, clientY: 120 }, {
-  checkActive: false,
-  renderContent: (tooltipElement, text) => {
-    customRenderCalls += 1;
-    tooltipElement.replaceChildren();
-    const prefix = fakeDocument.createElement('span');
-    prefix.textContent = String(text || '').replace('我觉得', '');
-    const mark = fakeDocument.createElement('mark');
-    mark.textContent = '我觉得';
-    tooltipElement.appendChild(mark);
-    tooltipElement.appendChild(prefix);
-  }
+  checkActive: false
 });
-assert.strictEqual(customRenderCalls, 1, 'cursor tooltip should call custom content renderers');
-assert.ok(
-  element.children.some((child) => child.tagName === 'mark' && child.textContent === '我觉得'),
-  'cursor tooltip custom content should support highlighted mark nodes'
+assert.strictEqual(
+  element.children[0].textContent,
+  '我觉得完整标题',
+  'cursor tooltip text should be rendered by the shared React view'
 );
 controller.show(target, 'A very long bookmark title', { clientX: 100, clientY: 120 }, {
   checkActive: false,

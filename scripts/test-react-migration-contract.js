@@ -109,37 +109,45 @@ const bundlePaths = [
   overlayBundlePath
 ];
 
-const legacyScript = '<script src="shortcut-dialog.js"></script>';
-const legacyRecentSitesScript = '<script src="recent-sites-view.js"></script>';
-const legacyBookmarksScript = '<script src="bookmarks-view.js"></script>';
-const legacySuggestionsScript = '<script src="suggestions-view.js"></script>';
-const legacyShortcutsScript = '<script src="shortcuts-view.js"></script>';
-const legacyToastScript = '<script src="toast.js"></script>';
+const retiredNewtabRendererScripts = [
+  'bookmarks-topbar.js',
+  'page-notice.js',
+  'toast.js',
+  'dock.js',
+  'recent-sites-view.js',
+  'bookmarks-view.js',
+  'suggestions-view.js',
+  'shortcut-dialog.js',
+  'shortcuts-view.js'
+].map((name) => `<script src="${name}"></script>`);
+const retiredRendererFiles = [
+  'src/newtab/bookmarks-topbar.js',
+  'src/newtab/bookmarks-view.js',
+  'src/newtab/dock.js',
+  'src/newtab/page-notice.js',
+  'src/newtab/recent-sites-view.js',
+  'src/newtab/shortcut-dialog.js',
+  'src/newtab/shortcuts-view.js',
+  'src/newtab/suggestions-view.js',
+  'src/newtab/toast.js',
+  'src/overlay/input-ui.js',
+  'src/overlay/shell.js',
+  'src/shared/checkbox.js',
+  'src/shared/custom-select.js',
+  'src/shared/search-input-ui.js'
+];
 const bootstrapScript = 'src="../shared/react-page-bootstrap.js"';
 
 assert(
-  newtabHtml.includes(legacyScript) &&
-    newtabHtml.includes(legacyRecentSitesScript) &&
-    newtabHtml.includes(legacyBookmarksScript) &&
-    newtabHtml.includes(legacySuggestionsScript) &&
-    newtabHtml.includes(legacyShortcutsScript) &&
-    newtabHtml.includes(legacyToastScript) &&
+  retiredNewtabRendererScripts.every((script) => !newtabHtml.includes(script)) &&
     newtabHtml.includes(bootstrapScript),
-  'newtab should declare its fallback APIs and React-aware page bootstrap'
+  'New Tab should load its React entry without retired renderer scripts'
 );
 assert(
-  newtabHtml.indexOf(legacyRecentSitesScript) <
-      newtabHtml.indexOf(bootstrapScript) &&
-    newtabHtml.indexOf(legacyBookmarksScript) <
-      newtabHtml.indexOf(bootstrapScript) &&
-    newtabHtml.indexOf(legacySuggestionsScript) <
-      newtabHtml.indexOf(bootstrapScript) &&
-    newtabHtml.indexOf(legacyShortcutsScript) <
-      newtabHtml.indexOf(bootstrapScript) &&
-    newtabHtml.indexOf(legacyToastScript) <
-      newtabHtml.indexOf(bootstrapScript) &&
-    newtabHtml.indexOf(legacyScript) < newtabHtml.indexOf(bootstrapScript),
-  'fallback APIs should be ready before the React-aware bootstrap starts'
+  retiredRendererFiles.every(
+    (relativePath) => !fs.existsSync(path.join(repoRoot, relativePath))
+  ),
+  'retired UI renderer and fallback files should stay deleted'
 );
 assert(
   !newtabHtml.includes('<script src="newtab.js"></script>') &&
@@ -147,8 +155,9 @@ assert(
     newtabHtml.includes('data-page-entry="../newtab/newtab.js"') &&
     newtabHtml.includes('data-react-state="LumnoNewtabReactBootstrap"') &&
     bootstrap.includes('import(reactEntryUrl)') &&
-    bootstrap.includes("startPage(bootstrapState.reactReady ? 'react' : 'legacy')"),
-  'the bootstrap should wait for the React islands before injecting the classic page runtime'
+    bootstrap.includes('if (!bootstrapState.reactReady)') &&
+    bootstrap.includes('startPage();'),
+  'the bootstrap should require React readiness before injecting the browser adapter'
 );
 assert(
   !optionsHtml.includes('<script src="options.js"></script>') &&
@@ -167,10 +176,12 @@ assert(
   'Onboarding should use the shared React-aware bootstrap and retain classic page semantics'
 );
 assert(
-  bootstrap.includes("startPage('legacy')") &&
-    bootstrap.includes('allowReactUpgrade') &&
-    bootstrap.includes('1500'),
-  'the bootstrap should retain a bounded legacy fallback when React cannot start'
+  !bootstrap.includes("startPage('legacy')") &&
+    !bootstrap.includes('allowReactUpgrade') &&
+    !bootstrap.includes('1500') &&
+    bootstrap.includes("root.dataset.lumnoReactRuntime = 'error'") &&
+    bootstrap.includes('React page failed to start'),
+  'the bootstrap should fail explicitly instead of reviving a legacy UI path'
 );
 assert.strictEqual(
   packageJson.scripts['build:react'],
@@ -204,8 +215,8 @@ assert(
     fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    234 * 1024,
-  'the Options React route should stay within its 234 KiB uncompressed budget'
+    236 * 1024,
+  'the Options React route should stay within its 236 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
@@ -287,109 +298,62 @@ assert(
   'the shared React search input should keep a diagnostic host marker'
 );
 assert(
-  optionsBundle.includes('LumnoOptionsToastReact') &&
-    optionsBundle.includes('LumnoOptionsBlacklistListReact') &&
-    optionsBundle.includes('LumnoOptionsPopconfirmReact') &&
-    optionsBundle.includes('LumnoOptionsSegmentedControlReact') &&
-    optionsBundle.includes('LumnoOptionsSelectControlReact') &&
-    optionsBundle.includes('LumnoOptionsSettingsNavigationReact') &&
-    optionsBundle.includes('LumnoOptionsSettingsControlsReact') &&
-    optionsBundle.includes('LumnoOptionsSettingsFormsReact') &&
-    optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
-    optionsBundle.includes('LumnoOptionsSiteSearchListReact') &&
-    optionsBundle.includes('LumnoOptionsThemePickerReact') &&
-    optionsBundle.includes('LumnoOptionsReactIslands') &&
-    optionsBundle.includes('options-blacklist-list') &&
-    optionsBundle.includes('options-popconfirm') &&
-    optionsBundle.includes('options-segmented-control') &&
-    optionsBundle.includes('options-select-control') &&
-    optionsBundle.includes('options-settings-navigation') &&
-    optionsBundle.includes('options-toggle-control') &&
-    optionsBundle.includes('options-required-checkbox-group') &&
-    optionsBundle.includes('options-site-search-form') &&
-    optionsBundle.includes('options-blacklist-form') &&
-    optionsBundle.includes('options-shortcut-reference') &&
-    optionsBundle.includes('options-site-search-list') &&
-    optionsBundle.includes('options-theme-picker') &&
-    optionsSource.includes('globalThis.LumnoOptionsPopconfirm') &&
-    optionsSource.includes('globalThis.LumnoOptionsBlacklistList') &&
-    optionsSource.includes('optionsBlacklistListApi.createBlacklistListController') &&
-    optionsSource.includes('renderBlacklistListWithReact(') &&
-    optionsSource.includes('searchBlacklistListController') &&
-    optionsSource.includes('faviconBlacklistListController') &&
-    optionsSource.includes('reactApi.createPopconfirmController') &&
-    optionsSource.includes('createPopconfirmWrap(') &&
-    optionsSource.includes('destroyPopconfirmControllersWithin(') &&
-    optionsSource.includes('optionsSegmentedControlApi.createSegmentedControlController') &&
-    optionsSource.includes('renderSegmentedControlState(') &&
-    optionsSource.includes('recentModeTabsController') &&
-    optionsSource.includes('newtabWidthTabsController') &&
-    optionsSource.includes('overlaySizeTabsController') &&
-    optionsSource.includes('restrictedActionTabsController') &&
-    optionsSource.includes('searchResultPriorityTabsController') &&
-    optionsSource.includes('optionsSelectControlApi.createSelectControlController') &&
-    optionsSource.includes('setOptionsSelectState(') &&
-    optionsSource.includes('renderOptionsSelectControl(') &&
-    optionsSource.includes('optionsSettingsNavigationApi.createSettingsNavigationController') &&
-    optionsSource.includes('settingsNavigationController.render') &&
-    optionsSource.includes('handleSettingsTabSelection') &&
-    optionsSource.includes('optionsSettingsControlsApi.createToggleControlController') &&
-    optionsSource.includes('optionsSettingsControlsApi.createRequiredCheckboxGroupController') &&
-    optionsSource.includes('setOptionsToggleState(') &&
-    optionsSource.includes('renderSearchResultSourceTypeControl(') &&
-    optionsSource.includes('optionsSettingsFormsApi.createSiteSearchFormController') &&
-    optionsSource.includes('optionsSettingsFormsApi.createBlacklistFormController') &&
-    optionsSource.includes('handleReactSiteSearchFormSave') &&
-    optionsSource.includes('handleReactSearchBlacklistFormSave') &&
-    optionsSource.includes('handleReactFaviconBlacklistFormSave') &&
-    optionsSource.includes('optionsShortcutReferenceApi.createShortcutReferenceController') &&
-    optionsSource.includes('shortcutReferenceController.render') &&
-    optionsSource.includes('optionsSiteSearchListApi.createSiteSearchListController') &&
-    optionsSource.includes('renderSiteSearchListController(') &&
-    optionsSource.includes('siteSearchCustomListController') &&
-    optionsSource.includes('siteSearchBuiltinListController') &&
-    optionsSource.includes('siteSearchAiBuiltinListController') &&
-    optionsSource.includes('optionsThemePickerApi.createThemePickerController') &&
-    optionsSource.includes('themePickerController.render') &&
-    optionsSource.includes('optionsToastApi.createToastController') &&
-    optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Select Control, Settings Controls, Settings Forms, Settings Navigation, Shortcut Reference, Site Search List, Theme Picker, and Toast islands'
+  [
+    'LumnoOptionsToastReact',
+    'LumnoOptionsBlacklistListReact',
+    'LumnoOptionsPopconfirmReact',
+    'LumnoOptionsSegmentedControlReact',
+    'LumnoOptionsSelectControlReact',
+    'LumnoOptionsSettingsNavigationReact',
+    'LumnoOptionsSettingsControlsReact',
+    'LumnoOptionsSettingsFormsReact',
+    'LumnoOptionsShortcutReferenceReact',
+    'LumnoOptionsShortcutHotkeyReact',
+    'LumnoOptionsSiteSearchListReact',
+    'LumnoOptionsThemePickerReact',
+    'LumnoOptionsReactIslands'
+  ].every((name) => optionsBundle.includes(name)) &&
+    [
+      'optionsBlacklistListApi.createBlacklistListController',
+      'optionsPopconfirmApi',
+      'optionsSegmentedControlApi.createSegmentedControlController',
+      'optionsSelectControlApi.createSelectControlController',
+      'optionsSettingsControlsApi.createToggleControlController',
+      'optionsSettingsControlsApi.createRequiredCheckboxGroupController',
+      'optionsSettingsFormsApi.createSiteSearchFormController',
+      'optionsSettingsFormsApi.createBlacklistFormController',
+      'optionsSettingsNavigationApi.createSettingsNavigationController',
+      'optionsShortcutReferenceApi.createShortcutReferenceController',
+      'optionsShortcutHotkeyApi.createShortcutHotkeyController',
+      'optionsSiteSearchListApi.createSiteSearchListController',
+      'optionsThemePickerApi.createThemePickerController',
+      'optionsToastApi.createToastController'
+    ].every((contract) => optionsSource.includes(contract)),
+  'Options should install and consume every migrated React controller'
 );
 assert(
-  onboardingBundle.includes('LumnoOnboardingPageStripReact') &&
-    onboardingBundle.includes('LumnoOnboardingActionsReact') &&
-    onboardingBundle.includes('LumnoOnboardingBodyCopyReact') &&
-    onboardingBundle.includes('LumnoOnboardingCopyHeadingReact') &&
-    onboardingBundle.includes('LumnoOnboardingCursorLayerReact') &&
-    onboardingBundle.includes('LumnoOnboardingInteractionsReact') &&
-    onboardingBundle.includes('LumnoOnboardingVisualSurfaceReact') &&
-    onboardingBundle.includes('LumnoOnboardingReactIslands') &&
-    onboardingBundle.includes('onboarding-page-strip') &&
-    onboardingBundle.includes('onboarding-actions') &&
-    onboardingBundle.includes('onboarding-body-copy') &&
-    onboardingBundle.includes('onboarding-title-copy') &&
-    onboardingBundle.includes('onboarding-cursor-layer') &&
-    onboardingBundle.includes('onboarding-interactions') &&
-    onboardingBundle.includes('onboarding-lumno-wordmark-surface') &&
-    onboardingBundle.includes('onboarding-feature-cards-surface') &&
-    onboardingBundle.includes('onboarding-site-search-demo-surface') &&
-    onboardingBundle.includes('onboarding-newtab-preview-surface') &&
-    onboardingBundle.includes('onboarding-bookmark-focus-surface') &&
-    onboardingSource.includes('onboardingPageStripApi.createPageStripController') &&
-    onboardingSource.includes('pageStripController.render') &&
-    onboardingSource.includes('onboardingActionsApi.createActionButtonsController') &&
-    onboardingSource.includes('copyActionsController.render') &&
-    onboardingSource.includes('onboardingBodyCopyApi.createBodyCopyController') &&
-    onboardingSource.includes('bodyCopyController.render') &&
-    onboardingSource.includes('onboardingCopyHeadingApi.createCopyHeadingController') &&
-    onboardingSource.includes('copyHeadingController.render') &&
-    onboardingSource.includes('onboardingCursorLayerApi.createCursorLayerController') &&
-    onboardingSource.includes('cursorLayerController.render') &&
-    onboardingSource.includes('onboardingInteractionsApi.createInteractionsController') &&
-    onboardingSource.includes('interactionSlotsController.render') &&
-    onboardingSource.includes('onboardingVisualSurfaceApi.createVisualSurfaceController') &&
-    onboardingSource.includes('visualSurfaceController.render'),
-  'Onboarding should expose and consume its React page-strip, action, body-copy, copy-heading, cursor-layer, interaction, and visual-surface islands'
+  [
+    'LumnoOnboardingPageStripReact',
+    'LumnoOnboardingActionsReact',
+    'LumnoOnboardingBodyCopyReact',
+    'LumnoOnboardingCopyHeadingReact',
+    'LumnoOnboardingCursorLayerReact',
+    'LumnoOnboardingInteractionsReact',
+    'LumnoOnboardingVisualSurfaceReact',
+    'LumnoOnboardingInfoTooltipContentReact',
+    'LumnoOnboardingReactIslands'
+  ].every((name) => onboardingBundle.includes(name)) &&
+    [
+      'onboardingPageStripApi.createPageStripController',
+      'onboardingActionsApi.createActionButtonsController',
+      'onboardingBodyCopyApi.createBodyCopyController',
+      'onboardingCopyHeadingApi.createCopyHeadingController',
+      'onboardingCursorLayerApi.createCursorLayerController',
+      'onboardingInteractionsApi.createInteractionsController',
+      'onboardingVisualSurfaceApi.createVisualSurfaceController',
+      'onboardingInfoTooltipContentApi.render('
+    ].every((contract) => onboardingSource.includes(contract)),
+  'Onboarding should install and consume every migrated React controller'
 );
 assert(
   !bundle.includes('process.env.NODE_ENV') &&

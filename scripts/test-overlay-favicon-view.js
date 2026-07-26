@@ -30,11 +30,7 @@ function createRealPolicyRerender(deps) {
   const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
   const factory = new Function('runtimeDeps', `
     const suggestionsContainer = runtimeDeps.suggestionsContainer;
-    const latestOverlayQuery = runtimeDeps.latestOverlayQuery;
-    const lastSuggestionResponse = runtimeDeps.lastSuggestionResponse;
-    const tabs = runtimeDeps.tabs;
-    const updateSearchSuggestions = runtimeDeps.updateSearchSuggestions;
-    const renderTabSuggestions = runtimeDeps.renderTabSuggestions;
+    const CustomEvent = runtimeDeps.CustomEvent;
     ${extractFunctionSource(overlayJs, 'rerenderReplacedFaviconRows')}
     return rerenderReplacedFaviconRows;
   `);
@@ -300,6 +296,10 @@ function testOverlayRendererLoadsFaviconPolicyBeforeInitialTabs() {
 
 function testOverlayRendererGuardsThemeSourcesInStrictMode() {
   const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+  const suggestionsReact = fs.readFileSync(
+    path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+    'utf8'
+  );
   assert.match(
     overlayJs,
     /function getOverlayFaviconUrlResolver\(\)[\s\S]*?isEnhancedFaviconFetchEnabled: isOverlayEnhancedFaviconFetchEnabled/,
@@ -327,187 +327,133 @@ function testOverlayRendererGuardsThemeSourcesInStrictMode() {
   );
   assert.match(
     overlayJs,
-    /const safeModeSwitchFavicon = getSafeOverlayFaviconUrl\(suggestion\.favicon\)[\s\S]*?favicon\.src = safeModeSwitchFavicon/,
-    'mode-switch rows should sanitize their favicon before direct image assignment'
+    /function buildModeSuggestion\(\)[\s\S]*?favicon:\s*chrome\.runtime\.getURL\('assets\/images\/lumno\.png'\)/,
+    'mode-switch rows should source their favicon from a trusted extension resource'
   );
   assert.match(
-    overlayJs,
-    /attachFaviconData\(favicon,\s*iconUrl,\s*suggestionHost,\s*suggestion\.url \|\| ''\)/,
-    'suggestion favicon data requests should include the page URL for path-specific exclusions'
+    suggestionsReact,
+    /options\.attachFaviconWithFallbacks\([\s\S]*?spec\.url \|\| spec\.favicon \|\| ''[\s\S]*?getFaviconCandidates\(/,
+    'React suggestion favicon requests should include the page URL for path-specific exclusions'
   );
 }
 
 function testOverlayRendererLetsLocalFaviconsReachRuntime() {
   const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+  const suggestionsReact = fs.readFileSync(
+    path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+    'utf8'
+  );
   assert.doesNotMatch(
     overlayJs,
     /const useFallback = shouldBlockOverlayFaviconForHost\(hostForTab\);/,
     'overlay open-tab rendering should let local favicons reach the data-only runtime path'
   );
-  const faviconBranch = overlayJs.search(
-    /if \(suggestion\.favicon \|\|[\s\S]{0,160}?faviconContinuityOptions\.reuseFavicon[\s\S]{0,220}?createAttachedSuggestionFavicon\([\s\S]{0,120}?faviconContinuityOptions/
+  assert.match(
+    suggestionsReact,
+    /if \(favicon \|\| useBrowserFavicon\)[\s\S]*?kind:\s*'favicon'[\s\S]*?attach:\s*true/,
+    'the React suggestions view should route available favicon data through the runtime attachment path'
   );
-  const localFallbackBranch = overlayJs.indexOf('} else if (suggestionHost && shouldBlockOverlayFaviconForHost(suggestionHost)) {\n              iconNode = createLinkIcon();');
-  assert.notStrictEqual(faviconBranch, -1, 'overlay suggestion rendering should keep the favicon runtime branch');
-  assert.notStrictEqual(localFallbackBranch, -1, 'overlay suggestion rendering should keep a no-favicon local fallback');
-  assert.ok(
-    faviconBranch < localFallbackBranch,
-    'overlay suggestion rendering should try favicon runtime before local link fallback'
+  assert.match(
+    suggestionsReact,
+    /if \(host && options\.shouldBlockFaviconForHost\(host\)\) \{\s*return \{ kind: 'inline', iconName: 'ri-link' \};/,
+    'the React suggestions view should keep a link-icon fallback for blocked favicon hosts'
+  );
+  assert.match(
+    suggestionsReact,
+    /options\.attachFaviconWithFallbacks\([\s\S]*?getFaviconCandidates\(/,
+    'the React favicon element should delegate candidate loading to the data-only runtime'
   );
 }
 
-function testOverlayRendererDefersFallbackReplacementUntilFaviconIsMounted() {
+function testOverlayRendererDelegatesFallbackStateToReact() {
   const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
-  assert.match(
+  const suggestionsReact = fs.readFileSync(
+    path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(
     overlayJs,
-    /function replaceFaviconWithFallbackIcon\(favicon,\s*fallbackIconFactory\)[\s\S]*?scheduleFaviconFallbackReplacement\(favicon,\s*replace\);/,
-    'overlay favicon fallback replacement should retry after the favicon has been mounted'
+    /replaceChild\([^)]*favicon|createSuggestionInlineIcon|createLinkIcon/,
+    'the overlay adapter should not replace React-owned favicon nodes'
   );
   assert.match(
     overlayJs,
-    /fallbackDiv\.setAttribute\('data-x-ov-favicon-policy-fallback', 'true'\)[\s\S]*?replaceChild\(fallbackDiv, favicon\)/,
-    'replaced favicon fallbacks should remain discoverable for policy-change recovery'
+    /function attachReactOverlayFavicon\([\s\S]*?new CustomEvent\('lumno-favicon-fallback', \{\s*bubbles: true/,
+    'favicon runtime failures should be reported back to the owning React component'
+  );
+  assert.match(
+    suggestionsReact,
+    /slot\.addEventListener\(\s*'lumno-favicon-fallback',[\s\S]*?setFailed\(true\)/,
+    'the React favicon component should own its fallback state'
+  );
+  assert.match(
+    suggestionsReact,
+    /data-favicon-failed=\{failed \? 'true' : undefined\}[\s\S]*?<InlineIcon/,
+    'failed favicon state should render the fallback icon through React'
   );
   assert.match(
     overlayJs,
-    /function rerenderReplacedFaviconRows\(\)[\s\S]*?data-x-ov-favicon-policy-fallback[\s\S]*?updateSearchSuggestions\(lastSuggestionResponse, latestOverlayQuery, \{[\s\S]*?forceFullRerender: true[\s\S]*?\}\)[\s\S]*?renderTabSuggestions\(tabs\)/,
-    'policy-change recovery should rerender cached search or open-tab rows only when a replacement exists'
+    /function rerenderReplacedFaviconRows\(\)[\s\S]*?data-favicon-failed="true"[\s\S]*?new CustomEvent\('lumno-favicon-retry'\)/,
+    'policy changes should ask failed React rows to retry without rebuilding their DOM'
   );
   assert.match(
     overlayJs,
-    /function scheduleFaviconFallbackReplacement\(favicon,\s*replace\)[\s\S]*?queueMicrotask[\s\S]*?replace\(\)/,
-    'overlay favicon fallback replacement should use a microtask so same-turn appenders can mount the image first'
-  );
-  assert.match(
-    overlayJs,
-    /const replaceWithFallbackIcon = function\(\) \{\s*replaceFaviconWithFallbackIcon\(favicon,\s*fallbackIconFactory\);\s*\};/,
-    'attached suggestion favicons should use the deferred fallback replacement helper'
-  );
-  assert.match(
-    overlayJs,
-    /\(\) => \{\s*replaceFaviconWithFallbackIcon\(favicon,\s*createLinkIcon\);\s*\}/,
-    'open-tab favicons should use the deferred fallback replacement helper'
+    /attachFaviconWithFallbacks:\s*attachReactOverlayFavicon/,
+    'search and open-tab React rows should share the same favicon attachment adapter'
   );
 }
 
-function testOverlayPolicyRecoveryUsesRealSearchAndOpenTabRerenderPaths() {
-  const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
-  const currentSuggestions = [{ type: 'history', title: 'VPN', url: 'https://foo.example.com/' }];
-  const activeSearchCalls = [];
-  let openTabRenderCount = 0;
-  const activeSearchRerender = createRealPolicyRerender({
+function testOverlayPolicyRecoverySignalsFailedReactRows() {
+  const eventNames = [];
+  const failedSlots = [{
+    dispatchEvent(event) {
+      eventNames.push(event.type);
+    }
+  }];
+  function TestCustomEvent(type) {
+    this.type = type;
+  }
+  const retryFailedRows = createRealPolicyRerender({
+    CustomEvent: TestCustomEvent,
     suggestionsContainer: {
-      querySelector(selector) {
-        assert.strictEqual(selector, '[data-x-ov-favicon-policy-fallback="true"]');
-        return {};
+      querySelectorAll(selector) {
+        assert.strictEqual(selector, '[data-favicon-failed="true"]');
+        return failedSlots;
       }
-    },
-    latestOverlayQuery: 'vpn',
-    lastSuggestionResponse: currentSuggestions,
-    tabs: [{ id: 1, url: 'https://foo.example.com/' }],
-    updateSearchSuggestions() {
-      activeSearchCalls.push(Array.from(arguments));
-    },
-    renderTabSuggestions() {
-      openTabRenderCount += 1;
     }
   });
 
-  assert.strictEqual(activeSearchRerender(), true, 'active-search fallback recovery should report a rerender');
-  assert.strictEqual(activeSearchCalls.length, 1, 'active-search recovery should call updateSearchSuggestions once');
-  assert.strictEqual(activeSearchCalls[0][0], currentSuggestions, 'active-search recovery should reuse the latest response');
-  assert.strictEqual(activeSearchCalls[0][1], 'vpn', 'active-search recovery should preserve the active query');
+  assert.strictEqual(retryFailedRows(), true, 'failed React rows should report a recovery attempt');
   assert.deepStrictEqual(
-    activeSearchCalls[0][2],
-    { forceFullRerender: true },
-    'active-search recovery should opt out of prefix reuse so replaced rows are recreated'
+    eventNames,
+    ['lumno-favicon-retry'],
+    'each failed React row should receive a retry event'
   );
-  assert.strictEqual(openTabRenderCount, 0, 'active-search recovery should not render the open-tab branch');
-
-  const openTabCalls = [];
-  const openTabs = [{ id: 2, url: 'https://bar.example.com/' }];
-  const openTabRerender = createRealPolicyRerender({
+  const noFailedRows = createRealPolicyRerender({
+    CustomEvent: TestCustomEvent,
     suggestionsContainer: {
-      querySelector() {
-        return {};
+      querySelectorAll() {
+        return [];
       }
-    },
-    latestOverlayQuery: '',
-    lastSuggestionResponse: [],
-    tabs: openTabs,
-    updateSearchSuggestions() {
-      activeSearchCalls.push(Array.from(arguments));
-    },
-    renderTabSuggestions(tabList) {
-      openTabCalls.push(tabList);
     }
   });
-
-  assert.strictEqual(openTabRerender(), true, 'open-tab fallback recovery should report a rerender');
-  assert.deepStrictEqual(openTabCalls, [openTabs], 'open-tab recovery should rebuild the current tab rows');
-
-  const renderPolicyFactory = new Function(`
-    ${extractFunctionSource(overlayJs, 'isSameSuggestion')}
-    ${extractFunctionSource(overlayJs, 'isSuggestionPrefix')}
-    ${extractFunctionSource(overlayJs, 'shouldAppendSearchSuggestionRows')}
-    return shouldAppendSearchSuggestionRows;
-  `);
-  const shouldAppendSearchSuggestionRows = renderPolicyFactory();
-  const commonRenderState = {
-    query: 'vpn',
-    lastRenderedQuery: 'vpn',
-    actionContextKey: '0|default|mixed',
-    lastRenderedActionContextKey: '0|default|mixed',
-    currentSuggestions,
-    allSuggestions: currentSuggestions
-  };
-  assert.strictEqual(
-    shouldAppendSearchSuggestionRows({ ...commonRenderState, forceFullRerender: false }),
-    true,
-    'normal incremental updates should still reuse an identical rendered prefix'
-  );
-  assert.strictEqual(
-    shouldAppendSearchSuggestionRows({ ...commonRenderState, ...activeSearchCalls[0][2] }),
-    false,
-    'the real active-search recovery option should force startIndex back to zero'
-  );
-  assert.match(
-    overlayJs,
-    /function updateSearchSuggestions\(suggestions, query, options\)[\s\S]*?const forceFullRerender = renderOptions\.forceFullRerender === true;[\s\S]*?shouldAppendSearchSuggestionRows\(\{[\s\S]*?forceFullRerender,/,
-    'updateSearchSuggestions should feed the recovery option into the production prefix-reuse decision'
-  );
-}
-
-function testOverlayRendererReusesRuntimeFallbackIcon() {
-  const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
-  assert.match(
-    overlayJs,
-    /function findAttachedFaviconFallbackIcon\(favicon\)[\s\S]*?_x_extension_overlay_favicon_fallback_2026_unique_/,
-    'overlay fallback replacement should look for the runtime-managed fallback icon'
-  );
-  assert.match(
-    overlayJs,
-    /function showAttachedFaviconFallbackIcon\(favicon\)[\s\S]*?fallbackNode\.setAttribute\('data-visible', 'true'\)[\s\S]*?favicon\.setAttribute\('data-fallback-icon', 'true'\)/,
-    'overlay fallback replacement should show the runtime fallback and hide the failed image'
-  );
-  assert.match(
-    overlayJs,
-    /if \(showAttachedFaviconFallbackIcon\(favicon\)\) \{\s*return true;\s*\}[\s\S]*?fallbackIconFactory/,
-    'overlay fallback replacement should not create a second link icon when the runtime fallback exists'
-  );
+  assert.strictEqual(noFailedRows(), false, 'recovery should stay idle when React has no failed rows');
 }
 
 function testOverlayRendererBuildsBrowserPageFavicon2WhenMissingExplicitIcon() {
-  const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
-  assert.match(
-    overlayJs,
-    /const browserPageFavicon = suggestion\.type === 'browserPage'[\s\S]*?getPageFaviconCandidateUrl\(suggestion\.url \|\| ''\)/,
-    'browser-page suggestions should synthesize a browser favicon candidate when no explicit favicon is present'
+  const suggestionsReact = fs.readFileSync(
+    path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+    'utf8'
   );
   assert.match(
-    overlayJs,
-    /browserPageFavicon === suggestion\.favicon[\s\S]*?\{ \.\.\.suggestion, favicon: browserPageFavicon \}/,
-    'browser-page suggestions should pass the synthesized favicon into the shared favicon fallback chain'
+    suggestionsReact,
+    /const useBrowserFavicon =\s*type === 'browserPage'[\s\S]*?options\.isBrowserInternalUrl\(url\)[\s\S]*?if \(favicon \|\| useBrowserFavicon\)/,
+    'the React suggestions view should synthesize a browser favicon candidate when no explicit icon is present'
+  );
+  assert.match(
+    suggestionsReact,
+    /getPageFaviconRenderCandidates:[\s\S]*?const browserPageUrl = getBrowserPageFaviconUrl\(url\)[\s\S]*?browserPageUrl \|\| explicitUrl/,
+    'React browser-page suggestions should pass the synthesized favicon through the shared fallback chain'
   );
 }
 
@@ -549,8 +495,8 @@ function testOverlayRendererDefinesChromeMonogramHelper() {
   );
   assert.match(
     overlayJs,
-    /function createAttachedSuggestionFavicon\(suggestion, index, fallbackIconFactory, options\)[\s\S]*?!isChromeMonogramFaviconUrl\(iconUrl\)/,
-    'direct URL suggestion favicons should use the local chrome monogram helper instead of an undefined global'
+    /function attachReactOverlayFavicon\([\s\S]*?attachResolvedFaviconWithFallbacks\(/,
+    'React suggestion favicons should delegate to the runtime that owns chrome monogram filtering'
   );
 }
 
@@ -880,18 +826,9 @@ async function testOverlayPolicyEnableRecoversReplacedStrictFallback() {
     replacementVisible = true;
     currentImg.isConnected = false;
   };
-  runtimeOptions.rerenderReplacedFaviconRows = createRealPolicyRerender({
-    suggestionsContainer: {
-      querySelector() {
-        return replacementVisible ? {} : null;
-      }
-    },
-    latestOverlayQuery: 'vpn',
-    lastSuggestionResponse: [{ type: 'history', title: 'VPN', url: 'https://foo.example.com/' }],
-    tabs: [],
-    updateSearchSuggestions(_suggestions, query, options) {
-      assert.strictEqual(query, 'vpn', 'active-search recovery should preserve its query');
-      assert.deepStrictEqual(options, { forceFullRerender: true });
+  const failedSlot = {
+    dispatchEvent(event) {
+      assert.strictEqual(event.type, 'lumno-favicon-retry');
       replacementVisible = false;
       rerenderCount += 1;
       currentImg = createFakeImage();
@@ -902,9 +839,17 @@ async function testOverlayPolicyEnableRecoversReplacedStrictFallback() {
         created.vpnDirectFaviconUrl,
         replaceFailedImage
       );
-    },
-    renderTabSuggestions() {
-      throw new Error('active-search policy recovery should not render open tabs');
+    }
+  };
+  function TestCustomEvent(type) {
+    this.type = type;
+  }
+  runtimeOptions.rerenderReplacedFaviconRows = createRealPolicyRerender({
+    CustomEvent: TestCustomEvent,
+    suggestionsContainer: {
+      querySelectorAll() {
+        return replacementVisible ? [failedSlot] : [];
+      }
     }
   });
   created = createRuntime(runtimeOptions);
@@ -975,20 +920,9 @@ async function testOverlayOpenTabPolicyRecoveryIsSafeInBothDirections() {
     replacementVisible = true;
     currentImg.isConnected = false;
   };
-  runtimeOptions.rerenderReplacedFaviconRows = createRealPolicyRerender({
-    suggestionsContainer: {
-      querySelector() {
-        return replacementVisible ? {} : null;
-      }
-    },
-    latestOverlayQuery: '',
-    lastSuggestionResponse: [],
-    tabs: [{ id: 7, title: 'VPN', url: 'https://foo.example.com/' }],
-    updateSearchSuggestions() {
-      throw new Error('open-tab policy recovery should not render active-search results');
-    },
-    renderTabSuggestions(tabList) {
-      assert.strictEqual(tabList.length, 1, 'open-tab recovery should reuse the current tab list');
+  const failedSlot = {
+    dispatchEvent(event) {
+      assert.strictEqual(event.type, 'lumno-favicon-retry');
       replacementVisible = false;
       rerenderCount += 1;
       currentImg = createFakeImage();
@@ -999,6 +933,17 @@ async function testOverlayOpenTabPolicyRecoveryIsSafeInBothDirections() {
         created.vpnDirectFaviconUrl,
         replaceFailedImage
       );
+    }
+  };
+  function TestCustomEvent(type) {
+    this.type = type;
+  }
+  runtimeOptions.rerenderReplacedFaviconRows = createRealPolicyRerender({
+    CustomEvent: TestCustomEvent,
+    suggestionsContainer: {
+      querySelectorAll() {
+        return replacementVisible ? [failedSlot] : [];
+      }
     }
   });
   created = createRuntime(runtimeOptions);
@@ -1119,12 +1064,11 @@ testOverlayResolvesLocalFaviconThroughDataUrl()
   .then(testOverlayStrictModeReusesCachedFaviconData)
   .then(testOverlayPolicyEnableRecoversReplacedStrictFallback)
   .then(testOverlayOpenTabPolicyRecoveryIsSafeInBothDirections)
-  .then(testOverlayPolicyRecoveryUsesRealSearchAndOpenTabRerenderPaths)
+  .then(testOverlayPolicyRecoverySignalsFailedReactRows)
   .then(testOverlayUsesChromeFavicon2ForBrowserInternalPages)
   .then(testOverlayUsesExtensionFaviconProxyForBrowserInternalPagesWithoutExplicitIcon)
   .then(testOverlayRendererLetsLocalFaviconsReachRuntime)
-  .then(testOverlayRendererDefersFallbackReplacementUntilFaviconIsMounted)
-  .then(testOverlayRendererReusesRuntimeFallbackIcon)
+  .then(testOverlayRendererDelegatesFallbackStateToReact)
   .then(testOverlayRendererBuildsBrowserPageFavicon2WhenMissingExplicitIcon)
   .then(testOverlayRendererUsesExtensionFaviconProxyForBrowserPages)
   .then(testOverlayRendererDefinesChromeMonogramHelper)

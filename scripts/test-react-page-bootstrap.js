@@ -39,15 +39,13 @@ const ONBOARDING_CONFIG = Object.freeze({
 
 async function runBootstrap({ config, importResult }) {
   const appendedScripts = [];
-  const warnings = [];
-  const timers = new Map();
-  let nextTimerId = 1;
+  const errors = [];
 
   const sandbox = {
     URL,
     console: {
-      warn(...args) {
-        warnings.push(args);
+      error(...args) {
+        errors.push(args);
       }
     },
     document: {
@@ -70,15 +68,6 @@ async function runBootstrap({ config, importResult }) {
           appendedScripts.push(node);
         }
       }
-    },
-    setTimeout(callback) {
-      const id = nextTimerId;
-      nextTimerId += 1;
-      timers.set(id, callback);
-      return id;
-    },
-    clearTimeout(id) {
-      timers.delete(id);
     },
     __importReact(specifier) {
       assert.strictEqual(
@@ -110,15 +99,14 @@ async function runBootstrap({ config, importResult }) {
   return {
     appendedScripts,
     context,
-    timers,
-    warnings
+    errors
   };
 }
 
-function assertInjectedPage(result, config, expectedMode) {
+function assertInjectedPage(result, config) {
   assert.strictEqual(
     result.context.document.documentElement.dataset.lumnoReactRuntime,
-    expectedMode
+    'react'
   );
   assert.strictEqual(result.appendedScripts.length, 1);
   assert.strictEqual(
@@ -136,46 +124,43 @@ function assertInjectedPage(result, config, expectedMode) {
     config: NEWTAB_CONFIG,
     importResult: 'success'
   });
-  assert.deepStrictEqual(newtabSuccess.warnings, []);
-  assertInjectedPage(newtabSuccess, NEWTAB_CONFIG, 'react');
-  assert.strictEqual(newtabSuccess.timers.size, 0);
+  assert.deepStrictEqual(newtabSuccess.errors, []);
+  assertInjectedPage(newtabSuccess, NEWTAB_CONFIG);
 
   const optionsSuccess = await runBootstrap({
     config: OPTIONS_CONFIG,
     importResult: 'success'
   });
-  assert.deepStrictEqual(optionsSuccess.warnings, []);
-  assertInjectedPage(optionsSuccess, OPTIONS_CONFIG, 'react');
-  assert.strictEqual(optionsSuccess.timers.size, 0);
+  assert.deepStrictEqual(optionsSuccess.errors, []);
+  assertInjectedPage(optionsSuccess, OPTIONS_CONFIG);
 
   const onboardingSuccess = await runBootstrap({
     config: ONBOARDING_CONFIG,
     importResult: 'success'
   });
-  assert.deepStrictEqual(onboardingSuccess.warnings, []);
-  assertInjectedPage(onboardingSuccess, ONBOARDING_CONFIG, 'react');
-  assert.strictEqual(onboardingSuccess.timers.size, 0);
+  assert.deepStrictEqual(onboardingSuccess.errors, []);
+  assertInjectedPage(onboardingSuccess, ONBOARDING_CONFIG);
 
   const failure = await runBootstrap({
     config: NEWTAB_CONFIG,
     importResult: 'failure'
   });
-  assertInjectedPage(failure, NEWTAB_CONFIG, 'legacy');
-  assert.strictEqual(failure.warnings.length, 1);
-  assert.strictEqual(failure.timers.size, 0);
+  assert.strictEqual(failure.appendedScripts.length, 0);
+  assert.strictEqual(
+    failure.context.document.documentElement.dataset.lumnoReactRuntime,
+    'error'
+  );
+  assert.strictEqual(failure.errors.length, 1);
 
   const timeout = await runBootstrap({
     config: OPTIONS_CONFIG,
     importResult: 'pending'
   });
   assert.strictEqual(timeout.appendedScripts.length, 0);
-  assert.strictEqual(timeout.timers.size, 1);
-  Array.from(timeout.timers.values())[0]();
-  assertInjectedPage(timeout, OPTIONS_CONFIG, 'legacy');
   assert.strictEqual(
-    timeout.context.LumnoOptionsReactBootstrap.allowReactUpgrade,
-    false,
-    'a timed-out React entry should not replace fallback APIs after the page starts'
+    timeout.context.document.documentElement.dataset.lumnoReactRuntime,
+    'loading',
+    'a pending React entry should keep the page in its explicit loading state'
   );
 
   console.log('shared React page bootstrap tests passed');

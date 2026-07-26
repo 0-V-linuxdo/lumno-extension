@@ -342,52 +342,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
   }
 
-  function escapeRegExp(text) {
-    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
   function sanitizeDisplayText(text) {
     const raw = String(text || '');
     const withoutSpecial = raw.replace(/[\u0000-\u001F\u007F-\u009F\uFEFF\uFFF9-\uFFFD]|\p{Co}/gu, '');
     return withoutSpecial.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
-  }
-
-  function renderHighlightedText(target, text, query, styles) {
-    applyNoTranslate(target);
-    const safeText = sanitizeDisplayText(text);
-    const needle = String(query || '').trim();
-    if (!needle) {
-      target.textContent = safeText;
-      return;
-    }
-    const parts = safeText.split(new RegExp(`(${escapeRegExp(needle)})`, 'gi'));
-    if (parts.length === 1) {
-      target.textContent = safeText;
-      return;
-    }
-    parts.forEach((part) => {
-      if (!part) {
-        return;
-      }
-      if (part.toLowerCase() === needle.toLowerCase()) {
-        const mark = document.createElement('mark');
-        applyNoTranslate(mark);
-        mark.style.background = styles && styles.background
-          ? styles.background
-          : 'var(--x-ext-mark-bg, #CFE8FF)';
-        mark.style.color = styles && styles.color
-          ? styles.color
-          : 'var(--x-ext-mark-text, #1E3A8A)';
-        mark.style.padding = '0 1px';
-        mark.style.borderRadius = '2px';
-        mark.style.lineHeight = 'inherit';
-        mark.style.fontFamily = "'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-        mark.textContent = part;
-        target.appendChild(mark);
-      } else {
-        target.appendChild(document.createTextNode(part));
-      }
-    });
   }
 
   function applyNoTranslate(element) {
@@ -418,59 +376,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     return root;
   }
 
-  function setProtectedPlainText(element, text) {
-    if (!element) {
-      return element;
-    }
-    const safeText = sanitizeDisplayText(text);
-    element._xProtectedRender = function() {
-      applyNoTranslate(element);
-      if (element.textContent !== safeText || element.childNodes.length !== 1 || element.firstChild.nodeType !== Node.TEXT_NODE) {
-        element.textContent = safeText;
-      }
-    };
-    element._xProtectedRender();
-    return element;
-  }
-
-  function setProtectedHighlightedText(element, text, query, styles) {
-    if (!element) {
-      return element;
-    }
-    const safeText = sanitizeDisplayText(text);
-    const safeQuery = String(query || '');
-    element._xProtectedRender = function() {
-      applyNoTranslate(element);
-      element.textContent = '';
-      renderHighlightedText(element, safeText, safeQuery, styles);
-    };
-    element._xProtectedRender();
-    return element;
-  }
-
   function restoreProtectedNode(node) {
-    if (node && typeof node._xProtectedRender === 'function') {
-      node._xProtectedRender();
-      return true;
-    }
     return false;
   }
 
   function restoreProtectedAncestors(node, root) {
-    let current = node && node.nodeType === Node.ELEMENT_NODE
-      ? node
-      : node && node.parentElement
-        ? node.parentElement
-        : null;
-    while (current) {
-      if (restoreProtectedNode(current)) {
-        return true;
-      }
-      if (current === root) {
-        break;
-      }
-      current = current.parentElement;
-    }
     return false;
   }
 
@@ -480,22 +390,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
   function pauseOverlayAntiTranslateObserverForScroll() {
     overlayAntiTranslateGuard.pauseForScroll();
-  }
-
-  function setInlineLabelWithIcon(container, labelText, iconHtml) {
-    if (!container) {
-      return;
-    }
-    container.textContent = '';
-    const label = document.createElement('span');
-    label.className = 'x-ov-inline-label';
-    setProtectedPlainText(label, labelText);
-    const icon = document.createElement('span');
-    icon.className = 'x-ov-inline-icon';
-    applyNoTranslate(icon);
-    icon.innerHTML = iconHtml;
-    container.appendChild(label);
-    container.appendChild(icon);
   }
 
   function startOverlayAntiTranslateObserver(root) {
@@ -1422,6 +1316,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         '--x-ext-input-right-icon-inset': '13px',
         cursor: 'pointer'
       },
+      secondaryAction: {
+        id: '_x_extension_search_close_other_tabs_2026_unique_',
+        className: 'x-ov-close-other-tabs',
+        ariaLabel: t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）'),
+        html: getRiSvg('ri-brush-2-line', 'ri-size-16')
+      },
+      modeBadge: {
+        id: '_x_extension_mode_badge_2024_unique_',
+        className: 'x-lumno-search-input-mode__badge',
+        surface: 'overlay',
+        visible: false
+      },
       showUnderlineWhenEmpty: true
     });
     let searchInput = inputParts.input;
@@ -1559,13 +1465,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         clientWidth > 0 &&
         scrollWidth > clientWidth + 1;
     }
-    function renderSuggestionTitleTooltipContent(element, text, query) {
-      setProtectedHighlightedText(element, text, query, {
-        background: 'var(--x-ext-mark-bg, #CFE8FF)',
-        color: 'var(--x-ext-mark-text, #1E3A8A)'
-      });
-      return element;
-    }
     function getSuggestionTextCursorTooltipOptions(extraOptions) {
       return Object.assign({
         boundaryElement: overlay,
@@ -1587,9 +1486,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       suggestionTitleCursorTooltipController.bind(
         title,
         () => titleText,
-        getSuggestionTextCursorTooltipOptions({
-          renderContent: (element, text) => renderSuggestionTitleTooltipContent(element, text, query)
-        })
+        getSuggestionTextCursorTooltipOptions()
       );
     }
     function bindSuggestionUrlCursorTooltip(urlLine, url) {
@@ -1606,13 +1503,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         getSuggestionTextCursorTooltipOptions()
       );
     }
-    const closeOtherTabsButton = document.createElement('button');
-    applyNoTranslate(closeOtherTabsButton);
-    closeOtherTabsButton.id = '_x_extension_search_close_other_tabs_2026_unique_';
-    closeOtherTabsButton.className = 'x-ov-close-other-tabs';
-    closeOtherTabsButton.type = 'button';
-    closeOtherTabsButton.innerHTML = getRiSvg('ri-brush-2-line', 'ri-size-16');
-    closeOtherTabsButton.setAttribute('aria-label', t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）'));
+    const closeOtherTabsButton = inputParts.secondaryAction;
     const resetCloseOtherTabsButtonVisualState = () => {
       closeOtherTabsButton.removeAttribute('data-hover-active');
     };
@@ -1624,14 +1515,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     closeOtherTabsButton.addEventListener('blur', resetCloseOtherTabsButtonVisualState);
     closeOtherTabsButton.addEventListener('pointerup', resetCloseOtherTabsButtonVisualState);
     closeOtherTabsButton.addEventListener('pointercancel', resetCloseOtherTabsButtonVisualState);
-    inputContainer.appendChild(closeOtherTabsButton);
-    modeBadge = document.createElement('div');
-    modeBadge.id = '_x_extension_mode_badge_2024_unique_';
-    applyNoTranslate(modeBadge);
-    modeBadge.className = 'x-lumno-search-input-mode__badge';
-    modeBadge.setAttribute('data-surface', 'overlay');
-    modeBadge.setAttribute('data-visible', 'false');
-    inputContainer.appendChild(modeBadge);
+    modeBadge = inputParts.modeBadge;
 
     const suggestionsContainer = document.createElement('div');
     applyNoTranslate(suggestionsContainer);
@@ -1712,11 +1596,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function clearDefaultOpenTabsSuggestions() {
-      if (overlaySuggestionsView) {
-        overlaySuggestionsView.clear();
-      } else {
-        suggestionsContainer.innerHTML = '';
-      }
+      ensureOverlaySuggestionsView().clear();
       suggestionItems.length = 0;
       currentSuggestions = [];
       lastRenderedQuery = '';
@@ -3676,296 +3556,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       image.src = dataUrl;
     }
 
-    function createSuggestionInlineIcon(iconName, tone) {
-      const icon = document.createElement('span');
-      icon.className = 'x-ov-suggestion-inline-icon';
-      if (tone) {
-        icon.setAttribute('data-tone', tone);
-      }
-      icon.innerHTML = getRiSvg(iconName, 'ri-size-16');
-      return icon;
-    }
-
-    function createSearchIcon(tone) {
-      return createSuggestionInlineIcon('ri-search-line', tone);
-    }
-
-    function createLinkIcon(tone) {
-      return createSuggestionInlineIcon('ri-link', tone);
-    }
-
-    function findAttachedFaviconFallbackIcon(favicon) {
-      if (!favicon || !favicon.parentNode || typeof favicon.parentNode.querySelectorAll !== 'function') {
-        return null;
-      }
-      const fallbackNodes = Array.from(favicon.parentNode.querySelectorAll('._x_extension_overlay_favicon_fallback_2026_unique_'));
-      return fallbackNodes.find((node) => node && node._xFallbackForImage === favicon) ||
-        (fallbackNodes.length === 1 ? fallbackNodes[0] : null);
-    }
-
-    function showAttachedFaviconFallbackIcon(favicon) {
-      const fallbackNode = findAttachedFaviconFallbackIcon(favicon);
-      if (!fallbackNode) {
-        return false;
-      }
-      fallbackNode.setAttribute('data-visible', 'true');
-      if (favicon && typeof favicon.setAttribute === 'function') {
-        favicon.setAttribute('data-fallback-icon', 'true');
-        favicon.setAttribute('data-favicon-visibility', 'hidden');
-        favicon.removeAttribute('data-favicon-placeholder');
-      }
-      applyNoTranslateDeep(fallbackNode);
-      return true;
-    }
-
-    function scheduleFaviconFallbackReplacement(favicon, replace) {
-      if (!favicon || typeof replace !== 'function') {
-        return;
-      }
-      const run = () => {
-        if (replace()) {
-          return;
-        }
-        if (typeof window.setTimeout === 'function') {
-          window.setTimeout(() => {
-            replace();
-          }, 0);
-        }
-      };
-      if (typeof queueMicrotask === 'function') {
-        queueMicrotask(() => {
-          replace();
-        });
-        return;
-      }
-      run();
-    }
-
-    function replaceFaviconWithFallbackIcon(favicon, fallbackIconFactory) {
-      const replace = () => {
-        if (!favicon || !favicon.parentNode) {
-          return false;
-        }
-        if (showAttachedFaviconFallbackIcon(favicon)) {
-          return true;
-        }
-        const fallbackDiv = typeof fallbackIconFactory === 'function'
-          ? fallbackIconFactory()
-          : createLinkIcon();
-        fallbackDiv.setAttribute('data-x-ov-favicon-policy-fallback', 'true');
-        applyNoTranslateDeep(fallbackDiv);
-        favicon.parentNode.replaceChild(fallbackDiv, favicon);
-        return true;
-      };
-      if (replace()) {
-        return;
-      }
-      if (favicon && typeof favicon.setAttribute === 'function') {
-        favicon.setAttribute('data-favicon-placeholder', 'true');
-      }
-      scheduleFaviconFallbackReplacement(favicon, replace);
-    }
-
     function rerenderReplacedFaviconRows() {
-      const replacedFallback = suggestionsContainer.querySelector(
-        '[data-x-ov-favicon-policy-fallback="true"]'
-      );
-      if (!replacedFallback) {
+      const failedSlots = Array.from(suggestionsContainer.querySelectorAll(
+        '[data-favicon-failed="true"]'
+      ));
+      if (failedSlots.length === 0) {
         return false;
       }
-      if (latestOverlayQuery) {
-        updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery, {
-          forceFullRerender: true
-        });
-      } else {
-        renderTabSuggestions(tabs);
-      }
+      failedSlots.forEach((slot) => {
+        slot.dispatchEvent(new CustomEvent('lumno-favicon-retry'));
+      });
       return true;
     }
 
-    function createAttachedSuggestionFavicon(suggestion, index, fallbackIconFactory, options) {
-      const renderOptions = options && typeof options === 'object' ? options : {};
-      const reusableFavicon = renderOptions.reuseFavicon &&
-          renderOptions.reuseFavicon.tagName === 'IMG'
-        ? renderOptions.reuseFavicon
-        : null;
-      const favicon = reusableFavicon || document.createElement('img');
-      favicon.className = 'x-ov-suggestion-favicon';
-      favicon.decoding = 'async';
-      favicon.loading = 'eager';
-      favicon.referrerPolicy = 'no-referrer';
-      if (renderOptions.preserveLoadedState === true) {
-        favicon.setAttribute('data-favicon-has-appeared', 'true');
-      }
-      if (index < 4) {
-        favicon.fetchPriority = 'high';
-      }
-      applyFaviconOpticalAlignment(favicon);
-      const suggestionHost = suggestion && suggestion.url ? getHostFromUrl(suggestion.url) : '';
-      const iconUrl = suggestion && suggestion.favicon ? suggestion.favicon : '';
-      if (iconUrl && !isBlockedLocalFaviconUrl(iconUrl) && !isFaviconProxyUrl(iconUrl) && !isChromeMonogramFaviconUrl(iconUrl)) {
-        attachFaviconData(favicon, iconUrl, suggestionHost, suggestion.url || '');
-      }
-      const replaceWithFallbackIcon = function() {
-        replaceFaviconWithFallbackIcon(favicon, fallbackIconFactory);
-      };
-      attachResolvedFaviconWithFallbacks(
-        favicon,
-        suggestion && suggestion.url ? suggestion.url : '',
-        suggestionHost,
-        iconUrl,
-        replaceWithFallbackIcon
-      );
-      return favicon;
-    }
-
-    function getNonFaviconIconBg() {
-      return isOverlayDarkMode() ? 'rgba(255, 255, 255, 0.12)' : '#FFFFFF';
-    }
-
-    function getOverlayActionTagPalette() {
-      if (isOverlayDarkMode()) {
-        return {
-          tagBg: 'rgba(59, 130, 246, 0.22)',
-          tagText: '#DBEAFE',
-          tagBorder: 'rgba(147, 197, 253, 0.52)',
-          keyBg: 'rgba(15, 23, 42, 0.45)',
-          keyText: '#DBEAFE',
-          keyBorder: 'rgba(147, 197, 253, 0.46)'
-        };
-      }
-      return {
-        tagBg: '#EEF6FF',
-        tagText: '#1E3A8A',
-        tagBorder: '#BFDBFE',
-        keyBg: '#FFFFFF',
-        keyText: '#1E3A8A',
-        keyBorder: '#BFDBFE'
-      };
-    }
-
-    function setNonFaviconIconBg(item, isActive) {
-      if (!item || !item._xIconWrap || item._xIconIsFavicon) {
-        return;
-      }
-      item._xIconWrap.style.setProperty(
-        'background-color',
-        isActive ? getNonFaviconIconBg() : 'transparent'
-      );
-    }
-
-    function createActionTag(labelText, keyLabel) {
-      const tag = document.createElement('span');
-      tag.className = 'x-ov-action-tag';
-      applyNoTranslate(tag);
-
-      const label = document.createElement('span');
-      label.className = 'x-ov-action-tag__label';
-      setProtectedPlainText(label, labelText);
-
-      const keycap = document.createElement('span');
-      keycap.className = 'x-ov-action-tag__key';
-      setProtectedPlainText(keycap, keyLabel);
-
-      tag.appendChild(label);
-      tag.appendChild(keycap);
-      tag._xActionLabel = label;
-      return tag;
-    }
-
-    function getSuggestionProviderSearchActionLabel(suggestion) {
-      const provider = suggestion && suggestion.provider ? suggestion.provider : null;
-      if (!provider) {
-        return '';
-      }
-      const site = getSiteSearchDisplayName(provider);
-      if (isAiSiteSearchProvider(provider)) {
-        return formatMessage('action_open_ai_web', '打开 {site} 网页版', { site });
-      }
-      return formatMessage('search_in_site', '在 {site} 中搜索', { site });
-    }
-
-    function getSuggestionActionLabel(action, suggestion) {
-      switch (action) {
-        case 'search':
-          return getSuggestionProviderSearchActionLabel(suggestion) || getSearchActionLabel();
-        case 'switch':
-          return t('action_switch', '切换');
-        case 'open':
-          return t('action_open', '打开');
-        case 'openBackgroundTab':
-          return t('action_open_background_new_tab', '在后台新开');
-        case 'openNewTab':
-          return t('action_open_new_tab', '新开');
-        case 'go':
-          return t('action_go_current_tab', '前往');
-        case 'commandNewTab':
-          return t('command_newtab', '新建标签页');
-        case 'commandSettings':
-          return formatMessage('command_settings', '打开 {name} 设置', { name: 'Lumno' });
-        case 'commandOpenTabs':
-          return t('command_tabs_action', '搜索标签页');
-        case 'commandCopyUrl':
-          return t('command_copy_action', '复制链接');
-        case 'commandDocumentPip':
-          return t('document_pip_command_action', '开始剪裁');
-        default:
-          return t('action_open_new_tab', '新开');
-      }
-    }
-
-    function setSuggestionVisitButtonContent(button, action, suggestion) {
-      setInlineLabelWithIcon(
-        button,
-        getSuggestionActionLabel(getModifierAdjustedAction(action), suggestion),
-        getRiSvg('ri-arrow-right-line', 'ri-size-12')
-      );
-    }
-
-    function getModifierAdjustedAction(action) {
-      if (SUGGESTION_ACTION_MODEL &&
-          typeof SUGGESTION_ACTION_MODEL.getModifierAdjustedAction === 'function') {
-        return SUGGESTION_ACTION_MODEL.getModifierAdjustedAction(action, {
-          openInCurrentTab: openInCurrentTabModifierActive,
-          openSwitchInNewTab: openSwitchInNewTabModifierActive,
-          openInBackgroundTab: openInBackgroundTabModifierActive
-        });
-      }
-      if (openSwitchInNewTabModifierActive && action === 'switch') {
-        return openInBackgroundTabModifierActive && !openInCurrentTabModifierActive
-          ? 'openBackgroundTab'
-          : 'openNewTab';
-      }
-      if (openInBackgroundTabModifierActive && !openInCurrentTabModifierActive &&
-          (action === 'openNewTab' || action === 'go' || action === 'switch')) {
-        return 'openBackgroundTab';
-      }
-      return openInCurrentTabModifierActive && action === 'openNewTab' ? 'go' : action;
-    }
-
-    function setSuggestionActionTagContent(tag, action, suggestion) {
-      if (!tag || !tag._xActionLabel) {
-        return;
-      }
-      setProtectedPlainText(tag._xActionLabel, getSuggestionActionLabel(getModifierAdjustedAction(action), suggestion));
-    }
-
-    function updateModifierActionLabels() {
-      suggestionItems.forEach((item) => {
-        if (!item || (!item._xIsSearchSuggestion && !item._xIsRenderedTabSuggestion)) {
-          return;
-        }
-        const actionButton = item._xVisitButton || item._xSwitchButton;
-        if (actionButton && item._xVisitButtonAction) {
-          setSuggestionVisitButtonContent(actionButton, item._xVisitButtonAction, item._xSuggestion);
-        }
-        if (Array.isArray(item._xActionTags)) {
-          item._xActionTags.forEach((tag) => {
-            setSuggestionActionTagContent(tag, tag._xAction, tag._xSuggestion);
-          });
-        }
-      });
-    }
 
     function setSuggestionActionModifiersActive(openInCurrentTabActive, openSwitchInNewTabActive, openInBackgroundTabActive) {
       const nextOpenInCurrentTabActive = Boolean(openInCurrentTabActive);
@@ -3979,19 +3582,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       openInCurrentTabModifierActive = nextOpenInCurrentTabActive;
       openSwitchInNewTabModifierActive = nextOpenSwitchInNewTabActive;
       openInBackgroundTabModifierActive = nextOpenInBackgroundTabActive;
-      if (overlaySuggestionsView) {
-        overlaySuggestionsView.setOpenInCurrentTabModifierActive(
-          nextOpenInCurrentTabActive
-        );
-        overlaySuggestionsView.setOpenSwitchInNewTabModifierActive(
-          nextOpenSwitchInNewTabActive
-        );
-        overlaySuggestionsView.setOpenInBackgroundTabModifierActive(
-          nextOpenInBackgroundTabActive
-        );
-        return;
-      }
-      updateModifierActionLabels();
+      const reactView = ensureOverlaySuggestionsView();
+      reactView.setOpenInCurrentTabModifierActive(
+        nextOpenInCurrentTabActive
+      );
+      reactView.setOpenSwitchInNewTabModifierActive(
+        nextOpenSwitchInNewTabActive
+      );
+      reactView.setOpenInBackgroundTabModifierActive(
+        nextOpenInBackgroundTabActive
+      );
     }
 
     function syncSuggestionActionModifiersFromEvent(event) {
@@ -5847,174 +5447,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     window.addEventListener('blur', overlayModifierBlurHandler);
 
-    function setSuggestionRowColors(item, bg, border) {
-      if (!item) {
-        return;
-      }
-      item.style.setProperty('--x-ov-suggestion-row-bg', bg || 'transparent');
-      item.style.setProperty('--x-ov-suggestion-row-border', border || 'transparent');
-    }
-
-    function setSuggestionActionTagsVisible(element, visible) {
-      if (!element) {
-        return;
-      }
-      element.setAttribute('data-visible', visible ? 'true' : 'false');
-    }
-
-    function setSuggestionTitleActive(title, active) {
-      if (!title) {
-        return;
-      }
-      title.style.setProperty('--x-ov-suggestion-title-weight', active ? '600' : '400');
-    }
-
-    function setSuggestionSourceTagVisible(tag, visible) {
-      if (!tag) {
-        return;
-      }
-      tag.setAttribute('data-visible', visible ? 'true' : 'false');
-    }
-
-    function setSuggestionSourceTagPalette(tag, bg, text, border) {
-      if (!tag) {
-        return;
-      }
-      tag.style.setProperty('--x-ov-suggestion-source-tag-bg', bg || 'var(--x-ov-tag-bg, #F3F4F6)');
-      tag.style.setProperty('--x-ov-suggestion-source-tag-text', text || 'var(--x-ov-tag-text, #6B7280)');
-      tag.style.setProperty('--x-ov-suggestion-source-tag-border', border || 'transparent');
-    }
-
-    function applySuggestionSourceTagState(tag, visible, active, resolvedTheme) {
-      if (!tag) {
-        return;
-      }
-      setSuggestionSourceTagVisible(tag, visible);
-      if (active) {
-        setSuggestionSourceTagPalette(tag, resolvedTheme.tagBg, resolvedTheme.tagText, resolvedTheme.tagBorder);
-      } else {
-        setSuggestionSourceTagPalette(
-          tag,
-          tag._xDefaultBg || 'var(--x-ov-tag-bg, #F3F4F6)',
-          tag._xDefaultText || 'var(--x-ov-tag-text, #6B7280)',
-          tag._xDefaultBorder || 'transparent'
-        );
-      }
-    }
-
-    function createSuggestionSourceTag(label, defaults) {
-      const tag = document.createElement('span');
-      setProtectedPlainText(tag, label);
-      tag.className = 'x-ov-suggestion-source-tag';
-      tag._xDefaultBg = defaults && defaults.bg ? defaults.bg : 'var(--x-ov-tag-bg, #F3F4F6)';
-      tag._xDefaultText = defaults && defaults.text ? defaults.text : 'var(--x-ov-tag-text, #6B7280)';
-      tag._xDefaultBorder = defaults && defaults.border ? defaults.border : 'transparent';
-      setSuggestionSourceTagPalette(tag, tag._xDefaultBg, tag._xDefaultText, tag._xDefaultBorder);
-      setSuggestionSourceTagVisible(tag, true);
-      return tag;
-    }
-
-    function setSuggestionActionButtonVisible(button, visible) {
-      if (!button) {
-        return;
-      }
-      button.setAttribute('data-visible', visible ? 'true' : 'false');
-    }
-
-    function setSuggestionActionButtonPalette(button, text, bg, border) {
-      if (!button) {
-        return;
-      }
-      button.style.setProperty(
-        '--x-ov-suggestion-action-button-text',
-        text || 'var(--x-ov-subtext, #9CA3AF)'
-      );
-      button.style.setProperty('--x-ov-suggestion-action-button-bg', bg || 'transparent');
-      button.style.setProperty('--x-ov-suggestion-action-button-border', border || 'transparent');
-    }
-
-    function applySuggestionVisitButtonState(button, visible, active, resolvedTheme) {
-      if (!button) {
-        return;
-      }
-      setSuggestionActionButtonVisible(button, visible);
-      if (active && resolvedTheme) {
-        setSuggestionActionButtonPalette(
-          button,
-          resolvedTheme.buttonText,
-          resolvedTheme.buttonBg,
-          resolvedTheme.buttonBorder
-        );
-        return;
-      }
-      setSuggestionActionButtonPalette(button, 'var(--x-ov-subtext, #9CA3AF)', 'transparent', 'transparent');
-    }
-
-    function applySuggestionSwitchButtonState(button, visible, active) {
-      if (!button) {
-        return;
-      }
-      setSuggestionActionButtonVisible(button, visible);
-      setSuggestionActionButtonPalette(
-        button,
-        active ? 'var(--x-ov-text, #1F2937)' : 'var(--x-ov-subtext, #9CA3AF)',
-        'transparent',
-        'transparent'
-      );
-    }
-
-    function setHistoryDeleteVisible(slot, button, visible) {
-      if (slot) {
-        slot.setAttribute('data-visible', visible ? 'true' : 'false');
-      }
-      if (button) {
-        button.setAttribute('data-visible', visible ? 'true' : 'false');
-      }
-    }
-
-    function setHistoryDeleteButtonHover(button, active) {
-      if (!button) {
-        return;
-      }
-      button.setAttribute('data-hover-active', active ? 'true' : 'false');
-    }
-
-    function setHistoryDeleteButtonPalette(button, text, bg, border) {
-      if (!button) {
-        return;
-      }
-      button.style.setProperty('--x-ov-history-delete-text', text || 'var(--x-ext-input-icon, #9CA3AF)');
-      button.style.setProperty('--x-ov-history-delete-bg', bg || 'transparent');
-      button.style.setProperty('--x-ov-history-delete-border', border || 'transparent');
-    }
-
-    function setHistoryDeleteButtonSurface(button, bg, border) {
-      if (!button) {
-        return;
-      }
-      button.style.setProperty('--x-ov-history-delete-bg', bg || 'transparent');
-      button.style.setProperty('--x-ov-history-delete-border', border || 'transparent');
-    }
-
-    function isTopSiteSuggestion(suggestion) {
-      return Boolean(suggestion && (suggestion.type === 'topSite' || suggestion.isTopSite));
-    }
-
-    function canRemoveSuggestionFromHistory(suggestion) {
-      return Boolean(
-        suggestion &&
-        suggestion.url &&
-        (suggestion.type === 'history' || isTopSiteSuggestion(suggestion))
-      );
-    }
-
-    function getRemoveSuggestionTooltipText(suggestion) {
-      if (isTopSiteSuggestion(suggestion)) {
-        return t('search_remove_top_site_tooltip', '移除该常用');
-      }
-      return t('search_remove_history_tooltip', '移除该历史');
-    }
-
     function getOverlaySuggestionRefreshQuery() {
       return latestOverlayQuery || (searchInput ? String(searchInput.value || '').trim() : '');
     }
@@ -6047,229 +5479,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
 
-    function resetHistoryDeleteButtonInteraction(button) {
-      hideTopActionTooltip();
-      setHistoryDeleteButtonSurface(button, 'transparent', 'transparent');
-      setHistoryDeleteButtonHover(button, false);
-    }
-
-    function applyHistoryDeleteButtonHover(button, item, tooltipText) {
-      if (!button || !item) {
-        return;
-      }
-      const itemIndex = suggestionItems.indexOf(item);
-      const isSelected = itemIndex === selectedIndex;
-      const shouldAutoHighlight = selectedIndex === -1 && item._xIsAutocompleteTop;
-      const shouldUseThemeHover = Boolean(isSelected || shouldAutoHighlight);
-      const buttonThemeSource = item._xTheme || defaultTheme;
-      const resolvedTheme = getThemeForMode(buttonThemeSource);
-      const hoverColors = shouldUseThemeHover
-        ? getHoverColors(buttonThemeSource)
-        : getNeutralHoverActionColors();
-      showTopActionTooltip(button, tooltipText);
-      setHistoryDeleteButtonPalette(
-        button,
-        shouldUseThemeHover ? resolvedTheme.buttonText : hoverColors.text,
-        hoverColors.bg,
-        hoverColors.border
-      );
-      setHistoryDeleteButtonHover(button, true);
-    }
-
-    function bindHistoryDeleteButtonEvents(button, item, suggestion, tooltipText) {
-      if (!button) {
-        return;
-      }
-      button.addEventListener('mouseenter', () => {
-        applyHistoryDeleteButtonHover(button, item, tooltipText);
-      });
-      button.addEventListener('mouseleave', () => {
-        resetHistoryDeleteButtonInteraction(button);
-      });
-      button.addEventListener('blur', () => {
-        resetHistoryDeleteButtonInteraction(button);
-      });
-      button.addEventListener('pointerup', () => {
-        setHistoryDeleteButtonHover(button, false);
-      });
-      button.addEventListener('pointercancel', () => {
-        setHistoryDeleteButtonHover(button, false);
-      });
-      button.addEventListener('click', function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        deleteHistorySuggestionUrl(suggestion);
-      });
-    }
-
-    function createHistoryDeleteControl(suggestion, item) {
-      if (!canRemoveSuggestionFromHistory(suggestion)) {
-        return null;
-      }
-      const slot = document.createElement('div');
-      applyNoTranslate(slot);
-      slot.className = 'x-ov-history-delete-slot';
-      const button = document.createElement('button');
-      applyNoTranslate(button);
-      button.type = 'button';
-      button.className = 'x-ov-history-delete-button';
-      const tooltipText = getRemoveSuggestionTooltipText(suggestion);
-      button.innerHTML = getRiSvg('ri-delete-bin-6-line', 'ri-size-14');
-      button.setAttribute('aria-label', tooltipText);
-      setHistoryDeleteVisible(slot, button, false);
-      setHistoryDeleteButtonHover(button, false);
-      setHistoryDeleteButtonPalette(
-        button,
-        'var(--x-ext-input-icon, #9CA3AF)',
-        'transparent',
-        'transparent'
-      );
-      bindHistoryDeleteButtonEvents(button, item, suggestion, tooltipText);
-      slot.appendChild(button);
-      return { slot, button };
-    }
-
-    function applyHistoryDeleteState(item, active, resolvedTheme) {
-      if (!item || !item._xHistoryDeleteButton) {
-        return;
-      }
-      const shouldShowHistoryDelete = Boolean(item._xHasHistoryDeleteButton && item._xIsHovering);
-      setHistoryDeleteVisible(item._xHistoryDeleteSlot, item._xHistoryDeleteButton, shouldShowHistoryDelete);
-      if (!shouldShowHistoryDelete) {
-        setHistoryDeleteButtonHover(item._xHistoryDeleteButton, false);
-      }
-      if (shouldShowHistoryDelete && active) {
-        setHistoryDeleteButtonPalette(
-          item._xHistoryDeleteButton,
-          resolvedTheme.buttonText,
-          resolvedTheme.buttonBg,
-          resolvedTheme.buttonBorder
-        );
-        return;
-      }
-      setHistoryDeleteButtonPalette(
-        item._xHistoryDeleteButton,
-        'var(--x-ext-input-icon, #9CA3AF)',
-        'transparent',
-        'transparent'
-      );
-    }
-
-    function applySearchSuggestionHighlight(item, theme) {
-      if (!item) {
-        return;
-      }
-      const highlight = getHighlightColors(theme);
-      item.setAttribute('data-row-state', 'active');
-      setSuggestionRowColors(item, highlight.bg, highlight.border);
-    }
-
-    function resetSearchSuggestion(item) {
-      if (!item) {
-        return;
-      }
-      item.removeAttribute('data-row-state');
-      setSuggestionRowColors(item, 'transparent', 'transparent');
-    }
-
-    function applySearchActionStyles(item, theme, isActive) {
-      const resolvedTheme = getThemeForMode(theme);
-      applyMarkVariables(item, isActive ? resolvedTheme : defaultTheme);
-      const shouldHideSourceTags = Boolean(item._xHasSwitchAction);
-      if (item._xVisitButton) {
-        const shouldShowVisitButton = SUGGESTION_ACTION_MODEL &&
-          typeof SUGGESTION_ACTION_MODEL.shouldShowVisitButton === 'function'
-          ? SUGGESTION_ACTION_MODEL.shouldShowVisitButton(item._xActionModel, isActive)
-          : Boolean(!item._xAlwaysHideVisitButton && !(isActive && item._xHasActionTags));
-        applySuggestionVisitButtonState(item._xVisitButton, shouldShowVisitButton, isActive, resolvedTheme);
-      }
-      applyHistoryDeleteState(item, isActive, resolvedTheme);
-      if (item._xHistoryTag) {
-        applySuggestionSourceTagState(item._xHistoryTag, !shouldHideSourceTags, isActive, resolvedTheme);
-      }
-      if (item._xBookmarkTag) {
-        applySuggestionSourceTagState(item._xBookmarkTag, !shouldHideSourceTags, isActive, resolvedTheme);
-      }
-      if (item._xTopSiteTag) {
-        applySuggestionSourceTagState(item._xTopSiteTag, !shouldHideSourceTags, isActive, resolvedTheme);
-      }
-      if (item._xOpenTabTag) {
-        applySuggestionSourceTagState(item._xOpenTabTag, Boolean(item._xHasSwitchAction), isActive, resolvedTheme);
-      }
-      if (item._xTagContainer) {
-        const shouldShow = isActive && item._xHasActionTags;
-        setSuggestionActionTagsVisible(item._xTagContainer, shouldShow);
-      }
-      if (item._xTitle) {
-        setSuggestionTitleActive(item._xTitle, isActive);
-      }
-    }
-
     function updateSelection() {
-      if (overlaySuggestionsView) {
-        overlaySuggestionsView.updateSelection(selectedIndex);
-        return;
-      }
-      suggestionItems.forEach((item, index) => {
-        const isSelected = index === selectedIndex;
-        const shouldAutoHighlight = selectedIndex === -1 && item._xIsAutocompleteTop;
-        const isHighlighted = isSelected || shouldAutoHighlight;
-        if (item._xIsSearchSuggestion) {
-          const theme = item._xTheme || defaultTheme;
-          const shouldUseBlue = !(theme && theme._xIsBrand) && (isSelected || item._xIsAutocompleteTop);
-          const highlightTheme = shouldUseBlue ? urlHighlightTheme : theme;
-          if (isHighlighted) {
-            applySearchSuggestionHighlight(item, highlightTheme);
-          } else {
-            resetSearchSuggestion(item);
-          }
-          applySearchActionStyles(item, theme, isHighlighted);
-          setNonFaviconIconBg(item, Boolean(isHighlighted || item._xIsHovering));
-          if (item._xDirectIconWrap) {
-            const shouldShow = isHighlighted && theme && theme._xIsBrand;
-            const resolvedTheme = getThemeForMode(theme || defaultTheme);
-            item._xDirectIconWrap.style.setProperty(
-              'color',
-              shouldShow ? resolvedTheme.accent : 'var(--x-ov-subtext, #9CA3AF)'
-            );
-          }
-          return;
-        }
-        setNonFaviconIconBg(item, Boolean(isHighlighted || item._xIsHovering));
-        const theme = item._xTheme || defaultTheme;
-        const shouldUseBlue = !(theme && theme._xIsBrand) && isHighlighted;
-        const highlightTheme = shouldUseBlue ? urlHighlightTheme : theme;
-        if (isHighlighted) {
-          applySearchSuggestionHighlight(item, highlightTheme);
-          if (item._xEntryActionTag) {
-            const palette = getOverlayActionTagPalette();
-            item._xEntryActionTag.style.setProperty('--x-ext-tag-bg', palette.tagBg);
-            item._xEntryActionTag.style.setProperty('--x-ext-tag-text', palette.tagText);
-            item._xEntryActionTag.style.setProperty('--x-ext-tag-border', palette.tagBorder);
-            item._xEntryActionTag.style.setProperty('--x-ext-key-bg', palette.keyBg);
-            item._xEntryActionTag.style.setProperty('--x-ext-key-text', palette.keyText);
-            item._xEntryActionTag.style.setProperty('--x-ext-key-border', palette.keyBorder);
-          }
-          if (item._xSwitchButton) {
-            const shouldShowTags = Boolean(item._xTagContainer && item._xHasActionTags);
-            applySuggestionSwitchButtonState(item._xSwitchButton, !shouldShowTags, true);
-          }
-          if (item._xTagContainer) {
-            setSuggestionActionTagsVisible(item._xTagContainer, item._xHasActionTags);
-          }
-        } else {
-          resetSearchSuggestion(item);
-          if (item._xSwitchButton) {
-            applySuggestionSwitchButtonState(item._xSwitchButton, true, false);
-          }
-          if (item._xTagContainer) {
-            setSuggestionActionTagsVisible(item._xTagContainer, false);
-          }
-        }
-        if (item._xTitle) {
-          setSuggestionTitleActive(item._xTitle, isHighlighted);
-        }
-      });
+      ensureOverlaySuggestionsView().updateSelection(selectedIndex);
     }
 
     function syncSuggestionLastState() {
@@ -6551,7 +5762,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         host || '',
         resolvedCandidates.primaryUrl || resolvedCandidates.browserUrl || '',
         () => {
-          replaceFaviconWithFallbackIcon(image, createLinkIcon);
+          image.dispatchEvent(new CustomEvent('lumno-favicon-fallback', {
+            bubbles: true
+          }));
         }
       );
     }
@@ -6566,9 +5779,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     function ensureOverlaySuggestionsView() {
       if (overlaySuggestionsView) {
         return overlaySuggestionsView;
-      }
-      if (typeof OVERLAY_SUGGESTIONS_VIEW.createSuggestionsView !== 'function') {
-        return null;
       }
       overlaySuggestionsView = OVERLAY_SUGGESTIONS_VIEW.createSuggestionsView({
         surface: 'overlay',
@@ -6657,52 +5867,22 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function renderOverlayEmptyState(message) {
-      const reactView = typeof ensureOverlaySuggestionsView === 'function'
-        ? ensureOverlaySuggestionsView()
-        : null;
-      if (reactView) {
-        reactView.render({
-          suggestions: [],
-          query: latestOverlayQuery,
-          emptyMessage: message || t('overlay_empty_result', '无匹配结果')
-        });
-        return;
-      }
-      const existingEmpty = suggestionsContainer.querySelector('.x-ov-empty-state');
-      if (existingEmpty && existingEmpty.parentNode) {
-        existingEmpty.parentNode.removeChild(existingEmpty);
-      }
-      const isDark = isOverlayDarkMode();
-      const empty = document.createElement('div');
-      applyNoTranslate(empty);
-      empty.className = 'x-ov-empty-state';
-      empty.setAttribute('data-theme', isDark ? 'dark' : 'light');
-      const icon = document.createElement('span');
-      applyNoTranslate(icon);
-      icon.innerHTML = getRiSvg('ri-file-3-line', 'ri-size-16');
-      icon.className = 'x-ov-empty-state__icon';
-      const text = document.createElement('span');
-      setProtectedPlainText(text, message || t('overlay_empty_result', '无匹配结果'));
-      text.className = 'x-ov-empty-state__text';
-      empty.appendChild(icon);
-      empty.appendChild(text);
-      suggestionsContainer.appendChild(empty);
+      ensureOverlaySuggestionsView().render({
+        suggestions: [],
+        query: latestOverlayQuery,
+        emptyMessage: message || t('overlay_empty_result', '无匹配结果')
+      });
     }
 
     function renderTabSuggestions(tabList) {
       setOverlayResultsCollapsed(false);
       const reactView = ensureOverlaySuggestionsView();
-      if (!reactView) {
-        suggestionsContainer.innerHTML = '';
-      }
       suggestionItems.length = 0;
       currentSuggestions = [];
       lastRenderedQuery = '';
       lastRenderedActionContextKey = '';
       const list = Array.isArray(tabList) ? tabList : [];
-      const showOpenTabsModeEntry = false;
-      const totalItems = list.length + (showOpenTabsModeEntry ? 1 : 0);
-      if (totalItems === 0) {
+      if (list.length === 0) {
         const emptyText = openTabsSearchModeActive
           ? t('overlay_empty_open_tabs', '未找到匹配的已打开标签页')
           : t('overlay_empty_result', '无匹配结果');
@@ -6714,308 +5894,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           preloadIcon(tab.favIconUrl, tab.url || '');
         }
       });
-      if (reactView) {
-        reactView.renderTabs(list);
-        selectedIndex = -1;
-        updateSelection();
-        return;
-      }
-      if (showOpenTabsModeEntry) {
-        const entryItem = document.createElement('div');
-        applyNoTranslate(entryItem);
-        entryItem.id = '_x_extension_open_tabs_mode_entry_2026_unique_';
-        const entryIsLast = totalItems === 1;
-        entryItem.className = 'x-ov-suggestion-item';
-        entryItem.setAttribute('data-last', entryIsLast ? 'true' : 'false');
-        entryItem._xIsSearchSuggestion = false;
-        entryItem._xIsOpenTabsModeEntry = true;
-        entryItem._xIsAutocompleteTop = false;
-        entryItem._xTheme = defaultTheme;
-        suggestionItems.push(entryItem);
-
-        const entryLeft = document.createElement('div');
-        entryLeft.className = 'x-ov-suggestion-left';
-        const entryIconSlot = document.createElement('span');
-        entryIconSlot.className = 'x-ov-suggestion-icon-slot';
-        entryIconSlot.setAttribute('data-favicon', 'false');
-        const entryIcon = document.createElement('span');
-        entryIcon.innerHTML = getRiSvg('ri-search-line', 'ri-size-16');
-        entryIconSlot.appendChild(entryIcon);
-        entryItem._xIconWrap = entryIconSlot;
-        entryItem._xIconIsFavicon = false;
-
-        const entryTitle = document.createElement('span');
-        applyNoTranslate(entryTitle);
-        setProtectedPlainText(entryTitle, t('search_open_tabs_only_entry', '搜索已打开标签页'));
-        entryTitle.className = 'x-ov-suggestion-title';
-        entryItem._xTitle = entryTitle;
-
-        const entryActionTags = document.createElement('div');
-        entryActionTags.className = 'x-ov-suggestion-action-tags';
-        setSuggestionActionTagsVisible(entryActionTags, false);
-        const entryActionTag = createActionTag(t('action_search', '搜索'), 'Tab');
-        entryActionTag.dataset.clickable = 'true';
-        const entryTagPalette = getOverlayActionTagPalette();
-        entryActionTag.style.setProperty('--x-ext-tag-bg', entryTagPalette.tagBg);
-        entryActionTag.style.setProperty('--x-ext-tag-text', entryTagPalette.tagText);
-        entryActionTag.style.setProperty('--x-ext-tag-border', entryTagPalette.tagBorder);
-        entryActionTag.style.setProperty('--x-ext-key-bg', entryTagPalette.keyBg);
-        entryActionTag.style.setProperty('--x-ext-key-text', entryTagPalette.keyText);
-        entryActionTag.style.setProperty('--x-ext-key-border', entryTagPalette.keyBorder);
-        entryItem._xEntryActionTag = entryActionTag;
-        entryActionTags.appendChild(entryActionTag);
-        entryItem._xTagContainer = entryActionTags;
-        entryItem._xHasActionTags = true;
-
-        const entryVisitButton = document.createElement('button');
-        applyNoTranslate(entryVisitButton);
-        entryVisitButton.className = 'x-ov-suggestion-action-button x-ov-suggestion-visit-button';
-        setSuggestionActionButtonVisible(entryVisitButton, true);
-        setSuggestionActionButtonPalette(entryVisitButton, 'var(--x-ov-subtext, #9CA3AF)', 'transparent', 'transparent');
-        setInlineLabelWithIcon(
-          entryVisitButton,
-          t('action_search', '搜索'),
-          getRiSvg('ri-arrow-right-line', 'ri-size-12')
-        );
-        entryItem._xSwitchButton = entryVisitButton;
-
-        entryItem.addEventListener('mouseenter', function() {
-          if (suggestionItems.indexOf(this) !== selectedIndex) {
-            this._xIsHovering = true;
-            setNonFaviconIconBg(this, true);
-            if (selectedIndex === -1 && this._xIsAutocompleteTop) {
-              return;
-            }
-            setSuggestionRowColors(this, 'var(--x-ov-hover-bg)', 'transparent');
-          }
-        });
-        entryItem.addEventListener('mouseleave', function() {
-          if (suggestionItems.indexOf(this) !== selectedIndex) {
-            this._xIsHovering = false;
-            updateSelection();
-          }
-        });
-        const activateEntry = function() {
-          activateOpenTabsSearchMode();
-          searchInput.focus();
-        };
-        const activateEntryFromAction = function(e) {
-          e.stopPropagation();
-          activateEntry();
-        };
-        entryActionTag.addEventListener('click', activateEntryFromAction);
-        entryVisitButton.addEventListener('click', activateEntryFromAction);
-        entryItem.addEventListener('click', activateEntry);
-
-        entryLeft.appendChild(entryIconSlot);
-        entryLeft.appendChild(entryTitle);
-        const entryRight = document.createElement('div');
-        entryRight.className = 'x-ov-suggestion-right';
-        entryRight.setAttribute('data-action-column', 'true');
-        entryRight.appendChild(entryActionTags);
-        entryRight.appendChild(entryVisitButton);
-        entryItem.appendChild(entryLeft);
-        entryItem.appendChild(entryRight);
-        applyNoTranslateDeep(entryItem);
-        suggestionsContainer.appendChild(entryItem);
-      }
-      list.forEach((tab, tabIndex) => {
-        const index = tabIndex + (showOpenTabsModeEntry ? 1 : 0);
-        const suggestionItem = document.createElement('div');
-        applyNoTranslate(suggestionItem);
-        suggestionItem.id = `_x_extension_suggestion_item_${index}_2024_unique_`;
-        const isLastItem = index === totalItems - 1;
-        suggestionItem.className = 'x-ov-suggestion-item';
-        suggestionItem.setAttribute('data-last', isLastItem ? 'true' : 'false');
-        suggestionItem._xIsSearchSuggestion = false;
-
-        // Store reference to suggestion item
-        suggestionItems.push(suggestionItem);
-        suggestionItem._xIsAutocompleteTop = tabIndex === 0;
-        suggestionItem._xTheme = defaultTheme;
-        suggestionItem._xTabId = tab && typeof tab.id === 'number' ? tab.id : null;
-        suggestionItem._xIsRenderedTabSuggestion = true;
-        suggestionItem._xSuggestion = {
-          type: 'openTab',
-          title: tab && tab.title ? tab.title : t('untitled', '无标题'),
-          url: tab && tab.url ? tab.url : '',
-          favicon: tab && tab.favIconUrl ? tab.favIconUrl : '',
-          _xMatchedTabId: tab && typeof tab.id === 'number' ? tab.id : null
-        };
-
-        // Create left side with icon and title
-        const leftSide = document.createElement('div');
-        leftSide.id = `_x_extension_left_side_${index}_2024_unique_`;
-        leftSide.className = 'x-ov-suggestion-left';
-
-        // Create favicon
-        let favicon = null;
-        let hostForTab = '';
-        try {
-          hostForTab = tab && tab.url ? new URL(tab.url).hostname : '';
-        } catch (e) {
-          hostForTab = '';
-        }
-        const useFallback = shouldBlockFaviconForHost(hostForTab);
-        let iconNode = null;
-        let isFaviconIcon = false;
-        if (useFallback) {
-          iconNode = createLinkIcon();
-        } else {
-          favicon = document.createElement('img');
-          favicon.id = `_x_extension_favicon_${index}_2024_unique_`;
-          favicon.className = 'x-ov-suggestion-favicon';
-          favicon.decoding = 'async';
-          favicon.loading = 'eager';
-          favicon.referrerPolicy = 'no-referrer';
-          if (index < 4) {
-            favicon.fetchPriority = 'high';
-          }
-          applyFaviconOpticalAlignment(favicon);
-          attachResolvedFaviconWithFallbacks(
-            favicon,
-            tab && tab.url ? tab.url : '',
-            hostForTab,
-            tab.favIconUrl || '',
-            () => {
-              replaceFaviconWithFallbackIcon(favicon, createLinkIcon);
-            }
-          );
-          iconNode = favicon;
-          isFaviconIcon = true;
-        }
-        const iconSlot = document.createElement('span');
-        iconSlot.className = 'x-ov-suggestion-icon-slot';
-        iconSlot.setAttribute('data-favicon', isFaviconIcon ? 'true' : 'false');
-        iconSlot.appendChild(iconNode);
-        suggestionItem._xIconWrap = iconSlot;
-        suggestionItem._xIconIsFavicon = isFaviconIcon;
-
-        // Create title
-        const title = document.createElement('span');
-        applyNoTranslate(title);
-        title.id = `_x_extension_title_${index}_2024_unique_`;
-        setProtectedPlainText(title, tab.title || t('untitled', '无标题'));
-        title.className = 'x-ov-suggestion-title';
-        suggestionItem._xTitle = title;
-
-        // Create switch button
-        const switchButton = document.createElement('button');
-        applyNoTranslate(switchButton);
-        switchButton.id = `_x_extension_switch_button_${index}_2024_unique_`;
-        switchButton.className = 'x-ov-suggestion-action-button x-ov-suggestion-switch-button';
-        setSuggestionActionButtonVisible(switchButton, true);
-        setSuggestionActionButtonPalette(switchButton, 'var(--x-ov-subtext, #4B5563)', 'transparent', 'transparent');
-        suggestionItem._xVisitButtonAction = 'switch';
-        setSuggestionVisitButtonContent(switchButton, suggestionItem._xVisitButtonAction, suggestionItem._xSuggestion);
-        suggestionItem._xSwitchButton = switchButton;
-
-        const actionTags = document.createElement('div');
-        actionTags.className = 'x-ov-suggestion-action-tags';
-        setSuggestionActionTagsVisible(actionTags, false);
-        const switchActionTag = createActionTag(t('action_switch', '切换'), 'Enter');
-        switchActionTag._xAction = 'switch';
-        switchActionTag._xSuggestion = suggestionItem._xSuggestion;
-        actionTags.appendChild(switchActionTag);
-        suggestionItem._xActionTags = [switchActionTag];
-        suggestionItem._xTagContainer = actionTags;
-        suggestionItem._xHasActionTags = actionTags.childNodes.length > 0;
-
-        // Add hover effects
-        suggestionItem.addEventListener('mouseenter', function() {
-          if (suggestionItems.indexOf(this) !== selectedIndex) {
-            this._xIsHovering = true;
-            setNonFaviconIconBg(this, true);
-            if (selectedIndex === -1 && this._xIsAutocompleteTop) {
-              return;
-            }
-            const theme = this._xTheme;
-            if (theme && theme._xIsBrand) {
-              const hover = getHoverColors(theme);
-              setSuggestionRowColors(this, hover.bg, hover.border);
-            } else {
-              setSuggestionRowColors(this, 'var(--x-ov-hover-bg)', 'transparent');
-            }
-          }
-        });
-
-        suggestionItem.addEventListener('mouseleave', function() {
-          if (suggestionItems.indexOf(this) !== selectedIndex) {
-            this._xIsHovering = false;
-            updateSelection();
-          }
-        });
-
-        const activateRenderedTabSuggestion = function(event) {
-          openMatchedTabSuggestion(suggestionItem._xSuggestion, event, suggestionItem, searchInput.value.trim());
-          finishOverlayResultActivation(event, Boolean(
-            suggestionItem._xSuggestion && suggestionItem._xSuggestion.url
-          ));
-        };
-
-        // Add click handler to switch to tab
-        switchButton.addEventListener('click', function(e) {
-          e.stopPropagation();
-          activateRenderedTabSuggestion(e);
-        });
-        switchButton.addEventListener('auxclick', function(event) {
-          if (!event || Number(event.button) !== 1) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          activateRenderedTabSuggestion(event);
-        });
-
-        // Add click handler to select item
-        suggestionItem.addEventListener('click', function(event) {
-          activateRenderedTabSuggestion(event);
-        });
-        suggestionItem.addEventListener('auxclick', function(event) {
-          if (!event || Number(event.button) !== 1) {
-            return;
-          }
-          event.preventDefault();
-          activateRenderedTabSuggestion(event);
-        });
-
-        leftSide.appendChild(iconSlot);
-        leftSide.appendChild(title);
-        if (overlayTabScoreDebugEnabled) {
-          const rankDebug = document.createElement('span');
-          applyNoTranslate(rankDebug);
-          setProtectedPlainText(rankDebug, formatTabRankDebugText(tab));
-          rankDebug.className = 'x-ov-tab-rank-debug';
-          leftSide.appendChild(rankDebug);
-        }
-        const rightSide = document.createElement('div');
-        rightSide.className = 'x-ov-suggestion-right';
-        rightSide.setAttribute('data-action-column', 'true');
-        rightSide.appendChild(actionTags);
-        rightSide.appendChild(switchButton);
-        suggestionItem.appendChild(leftSide);
-        suggestionItem.appendChild(rightSide);
-        applyNoTranslateDeep(suggestionItem);
-        suggestionsContainer.appendChild(suggestionItem);
-
-        const themeSourceSuggestion = {
-          url: tab.url || '',
-          favicon: tab.favIconUrl || ''
-        };
-        const immediateTheme = getImmediateThemeForSuggestion(themeSourceSuggestion) || defaultTheme;
-        suggestionItem._xTheme = immediateTheme;
-        applyThemeVariables(suggestionItem, immediateTheme);
-        getThemeForSuggestion(themeSourceSuggestion).then((theme) => {
-          if (!suggestionItem.isConnected) {
-            return;
-          }
-          suggestionItem._xTheme = theme;
-          applyThemeVariables(suggestionItem, theme);
-          updateSelection();
-        });
-      });
-
-      syncSuggestionLastState();
+      reactView.renderTabs(list);
       selectedIndex = -1;
       updateSelection();
     }
@@ -7426,17 +6305,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       //   favicon: 'https://img.icons8.com/?size=100&id=kzJWN5jCDzpq&format=png&color=000000'
       // };
 
-      function buildUrlLine(url) {
-        if (!url) {
-          return null;
-        }
-        const urlLine = document.createElement('span');
-        setProtectedPlainText(urlLine, url);
-        urlLine.className = 'x-ov-suggestion-url-line';
-        bindSuggestionUrlCursorTooltip(urlLine, url);
-        return urlLine;
-      }
-
       getShortcutRules().then((rules) => {
         if (query !== latestOverlayQuery) {
           return;
@@ -7721,633 +6589,26 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         const startIndex = canAppend ? currentSuggestions.length : 0;
         const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
         const reactView = ensureOverlaySuggestionsView();
-        if (reactView) {
-          currentSuggestions = allSuggestions;
-          lastRenderedQuery = query;
-          lastRenderedActionContextKey = actionContextKey;
-          warmIconCache(allSuggestions);
-          const emptyMessage = slashCommandModeActive && allSuggestions.length === 0
-            ? t('slash_command_empty', '无匹配命令')
-            : (localSearchQueryModeActive && allSuggestions.length === 0
-              ? t('overlay_empty_result', '无匹配结果')
-              : '');
-          reactView.render({
-            suggestions: allSuggestions,
-            query,
-            canAppend,
-            startIndex,
-            primaryHighlightIndex,
-            primarySuggestion,
-            primaryHighlightReason,
-            onlyKeywordSuggestions,
-            mergedProvider,
-            emptyMessage
-          });
-          if (shouldPreserveVisualState) {
-            suggestionsContainer.scrollTop = previousScrollTop;
-          }
-          syncSuggestionLastState();
-          updateSelection();
-          const heightHeldForRemoteMix = holdSuggestionsHeightForRemoteMix(
-            suggestionsContainer,
-            previousHeightState,
-            query,
-            shouldDeferCappedShrink
-          );
-          if (!heightHeldForRemoteMix) {
-            if (deferredSuggestionsHeightQuery === query) {
-              deferredSuggestionsHeightQuery = '';
-            }
-            animateSuggestionsHeight(
-              suggestionsContainer,
-              previousHeightState.height
-            );
-          }
-          if (!canAppend) {
-            selectedIndex = -1;
-          }
-          return;
-        }
-        if (!canAppend) {
-          // Clear existing suggestions
-          suggestionsContainer.innerHTML = '';
-          suggestionItems.length = 0;
-          selectedIndex = -1;
-        } else {
-          suggestionItems.forEach((item, index) => {
-            item._xIsAutocompleteTop = index === primaryHighlightIndex;
-          });
-        }
-
-        currentSuggestions = allSuggestions; // Store current suggestions including ChatGPT
+        currentSuggestions = allSuggestions;
         lastRenderedQuery = query;
         lastRenderedActionContextKey = actionContextKey;
         warmIconCache(allSuggestions);
-
-        if (slashCommandModeActive && allSuggestions.length === 0) {
-          renderOverlayEmptyState(t('slash_command_empty', '无匹配命令'));
-        } else if (localSearchQueryModeActive && allSuggestions.length === 0) {
-          renderOverlayEmptyState(t('overlay_empty_result', '无匹配结果'));
-        }
-
-        // Add search suggestions
-        allSuggestions.forEach((suggestion, index) => {
-          if (index < startIndex) {
-            return;
-          }
-          const suggestionItem = document.createElement('div');
-          applyNoTranslate(suggestionItem);
-          suggestionItem.id = `_x_extension_suggestion_item_${index}_2024_unique_`;
-          const isLastItem = index === allSuggestions.length - 1;
-          const isPrimaryHighlight = index === primaryHighlightIndex;
-          const shouldSwitchMatchedTab = isPrimaryHighlight &&
-            (primaryHighlightReason === 'openTab' || primaryHighlightReason === 'currentOpenTab') &&
-            shouldSwitchMatchedTabSuggestion(suggestion, index);
-          const isPrimarySearchSuggest = isPrimaryHighlight && suggestion.type === 'googleSuggest';
-          const preservedVisualState = takeSuggestionVisualState(
-            previousVisualStateByIdentity,
-            suggestion
-          );
-          const faviconContinuityOptions = preservedVisualState
-            ? {
-                reuseFavicon: preservedVisualState.favicon,
-                preserveLoadedState: preservedVisualState.faviconHadAppeared
-              }
-            : null;
-          let immediateTheme = (preservedVisualState && preservedVisualState.theme) ||
-            getImmediateThemeForSuggestion(suggestion) ||
-            defaultTheme;
-          if (suggestion.type === 'directUrl' || suggestion.type === 'browserPage') {
-            immediateTheme = urlHighlightTheme;
-          }
-          const shouldUseSearchEngineTheme = isPrimarySearchSuggest ||
-            (onlyKeywordSuggestions && isPrimaryHighlight && suggestion.type === 'newtab');
-          if (shouldUseSearchEngineTheme) {
-            const engineAccent = getBrandAccentForUrl(getDefaultSearchEngineThemeUrlForOverlay());
-            if (engineAccent) {
-              immediateTheme = buildTheme(engineAccent);
-              immediateTheme._xIsBrand = true;
-            }
-          }
-          suggestionItem.className = 'x-ov-suggestion-item';
-          suggestionItem.setAttribute('data-last', isLastItem ? 'true' : 'false');
-          if (isPrimaryHighlight) {
-            applySearchSuggestionHighlight(suggestionItem, immediateTheme);
-          }
-
-          suggestionItems.push(suggestionItem);
-          suggestionItem._xIsSearchSuggestion = true;
-          suggestionItem._xIsAutocompleteTop = isPrimaryHighlight;
-          suggestionItem._xTheme = immediateTheme;
-          applyThemeVariables(suggestionItem, immediateTheme);
-
-          // Create left side with icon and title
-          const leftSide = document.createElement('div');
-          leftSide.className = 'x-ov-suggestion-left';
-          leftSide.setAttribute('data-motion', 'true');
-
-          let iconNode = null;
-          let iconWrapper = null;
-          if (suggestion.type === 'browserPage' || suggestion.type === 'directUrl') {
-            const browserPageFavicon = suggestion.type === 'browserPage'
-              ? (suggestion.favicon || getPageFaviconCandidateUrl(suggestion.url || ''))
-              : suggestion.favicon;
-            if (browserPageFavicon ||
-                (faviconContinuityOptions && faviconContinuityOptions.reuseFavicon)) {
-              iconNode = createAttachedSuggestionFavicon(
-                browserPageFavicon === suggestion.favicon
-                  ? suggestion
-                  : { ...suggestion, favicon: browserPageFavicon },
-                index,
-                createLinkIcon,
-                faviconContinuityOptions
-              );
-            } else {
-              iconNode = suggestion.type === 'browserPage'
-                ? createLinkIcon()
-                : createSearchIcon();
-            }
-          } else if (suggestion.type === 'commandNewTab') {
-            iconNode = createSuggestionInlineIcon('ri-add-line', 'subtext');
-          } else if (suggestion.type === 'commandSettings') {
-            iconNode = createSuggestionInlineIcon('ri-settings-3-line', 'subtext');
-          } else if (suggestion.type === 'commandOpenTabs') {
-            iconNode = createSuggestionInlineIcon('ri-window-line', 'subtext');
-          } else if (suggestion.type === 'commandCopyUrl') {
-            iconNode = createSuggestionInlineIcon('ri-link', 'subtext');
-          } else if (suggestion.type === 'commandDocumentPip') {
-            iconNode = createSuggestionInlineIcon('ri-scissors-cut-line', 'subtext');
-          } else if (suggestion.type === 'modeSwitch') {
-            const safeModeSwitchFavicon = getSafeOverlayFaviconUrl(suggestion.favicon);
-            if (safeModeSwitchFavicon) {
-              const favicon = document.createElement('img');
-              favicon.className = 'x-ov-suggestion-favicon';
-              favicon.decoding = 'async';
-              favicon.loading = 'eager';
-              favicon.referrerPolicy = 'no-referrer';
-              if (index < 4) {
-                favicon.fetchPriority = 'high';
-              }
-              applyFaviconOpticalAlignment(favicon);
-              favicon.src = safeModeSwitchFavicon;
-              favicon.onerror = function() {
-                replaceFaviconWithFallbackIcon(favicon, () => createLinkIcon('subtext'));
-              };
-              iconNode = favicon;
-            } else {
-              iconNode = createLinkIcon('subtext');
-            }
-          } else if (suggestion.type === 'newtab' || suggestion.type === 'googleSuggest') {
-            iconNode = createSearchIcon('subtext');
-          } else {
-            const suggestionHost = suggestion.url ? getHostFromUrl(suggestion.url) : '';
-            if (suggestion.favicon ||
-                (faviconContinuityOptions && faviconContinuityOptions.reuseFavicon)) {
-              iconNode = createAttachedSuggestionFavicon(
-                suggestion,
-                index,
-                createLinkIcon,
-                faviconContinuityOptions
-              );
-            } else if (suggestionHost && shouldBlockOverlayFaviconForHost(suggestionHost)) {
-              iconNode = createLinkIcon();
-            } else {
-              iconNode = createSearchIcon('subtext');
-            }
-          }
-
-          if (iconNode) {
-            const isFaviconIcon = iconNode.tagName === 'IMG';
-            const iconSlot = document.createElement('span');
-            iconSlot.className = 'x-ov-suggestion-icon-slot';
-            iconSlot.setAttribute('data-favicon', isFaviconIcon ? 'true' : 'false');
-            iconSlot._xIsFavicon = isFaviconIcon;
-            iconSlot.appendChild(iconNode);
-            iconNode = iconSlot;
-            suggestionItem._xIconWrap = iconSlot;
-            suggestionItem._xIconIsFavicon = isFaviconIcon;
-            if (suggestion.type === 'directUrl' || suggestion.type === 'browserPage') {
-              iconWrapper = iconSlot;
-            }
-          }
-
-          // Create text wrapper for title and tag
-          const textWrapper = document.createElement('div');
-          textWrapper.className = 'x-ov-suggestion-text';
-
-          const isCommandSuggestion = Boolean(suggestion.commandText);
-          let commandLabel = null;
-          if (isCommandSuggestion) {
-            suggestionItem.setAttribute('data-command-row', 'true');
-            commandLabel = document.createElement('span');
-            applyNoTranslate(commandLabel);
-            setProtectedHighlightedText(commandLabel, suggestion.commandText, query, {
-              background: 'var(--x-ext-mark-bg, #CFE8FF)',
-              color: 'var(--x-ext-mark-text, #1E3A8A)'
-            });
-            commandLabel.className = 'x-ov-suggestion-command';
-            suggestionItem._xCommandLabel = commandLabel;
-            suggestionItem._xTitle = commandLabel;
-            textWrapper.appendChild(commandLabel);
-          }
-
-          // Create title with highlighted query
-          const title = document.createElement('span');
-          applyNoTranslate(title);
-          let highlightedTitle;
-          if (isPrimarySearchSuggest ||
-              suggestion.type === 'chatgpt' ||
-              suggestion.type === 'perplexity' ||
-              suggestion.type === 'newtab' ||
-              suggestion.type === 'siteSearch' ||
-              suggestion.type === 'inlineSiteSearch' ||
-              suggestion.type === 'siteSearchPrompt' ||
-              suggestion.type === 'modeSwitch') {
-            // For ChatGPT, Perplexity, and New Tab, don't highlight the query part
-            highlightedTitle = suggestion.title;
-          } else {
-            // For other suggestions, highlight the query
-            highlightedTitle = suggestion.title;
-          }
-          if (isCommandSuggestion) {
-            setProtectedPlainText(title, highlightedTitle);
-            title.className = 'x-ov-suggestion-title x-ov-suggestion-command-description';
-          } else {
-            setProtectedHighlightedText(title, highlightedTitle, query, {
-              background: 'var(--x-ext-mark-bg, #CFE8FF)',
-              color: 'var(--x-ext-mark-text, #1E3A8A)'
-            });
-            title.className = 'x-ov-suggestion-title';
-            suggestionItem._xTitle = title;
-          }
-          bindSuggestionTitleCursorTooltip(title, suggestion, query);
-
-          textWrapper.appendChild(title);
-          const reasonText = Array.isArray(suggestion.reasons)
-            ? suggestion.reasons.map((item) => String(item || '').trim()).filter(Boolean).join(' · ')
-            : '';
-          if (overlayTabScoreDebugEnabled && reasonText) {
-            const reasonLine = document.createElement('span');
-            setProtectedPlainText(reasonLine, reasonText);
-            reasonLine.className = 'x-ov-suggestion-reason';
-            textWrapper.appendChild(reasonLine);
-          }
-
-          // Add history tag if type is history
-          if (suggestion.type === 'history' && !suggestion.isTopSite) {
-            const urlLine = buildUrlLine(suggestion.url || '');
-            if (urlLine) {
-              textWrapper.appendChild(urlLine);
-            }
-            const historyTag = createSuggestionSourceTag(t('search_tag_history', '历史'), {
-              bg: 'var(--x-ov-tag-bg, #F3F4F6)',
-              text: 'var(--x-ov-tag-text, #6B7280)',
-              border: 'transparent'
-            });
-            textWrapper.appendChild(historyTag);
-            suggestionItem._xHistoryTag = historyTag;
-          }
-
-          // Add topSite tag if type is topSite
-          if (suggestion.type === 'topSite' || suggestion.isTopSite) {
-            const urlLine = buildUrlLine(suggestion.url || '');
-            if (urlLine) {
-              textWrapper.appendChild(urlLine);
-            }
-            const topSiteTag = createSuggestionSourceTag(t('search_tag_top_site', '常用'), {
-              bg: 'var(--x-ov-tag-bg, #F3F4F6)',
-              text: 'var(--x-ov-tag-text, #6B7280)',
-              border: 'transparent'
-            });
-            textWrapper.appendChild(topSiteTag);
-            suggestionItem._xTopSiteTag = topSiteTag;
-          }
-
-          // Add bookmark tag if type is bookmark
-          if (suggestion.type === 'bookmark') {
-            if (suggestion.path) {
-              const bookmarkPath = document.createElement('span');
-              setProtectedPlainText(bookmarkPath, suggestion.path);
-              bookmarkPath.className = 'x-ov-suggestion-bookmark-path';
-              textWrapper.appendChild(bookmarkPath);
-            }
-            const bookmarkTag = createSuggestionSourceTag(t('search_tag_bookmark', '书签'), {
-              bg: 'var(--x-ov-bookmark-tag-bg, #FEF3C7)',
-              text: 'var(--x-ov-bookmark-tag-text, #D97706)',
-              border: 'transparent'
-            });
-            textWrapper.appendChild(bookmarkTag);
-            suggestionItem._xBookmarkTag = bookmarkTag;
-          }
-          if (shouldSwitchMatchedTab) {
-            const openTabTag = createSuggestionSourceTag(t('search_tag_open_tab', '已打开'), {
-              bg: 'var(--x-ov-tag-bg, #F3F4F6)',
-              text: 'var(--x-ov-tag-text, #6B7280)',
-              border: 'transparent'
-            });
-            textWrapper.appendChild(openTabTag);
-            suggestionItem._xOpenTabTag = openTabTag;
-          }
-
-          const rightSide = document.createElement('div');
-          rightSide.className = 'x-ov-suggestion-right';
-
-          const actionTags = document.createElement('div');
-          actionTags.className = 'x-ov-suggestion-action-tags';
-          setSuggestionActionTagsVisible(actionTags, false);
-
-          const isMergedHighlight = Boolean(mergedProvider && primarySuggestion === suggestion && isPrimaryHighlight);
-          const itemActionModel = createSuggestionActionModel({
-            suggestion,
-            isPrimaryHighlight,
-            isPrimarySearchSuggest,
-            primaryHighlightReason,
-            onlyKeywordSuggestions,
-            isMergedHighlight,
-            shouldSwitchMatchedTab,
-            enterAction: 'openNewTab'
-          });
-          if (!itemActionModel.alwaysHideVisitButton || itemActionModel.hasActionTags) {
-            rightSide.setAttribute('data-action-column', 'true');
-          }
-          const actionTagNodes = [];
-          itemActionModel.actionTags.forEach((tag) => {
-            const actionTag = createActionTag(
-              getSuggestionActionLabel(getModifierAdjustedAction(tag.action), suggestion),
-              tag.keyLabel || 'Enter'
-            );
-            actionTag._xAction = tag.action;
-            actionTag._xSuggestion = suggestion;
-            actionTags.appendChild(actionTag);
-            actionTagNodes.push(actionTag);
-          });
-
-          // Create visit button
-          const visitButton = document.createElement('button');
-          applyNoTranslate(visitButton);
-          visitButton.type = 'button';
-          visitButton.className = 'x-ov-suggestion-action-button x-ov-suggestion-visit-button';
-          setSuggestionActionButtonVisible(visitButton, true);
-          setSuggestionActionButtonPalette(visitButton, 'var(--x-ov-subtext, #9CA3AF)', 'transparent', 'transparent');
-          suggestionItem._xAlwaysHideVisitButton = itemActionModel.alwaysHideVisitButton;
-          if (suggestionItem._xAlwaysHideVisitButton) {
-            setSuggestionActionButtonVisible(visitButton, false);
-          }
-          setSuggestionVisitButtonContent(visitButton, itemActionModel.visitButtonAction, suggestion);
-
-          const historyDeleteControl = createHistoryDeleteControl(suggestion, suggestionItem);
-          const historyDeleteSlot = historyDeleteControl ? historyDeleteControl.slot : null;
-          const historyDeleteButton = historyDeleteControl ? historyDeleteControl.button : null;
-
-          // Add hover effects
-          suggestionItem.addEventListener('mouseenter', function() {
-            this._xIsHovering = true;
-            setNonFaviconIconBg(this, true);
-            updateSelection();
-            if (suggestionItems.indexOf(this) !== selectedIndex) {
-              if (selectedIndex === -1 && this._xIsAutocompleteTop) {
-                return;
-              }
-              setSuggestionRowColors(this, 'var(--x-ov-hover-bg)', 'transparent');
-            }
-          });
-
-          suggestionItem.addEventListener('mouseleave', function() {
-            this._xIsHovering = false;
-            updateSelection();
-          });
-
-          // Add click handler to visit URL
-          const activateVisitButton = function(e) {
-            e.stopPropagation();
-            if (suggestion.type === 'commandNewTab') {
-              chrome.runtime.sendMessage({ action: 'openNewTab' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandSettings') {
-              chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandOpenTabs') {
-              searchInput.value = '';
-              latestRawInputValue = '';
-              latestOverlayQuery = '';
-              activateOpenTabsSearchMode();
-              searchInput.focus();
-              return;
-            }
-            if (suggestion.type === 'commandCopyUrl') {
-              chrome.runtime.sendMessage({ action: 'copyCurrentPageUrl' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandDocumentPip') {
-              openDocumentPipPickerFromOverlay();
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'siteSearchPrompt' && suggestion.provider) {
-              activateSiteSearch(suggestion.provider);
-              searchInput.focus();
-              return;
-            }
-            if (shouldSwitchMatchedTabSuggestion(suggestion, index)) {
-              openMatchedTabSuggestion(suggestion, e, suggestionItem, query);
-              finishOverlayResultActivation(e, Boolean(suggestion.url));
-              return;
-            }
-            if (suggestion.provider && suggestion.searchQuery) {
-              openSiteSearchProviderQuery(suggestion.provider, suggestion.searchQuery, e);
-              finishOverlayResultActivation(e, true);
-              return;
-            }
-            if (suggestion.forceSearch && suggestion.searchQuery) {
-              if (shouldOpenSearchResultInBackgroundTab(e) && suggestion.url) {
-                recordSearchSuggestionSelectionFromSuggestion(suggestion, query, 'overlay');
-                chrome.runtime.sendMessage({
-                  action: 'createTab',
-                  url: suggestion.url,
-                  disposition: 'backgroundTab'
-                });
-              } else {
-                chrome.runtime.sendMessage({
-                  action: 'searchOrNavigate',
-                  query: suggestion.searchQuery,
-                  forceSearch: true
-                });
-              }
-            } else {
-              recordSearchSuggestionSelectionFromSuggestion(suggestion, query, 'overlay');
-              chrome.runtime.sendMessage({
-                action: 'createTab',
-                url: suggestion.url,
-                disposition: getSearchResultCreateDisposition(suggestion, e, suggestionItem)
-              });
-            }
-            finishOverlayResultActivation(
-              e,
-              !(suggestion.forceSearch && !suggestion.url)
-            );
-          };
-          visitButton.addEventListener('click', activateVisitButton);
-          visitButton.addEventListener('auxclick', function(event) {
-            if (!event || Number(event.button) !== 1) {
-              return;
-            }
-            event.preventDefault();
-            activateVisitButton(event);
-          });
-
-          // Add click handler to select item
-          const activateSuggestionItem = function(event) {
-            if (suggestion.type === 'commandNewTab') {
-              chrome.runtime.sendMessage({ action: 'openNewTab' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandSettings') {
-              chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandOpenTabs') {
-              searchInput.value = '';
-              latestRawInputValue = '';
-              latestOverlayQuery = '';
-              activateOpenTabsSearchMode();
-              searchInput.focus();
-              return;
-            }
-            if (suggestion.type === 'commandCopyUrl') {
-              chrome.runtime.sendMessage({ action: 'copyCurrentPageUrl' });
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'commandDocumentPip') {
-              openDocumentPipPickerFromOverlay();
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
-              return;
-            }
-            if (suggestion.type === 'siteSearchPrompt' && suggestion.provider) {
-              activateSiteSearch(suggestion.provider);
-              searchInput.focus();
-              return;
-            }
-            if (suggestion.type === 'modeSwitch') {
-              applyThemeModeChange(suggestion.nextMode);
-              searchInput.focus();
-              return;
-            }
-            if (shouldSwitchMatchedTabSuggestion(suggestion, index)) {
-              openMatchedTabSuggestion(suggestion, event, suggestionItem, query);
-              finishOverlayResultActivation(event, Boolean(suggestion.url));
-              return;
-            }
-            if (suggestion.provider && suggestion.searchQuery) {
-              openSiteSearchProviderQuery(suggestion.provider, suggestion.searchQuery, event);
-              finishOverlayResultActivation(event, true);
-              return;
-            }
-            if (suggestion.forceSearch && suggestion.searchQuery) {
-              if (shouldOpenSearchResultInBackgroundTab(event) && suggestion.url) {
-                chrome.runtime.sendMessage({
-                  action: 'createTab',
-                  url: suggestion.url,
-                  disposition: 'backgroundTab'
-                });
-              } else {
-                chrome.runtime.sendMessage({
-                  action: 'searchOrNavigate',
-                  query: suggestion.searchQuery,
-                  forceSearch: true
-                });
-              }
-            } else {
-              chrome.runtime.sendMessage({
-                action: 'createTab',
-                url: suggestion.url,
-                disposition: getSearchResultCreateDisposition(suggestion, event, suggestionItem)
-              });
-            }
-            finishOverlayResultActivation(
-              event,
-              !(suggestion.forceSearch && !suggestion.url)
-            );
-          };
-          suggestionItem.addEventListener('click', activateSuggestionItem);
-          suggestionItem.addEventListener('auxclick', function(event) {
-            if (!event || Number(event.button) !== 1) {
-              return;
-            }
-            event.preventDefault();
-            activateSuggestionItem(event);
-          });
-
-          leftSide.appendChild(iconNode);
-          leftSide.appendChild(textWrapper);
-          suggestionItem.appendChild(leftSide);
-          rightSide.appendChild(actionTags);
-          rightSide.appendChild(visitButton);
-          suggestionItem.appendChild(rightSide);
-          suggestionItem._xVisitButton = visitButton;
-          suggestionItem._xVisitButtonAction = itemActionModel.visitButtonAction;
-          suggestionItem._xActionTags = actionTagNodes;
-          suggestionItem._xSuggestion = suggestion;
-          suggestionItem._xTagContainer = actionTags;
-          suggestionItem._xActionModel = itemActionModel;
-          suggestionItem._xHasActionTags = itemActionModel.hasActionTags;
-          suggestionItem._xHasSwitchAction = itemActionModel.hasSwitchAction;
-          suggestionItem._xHistoryDeleteSlot = historyDeleteSlot;
-          suggestionItem._xHistoryDeleteButton = historyDeleteButton;
-          suggestionItem._xHasHistoryDeleteButton = Boolean(historyDeleteButton);
-          if (iconWrapper) {
-            suggestionItem._xDirectIconWrap = iconWrapper;
-          }
-          if (historyDeleteSlot) {
-            rightSide.appendChild(historyDeleteSlot);
-          }
-          applyNoTranslateDeep(suggestionItem);
-          suggestionsContainer.appendChild(suggestionItem);
-
-          if (!shouldUseSearchEngineTheme &&
-              !(onlyKeywordSuggestions && suggestion.type === 'newtab') &&
-              suggestion.type !== 'directUrl' &&
-              suggestion.type !== 'browserPage') {
-            getThemeForSuggestion(suggestion).then((theme) => {
-              if (!suggestionItem.isConnected) {
-                return;
-              }
-              suggestionItem._xTheme = theme;
-              applyThemeVariables(suggestionItem, theme);
-              updateSelection();
-            });
-          }
+        const emptyMessage = slashCommandModeActive && allSuggestions.length === 0
+          ? t('slash_command_empty', '无匹配命令')
+          : (localSearchQueryModeActive && allSuggestions.length === 0
+            ? t('overlay_empty_result', '无匹配结果')
+            : '');
+        reactView.render({
+          suggestions: allSuggestions,
+          query,
+          canAppend,
+          startIndex,
+          primaryHighlightIndex,
+          primarySuggestion,
+          primaryHighlightReason,
+          onlyKeywordSuggestions,
+          mergedProvider,
+          emptyMessage
         });
         if (shouldPreserveVisualState) {
           suggestionsContainer.scrollTop = previousScrollTop;
@@ -8364,15 +6625,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           if (deferredSuggestionsHeightQuery === query) {
             deferredSuggestionsHeightQuery = '';
           }
-          animateSuggestionsHeight(suggestionsContainer, previousHeightState.height);
+          animateSuggestionsHeight(
+            suggestionsContainer,
+            previousHeightState.height
+          );
         }
-      // Update keyboard navigation
         if (!canAppend) {
           selectedIndex = -1;
         }
       });
     }
-
     function clearSearchSuggestions() {
       cancelPendingOverlaySuggestionRequests();
       inlineSearchState = null;

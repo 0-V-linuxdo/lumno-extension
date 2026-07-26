@@ -14,7 +14,11 @@ const bookmarkDragJs = fs.readFileSync(
   'utf8'
 );
 const cascadeJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'), 'utf8');
-const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmarks-view.js'), 'utf8');
+const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'react-src', 'newtab', 'bookmarks.tsx'), 'utf8');
+const cascadeViewReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src', 'newtab', 'bookmark-cascade-view.tsx'),
+  'utf8'
+);
 const {
   canMoveBookmarkToLocation,
   canMoveBookmarkToFolder,
@@ -422,7 +426,7 @@ assert.ok(
   'nested folders should use a deliberate hover delay during drag navigation'
 );
 assert.ok(
-  cascadeJs.includes("itemButton.setAttribute('data-bookmark-parent-id'") &&
+  cascadeViewReact.includes('data-bookmark-parent-id={parentId}') &&
     cascadeJs.includes("itemButton.addEventListener('pointerdown'") &&
     cascadeJs.includes('onItemPointerDown({'),
   'cascade menu items should expose bookmark metadata and initiate pointer drags'
@@ -461,7 +465,7 @@ assert.ok(
 assert.ok(
   newtabJs.includes('function setFolderPathMorphState(folderIcon, toHover)') &&
     newtabJs.includes('morphOptions && morphOptions.instant === true') &&
-    bookmarksViewJs.includes('playFolderPathMorph(folderIcon, nextActive, visualOptions)'),
+    bookmarksViewJs.includes('options.playFolderPathMorph('),
   'a rebound folder icon should inherit its open state without replaying the morph animation'
 );
 assert.ok(

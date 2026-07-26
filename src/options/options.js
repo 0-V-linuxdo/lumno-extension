@@ -95,7 +95,6 @@
   const shortcutReferenceList = document.getElementById('_x_extension_shortcut_reference_list_2026_unique_');
   const openOnboardingPageButton = document.getElementById('_x_extension_open_onboarding_page_2026_unique_');
   const openShortcutsPageButton = document.getElementById('_x_extension_open_shortcuts_page_2026_unique_');
-  const customSelectWraps = Array.from(document.querySelectorAll('._x_extension_custom_select_2024_unique_'));
   const siteSearchCustomList = document.getElementById('_x_extension_site_search_custom_list_2024_unique_');
   const siteSearchBuiltinList = document.getElementById('_x_extension_site_search_builtin_list_2024_unique_');
   const siteSearchAiGroup = document.getElementById('_x_extension_site_search_ai_group_2026_unique_');
@@ -143,6 +142,7 @@
   const optionsSettingsFormsApi = globalThis.LumnoOptionsSettingsForms || {};
   const optionsSettingsNavigationApi = globalThis.LumnoOptionsSettingsNavigation || {};
   const optionsShortcutReferenceApi = globalThis.LumnoOptionsShortcutReference || {};
+  const optionsShortcutHotkeyApi = globalThis.LumnoOptionsShortcutHotkey || {};
   const optionsSiteSearchListApi = globalThis.LumnoOptionsSiteSearchList || {};
   const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
@@ -155,6 +155,13 @@
   const shortcutReferenceController =
     typeof optionsShortcutReferenceApi.createShortcutReferenceController === 'function'
       ? optionsShortcutReferenceApi.createShortcutReferenceController(shortcutReferenceList)
+      : null;
+  const shortcutHotkeyController =
+    typeof optionsShortcutHotkeyApi.createShortcutHotkeyController === 'function'
+      ? optionsShortcutHotkeyApi.createShortcutHotkeyController(
+          fallbackShortcutTokens,
+          { onContentReady: updateFallbackShortcutWrapWidthForContent }
+        )
       : null;
   const themePickerController =
     typeof optionsThemePickerApi.createThemePickerController === 'function'
@@ -445,9 +452,6 @@
       searchResultSourceTypeItems.filter((item) => item.checked).map((item) => item.value)
     );
   }
-  const CHECKBOX = globalThis.LumnoCheckbox || {};
-  const CHECKBOX_CLASS_NAME = CHECKBOX.className || '_x_extension_checkbox_2026_unique_';
-  const CHECKBOX_GROUP_CLASS_NAME = CHECKBOX.groupClassName || '_x_extension_checkbox_group_2026_unique_';
   const SECONDARY_BUTTON_CLASS_NAME = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_';
   const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = '_x_extension_default_search_engine_2024_unique_';
   const SYNC_META_KEY = '_x_extension_sync_meta_2024_unique_';
@@ -505,7 +509,6 @@
   let defaultSiteSearchProviders = [];
   let customSiteSearchProviders = [];
   let disabledSiteSearchKeys = new Set();
-  let toastTimer = null;
   let confirmResolver = null;
   let confirmOffset = { x: 0, y: 0 };
   let confirmClosingTimer = null;
@@ -527,15 +530,6 @@
   let blacklistFormExpanded = false;
   let faviconRequestBlacklistItems = [];
   let faviconBlacklistFormExpanded = false;
-  let searchResultSourceTypeGroup = null;
-  const customSelectController = globalThis.LumnoCustomSelect &&
-      typeof globalThis.LumnoCustomSelect.createController === 'function'
-    ? globalThis.LumnoCustomSelect.createController({
-      documentObj: document,
-      windowObj: window,
-      afterRefresh: syncFallbackShortcutWrapWidth
-    })
-    : null;
   const tooltipController = globalThis.LumnoTooltip &&
       typeof globalThis.LumnoTooltip.createController === 'function'
     ? globalThis.LumnoTooltip.createController({
@@ -1287,23 +1281,6 @@
     return modes;
   }
 
-  function createBlacklistModeOption(textKey, fallback, tooltipKey, tooltipFallback) {
-    const wrap = document.createElement('label');
-    wrap.className = CHECKBOX_CLASS_NAME;
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    const text = document.createElement('span');
-    text.textContent = getMessage(textKey, fallback);
-    const hint = document.createElement('span');
-    hint.className = '_x_extension_shortcut_hint_2024_unique_ _x_extension_tooltip_host_2024_unique_';
-    hint.setAttribute('data-tooltip', getMessage(tooltipKey, tooltipFallback));
-    hint.innerHTML = getRiSvg('ri-question-line', 'ri-size-14');
-    wrap.appendChild(input);
-    wrap.appendChild(text);
-    wrap.appendChild(hint);
-    return { wrap, input };
-  }
-
   function buildBlacklistRuleDraft(inputValue, matchModes) {
     if (!Array.isArray(matchModes) || matchModes.length === 0) {
       return {
@@ -1464,9 +1441,6 @@
   }
 
   function collectCheckedSearchResultSourceTypes() {
-    if (searchResultSourceTypeGroup && typeof searchResultSourceTypeGroup.getValue === 'function') {
-      return searchResultSourceTypeGroup.getValue();
-    }
     const checked = [];
     searchResultSourceTypeInputs.forEach((input) => {
       if (!input || !input.checked) {
@@ -1479,11 +1453,6 @@
 
   function setSearchResultSourceTypeState(value) {
     const normalized = normalizeSearchResultSourceTypes(value);
-    if (searchResultSourceTypeGroup && typeof searchResultSourceTypeGroup.setValue === 'function') {
-      searchResultSourceTypeGroup.setValue(normalized);
-      renderSearchResultSourceTypeControl(normalized);
-      return;
-    }
     const selected = new Set(normalized);
     searchResultSourceTypeInputs.forEach((input) => {
       const type = input.getAttribute('data-search-result-source-type');
@@ -1499,14 +1468,6 @@
       return;
     }
     storageArea.set({ [SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]: normalized });
-  }
-
-  if (searchResultSourceTypeInputs.length > 0 && typeof CHECKBOX.createRequiredGroup === 'function') {
-    searchResultSourceTypeGroup = CHECKBOX.createRequiredGroup(searchResultSourceTypeInputs, {
-      getValue: (input) => input && input.getAttribute('data-search-result-source-type'),
-      normalizeValue: normalizeSearchResultSourceTypes,
-      onChange: persistSearchResultSourceTypes
-    });
   }
 
   function measureTabsIndicator(container, indicator, activeButton, inset, containerInset) {
@@ -1656,21 +1617,9 @@
 
   function renderSegmentedControlState(
     controller,
-    model,
-    legacyButtons,
-    dataAttribute,
-    normalizeValue
+    model
   ) {
-    if (controller && typeof controller.render === 'function') {
-      controller.render(model);
-      return;
-    }
-    legacyButtons.forEach((button) => {
-      const buttonValue = normalizeValue(button.getAttribute(dataAttribute));
-      const active = buttonValue === model.activeValue;
-      button.setAttribute('data-active', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    controller.render(model);
   }
 
   function setRecentModeTabState(mode) {
@@ -2072,13 +2021,6 @@
     optionsSelectControlRecords.forEach((record, select) => {
       renderOptionsSelectControl(select);
     });
-    if (customSelectController) {
-      customSelectController.refresh(customSelectWraps.filter(
-        (wrapper) => wrapper.getAttribute('data-react-island') !== 'options-select-control'
-      ));
-      syncFallbackShortcutWrapWidth();
-      return;
-    }
     syncFallbackShortcutWrapWidth();
   }
 
@@ -2155,29 +2097,9 @@
   }
 
   function showToast(message, isError) {
-    if (toastController) {
-      toastController.show(message, {
-        error: Boolean(isError)
-      });
-      return;
-    }
-    if (!toastElement) {
-      return;
-    }
-    if (toastTimer) {
-      clearTimeout(toastTimer);
-      toastTimer = null;
-    }
-    toastElement.textContent = message;
-    if (isError) {
-      toastElement.style.setProperty('background', 'rgba(153, 27, 27, 0.92)');
-    } else {
-      toastElement.style.removeProperty('background');
-    }
-    toastElement.setAttribute('data-show', 'true');
-    toastTimer = setTimeout(() => {
-      toastElement.setAttribute('data-show', 'false');
-    }, 2200);
+    toastController.show(message, {
+      error: Boolean(isError)
+    });
   }
 
   function setSyncButtonEnabled(button, enabled) {
@@ -2420,12 +2342,7 @@
     }
 
     function setPopconfirmOpen(open) {
-      if (popconfirmController &&
-          typeof popconfirmController.render === 'function') {
-        popconfirmController.render(getPopconfirmRenderModel(open));
-        return;
-      }
-      popconfirm.setAttribute('data-open', open ? 'true' : 'false');
+      popconfirmController.render(getPopconfirmRenderModel(open));
     }
 
     function closePopconfirm() {
@@ -2436,60 +2353,23 @@
     }
     popconfirm._xOptionsClosePopconfirm = closePopconfirm;
 
-    if (typeof reactApi.createPopconfirmController === 'function') {
-      popconfirmController = reactApi.createPopconfirmController(popconfirm, {
-        onCancel() {
-          closePopconfirm();
-        },
-        onConfirm() {
-          closePopconfirm();
-          if (typeof onConfirm === 'function') {
-            onConfirm();
-          }
-        }
-      });
-      popconfirm._xOptionsDestroyPopconfirm = () => {
+    popconfirmController = reactApi.createPopconfirmController(popconfirm, {
+      onCancel() {
         closePopconfirm();
-        if (popconfirmController &&
-            typeof popconfirmController.destroy === 'function') {
-          popconfirmController.destroy();
-        }
-        popconfirmController = null;
-      };
-      setPopconfirmOpen(false);
-    } else {
-      const popText = document.createElement('div');
-      popText.className = '_x_extension_popconfirm_text_2024_unique_';
-      popText.setAttribute('data-i18n', messageKey);
-      popText.textContent = getMessage(messageKey, fallbackMessage);
-      const popActions = document.createElement('div');
-      popActions.className = '_x_extension_popconfirm_actions_2024_unique_';
-      const popCancel = document.createElement('button');
-      popCancel.className = SECONDARY_BUTTON_CLASS_NAME;
-      popCancel.setAttribute('data-i18n', 'confirm_cancel');
-      popCancel.textContent = getMessage('confirm_cancel', '取消');
-      const popOk = document.createElement('button');
-      popOk.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-      popOk.setAttribute('data-i18n', 'confirm_ok');
-      popOk.textContent = getMessage('confirm_ok', '确认');
-      popActions.appendChild(popCancel);
-      popActions.appendChild(popOk);
-      popconfirm.appendChild(popText);
-      popconfirm.appendChild(popActions);
-
-      popCancel.addEventListener('click', (event) => {
-        event.stopPropagation();
-        closePopconfirm();
-      });
-
-      popOk.addEventListener('click', (event) => {
-        event.stopPropagation();
+      },
+      onConfirm() {
         closePopconfirm();
         if (typeof onConfirm === 'function') {
           onConfirm();
         }
-      });
-    }
+      }
+    });
+    popconfirm._xOptionsDestroyPopconfirm = () => {
+      closePopconfirm();
+      popconfirmController.destroy();
+      popconfirmController = null;
+    };
+    setPopconfirmOpen(false);
 
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -2505,23 +2385,6 @@
       }
     });
     return wrap;
-  }
-
-  function createPopconfirmWrap(trigger, messageKey, fallbackMessage, onConfirm) {
-    const wrap = document.createElement('div');
-    return initializePopconfirmWrap(wrap, trigger, messageKey, fallbackMessage, onConfirm);
-  }
-
-  function destroyPopconfirmControllersWithin(container) {
-    if (!container || typeof container.querySelectorAll !== 'function') {
-      return;
-    }
-    container.querySelectorAll('._x_extension_popconfirm_2024_unique_').forEach((popconfirm) => {
-      const destroyPopconfirm = popconfirm._xOptionsDestroyPopconfirm;
-      if (typeof destroyPopconfirm === 'function') {
-        destroyPopconfirm();
-      }
-    });
   }
 
   function attachPopconfirm(trigger, messageKey, fallbackMessage, onConfirm) {
@@ -3031,46 +2894,18 @@
   }
 
   function renderFallbackShortcutTokens(shortcut, animate) {
-    if (!fallbackShortcutTokens) {
+    if (!shortcutHotkeyController) {
       return;
     }
-    const shouldAnimate = Boolean(animate);
     const tokens = getShortcutDisplayTokens(shortcut);
-    fallbackShortcutTokens.innerHTML = '';
     const emptyPlaceholder = isCapturingFallbackShortcut
       ? (fallbackShortcutInput ? (fallbackShortcutInput.getAttribute('placeholder') || '') : '')
       : getMessage('settings_shortcuts_empty_state', '无');
-    fallbackShortcutTokens.setAttribute('data-placeholder', emptyPlaceholder);
-    if (tokens.length === 0) {
-      fallbackShortcutTokens.setAttribute('data-empty', 'true');
-      updateFallbackShortcutWrapWidthForContent();
-      return;
-    }
-    fallbackShortcutTokens.setAttribute('data-empty', 'false');
-    const pendingAnimatedTokens = [];
-    tokens.forEach((label, index) => {
-      const tokenEl = document.createElement('span');
-      tokenEl.className = '_x_extension_shortcuts_hotkey_token_2024_unique_';
-      const textLabel = String(label || '');
-      if (textLabel.length > 1) {
-        const minWidth = Math.max(17, Math.round(textLabel.length * 7.5 + 12));
-        tokenEl.style.minWidth = `${minWidth}px`;
-      }
-      if (shouldAnimate) {
-        tokenEl.style.animationDelay = `${index * 36}ms`;
-        pendingAnimatedTokens.push(tokenEl);
-      }
-      tokenEl.textContent = label;
-      fallbackShortcutTokens.appendChild(tokenEl);
+    shortcutHotkeyController.render({
+      animate: Boolean(animate),
+      placeholder: emptyPlaceholder,
+      tokens
     });
-    if (shouldAnimate && pendingAnimatedTokens.length > 0) {
-      requestAnimationFrame(() => {
-        pendingAnimatedTokens.forEach((tokenEl) => {
-          tokenEl.classList.add('_x_extension_shortcuts_hotkey_token_pop_2024_unique_');
-        });
-      });
-    }
-    updateFallbackShortcutWrapWidthForContent();
   }
 
   function setFallbackShortcutLabel(value, animate) {
@@ -3196,49 +3031,6 @@
       .filter(Boolean);
   }
 
-  function createShortcutReferenceKeyField(shortcut) {
-    const keyField = document.createElement('div');
-    keyField.className = '_x_extension_shortcut_reference_key_field_2026_unique_';
-    const parts = getShortcutReferenceParts(shortcut);
-    keyField.textContent = parts.length > 0
-      ? parts.join(' / ')
-      : getMessage('shortcut_reference_unset', '未设置');
-    if (parts.length === 0) {
-      keyField.setAttribute('data-empty', 'true');
-    }
-    return keyField;
-  }
-
-  function createShortcutReferenceItem(item) {
-    const row = document.createElement('div');
-    row.className = '_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_shortcut_reference_item_2026_unique_';
-    row.setAttribute('data-shortcut-id', item && item.id ? String(item.id) : '');
-    row.setAttribute('data-shortcut-command', item && item.commandName ? String(item.commandName) : '');
-    row.setAttribute('data-shortcut-editable', item && item.editable ? 'true' : 'false');
-
-    const text = document.createElement('div');
-    const title = document.createElement('p');
-    title.className = '_x_extension_setting_title_2024_unique_';
-    title.textContent = getMessage(item.titleKey, item.titleFallback || '');
-    text.appendChild(title);
-
-    const actions = document.createElement('div');
-    actions.className = '_x_extension_shortcut_reference_actions_2026_unique_';
-    actions.appendChild(createShortcutReferenceKeyField(item.shortcut || ''));
-
-    row.appendChild(text);
-    row.appendChild(actions);
-    return row;
-  }
-
-  function createShortcutReferenceGroupTitle(group) {
-    const title = document.createElement('div');
-    title.className = '_x_extension_shortcut_reference_group_title_2026_unique_';
-    title.setAttribute('data-shortcut-group', group && group.id ? String(group.id) : '');
-    title.textContent = getMessage(group.titleKey, group.titleFallback || '');
-    return title;
-  }
-
   function renderShortcutReferenceGroups(groups) {
     if (!shortcutReferenceList) {
       return;
@@ -3247,37 +3039,26 @@
       ...group,
       items: (group.items || []).filter((item) => !(item && item.commandName === 'show-search'))
     })).filter((group) => group.items.length > 0);
-    if (shortcutReferenceController &&
-        typeof shortcutReferenceController.render === 'function') {
-      shortcutReferenceController.render({
-        groups: visibleGroups.map((group) => ({
-          id: group && group.id ? String(group.id) : '',
-          titleKey: group && group.titleKey ? String(group.titleKey) : '',
-          title: getMessage(group.titleKey, group.titleFallback || ''),
-          items: group.items.map((item) => {
-            const parts = getShortcutReferenceParts(item.shortcut || '');
-            return {
-              id: item && item.id ? String(item.id) : '',
-              commandName: item && item.commandName ? String(item.commandName) : '',
-              editable: Boolean(item && item.editable),
-              titleKey: item && item.titleKey ? String(item.titleKey) : '',
-              title: getMessage(item.titleKey, item.titleFallback || ''),
-              shortcutEmpty: parts.length === 0,
-              shortcutLabel: parts.length > 0
-                ? parts.join(' / ')
-                : getMessage('shortcut_reference_unset', '未设置')
-            };
-          })
-        }))
-      });
-      return;
-    }
-    shortcutReferenceList.innerHTML = '';
-    visibleGroups.forEach((group) => {
-      shortcutReferenceList.appendChild(createShortcutReferenceGroupTitle(group));
-      group.items.forEach((item) => {
-        shortcutReferenceList.appendChild(createShortcutReferenceItem(item));
-      });
+    shortcutReferenceController.render({
+      groups: visibleGroups.map((group) => ({
+        id: group && group.id ? String(group.id) : '',
+        titleKey: group && group.titleKey ? String(group.titleKey) : '',
+        title: getMessage(group.titleKey, group.titleFallback || ''),
+        items: group.items.map((item) => {
+          const parts = getShortcutReferenceParts(item.shortcut || '');
+          return {
+            id: item && item.id ? String(item.id) : '',
+            commandName: item && item.commandName ? String(item.commandName) : '',
+            editable: Boolean(item && item.editable),
+            titleKey: item && item.titleKey ? String(item.titleKey) : '',
+            title: getMessage(item.titleKey, item.titleFallback || ''),
+            shortcutEmpty: parts.length === 0,
+            shortcutLabel: parts.length > 0
+              ? parts.join(' / ')
+              : getMessage('shortcut_reference_unset', '未设置')
+          };
+        })
+      }))
     });
   }
 
@@ -3343,17 +3124,9 @@
   }
 
   function renderSettingsNavigation(tabKey) {
-    if (settingsNavigationController && typeof settingsNavigationController.render === 'function') {
-      settingsNavigationController.render({
-        activeKey: tabKey,
-        items: getSettingsNavigationItems()
-      });
-      return;
-    }
-    tabButtons.forEach((button) => {
-      const isActive = button.getAttribute('data-tab') === tabKey;
-      button.setAttribute('data-active', isActive ? 'true' : 'false');
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    settingsNavigationController.render({
+      activeKey: tabKey,
+      items: getSettingsNavigationItems()
     });
   }
 
@@ -3568,38 +3341,29 @@
   function updateThemeButtons(mode) {
     const nextMode = mode === 'dark' || mode === 'light' ? mode : 'system';
     currentThemeMode = nextMode;
-    if (themePickerController &&
-        typeof themePickerController.render === 'function') {
-      themePickerController.render({
-        activeMode: nextMode,
-        options: [
-          {
-            mode: 'system',
-            labelKey: 'settings_theme_system',
-            label: getMessage('settings_theme_system', '跟随系统/网站'),
-            previewSrc: '../../assets/images/system.svg'
-          },
-          {
-            mode: 'light',
-            labelKey: 'settings_theme_light',
-            label: getMessage('settings_theme_light', '浅色'),
-            previewSrc: '../../assets/images/light.svg'
-          },
-          {
-            mode: 'dark',
-            labelKey: 'settings_theme_dark',
-            label: getMessage('settings_theme_dark', '深色'),
-            previewSrc: '../../assets/images/dark.svg'
-          }
-        ]
-      });
-    } else {
-      themeButtons.forEach((button) => {
-        const isActive = button.getAttribute('data-mode') === nextMode;
-        button.setAttribute('data-active', isActive ? 'true' : 'false');
-        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      });
-    }
+    themePickerController.render({
+      activeMode: nextMode,
+      options: [
+        {
+          mode: 'system',
+          labelKey: 'settings_theme_system',
+          label: getMessage('settings_theme_system', '跟随系统/网站'),
+          previewSrc: '../../assets/images/system.svg'
+        },
+        {
+          mode: 'light',
+          labelKey: 'settings_theme_light',
+          label: getMessage('settings_theme_light', '浅色'),
+          previewSrc: '../../assets/images/light.svg'
+        },
+        {
+          mode: 'dark',
+          labelKey: 'settings_theme_dark',
+          label: getMessage('settings_theme_dark', '深色'),
+          previewSrc: '../../assets/images/dark.svg'
+        }
+      ]
+    });
     requestAnimationFrame(updateThemeIndicator);
   }
 
@@ -4033,7 +3797,7 @@
       });
     });
   }
-  if (!searchResultSourceTypeGroup && searchResultSourceTypeInputs.length > 0) {
+  if (searchResultSourceTypeInputs.length > 0) {
     searchResultSourceTypeInputs.forEach((input) => {
       input.addEventListener('change', () => {
         persistSearchResultSourceTypes(collectCheckedSearchResultSourceTypes());
@@ -5096,14 +4860,26 @@
     if (!siteSearchCustomList || !siteSearchBuiltinList) {
       return;
     }
-    const customKeys = new Set(customSiteSearchProviders.map((item) => String(item.key || '').toLowerCase()));
+    const customKeys = new Set(
+      customSiteSearchProviders.map((item) =>
+        String(item.key || '').toLowerCase()
+      )
+    );
     const displayDefaults = defaultSiteSearchProviders.filter((item) => {
       const key = String(item.key || '').toLowerCase();
       return key && !customKeys.has(key) && !disabledSiteSearchKeys.has(key);
     });
-    const displayAiDefaults = displayDefaults.filter((item) => isAiSiteSearchProvider(item));
-    const displaySearchDefaults = displayDefaults.filter((item) => !isAiSiteSearchProvider(item));
-    const builtinTemplateSet = new Set(defaultSiteSearchProviders.map((item) => normalizeSiteSearchTemplate(String(item.template || '').trim())).filter(Boolean));
+    const displayAiDefaults = displayDefaults.filter(isAiSiteSearchProvider);
+    const displaySearchDefaults = displayDefaults.filter(
+      (item) => !isAiSiteSearchProvider(item)
+    );
+    const builtinTemplateSet = new Set(
+      defaultSiteSearchProviders
+        .map((item) =>
+          normalizeSiteSearchTemplate(String(item.template || '').trim())
+        )
+        .filter(Boolean)
+    );
     const customItems = customSiteSearchProviders.map((item) => ({
       ...item,
       _xIsCustom: true
@@ -5116,340 +4892,32 @@
       ...item,
       _xIsCustom: false
     }));
-    const renderedWithReact = [
-      renderSiteSearchListController(
-        siteSearchCustomListController,
-        customItems,
-        '',
-        builtinTemplateSet
-      ),
-      renderSiteSearchListController(
-        siteSearchBuiltinListController,
-        searchItems,
-        getMessage('shortcuts_empty_builtin', '暂无内置站内搜索'),
-        builtinTemplateSet
-      ),
-      siteSearchAiBuiltinList
-        ? renderSiteSearchListController(
-            siteSearchAiBuiltinListController,
-            aiItems,
-            getMessage('shortcuts_empty_ai', '暂无内置 AI'),
-            builtinTemplateSet
-          )
-        : true
-    ].every(Boolean);
-    if (renderedWithReact) {
-      initTooltips();
-      if (pendingOptionsScrollTarget &&
-          scrollToOptionsTarget(pendingOptionsScrollTarget, { behavior: 'auto' })) {
-        pendingOptionsScrollTarget = '';
-      }
-      return;
-    }
-    destroyPopconfirmControllersWithin(siteSearchCustomList);
-    destroyPopconfirmControllersWithin(siteSearchBuiltinList);
-    siteSearchCustomList.innerHTML = '';
-    siteSearchBuiltinList.innerHTML = '';
+
+    renderSiteSearchListController(
+      siteSearchCustomListController,
+      customItems,
+      '',
+      builtinTemplateSet
+    );
+    renderSiteSearchListController(
+      siteSearchBuiltinListController,
+      searchItems,
+      getMessage('shortcuts_empty_builtin', '暂无内置站内搜索'),
+      builtinTemplateSet
+    );
     if (siteSearchAiBuiltinList) {
-      destroyPopconfirmControllersWithin(siteSearchAiBuiltinList);
-      siteSearchAiBuiltinList.innerHTML = '';
-    }
-    const builtinRowByTemplate = new Map();
-    const renderItem = (item, list) => {
-      const row = document.createElement('div');
-      row.className = '_x_extension_shortcut_item_2024_unique_';
-      row.setAttribute('data-expanded', 'false');
-      row.dataset.key = item.key || '';
-      row.dataset.type = item._xIsCustom ? 'custom' : 'builtin';
-      const normalizedTemplate = normalizeSiteSearchTemplate(String(item.template || '').trim());
-      if (!item._xIsCustom && normalizedTemplate) {
-        row.dataset.template = normalizedTemplate;
-        builtinRowByTemplate.set(normalizedTemplate, row);
-      }
-      const header = document.createElement('div');
-      header.className = '_x_extension_shortcut_item_header_2024_unique_';
-      const info = document.createElement('div');
-      info.className = '_x_extension_shortcut_item_info_2024_unique_';
-      const title = document.createElement('div');
-      title.className = '_x_extension_shortcut_item_title_2024_unique_';
-      const badge = document.createElement('div');
-      badge.className = '_x_extension_shortcut_badge_2024_unique_';
-      badge.textContent = item._xIsCustom
-        ? getMessage('shortcuts_badge_custom', '自定义')
-        : isAiSiteSearchProvider(item)
-          ? getMessage('shortcuts_badge_ai', 'AI')
-          : getMessage('shortcuts_badge_builtin', '内置');
-      const titleText = document.createElement('span');
-      titleText.textContent = getLocalizedBuiltinProviderName(item);
-      title.appendChild(badge);
-      const iconUrl = getSiteSearchItemIconUrl(item);
-      if (iconUrl) {
-        const icon = document.createElement('img');
-        icon.className = '_x_extension_shortcut_item_icon_2024_unique_';
-        icon.decoding = 'async';
-        icon.loading = 'lazy';
-        icon.referrerPolicy = 'no-referrer';
-        icon.alt = '';
-        icon.src = iconUrl;
-        icon.addEventListener('error', () => {
-          icon.remove();
-        }, { once: true });
-        title.appendChild(icon);
-      }
-      if (item._xIsCustom && normalizedTemplate && builtinTemplateSet.has(normalizedTemplate)) {
-        const duplicateTag = document.createElement('button');
-        duplicateTag.type = 'button';
-        duplicateTag.className = '_x_extension_shortcut_badge_2024_unique_ _x_extension_shortcut_badge_warn_2024_unique_';
-        duplicateTag.setAttribute('data-template', normalizedTemplate);
-        duplicateTag.setAttribute('data-tooltip', getMessage('shortcuts_duplicate_action', '定位内置项'));
-        duplicateTag.setAttribute('aria-label', getMessage('shortcuts_duplicate_action', '定位内置项'));
-        duplicateTag.innerHTML = `${getRiSvg('ri-question-line', 'ri-size-12')}${getMessage('shortcuts_duplicate_tag', '与内置重复')}`;
-        duplicateTag.addEventListener('click', (event) => {
-          event.stopPropagation();
-          const targetRow = builtinRowByTemplate.get(normalizedTemplate);
-          if (!targetRow) {
-            return;
-          }
-          targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          targetRow.removeAttribute('data-flash');
-          void targetRow.offsetWidth;
-          targetRow.setAttribute('data-flash', 'true');
-          const onFlashEnd = () => {
-            targetRow.removeAttribute('data-flash');
-            targetRow.removeEventListener('animationend', onFlashEnd);
-          };
-          targetRow.addEventListener('animationend', onFlashEnd);
-        });
-        title.appendChild(duplicateTag);
-      }
-      title.appendChild(titleText);
-      const meta = document.createElement('div');
-      meta.className = '_x_extension_shortcut_item_meta_2024_unique_';
-      meta.textContent = `${item.key} · ${item.template || ''}`;
-      info.appendChild(title);
-      info.appendChild(meta);
-      const actions = document.createElement('div');
-      actions.className = '_x_extension_shortcut_item_actions_2024_unique_';
-      const editButton = document.createElement('button');
-      editButton.className = '_x_extension_shortcut_edit_2024_unique_';
-      editButton.innerHTML = getRiSvg('ri-edit-line', 'ri-size-14');
-      editButton.dataset.editKey = item.key || '';
-      editButton.dataset.editType = item._xIsCustom ? 'custom' : 'builtin';
-      actions.appendChild(editButton);
-      const removeButton = document.createElement('button');
-      removeButton.className = '_x_extension_shortcut_remove_2024_unique_';
-      removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
-      removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      actions.appendChild(createPopconfirmWrap(
-        removeButton,
-        'confirm_remove_item',
-        '确认移除该项？',
-        () => removeSiteSearchItem(item.key || '', !item._xIsCustom)
-      ));
-      header.appendChild(info);
-      header.appendChild(actions);
-      row.appendChild(header);
-      const editor = document.createElement('div');
-      editor.className = '_x_extension_shortcut_editor_2024_unique_';
-      const templateField = document.createElement('div');
-      templateField.className = '_x_extension_shortcut_field_2024_unique_';
-      const templateLabelRow = document.createElement('div');
-      templateLabelRow.className = '_x_extension_shortcut_label_row_2024_unique_';
-      const templateLabel = document.createElement('label');
-      templateLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      const templateLabelText = document.createElement('span');
-      templateLabelText.setAttribute('data-i18n', 'shortcuts_label_template');
-      templateLabelText.textContent = getMessage('shortcuts_label_template', '搜索模板');
-      const templateRequired = document.createElement('span');
-      templateRequired.className = '_x_extension_shortcut_required_2024_unique_';
-      templateRequired.textContent = '*';
-      const templateHint = document.createElement('span');
-      templateHint.className = '_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_';
-      templateHint.setAttribute('data-tooltip', getMessage(
-        'shortcuts_template_help',
-        '1.打开你想添加的网站\n2.输入任一搜索词，触发搜索\n3.将搜索结果页面 url 粘贴在此处\n4.将关键词替换为{query}'
-      ));
-      templateHint.setAttribute('aria-label', getMessage(
-        'shortcuts_template_help',
-        '1.打开你想添加的网站\n2.输入任一搜索词，触发搜索\n3.将搜索结果页面 url 粘贴在此处\n4.将关键词替换为{query}'
-      ));
-      templateHint.innerHTML = getRiSvg('ri-question-line', 'ri-size-14');
-      templateLabel.appendChild(templateLabelText);
-      templateLabel.appendChild(templateRequired);
-      templateLabelRow.appendChild(templateLabel);
-      templateLabelRow.appendChild(templateRequired);
-      templateLabelRow.appendChild(templateHint);
-      const templateInput = document.createElement('input');
-      templateInput.className = '_x_extension_shortcut_input_2024_unique_';
-      templateInput.value = item.template || '';
-      templateInput.disabled = !item._xIsCustom;
-      templateField.appendChild(templateLabelRow);
-      templateField.appendChild(templateInput);
-
-      const keyField = document.createElement('div');
-      keyField.className = '_x_extension_shortcut_field_2024_unique_';
-      const keyLabel = document.createElement('label');
-      keyLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      const keyLabelText = document.createElement('span');
-      keyLabelText.setAttribute('data-i18n', 'shortcuts_label_key');
-      keyLabelText.textContent = getMessage('shortcuts_label_key', '触发词');
-      const keyRequired = document.createElement('span');
-      keyRequired.className = '_x_extension_shortcut_required_2024_unique_';
-      keyRequired.textContent = '*';
-      keyLabel.appendChild(keyLabelText);
-      keyLabel.appendChild(keyRequired);
-      const keyInput = document.createElement('input');
-      keyInput.className = '_x_extension_shortcut_input_2024_unique_';
-      keyInput.value = item.key || '';
-      keyInput.placeholder = getMessage('shortcuts_placeholder_required', '必填，如有多个用英文逗号分隔，如 jd,bili');
-      keyField.appendChild(keyLabel);
-      keyField.appendChild(keyInput);
-
-      const nameField = document.createElement('div');
-      nameField.className = '_x_extension_shortcut_field_2024_unique_';
-      const nameLabel = document.createElement('label');
-      nameLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      nameLabel.textContent = getMessage('shortcuts_label_name', '显示名称');
-      const nameInput = document.createElement('input');
-      nameInput.className = '_x_extension_shortcut_input_2024_unique_';
-      nameInput.value = item.name || item.key || '';
-      nameInput.placeholder = getMessage('shortcuts_placeholder_optional_default', '选填，默认使用触发词');
-      nameField.appendChild(nameLabel);
-      nameField.appendChild(nameInput);
-
-      const aliasField = document.createElement('div');
-      aliasField.className = '_x_extension_shortcut_field_2024_unique_';
-      const aliasLabel = document.createElement('label');
-      aliasLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      const aliasLabelText = document.createElement('span');
-      aliasLabelText.setAttribute('data-i18n', 'shortcuts_label_alias');
-      aliasLabelText.textContent = getMessage('shortcuts_label_alias', '别名');
-      const aliasRequired = document.createElement('span');
-      aliasRequired.className = '_x_extension_shortcut_required_2024_unique_';
-      aliasRequired.textContent = '*';
-      aliasLabel.appendChild(aliasLabelText);
-      aliasLabel.appendChild(aliasRequired);
-      const aliasInput = document.createElement('input');
-      aliasInput.className = '_x_extension_shortcut_input_2024_unique_';
-      aliasInput.value = Array.isArray(item.aliases) ? item.aliases.join(',') : '';
-      aliasInput.placeholder = getMessage('shortcuts_placeholder_alias', '选填，例如 小破站、油管等');
-      aliasField.appendChild(aliasLabel);
-      aliasField.appendChild(aliasInput);
-
-      const editorActions = document.createElement('div');
-      editorActions.className = '_x_extension_shortcut_editor_actions_2024_unique_';
-      const saveButton = document.createElement('button');
-      saveButton.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-      saveButton.textContent = getMessage('shortcuts_save', '保存修改');
-      const cancelButton = document.createElement('button');
-      cancelButton.className = SECONDARY_BUTTON_CLASS_NAME;
-      cancelButton.textContent = getMessage('shortcuts_cancel', '取消');
-      editorActions.appendChild(cancelButton);
-      editorActions.appendChild(saveButton);
-      attachSaveButtonAnimation(saveButton);
-
-      cancelButton.addEventListener('click', () => {
-        row.setAttribute('data-expanded', 'false');
-      });
-      saveButton.addEventListener('click', () => {
-        suspendSiteSearchRefresh(260);
-        const nextKeyRaw = String(keyInput.value || '').trim();
-        const isBuiltinAiProvider = !item._xIsCustom && isAiSiteSearchProvider(item);
-        if (!nextKeyRaw) {
-          showToast(getMessage('shortcuts_error_key', '请填写触发词'), true);
-          return;
-        }
-        if (/\s/.test(nextKeyRaw)) {
-          showToast(getMessage('shortcuts_error_key_space', '触发词不能包含空格'), true);
-          return;
-        }
-        const templateRaw = String(templateInput.value || '').trim();
-        const template = normalizeSiteSearchTemplate(templateRaw);
-        if (!template || (!isBuiltinAiProvider && !template.includes('{query}'))) {
-          showToast(getMessage('toast_error_template', '搜索模板必须包含 {query}'), true);
-          return;
-        }
-        const aliases = normalizeAliases(aliasInput.value || '');
-        const normalizedKey = nextKeyRaw.toLowerCase();
-        let next = customSiteSearchProviders.filter((entry) => String(entry.key || '').toLowerCase() !== normalizedKey);
-        const previousKey = String(item.key || '').toLowerCase();
-        if (previousKey && previousKey !== normalizedKey) {
-          next = next.filter((entry) => String(entry.key || '').toLowerCase() !== previousKey);
-        }
-        const shouldDisable = item._xIsCustom && isDuplicateTemplate(template, defaultSiteSearchProviders);
-        const nextItem = normalizeSiteSearchProvider({
-          ...item,
-          key: nextKeyRaw,
-          name: String(nameInput.value || '').trim() || nextKeyRaw,
-          template: template,
-          aliases: aliases,
-          disabled: shouldDisable,
-          disabledReason: shouldDisable ? 'duplicate' : ''
-        });
-        if (!nextItem) {
-          showToast(getMessage('toast_error', '操作失败，请重试'), true);
-          return;
-        }
-        next.unshift(nextItem);
-        disabledSiteSearchKeys.delete(normalizedKey);
-        Promise.all([
-          saveCustomSiteSearchProviders(next),
-          saveDisabledSiteSearchKeys(disabledSiteSearchKeys)
-        ]).then(() => {
-          customSiteSearchProviders = next;
-          row.setAttribute('data-expanded', 'false');
-          const finalize = () => {
-            showToast(getMessage('toast_saved', '已保存'), false);
-          };
-          if (saveButton.classList.contains('_x_extension_shortcut_save_2024_unique_')) {
-            setTimeout(finalize, 220);
-          } else {
-            finalize();
-          }
-        }).catch(() => {
-          showToast(getMessage('toast_error', '操作失败，请重试'), true);
-        });
-      });
-
-      editor.appendChild(templateField);
-      editor.appendChild(keyField);
-      editor.appendChild(nameField);
-      editor.appendChild(aliasField);
-      editor.appendChild(editorActions);
-      row.appendChild(editor);
-      list.appendChild(row);
-    };
-    if (customSiteSearchProviders.length === 0) {
-      // 保留虚线添加框即可
-    } else {
-      customSiteSearchProviders.forEach((item) => {
-        renderItem({ ...item, _xIsCustom: true }, siteSearchCustomList);
-      });
-    }
-    if (displaySearchDefaults.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = '_x_extension_settings_placeholder_2024_unique_';
-      empty.textContent = getMessage('shortcuts_empty_builtin', '暂无内置站内搜索');
-      siteSearchBuiltinList.appendChild(empty);
-    } else {
-      displaySearchDefaults.forEach((item) => {
-        renderItem({ ...item, _xIsCustom: false }, siteSearchBuiltinList);
-      });
-    }
-    if (siteSearchAiBuiltinList) {
-      if (displayAiDefaults.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = '_x_extension_settings_placeholder_2024_unique_';
-        empty.textContent = getMessage('shortcuts_empty_ai', '暂无内置 AI');
-        siteSearchAiBuiltinList.appendChild(empty);
-      } else {
-        displayAiDefaults.forEach((item) => {
-          renderItem({ ...item, _xIsCustom: false }, siteSearchAiBuiltinList);
-        });
-      }
+      renderSiteSearchListController(
+        siteSearchAiBuiltinListController,
+        aiItems,
+        getMessage('shortcuts_empty_ai', '暂无内置 AI'),
+        builtinTemplateSet
+      );
     }
     initTooltips();
-    if (pendingOptionsScrollTarget && scrollToOptionsTarget(pendingOptionsScrollTarget, { behavior: 'auto' })) {
+    if (
+      pendingOptionsScrollTarget &&
+      scrollToOptionsTarget(pendingOptionsScrollTarget, { behavior: 'auto' })
+    ) {
       pendingOptionsScrollTarget = '';
     }
   }
@@ -5748,326 +5216,22 @@
     if (!faviconBlacklistList) {
       return;
     }
-    if (renderBlacklistListWithReact(
+    renderBlacklistListWithReact(
       faviconBlacklistListController,
       faviconRequestBlacklistItems,
       false
-    )) {
-      return;
-    }
-    destroyPopconfirmControllersWithin(faviconBlacklistList);
-    faviconBlacklistList.innerHTML = '';
-    (Array.isArray(faviconRequestBlacklistItems) ? faviconRequestBlacklistItems : []).forEach((item) => {
-      const itemKey = buildBlacklistItemKey(item);
-      const row = document.createElement('div');
-      row.className = '_x_extension_shortcut_item_2024_unique_';
-      const header = document.createElement('div');
-      header.className = '_x_extension_shortcut_item_header_2024_unique_';
-      const info = document.createElement('div');
-      info.className = '_x_extension_shortcut_item_info_2024_unique_';
-      const title = document.createElement('div');
-      title.className = '_x_extension_shortcut_item_title_2024_unique_';
-      const badge = document.createElement('div');
-      const badgeConfig = getBlacklistMatchBadgeConfig(item.matchModes);
-      badge.className = '_x_extension_shortcut_badge_2024_unique_';
-      badge.setAttribute('data-tone', badgeConfig.tone);
-      badge.textContent = badgeConfig.text;
-      const titleText = document.createElement('span');
-      titleText.textContent = formatBlacklistPatternForDisplay(item);
-      title.appendChild(badge);
-      title.appendChild(titleText);
-      info.appendChild(title);
-      const removeButton = document.createElement('button');
-      removeButton.className = '_x_extension_shortcut_remove_2024_unique_';
-      removeButton.type = 'button';
-      removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
-      removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      const popWrap = createPopconfirmWrap(
-        removeButton,
-        'confirm_remove_item',
-        '确认移除该项？',
-        () => {
-          const nextItems = faviconRequestBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
-          saveFaviconRequestBlacklistItems(nextItems).then((savedItems) => {
-            faviconRequestBlacklistItems = savedItems;
-            renderFaviconRequestBlacklistList();
-            showToast(getMessage('favicon_blacklist_removed_toast', '已移除排除规则'), false);
-          }).catch(() => showToast(getMessage('toast_error', '操作失败，请重试'), true));
-        }
-      );
-      header.appendChild(info);
-      header.appendChild(popWrap);
-      row.appendChild(header);
-      faviconBlacklistList.appendChild(row);
-    });
+    );
   }
 
   function renderSearchBlacklistList() {
     if (!blacklistList) {
       return;
     }
-    if (renderBlacklistListWithReact(
+    renderBlacklistListWithReact(
       searchBlacklistListController,
       searchBlacklistItems,
       true
-    )) {
-      return;
-    }
-    destroyPopconfirmControllersWithin(blacklistList);
-    blacklistList.innerHTML = '';
-    if (!Array.isArray(searchBlacklistItems) || searchBlacklistItems.length === 0) {
-      // 保留输入区域即可，和站内搜索空状态保持一致
-      return;
-    }
-    searchBlacklistItems.forEach((item) => {
-      const itemKey = buildBlacklistItemKey(item);
-      const row = document.createElement('div');
-      row.className = '_x_extension_shortcut_item_2024_unique_';
-      row.setAttribute('data-expanded', 'false');
-      const header = document.createElement('div');
-      header.className = '_x_extension_shortcut_item_header_2024_unique_';
-      const info = document.createElement('div');
-      info.className = '_x_extension_shortcut_item_info_2024_unique_';
-      const title = document.createElement('div');
-      title.className = '_x_extension_shortcut_item_title_2024_unique_';
-      const badge = document.createElement('div');
-      badge.className = '_x_extension_shortcut_badge_2024_unique_';
-      const badgeConfig = getBlacklistMatchBadgeConfig(item.matchModes);
-      badge.setAttribute('data-tone', badgeConfig.tone);
-      badge.textContent = badgeConfig.text;
-      const titleText = document.createElement('span');
-      titleText.textContent = formatBlacklistPatternForDisplay(item);
-      title.appendChild(badge);
-      title.appendChild(titleText);
-      info.appendChild(title);
-      const actions = document.createElement('div');
-      actions.className = '_x_extension_shortcut_item_actions_2024_unique_';
-      const editButton = document.createElement('button');
-      editButton.className = '_x_extension_shortcut_edit_2024_unique_';
-      editButton.innerHTML = getRiSvg('ri-edit-line', 'ri-size-14');
-      editButton.setAttribute('aria-label', getMessage('shortcuts_edit', '编辑'));
-      const removeButton = document.createElement('button');
-      removeButton.className = '_x_extension_shortcut_remove_2024_unique_';
-      removeButton.innerHTML = getRiSvg('ri-delete-bin-4-line', 'ri-size-14');
-      removeButton.setAttribute('aria-label', getMessage('shortcuts_remove', '移除'));
-      const popWrap = createPopconfirmWrap(
-        removeButton,
-        'confirm_remove_item',
-        '确认移除该项？',
-        () => {
-          const nextItems = searchBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey);
-          saveSearchBlacklistItems(nextItems).then((savedItems) => {
-            searchBlacklistItems = savedItems;
-            renderSearchBlacklistList();
-            notifyNewtabSectionsRefresh('recent');
-            showToast(getMessage('blacklist_removed_toast', '已从黑名单移除'), false);
-            if (blacklistUrlInput) {
-              blacklistUrlInput.focus();
-            }
-          }).catch(() => {
-            showToast(getMessage('toast_error', '操作失败，请重试'), true);
-          });
-        }
-      );
-      actions.appendChild(editButton);
-      actions.appendChild(popWrap);
-      header.appendChild(info);
-      header.appendChild(actions);
-      row.appendChild(header);
-
-      const editor = document.createElement('div');
-      editor.className = '_x_extension_shortcut_editor_2024_unique_';
-
-      const urlField = document.createElement('div');
-      urlField.className = '_x_extension_shortcut_field_2024_unique_';
-      const urlLabel = document.createElement('div');
-      urlLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      const urlLabelText = document.createElement('span');
-      const urlRequired = document.createElement('span');
-      urlRequired.className = '_x_extension_shortcut_required_2024_unique_';
-      urlRequired.textContent = '*';
-      urlLabel.appendChild(urlLabelText);
-      urlLabel.appendChild(urlRequired);
-      const urlAffix = document.createElement('div');
-      urlAffix.className = '_x_extension_shortcut_input_affix_2026_unique_';
-      const urlPrefix = document.createElement('span');
-      urlPrefix.className = '_x_extension_shortcut_input_prefix_2026_unique_';
-      const urlInput = document.createElement('input');
-      urlInput.className = '_x_extension_shortcut_input_2024_unique_';
-      urlInput.value = getBlacklistPatternInputValue(item);
-      urlAffix.appendChild(urlPrefix);
-      urlAffix.appendChild(urlInput);
-      urlField.appendChild(urlLabel);
-      urlField.appendChild(urlAffix);
-
-      const matchField = document.createElement('div');
-      matchField.className = '_x_extension_shortcut_field_2024_unique_';
-      const matchLabel = document.createElement('div');
-      matchLabel.className = '_x_extension_shortcut_label_2024_unique_';
-      matchLabel.textContent = getMessage('blacklist_match_label', '匹配方式');
-      const matchModes = document.createElement('div');
-      matchModes.className = CHECKBOX_GROUP_CLASS_NAME;
-      matchModes.setAttribute('data-align', 'start');
-      matchModes.setAttribute('data-gap', 'wide');
-
-      function createModeOption(mode, textKey, fallback, tooltipKey, tooltipFallback) {
-        const wrap = document.createElement('label');
-        wrap.className = CHECKBOX_CLASS_NAME;
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        const text = document.createElement('span');
-        text.textContent = getMessage(textKey, fallback);
-        const hint = document.createElement('span');
-        hint.className = '_x_extension_shortcut_hint_2024_unique_ _x_extension_tooltip_host_2024_unique_';
-        hint.setAttribute('data-tooltip', getMessage(tooltipKey, tooltipFallback));
-        hint.innerHTML = getRiSvg('ri-question-line', 'ri-size-14');
-        wrap.appendChild(input);
-        wrap.appendChild(text);
-        wrap.appendChild(hint);
-        return { wrap, input };
-      }
-
-      const exactOption = createModeOption(
-        'exact',
-        'blacklist_match_exact',
-        '当前页面',
-        'blacklist_match_exact_tooltip',
-        '只屏蔽这一页\n────────\n例如，填 x.com/home 后，只有这一页不会出现，其他页面不受影响'
-      );
-      const prefixOption = createModeOption(
-        'prefix',
-        'blacklist_match_prefix',
-        '当前站点路径',
-        'blacklist_match_prefix_tooltip',
-        '只屏蔽这个站点下这一路径的页面\n────────\n例如，填 baidu.com/search 后，baidu.com/search 和 baidu.com/search/1 不会出现，但 baidu.com/news 不受影响'
-      );
-      const suffixOption = createModeOption(
-        'suffix',
-        'blacklist_match_suffix',
-        '整个网站',
-        'blacklist_match_suffix_tooltip',
-        '屏蔽这个网站的所有页面，也包括它的子网站\n────────\n例如，填 baidu.com 后，baidu.com/search 和 tieba.baidu.com 都不会出现'
-      );
-      matchModes.appendChild(suffixOption.wrap);
-      matchModes.appendChild(exactOption.wrap);
-      matchModes.appendChild(prefixOption.wrap);
-      matchField.appendChild(matchLabel);
-      matchField.appendChild(matchModes);
-
-      const editorError = document.createElement('div');
-      editorError.className = '_x_extension_shortcut_error_2024_unique_';
-      editorError.style.display = 'none';
-      function setEditorError(message) {
-        const text = String(message || '').trim();
-        editorError.textContent = text;
-        editorError.style.display = text ? 'block' : 'none';
-      }
-
-      function getEditorMatchModes() {
-        return normalizeBlacklistMatchModes([
-          exactOption.input.checked ? 'exact' : '',
-          prefixOption.input.checked ? 'prefix' : '',
-          suffixOption.input.checked ? 'suffix' : ''
-        ], null);
-      }
-
-      function syncEditorMatchModeAvailability(changedMode) {
-        syncBlacklistModeSelection(
-          {
-            exact: exactOption.input,
-            prefix: prefixOption.input,
-            suffix: suffixOption.input
-          },
-          changedMode,
-          {
-            exact: exactOption.wrap,
-            prefix: prefixOption.wrap,
-            suffix: suffixOption.wrap
-          },
-          (modes) => applyBlacklistInputPresentationToElements(
-            urlLabelText,
-            urlPrefix,
-            urlInput,
-            modes
-          )
-        );
-      }
-
-      exactOption.input.addEventListener('change', () => syncEditorMatchModeAvailability('exact'));
-      prefixOption.input.addEventListener('change', () => syncEditorMatchModeAvailability('prefix'));
-      suffixOption.input.addEventListener('change', () => syncEditorMatchModeAvailability('suffix'));
-      urlInput.addEventListener('input', () => {
-        setEditorError('');
-      });
-
-      const initialModes = normalizeBlacklistMatchModes(item.matchModes);
-      exactOption.input.checked = initialModes.includes('exact');
-      prefixOption.input.checked = initialModes.includes('prefix');
-      suffixOption.input.checked = initialModes.includes('suffix');
-      syncEditorMatchModeAvailability();
-
-      const editorActions = document.createElement('div');
-      editorActions.className = '_x_extension_shortcut_editor_actions_2024_unique_';
-      const cancelButton = document.createElement('button');
-      cancelButton.className = SECONDARY_BUTTON_CLASS_NAME;
-      cancelButton.textContent = getMessage('shortcuts_cancel', '取消');
-      const saveButton = document.createElement('button');
-      saveButton.className = '_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_';
-      saveButton.textContent = getMessage('shortcuts_save', '保存修改');
-      attachSaveButtonAnimation(saveButton);
-      cancelButton.addEventListener('click', () => {
-        row.setAttribute('data-expanded', 'false');
-      });
-      saveButton.addEventListener('click', () => {
-        const nextModes = getEditorMatchModes();
-        if (nextModes.length === 0) {
-          setEditorError(getMessage('blacklist_error_match_mode', '请选择至少一种匹配方式'));
-          return;
-        }
-        const nextPattern = normalizeBlacklistPattern(urlInput.value, nextModes);
-        if (!nextPattern) {
-          const message = nextModes.includes('suffix')
-            ? getMessage('blacklist_error_domain', '请输入网站域名')
-            : getMessage('blacklist_error_url', '请输入站点域名或完整 URL');
-          setEditorError(message);
-          return;
-        }
-        setEditorError('');
-        const nextItems = [{ pattern: nextPattern, matchModes: nextModes }].concat(
-          searchBlacklistItems.filter((entry) => buildBlacklistItemKey(entry) !== itemKey && entry.pattern !== nextPattern)
-        );
-        saveSearchBlacklistItems(nextItems).then((savedItems) => {
-          searchBlacklistItems = savedItems;
-          renderSearchBlacklistList();
-          notifyNewtabSectionsRefresh('recent');
-          const finalize = () => {
-            showToast(getMessage('toast_saved', '已保存'), false);
-          };
-          if (saveButton.classList.contains('_x_extension_shortcut_save_2024_unique_')) {
-            setTimeout(finalize, 220);
-          } else {
-            finalize();
-          }
-        }).catch(() => {
-          showToast(getMessage('toast_error', '操作失败，请重试'), true);
-        });
-      });
-      editorActions.appendChild(cancelButton);
-      editorActions.appendChild(saveButton);
-
-      editor.appendChild(urlField);
-      editor.appendChild(matchField);
-      editor.appendChild(editorActions);
-      editor.appendChild(editorError);
-      row.appendChild(editor);
-
-      editButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        row.setAttribute('data-expanded', row.getAttribute('data-expanded') === 'true' ? 'false' : 'true');
-      });
-      blacklistList.appendChild(row);
-    });
-    initTooltips();
+    );
   }
 
   function refreshSiteSearchProviders() {

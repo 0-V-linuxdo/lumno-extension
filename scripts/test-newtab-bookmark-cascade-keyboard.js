@@ -5,6 +5,9 @@ const repoRoot = path.resolve(__dirname, '..');
 const {
   createBookmarkCascadeMenuRuntime
 } = require(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'));
+const {
+  createFakeBookmarkCascadeView
+} = require(path.join(repoRoot, 'scripts', 'helpers', 'fake-bookmark-cascade-view.js'));
 
 function createFakeEvent(type, values) {
   return {
@@ -289,6 +292,7 @@ async function flushPromises() {
   const openUrlCalls = [];
   const tooltipCalls = [];
   const runtime = createBookmarkCascadeMenuRuntime({
+    view: createFakeBookmarkCascadeView(),
     documentObj,
     windowObj: {
       innerWidth: 1024,

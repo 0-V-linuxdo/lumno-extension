@@ -76,8 +76,6 @@ export interface ShortcutsViewOptions {
   getAddLabel?: () => string;
   getAddIconSvg?: () => string;
   onAdd?: (sourceElement: HTMLButtonElement) => void;
-  renderTile?: (shortcut: ShortcutItem) => ShortcutTileElement | null;
-  createAddButton?: () => HTMLButtonElement | null;
 }
 
 export interface ShortcutsViewController {
@@ -86,12 +84,6 @@ export interface ShortcutsViewController {
   refreshElements(): void;
   getTiles(): ShortcutTileElement[];
   getAddButton(): HTMLButtonElement | null;
-}
-
-export interface LegacyShortcutsApi {
-  createShortcutsView?: (
-    options: ShortcutsViewOptions
-  ) => ShortcutsViewController;
 }
 
 interface NormalizedOptions {
@@ -377,13 +369,8 @@ function ShortcutsList({
 }
 
 function createNoopController(
-  options: ShortcutsViewOptions,
-  legacyApi?: LegacyShortcutsApi | null
+  options: ShortcutsViewOptions
 ): ShortcutsViewController {
-  const legacyView = legacyApi?.createShortcutsView?.(options);
-  if (legacyView) {
-    return legacyView;
-  }
   const tiles = Array.isArray(options.tiles) ? options.tiles : [];
   return {
     render() {
@@ -406,12 +393,11 @@ function createNoopController(
 }
 
 export function createShortcutsView(
-  rawOptions: ShortcutsViewOptions = {},
-  legacyApi?: LegacyShortcutsApi | null
+  rawOptions: ShortcutsViewOptions = {}
 ): ShortcutsViewController {
   const normalizedOptions = normalizeOptions(rawOptions);
   if (!normalizedOptions) {
-    return createNoopController(rawOptions, legacyApi);
+    return createNoopController(rawOptions);
   }
   const options: NormalizedOptions = normalizedOptions;
   const reactRoot: Root = createRoot(options.grid);
@@ -476,13 +462,11 @@ export function createShortcutsView(
   };
 }
 
-export function createShortcutsViewApi(
-  legacyApi?: LegacyShortcutsApi | null
-) {
+export function createShortcutsViewApi() {
   return Object.freeze({
     implementation: 'react',
     createShortcutsView(options?: ShortcutsViewOptions) {
-      return createShortcutsView(options, legacyApi);
+      return createShortcutsView(options);
     }
   });
 }

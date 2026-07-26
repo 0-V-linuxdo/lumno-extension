@@ -1,7 +1,5 @@
 const assert = require('assert');
 const fs = require('fs');
-const featureHints = require('../src/shared/feature-hints.js');
-const updateNotice = require('../src/shared/update-notice.js');
 
 class FakeElement {
   constructor(tagName) {
@@ -70,6 +68,81 @@ function createFakeDocument() {
   };
   return fakeDocument;
 }
+
+global.LumnoFeatureHintView = {
+  implementation: 'react-test-double',
+  createFeatureHintView(options) {
+    const documentObj = options.documentObj;
+    const model = options.model;
+    const element = documentObj.createElement('span');
+    element.id = model.elementId;
+    element.className = ['x-lumno-feature-hint', model.className || '']
+      .filter(Boolean)
+      .join(' ');
+    element.setAttribute('data-react-island', 'feature-hint');
+    element.setAttribute('data-rounded-arrow-tip', model.roundedArrowTip ? 'true' : 'false');
+    element.setAttribute('data-visible', 'false');
+    element.setAttribute('data-dismissed', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    const badge = documentObj.createElement('span');
+    badge.className = 'x-lumno-feature-hint__badge';
+    if (model.badgeIconText) {
+      const badgeIcon = documentObj.createElement('span');
+      badgeIcon.className = 'x-lumno-feature-hint__badge-icon';
+      badgeIcon.textContent = model.badgeIconText;
+      badgeIcon.setAttribute('data-icon-type', 'text');
+      badge.appendChild(badgeIcon);
+    }
+    const badgeText = documentObj.createElement('span');
+    badgeText.className = 'x-lumno-feature-hint__badge-text';
+    badge.appendChild(badgeText);
+    element.appendChild(badge);
+    const text = documentObj.createElement('span');
+    text.id = model.textId;
+    text.className = 'x-lumno-feature-hint__text';
+    element.appendChild(text);
+    let linkButton = null;
+    if (model.hasLink) {
+      linkButton = documentObj.createElement('button');
+      linkButton.className = 'x-lumno-feature-hint__link';
+      const linkText = documentObj.createElement('span');
+      linkText.className = 'x-lumno-feature-hint__link-text';
+      linkButton.appendChild(linkText);
+      linkButton.addEventListener('click', options.onLinkClick);
+      linkButton.addEventListener('auxclick', (event) => {
+        if (event && Number(event.button) === 1) {
+          options.onLinkClick(event);
+        }
+      });
+      element.appendChild(linkButton);
+    }
+    const closeButton = documentObj.createElement('button');
+    closeButton.className = 'x-lumno-feature-hint__close';
+    element.appendChild(closeButton);
+    return {
+      arrowTip: null,
+      badge,
+      closeButton,
+      destroy() {},
+      element,
+      linkButton,
+      text,
+      updateLabels(labels) {
+        badge.setAttribute('aria-label', labels.badge);
+        badgeText.textContent = labels.badge;
+        text.textContent = labels.text;
+        closeButton.setAttribute('aria-label', labels.close);
+        if (linkButton) {
+          linkButton.setAttribute('aria-label', labels.link || '');
+          linkButton.children[0].textContent = labels.link || '';
+        }
+      }
+    };
+  }
+};
+
+const featureHints = require('../src/shared/feature-hints.js');
+const updateNotice = require('../src/shared/update-notice.js');
 
 function createOnChangedEmitter() {
   const listeners = [];
@@ -408,11 +481,12 @@ function flushMicrotasks() {
     'text badge icons should reserve visual space before wide emoji glyphs'
   );
   const featureHintsSource = fs.readFileSync('src/shared/feature-hints.js', 'utf8');
+  const featureHintViewSource = fs.readFileSync('react-src/shared/feature-hint-view.tsx', 'utf8');
   const updateNoticeSource = fs.readFileSync('src/shared/update-notice.js', 'utf8');
   assert(
     updateNoticeSource.includes("badgeIconText: '🦋'") &&
       featureHintsSource.includes('definition.badgeIconText') &&
-      featureHintsSource.includes("badgeIcon.setAttribute('data-icon-type', 'text')"),
+      featureHintViewSource.includes('data-icon-type="text"'),
     'update notice butterfly should use the component badge icon slot'
   );
 

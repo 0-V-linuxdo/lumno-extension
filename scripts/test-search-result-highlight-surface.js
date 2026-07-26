@@ -7,6 +7,10 @@ const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html')
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const overlayCss = fs.readFileSync(path.join(repoRoot, 'src/overlay/suggestions-view.css'), 'utf8');
 const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+const suggestionsReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+  'utf8'
+);
 
 function getCssRuleBlock(source, selector) {
   const start = source.indexOf(`${selector} {`);
@@ -95,33 +99,33 @@ assert.match(
 );
 
 assert.match(
-  overlayJs,
-  /function setSuggestionRowColors\(item,\s*bg,\s*border\)[\s\S]*?--x-ov-suggestion-row-bg[\s\S]*?--x-ov-suggestion-row-border/,
-  'overlay row color helper should only control background and border'
+  suggestionsReact,
+  /'--x-nt-suggestion-active-bg':\s*'--x-ov-suggestion-row-bg'[\s\S]*?'--x-nt-suggestion-active-border':\s*'--x-ov-suggestion-row-border'/,
+  'the shared React view should map active background and border variables to Overlay tokens'
 );
 
 assert.match(
-  overlayJs,
-  /function applySearchSuggestionHighlight\(item,\s*theme\)[\s\S]*?setSuggestionRowColors\(item,\s*highlight\.bg,\s*highlight\.border\);/,
-  'overlay active suggestions should not apply an extra shadow'
+  suggestionsReact,
+  /const highlight = options\.getHighlightColors\(theme\);[\s\S]*?'--x-nt-suggestion-active-bg'[\s\S]*?highlight\.bg[\s\S]*?'--x-nt-suggestion-active-border'[\s\S]*?highlight\.border/,
+  'React Overlay active suggestions should apply only the shared background and border tokens'
 );
 
 assert.match(
-  overlayJs,
-  /function applySearchSuggestionHighlight\(item,\s*theme\)[\s\S]*?item\.setAttribute\('data-row-state',\s*'active'\);/,
-  'overlay active suggestions should expose row state for dark favicon styling'
+  suggestionsReact,
+  /item\.setAttribute\('data-row-state', 'active'\);/,
+  'React active suggestions should expose row state for dark favicon styling'
 );
 
 assert.match(
-  overlayJs,
-  /function resetSearchSuggestion\(item\)[\s\S]*?item\.removeAttribute\('data-row-state'\);/,
-  'overlay inactive suggestions should clear row state for dark favicon styling'
+  suggestionsReact,
+  /item\.removeAttribute\('data-row-state'\);/,
+  'React inactive suggestions should clear row state for dark favicon styling'
 );
 
 assert.match(
-  overlayJs,
-  /iconSlot\.setAttribute\('data-favicon',\s*isFaviconIcon \? 'true' : 'false'\);/,
-  'overlay favicon slots should expose whether their child is a favicon'
+  suggestionsReact,
+  /data-favicon=\{isFavicon \? 'true' : 'false'\}/,
+  'React favicon slots should expose whether their child is a favicon'
 );
 
 assert.doesNotMatch(

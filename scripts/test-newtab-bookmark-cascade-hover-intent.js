@@ -13,6 +13,9 @@ const {
 const {
   createBookmarkCascadeMenuRuntime
 } = require(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'));
+const {
+  createFakeBookmarkCascadeView
+} = require(path.join(repoRoot, 'scripts', 'helpers', 'fake-bookmark-cascade-view.js'));
 
 function assertContains(source, needle, message) {
   assert.ok(source.includes(needle), message);
@@ -615,6 +618,7 @@ function createCascadeRuntimeFixture(overrides) {
   };
 
   const runtime = createBookmarkCascadeMenuRuntime({
+    view: createFakeBookmarkCascadeView(),
     documentObj,
     windowObj: {
       innerWidth: 1024,

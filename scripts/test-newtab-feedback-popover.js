@@ -5,6 +5,10 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const feedbackReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/feedback.tsx'),
+  'utf8'
+);
 const zhCnMessages = JSON.parse(fs.readFileSync(path.join(repoRoot, '_locales/zh_CN/messages.json'), 'utf8'));
 const zhTwMessages = JSON.parse(fs.readFileSync(path.join(repoRoot, '_locales/zh_TW/messages.json'), 'utf8'));
 const enMessages = JSON.parse(fs.readFileSync(path.join(repoRoot, '_locales/en/messages.json'), 'utf8'));
@@ -143,21 +147,21 @@ assert.ok(
 );
 
 assertContains(
-  newtabJs,
-  "feedbackDetailRefreshButton.innerHTML = getRiSvg('ri-refresh-line', 'ri-size-16');",
-  'wechat detail should place a refresh icon in the header actions'
+  feedbackReact,
+  'ri-icon ri-size-16 ri-refresh-line',
+  'the React feedback detail should place a refresh icon in the header actions'
 );
 
 assertContains(
-  newtabJs,
-  "feedbackDetailCloseButton.innerHTML = getRiSvg('ri-close-line', 'ri-size-16');",
-  'wechat detail should place a close icon after the refresh icon'
+  feedbackReact,
+  'ri-icon ri-size-16 ri-close-line',
+  'the React feedback detail should place a close icon after the refresh icon'
 );
 
-assert.match(
-  newtabJs,
-  /actions\.appendChild\(feedbackDetailRefreshButton\);\s*actions\.appendChild\(feedbackDetailCloseButton\);/,
-  'wechat detail should place refresh to the left of close'
+assert.ok(
+  feedbackReact.indexOf('ri-icon ri-size-16 ri-refresh-line') <
+    feedbackReact.indexOf('ri-icon ri-size-16 ri-close-line'),
+  'the React feedback detail should place refresh to the left of close'
 );
 
 assertContains(
@@ -173,15 +177,15 @@ assert.match(
 );
 
 assertContains(
-  newtabJs,
-  "feedbackControl.setAttribute('data-detail-open', open ? 'true' : 'false');",
-  'detail open state should be reflected on the feedback container for animation and icon hiding'
+  feedbackReact,
+  "host.dataset.detailOpen = detailOpen ? 'true' : 'false';",
+  'the React feedback view should reflect detail state on its host for animation and icon hiding'
 );
 
 assertContains(
-  newtabJs,
-  "closeFeedbackPopover({ restoreFocus: true });",
-  'wechat detail close icon should close the whole feedback popover and restore focus'
+  feedbackReact,
+  'requestAnimationFrame(() => buttonRef.current?.focus());',
+  'the React wechat detail close icon should close the popover and restore focus'
 );
 
 assertContains(
@@ -197,33 +201,27 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  'let feedbackChromeReviewLink = null;',
-  'feedback popover should keep a Chrome review link reference'
+  feedbackReact,
+  'ri-icon ri-size-16 ri-star-line',
+  'the React feedback popover should use a rating star icon for the Chrome review action'
 );
 
 assertContains(
-  newtabJs,
-  "feedbackChromeReviewLink.innerHTML = getRiSvg('ri-star-line', 'ri-size-16');",
-  'feedback popover should use a rating star icon for the Chrome review action'
-);
-
-assertContains(
-  newtabJs,
-  "feedbackMenu.appendChild(feedbackChromeReviewLink);",
-  'feedback popover should place the Chrome review action in the icon row'
+  feedbackReact,
+  'href={model.chromeReviewUrl}',
+  'the React feedback popover should place the Chrome review action in the icon row'
 );
 
 assert.match(
-  newtabJs,
-  /async function handleFeedbackCommunityClick\(event\)[\s\S]*const disposition = getOpenDisposition\(event, 'newTab'\);[\s\S]*openFeedbackExternalUrl\([\s\S]*disposition\s*\);/,
-  'Discord feedback activation should preserve background-opening modifiers across async link loading'
+  feedbackReact,
+  /const getDisposition = \(event\?[\s\S]*?'backgroundTab'[\s\S]*?onOpenExternal\(model\.discordUrl, disposition\)/,
+  'React Discord feedback activation should preserve background-opening modifiers'
 );
 
 assert.match(
-  newtabJs,
-  /feedbackCommunityButton\.addEventListener\('auxclick',[\s\S]*isMiddleClick\(event\)[\s\S]*handleFeedbackCommunityClick\(event\)/,
-  'Discord feedback action should support middle-click background opening'
+  feedbackReact,
+  /onAuxClick=\{\(event\) => \{[\s\S]*?event\.button === 1[\s\S]*?openCommunity\(getDisposition\(event\)\)/,
+  'the React Discord feedback action should support middle-click background opening'
 );
 
 assert.ok(
@@ -235,21 +233,21 @@ assert.ok(
 );
 
 assertContains(
-  newtabJs,
-  'image.width = 1080;',
-  'wechat QR image should reserve its published width before loading'
+  feedbackReact,
+  'width="1080"',
+  'the React wechat QR image should reserve its published width before loading'
 );
 
 assertContains(
-  newtabJs,
-  'image.height = 1596;',
-  'wechat QR image should reserve its published height before loading'
+  feedbackReact,
+  'height="1596"',
+  'the React wechat QR image should reserve its published height before loading'
 );
 
 assert.match(
   newtabJs,
-  /async function handleFeedbackQrRefresh\(event\)[\s\S]*?loadFeedbackLinks\(\{ force: true \}\)/,
-  'wechat refresh should force a new remote community-links request'
+  /async onRefreshQr\(\)[\s\S]*?loadFeedbackLinks\(\{ force: true \}\)/,
+  'the feedback adapter should force a new remote community-links request'
 );
 
 assertContains(
@@ -260,37 +258,37 @@ assertContains(
 
 assert.match(
   newtabJs,
-  /const loaded = await preloadFeedbackQrImage\(refreshedUrl\);[\s\S]*?feedbackQrImage\.src = refreshedUrl;/,
-  'wechat refresh should only replace the visible QR image after the fresh image loads'
+  /const loaded = await preloadFeedbackQrImage\(refreshedUrl\);[\s\S]*?qrUrl:\s*refreshedUrl/,
+  'the feedback adapter should only return a fresh QR URL after its image loads'
 );
 
-assertContains(
+assert.match(
   newtabJs,
-  "t('newtab_feedback_wechat_refresh_success', 'Latest QR code loaded')",
+  /t\(\s*'newtab_feedback_wechat_refresh_success',\s*'Latest QR code loaded'\s*\)/,
   'wechat refresh should show a success tooltip after the latest image loads'
 );
 
-assertContains(
+assert.match(
   newtabJs,
-  "t('newtab_feedback_wechat_refresh_error', 'Could not refresh. Try again.')",
+  /t\(\s*'newtab_feedback_wechat_refresh_error',\s*'Could not refresh\. Try again\.'\s*\)/,
   'wechat refresh should show an error tooltip when the fresh image cannot be loaded'
 );
 
 assert.match(
-  newtabJs,
-  /setFeedbackActionLabel\(\s*feedbackDetailRefreshButton,[\s\S]*?newtab_feedback_wechat_refresh_tooltip/,
-  'wechat refresh icon should expose a localized tooltip and accessible label'
+  feedbackReact,
+  /aria-label=\{model\.refreshTooltip\}[\s\S]*?data-loading=/,
+  'the React wechat refresh icon should expose a localized accessible label'
+);
+
+assert.match(
+  feedbackReact,
+  /aria-label=\{model\.closeTooltip\}[\s\S]*?x-nt-feedback-detail-close/,
+  'the React wechat close icon should expose a localized accessible label'
 );
 
 assert.match(
   newtabJs,
-  /setFeedbackActionLabel\(\s*feedbackDetailCloseButton,[\s\S]*?newtab_feedback_wechat_close_tooltip/,
-  'wechat close icon should expose a localized tooltip and accessible label'
-);
-
-assertContains(
-  newtabJs,
-  "t('newtab_feedback_wechat_panel_title', 'Bug reports & feature requests')",
+  /t\(\s*'newtab_feedback_wechat_panel_title',\s*'Bug reports & feature requests'\s*\)/,
   'wechat detail title should use the bug feedback and feature request copy'
 );
 

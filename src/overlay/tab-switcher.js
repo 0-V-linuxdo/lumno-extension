@@ -58,42 +58,6 @@
     }
   }
 
-  function prepareImage(image) {
-    if (!image) {
-      return image;
-    }
-    image.decoding = 'async';
-    image.loading = 'eager';
-    image.referrerPolicy = 'no-referrer';
-    image.addEventListener('error', () => {
-      image.setAttribute('data-broken', 'true');
-      image.removeAttribute('src');
-    }, { once: true });
-    return image;
-  }
-
-  function createElement(doc, tagName, className) {
-    const element = doc.createElement(tagName);
-    if (className) {
-      element.className = className;
-    }
-    return element;
-  }
-
-  function createPreparedImage(doc, className, src, altText) {
-    const image = prepareImage(createElement(doc, 'img', className));
-    image.alt = altText;
-    image.src = src;
-    return image;
-  }
-
-  function createTitleFavicon(doc, favIconUrl) {
-    if (!favIconUrl) {
-      return createElement(doc, 'span', 'x-tab-switcher-title-favicon');
-    }
-    return createPreparedImage(doc, 'x-tab-switcher-title-favicon', favIconUrl, '');
-  }
-
   function updateOpenSwitcherThumbnailFromMessage(request) {
     const host = document.getElementById(HOST_ID);
     if (!host || typeof host._lumnoTabSwitcherUpdateThumbnail !== 'function') {
@@ -114,15 +78,6 @@
       sendResponse(updateOpenSwitcherThumbnailFromMessage(request));
       return true;
     });
-  }
-
-  function setButtonActive(button, active) {
-    if (!button) {
-      return;
-    }
-    button.setAttribute('data-active', active ? 'true' : 'false');
-    button.setAttribute('aria-selected', active ? 'true' : 'false');
-    button.tabIndex = active ? 0 : -1;
   }
 
   function clampSelectedIndex(index, length) {
@@ -996,50 +951,33 @@
     style.textContent = buildStyles();
     shadow.appendChild(style);
 
-    const buttons = [];
-    const tabById = new Map();
-    tabs.forEach((tab) => tabById.set(tab.id, tab));
     let selectedIndex = clampSelectedIndex(context.selectedIndex, tabs.length);
-    let tabSwitcherReactView = null;
-    let panel = null;
-    let list = null;
-    if (typeof TAB_SWITCHER_REACT_VIEW.createTabSwitcherView === 'function') {
-      tabSwitcherReactView = TAB_SWITCHER_REACT_VIEW.createTabSwitcherView({
-        document,
-        root: shadow,
-        panelId: PANEL_ID,
-        tabs,
-        selectedIndex,
-        ariaLabel: getMessage('tab_switcher_title', 'Recent tabs'),
-        sanitizeText,
-        getHostLabel,
-        getMessage,
-        normalizeAccentCss,
-        getThumbnailStatus,
-        onSelect(index) {
-          selectedIndex = index;
-          renderSelection();
-        },
-        onActivate(index, event) {
-          stopHandledKeyEvent(event);
-          selectedIndex = index;
-          switchToSelected();
-        }
-      });
-      panel = tabSwitcherReactView && tabSwitcherReactView.panel
-        ? tabSwitcherReactView.panel
-        : null;
-    }
+    let tabSwitcherReactView = TAB_SWITCHER_REACT_VIEW.createTabSwitcherView({
+      document,
+      root: shadow,
+      panelId: PANEL_ID,
+      tabs,
+      selectedIndex,
+      ariaLabel: getMessage('tab_switcher_title', 'Recent tabs'),
+      sanitizeText,
+      getHostLabel,
+      getMessage,
+      normalizeAccentCss,
+      getThumbnailStatus,
+      onSelect(index) {
+        selectedIndex = index;
+        renderSelection();
+      },
+      onActivate(index, event) {
+        stopHandledKeyEvent(event);
+        selectedIndex = index;
+        switchToSelected();
+      }
+    });
+    const panel = tabSwitcherReactView.panel;
     if (!panel) {
-      tabSwitcherReactView = null;
-      panel = createElement(document, 'div', '');
-      panel.id = PANEL_ID;
-      panel.setAttribute('role', 'listbox');
-      panel.setAttribute('aria-label', getMessage('tab_switcher_title', 'Recent tabs'));
-      panel.setAttribute('data-visible', 'true');
-      panel.style.setProperty('--x-tab-count', String(Math.max(1, Math.min(5, tabs.length))));
-      list = createElement(document, 'div', 'x-tab-switcher-list');
-      panel.appendChild(list);
+      host.remove();
+      return;
     }
     applySwitcherViewportPlacement(panel, window);
     applySwitcherZoomCompensation(panel, context.tabZoomFactor, getSwitcherVisualViewportScale(window));
@@ -1056,13 +994,7 @@
     let suppressInitialShortcutAdvanceUntilQKeyup = context.suppressInitialShortcutAdvance === true;
 
     function renderSelection() {
-      if (tabSwitcherReactView) {
-        tabSwitcherReactView.updateSelection(selectedIndex);
-        return;
-      }
-      buttons.forEach((button, index) => {
-        setButtonActive(button, index === selectedIndex);
-      });
+      tabSwitcherReactView.updateSelection(selectedIndex);
     }
 
     function close() {
@@ -1197,161 +1129,9 @@
       }
     }
 
-    function updateCardThumbnail(card, tab, update) {
-      if (!card || !tab || !update || typeof update !== 'object') {
-        return false;
-      }
-      const thumbnail = typeof update.thumbnail === 'string' ? update.thumbnail : '';
-      if (!thumbnail.startsWith('data:image/')) {
-        return false;
-      }
-      const updateUrl = typeof update.url === 'string' ? update.url : '';
-      if (updateUrl && tab.url && updateUrl !== tab.url) {
-        return false;
-      }
-      const thumb = card.querySelector('.x-tab-switcher-thumb');
-      if (!thumb) {
-        return false;
-      }
-      const previousImages = Array.from(thumb.querySelectorAll('img[data-kind="thumbnail"]'));
-      const currentImage = previousImages[previousImages.length - 1] || null;
-      if (currentImage && currentImage.getAttribute('src') === thumbnail) {
-        return true;
-      }
-      tab.thumbnail = thumbnail;
-      tab.thumbnailStatus = update.thumbnailStatus || 'ok';
-      tab.thumbnailReason = update.thumbnailReason || '';
-      const thumbnailStatus = getThumbnailStatus(tab, thumbnail);
-      card.setAttribute('data-thumbnail-status', thumbnailStatus);
-      thumb.setAttribute('data-thumbnail-status', thumbnailStatus);
-      thumb.removeAttribute('data-thumbnail-reason');
-      const nextImage = createPreparedImage(document, '', thumbnail, '');
-      nextImage.setAttribute('data-kind', 'thumbnail');
-      nextImage.setAttribute('data-entering', 'true');
-      thumb.appendChild(nextImage);
-      const revealImage = () => {
-        previousImages.forEach((image) => {
-          if (image && image !== nextImage) {
-            image.setAttribute('data-exiting', 'true');
-          }
-        });
-        requestAnimationFrame(() => {
-          nextImage.removeAttribute('data-entering');
-          window.setTimeout(() => {
-            previousImages.forEach((image) => {
-              if (image && image !== nextImage) {
-                image.remove();
-              }
-            });
-          }, 260);
-        });
-      };
-      if (typeof nextImage.decode === 'function') {
-        nextImage.decode().catch(() => {}).finally(revealImage);
-      } else {
-        revealImage();
-      }
-      return true;
-    }
-
     host._lumnoTabSwitcherUpdateThumbnail = function(update) {
-      if (tabSwitcherReactView) {
-        return tabSwitcherReactView.updateThumbnail(update);
-      }
-      const tabId = Number(update && update.tabId);
-      if (!Number.isInteger(tabId)) {
-        return { ok: false, reason: 'invalid-tab' };
-      }
-      const tab = tabById.get(tabId);
-      const index = tabs.findIndex((item) => item && item.id === tabId);
-      if (!tab || index < 0 || !buttons[index]) {
-        return { ok: false, reason: 'tab-not-visible' };
-      }
-      return {
-        ok: updateCardThumbnail(buttons[index], tab, update)
-      };
+      return tabSwitcherReactView.updateThumbnail(update);
     };
-
-    if (!tabSwitcherReactView) {
-      tabs.forEach((tab, index) => {
-      const card = createElement(document, 'button', 'x-tab-switcher-card');
-      tabById.set(tab.id, tab);
-      const accentCss = normalizeAccentCss(tab.accentRgb);
-      if (accentCss) {
-        card.style.setProperty('--x-tab-switcher-card-accent', accentCss);
-      }
-      card.type = 'button';
-      card.setAttribute('role', 'option');
-      card.setAttribute('data-tab-id', String(tab.id));
-      const titleText = sanitizeText(tab.title, getMessage('tab_switcher_untitled', 'Untitled'));
-      card.setAttribute('aria-label', titleText);
-
-      const thumb = createElement(document, 'div', 'x-tab-switcher-thumb');
-      thumb.setAttribute('data-tab-id', String(tab.id));
-      const thumbnail = typeof tab.thumbnail === 'string' ? tab.thumbnail : '';
-      const thumbnailStatus = getThumbnailStatus(tab, thumbnail);
-      card.setAttribute('data-thumbnail-status', thumbnailStatus);
-      thumb.setAttribute('data-thumbnail-status', thumbnailStatus);
-      if (tab.thumbnailReason) {
-        thumb.setAttribute('data-thumbnail-reason', sanitizeText(tab.thumbnailReason));
-      }
-      if (thumbnail && thumbnail.startsWith('data:image/')) {
-        const thumbImage = createPreparedImage(document, '', thumbnail, '');
-        thumbImage.setAttribute('data-kind', 'thumbnail');
-        thumb.appendChild(thumbImage);
-      } else {
-        const fallback = createElement(document, 'div', 'x-tab-switcher-fallback');
-        if (tab.favIconUrl) {
-          const favicon = createPreparedImage(
-            document,
-            'x-tab-switcher-favicon',
-            tab.favIconUrl,
-            getMessage('tab_switcher_favicon_alt', 'Site icon')
-          );
-          fallback.appendChild(favicon);
-        }
-        thumb.appendChild(fallback);
-      }
-      if (tab.favIconUrl) {
-        const thumbFavicon = createPreparedImage(document, 'x-tab-switcher-thumb-favicon', tab.favIconUrl, '');
-        thumb.appendChild(thumbFavicon);
-      }
-      card.appendChild(thumb);
-
-      const meta = createElement(document, 'div', 'x-tab-switcher-meta');
-      const nameRow = createElement(document, 'div', 'x-tab-switcher-name-row');
-      nameRow.appendChild(createTitleFavicon(document, tab.favIconUrl));
-      const name = createElement(document, 'div', 'x-tab-switcher-name');
-      name.textContent = titleText;
-      name.title = titleText;
-      nameRow.appendChild(name);
-      const hostLabel = createElement(document, 'div', 'x-tab-switcher-host');
-      hostLabel.textContent = getHostLabel(tab.url) || tab.url || '';
-      meta.appendChild(nameRow);
-      meta.appendChild(hostLabel);
-      card.appendChild(meta);
-
-      card.addEventListener('pointerenter', () => {
-        selectedIndex = index;
-        renderSelection();
-      });
-      card.addEventListener('focus', () => {
-        selectedIndex = index;
-        renderSelection();
-      });
-      card.addEventListener('click', (event) => {
-        stopHandledKeyEvent(event);
-        selectedIndex = index;
-        switchToSelected();
-      });
-      buttons.push(card);
-        list.appendChild(card);
-      });
-    }
-
-    if (!tabSwitcherReactView) {
-      shadow.appendChild(panel);
-    }
     document.documentElement.appendChild(host);
 
     const switcherVisualViewport = window.visualViewport && typeof window.visualViewport.addEventListener === 'function'

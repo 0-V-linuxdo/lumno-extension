@@ -91,18 +91,12 @@ describe('Toast React island', () => {
     expect(element.dataset.show).toBe('false');
   });
 
-  it('keeps the legacy controller available when no host exists', () => {
-    const legacyController = {
-      show: vi.fn(),
-      hide: vi.fn(),
-      destroy: vi.fn()
-    };
-    const legacyApi = {
-      createToastController: vi.fn(() => legacyController)
-    };
-    const controller = createToastController(null, {}, legacyApi);
-
-    expect(controller).toBe(legacyController);
-    expect(legacyApi.createToastController).toHaveBeenCalledWith(null, {});
+  it('returns a safe no-op controller when no host exists', () => {
+    const controller = createToastController(null);
+    expect(() => {
+      controller.show('Ignored');
+      controller.hide();
+      controller.destroy();
+    }).not.toThrow();
   });
 });

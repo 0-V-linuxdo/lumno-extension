@@ -272,7 +272,9 @@
     const config = options || {};
     const documentObj = config.documentObj || (typeof document !== 'undefined' ? document : null);
     const definition = getFeatureHint(config.definition || config.id || config.hint);
-    if (!definition || !documentObj || typeof documentObj.createElement !== 'function') {
+    const featureHintView = root && root.LumnoFeatureHintView;
+    if (!definition || !documentObj || !featureHintView ||
+        typeof featureHintView.createFeatureHintView !== 'function') {
       return null;
     }
     const t = typeof config.t === 'function' ? config.t : null;
@@ -298,16 +300,6 @@
     const roundedArrowTip = typeof config.roundedArrowTip === 'boolean'
       ? config.roundedArrowTip
       : Boolean(definition.roundedArrowTip);
-    const element = documentObj.createElement('span');
-    const arrowTip = documentObj.createElement('span');
-    const text = documentObj.createElement('span');
-    const badge = documentObj.createElement('span');
-    const badgeIcon = documentObj.createElement('span');
-    const badgeText = documentObj.createElement('span');
-    const linkButton = documentObj.createElement('button');
-    const linkText = documentObj.createElement('span');
-    const linkIcon = documentObj.createElement('span');
-    const closeButton = documentObj.createElement('button');
     const hasLink = Boolean(
       config.onLinkClick ||
       config.linkUrl ||
@@ -318,105 +310,75 @@
     let requestedVisible = config.initiallyVisible !== false;
     let dismissStateLoaded = dismissStorage === 'none';
     let firstShowRemembered = false;
-
-    element.id = config.elementId || `_x_lumno_feature_hint_${idPart}_2026_unique_`;
-    element.className = ['x-lumno-feature-hint', definition.className || ''].filter(Boolean).join(' ');
-    element.setAttribute('role', 'note');
-    element.setAttribute('data-feature-hint-id', definition.id);
-    element.setAttribute('data-feature-hint-surface', definition.surface || '');
-    element.setAttribute('data-feature-hint-placement', definition.placement || '');
-    element.setAttribute('data-feature-hint-version', definition.introducedIn || '');
-    element.setAttribute('data-arrow-side', arrowSide);
-    element.setAttribute('data-arrow-align', arrowAlign);
-    element.setAttribute('data-dismiss-storage', dismissStorage);
-    element.setAttribute('data-width-mode', widthMode);
-    element.setAttribute('data-align-mode', alignMode);
-    element.setAttribute('data-multiline', 'false');
-    element.setAttribute('data-has-link', hasLink ? 'true' : 'false');
-    element.setAttribute('data-rounded-arrow-tip', roundedArrowTip ? 'true' : 'false');
-    element.setAttribute('data-visible', 'false');
-    element.setAttribute('data-dismissed', dismissed ? 'true' : 'false');
-    element.setAttribute('aria-hidden', 'true');
-
-    arrowTip.className = 'x-lumno-feature-hint__arrow-tip';
-    arrowTip.setAttribute('aria-hidden', 'true');
-
-    badge.className = 'x-lumno-feature-hint__badge';
-    badgeIcon.className = 'x-lumno-feature-hint__badge-icon';
-    badgeText.className = 'x-lumno-feature-hint__badge-text';
     const badgeIconText = String(definition.badgeIconText || '').trim();
-    if (definition.badgeIcon) {
-      badgeIcon.innerHTML = getRiSvg(definition.badgeIcon, 'ri-size-10');
-      badge.appendChild(badgeIcon);
-    } else if (badgeIconText) {
-      badgeIcon.textContent = badgeIconText;
-      badgeIcon.setAttribute('data-icon-type', 'text');
-      badge.appendChild(badgeIcon);
-    }
-    badge.appendChild(badgeText);
-
-    text.id = config.textId || `_x_lumno_feature_hint_${idPart}_text_2026_unique_`;
-    text.className = 'x-lumno-feature-hint__text';
-
-    if (hasLink) {
-      linkButton.type = 'button';
-      linkButton.className = 'x-lumno-feature-hint__link';
-      linkText.className = 'x-lumno-feature-hint__link-text';
-      linkIcon.className = 'x-lumno-feature-hint__link-icon';
-      linkIcon.innerHTML = getRiSvg('ri-arrow-right-line', 'ri-size-12');
-      linkButton.appendChild(linkText);
-      linkButton.appendChild(linkIcon);
-      const activateLink = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (typeof config.onLinkClick === 'function') {
-          config.onLinkClick(event, definition);
-          return;
-        }
-        const linkUrl = typeof config.getLinkUrl === 'function'
-          ? config.getLinkUrl(definition)
-          : (config.linkUrl || definition.linkUrl || '');
-        const windowObj = config.windowObj || (typeof window !== 'undefined' ? window : null);
-        if (!linkUrl || !windowObj) {
-          return;
-        }
-        if (config.linkTarget === '_blank' && typeof windowObj.open === 'function') {
-          windowObj.open(linkUrl, '_blank', 'noopener');
-          return;
-        }
-        if (windowObj.location && typeof windowObj.location.assign === 'function') {
-          windowObj.location.assign(linkUrl);
-        }
-      };
-      linkButton.addEventListener('click', activateLink);
-      linkButton.addEventListener('auxclick', (event) => {
-        const isMiddleClick = typeof NAVIGATION_DISPOSITION.isMiddleClick === 'function'
-          ? NAVIGATION_DISPOSITION.isMiddleClick(event)
-          : Boolean(event && Number(event.button) === 1);
-        if (isMiddleClick) {
-          activateLink(event);
-        }
-      });
-    }
-
-    closeButton.type = 'button';
-    closeButton.className = 'x-lumno-feature-hint__close';
-    closeButton.innerHTML = getRiSvg('ri-close-line', 'ri-size-12');
-    closeButton.addEventListener('click', (event) => {
+    const activateLink = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      controller.dismiss();
+      if (typeof config.onLinkClick === 'function') {
+        config.onLinkClick(event, definition);
+        return;
+      }
+      const linkUrl = typeof config.getLinkUrl === 'function'
+        ? config.getLinkUrl(definition)
+        : (config.linkUrl || definition.linkUrl || '');
+      const targetWindow = config.windowObj || (typeof window !== 'undefined' ? window : null);
+      if (!linkUrl || !targetWindow) {
+        return;
+      }
+      if (config.linkTarget === '_blank' && typeof targetWindow.open === 'function') {
+        targetWindow.open(linkUrl, '_blank', 'noopener');
+        return;
+      }
+      if (targetWindow.location && typeof targetWindow.location.assign === 'function') {
+        targetWindow.location.assign(linkUrl);
+      }
+    };
+    let controller = null;
+    const viewController = featureHintView.createFeatureHintView({
+      documentObj,
+      model: {
+        alignMode,
+        arrowAlign,
+        arrowSide,
+        badgeIconHtml: definition.badgeIcon
+          ? getRiSvg(definition.badgeIcon, 'ri-size-10')
+          : '',
+        badgeIconText,
+        className: definition.className || '',
+        dismissStorage,
+        elementId: config.elementId || `_x_lumno_feature_hint_${idPart}_2026_unique_`,
+        hasLink,
+        hintId: definition.id,
+        placement: definition.placement || '',
+        roundedArrowTip,
+        surface: definition.surface || '',
+        textId: config.textId || `_x_lumno_feature_hint_${idPart}_text_2026_unique_`,
+        version: definition.introducedIn || '',
+        widthMode
+      },
+      labels: {
+        badge: '',
+        close: '',
+        link: '',
+        text: ''
+      },
+      onDismiss() {
+        if (controller) {
+          controller.dismiss();
+        }
+      },
+      onLinkClick: activateLink
     });
-
-    if (roundedArrowTip) {
-      element.appendChild(arrowTip);
+    if (!viewController) {
+      return null;
     }
-    element.appendChild(badge);
-    element.appendChild(text);
-    if (hasLink) {
-      element.appendChild(linkButton);
-    }
-    element.appendChild(closeButton);
+    const element = viewController.element;
+    const arrowTip = viewController.arrowTip;
+    const text = viewController.text;
+    const badge = viewController.badge;
+    const linkButton = viewController.linkButton;
+    const closeButton = viewController.closeButton;
+    element.setAttribute('data-dismissed', dismissed ? 'true' : 'false');
 
     let alignUpdateFrame = 0;
 
@@ -524,10 +486,18 @@
       }
     }
 
-    const controller = {
+    controller = {
       definition,
       element,
       textId: text.id,
+      destroy() {
+        disconnectAlignmentObserver();
+        if (alignUpdateFrame && windowObj && typeof windowObj.cancelAnimationFrame === 'function') {
+          windowObj.cancelAnimationFrame(alignUpdateFrame);
+          alignUpdateFrame = 0;
+        }
+        viewController.destroy();
+      },
       dismiss() {
         if (dismissed) {
           return;
@@ -553,16 +523,16 @@
         const badgeLabel = getMessage(t, definition.badgeKey, definition.badgeFallback);
         const textLabel = getMessage(t, definition.textKey, definition.textFallback);
         const closeLabel = getMessage(t, definition.closeLabelKey, definition.closeLabelFallback);
-        badge.setAttribute('aria-label', badgeLabel);
-        badgeText.textContent = badgeLabel;
-        text.textContent = textLabel;
+        let linkLabel = '';
         if (hasLink) {
-          const linkLabel = getMessage(t, config.linkKey || definition.linkKey, config.linkFallback || definition.linkFallback);
-          linkText.textContent = linkLabel;
-          linkButton.setAttribute('aria-label', linkLabel);
-          linkButton.setAttribute('title', linkLabel);
+          linkLabel = getMessage(t, config.linkKey || definition.linkKey, config.linkFallback || definition.linkFallback);
         }
-        closeButton.setAttribute('aria-label', closeLabel);
+        viewController.updateLabels({
+          badge: badgeLabel,
+          close: closeLabel,
+          link: linkLabel,
+          text: textLabel
+        });
         scheduleContentAlignmentUpdate();
       }
     };

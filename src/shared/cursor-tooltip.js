@@ -222,8 +222,8 @@
     const kind = tooltipKind || 'cursor';
     if (typeof baseTooltip.createElement === 'function') {
       return baseTooltip.createElement(doc, Object.assign({}, options, {
+        tooltipKind: kind,
         decorateElement: (element) => {
-          setAttribute(element, 'data-tooltip-kind', kind);
           if (decorateElement) {
             decorateElement(element);
           }
@@ -245,66 +245,15 @@
   }
 
   function renderContent(element, text, options) {
-    const config = options || {};
-    if (typeof config.renderContent === 'function') {
-      const rendered = config.renderContent(element, text, config);
-      return rendered || element;
-    }
     return renderText(element, text);
   }
 
   function clearElement(element) {
-    if (!element) {
-      return;
-    }
-    if (typeof element.replaceChildren === 'function') {
-      element.replaceChildren();
-    }
-    element.textContent = '';
-  }
-
-  function createTagPart(tag, className, text) {
-    if (!tag) {
-      return null;
-    }
-    const doc = tag.ownerDocument || getDocument();
-    const part = doc && typeof doc.createElement === 'function'
-      ? doc.createElement('span')
-      : null;
-    if (!part) {
-      return null;
-    }
-    addClass(part, className);
-    part.textContent = String(text || '');
-    tag.appendChild(part);
-    return part;
+    renderText(element, '');
   }
 
   function isWindowsLogoKeyText(text) {
     return String(text || '').trim().toLowerCase() === 'win';
-  }
-
-  function createWindowsLogo(key) {
-    if (!key) {
-      return null;
-    }
-    const doc = key.ownerDocument || getDocument();
-    const logo = doc && typeof doc.createElement === 'function'
-      ? doc.createElement('span')
-      : null;
-    if (!logo) {
-      return null;
-    }
-    addClass(logo, WINDOWS_LOGO_CLASS);
-    setAttribute(logo, 'aria-hidden', 'true');
-    for (let index = 0; index < 4; index += 1) {
-      const pane = doc.createElement('span');
-      addClass(pane, WINDOWS_LOGO_PANE_CLASS);
-      setAttribute(pane, 'data-cursor-tooltip-windows-logo-pane', String(index + 1));
-      logo.appendChild(pane);
-    }
-    key.appendChild(logo);
-    return logo;
   }
 
   function getCursorTooltipTagText(target, pointInput, options) {
@@ -435,18 +384,15 @@
       }
       const keyText = getCursorTooltipTagKeyText(Object.assign({}, config, renderOptions || {}));
       const drawWindowsLogo = isWindowsLogoKeyText(keyText);
-      clearElement(tag);
-      const key = createTagPart(tag, TAG_KEY_CLASS, drawWindowsLogo ? '' : keyText);
-      const label = createTagPart(tag, TAG_LABEL_CLASS, text);
-      if (!key || !label) {
-        tag.textContent = `${keyText} ${text}`.trim();
-      } else {
-        setAttribute(key, 'aria-hidden', 'true');
-        setAttribute(key, 'data-cursor-tooltip-tag-key', keyText);
-        if (drawWindowsLogo && !createWindowsLogo(key)) {
-          key.textContent = keyText;
-        }
+      const tooltipView = root && root.LumnoTooltipView;
+      if (!tooltipView || typeof tooltipView.renderCursorTag !== 'function') {
+        return null;
       }
+      tooltipView.renderCursorTag(tag, {
+        keyText,
+        label: text,
+        windowsLogo: drawWindowsLogo
+      });
       setAttribute(tag, 'aria-label', `${keyText} ${text}`.trim());
       setAttribute(tag, DEFAULT_VISIBLE_ATTRIBUTE, 'false');
       setAttribute(tag, 'aria-hidden', 'true');
@@ -890,6 +836,27 @@
       },
       get tagElement() {
         return ensureTagElement();
+      },
+      destroy() {
+        token += 1;
+        currentTarget = null;
+        activeBinding = null;
+        if (hideTimer) {
+          clearTimer(hideTimer);
+          hideTimer = null;
+        }
+        const tooltipView = root && root.LumnoTooltipView;
+        [element, tagElement].forEach((target) => {
+          if (target && tooltipView &&
+              typeof tooltipView.destroyTooltipElement === 'function') {
+            tooltipView.destroyTooltipElement(target);
+          }
+          if (target && target.parentNode) {
+            target.parentNode.removeChild(target);
+          }
+        });
+        element = null;
+        tagElement = null;
       },
       show,
       move,

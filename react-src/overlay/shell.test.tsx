@@ -1,56 +1,26 @@
 import { act } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createOverlayShellApi,
-  type LegacyOverlayShellApi
-} from './shell';
-
-function createLegacyShell(): LegacyOverlayShellApi {
-  return {
-    appendOverlayStyleNodes: vi.fn(),
-    createOverlayElement(doc, options = {}) {
-      const panel = doc.createElement('div');
-      panel.id = String(options.id || 'overlay');
-      panel.style.cssText =
-        'position: fixed !important; border-radius: 32px !important;';
-      panel.setAttribute('data-lumno-overlay-panel', 'true');
-      return panel;
-    },
-    createOverlayMount(doc, options = {}) {
-      const host = doc.createElement('div');
-      host.id = String(options.hostId || 'host');
-      host.setAttribute('data-lumno-overlay-host', 'true');
-      const root = host.attachShadow({ mode: 'open' });
-      const panel = this.createOverlayElement?.(doc, options);
-      if (!panel) {
-        return null;
-      }
-      root.appendChild(panel);
-      return { host, panel, root };
-    },
-    findOverlayPanel(doc, options = {}) {
-      const host = doc.getElementById(String(options.hostId || 'host'));
-      return host?.shadowRoot?.querySelector(
-        `#${String(options.id || 'overlay')}`
-      ) as HTMLElement | null;
-    }
-  };
-}
+import { afterEach, describe, expect, it } from 'vitest';
+import { createOverlayShellApi } from './shell';
 
 afterEach(() => {
   document.body.innerHTML = '';
+  document.head
+    .querySelectorAll('[id^="_x_extension_"]')
+    .forEach((element) => element.remove());
 });
 
 describe('Overlay React shell', () => {
-  it('recreates the legacy panel as a React-owned Shadow DOM node', () => {
-    const api = createOverlayShellApi(createLegacyShell());
+  it('creates the panel directly as a React-owned Shadow DOM node', () => {
+    const api = createOverlayShellApi();
     const holder: {
       value: ReturnType<typeof api.createOverlayMount>;
     } = { value: null };
     act(() => {
       holder.value = api.createOverlayMount(document, {
         hostId: 'overlay-host',
-        id: 'overlay-panel'
+        id: 'overlay-panel',
+        width: 800,
+        maxHeightVh: 80
       });
     });
     const mount = holder.value;
@@ -64,7 +34,15 @@ describe('Overlay React shell', () => {
     expect(mount.panel.id).toBe('overlay-panel');
     expect(mount.panel.getAttribute('data-lumno-overlay-panel')).toBe('true');
     expect(mount.panel.style.position).toBe('fixed');
+    expect(mount.panel.style.width).toBe('800px');
+    expect(mount.panel.style.maxHeight).toBe('80vh');
     expect(mount.root?.querySelectorAll('#overlay-panel')).toHaveLength(1);
+    expect(
+      api.findOverlayPanel(document, {
+        hostId: 'overlay-host',
+        id: 'overlay-panel'
+      })
+    ).toBe(mount.panel);
 
     const externalChild = document.createElement('input');
     mount.panel.appendChild(externalChild);
@@ -74,10 +52,18 @@ describe('Overlay React shell', () => {
     expect(mount.root?.querySelector('#overlay-panel')).toBeNull();
   });
 
-  it('keeps the legacy stylesheet and lookup adapters', () => {
-    const legacy = createLegacyShell();
-    const api = createOverlayShellApi(legacy);
-    api.appendOverlayStyleNodes(document, { root: document.head });
-    expect(legacy.appendOverlayStyleNodes).toHaveBeenCalled();
+  it('installs isolated styles without a legacy adapter', () => {
+    const api = createOverlayShellApi();
+    const root = document.createElement('div');
+    api.appendOverlayStyleNodes(document, {
+      root,
+      searchInputCssUrl: 'chrome-extension://example/search-input.css'
+    });
+    expect(
+      root.querySelector('#_x_extension_input_component_style_2026_unique_')
+    ).not.toBeNull();
+    expect(
+      root.querySelector('#_x_extension_overlay_theme_style_2024_unique_')
+    ).not.toBeNull();
   });
 });

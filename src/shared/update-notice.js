@@ -512,6 +512,9 @@
       applyNoticePayload,
       destroy() {
         destroyed = true;
+        if (typeof hintController.destroy === 'function') {
+          hintController.destroy();
+        }
         if (chromeApi &&
             chromeApi.storage &&
             chromeApi.storage.onChanged &&

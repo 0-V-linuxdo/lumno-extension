@@ -111,19 +111,19 @@
 
   function createElement(doc, options) {
     const documentObj = doc || getDocument(options);
-    if (!documentObj || typeof documentObj.createElement !== 'function') {
+    const tooltipView = root && root.LumnoTooltipView;
+    if (!documentObj || !tooltipView ||
+        typeof tooltipView.createTooltipElement !== 'function') {
       return null;
     }
     const config = options || {};
-    const element = documentObj.createElement('div');
-    if (config.id) {
-      element.id = String(config.id);
-    }
-    addClass(element, TOOLTIP_CLASS);
-    addClass(element, config.className);
-    setAttribute(element, DEFAULT_VISIBLE_ATTRIBUTE, 'false');
-    setAttribute(element, 'aria-hidden', 'true');
-    setAttribute(element, 'data-tooltip-position', config.positionMode === 'absolute' ? 'absolute' : 'fixed');
+    const element = tooltipView.createTooltipElement({
+      className: config.className || '',
+      documentObj,
+      id: config.id ? String(config.id) : '',
+      kind: config.tooltipKind || '',
+      positionMode: config.positionMode
+    });
     if (typeof config.decorateElement === 'function') {
       config.decorateElement(element);
     }
@@ -134,31 +134,11 @@
     if (!element) {
       return null;
     }
-    const doc = element.ownerDocument || getDocument();
-    const lines = String(text || '')
-      .split('\n')
-      .map((line) => line.trimEnd());
-    if (typeof element.replaceChildren === 'function') {
-      element.replaceChildren();
-    } else {
-      element.textContent = '';
+    const tooltipView = root && root.LumnoTooltipView;
+    if (!tooltipView || typeof tooltipView.renderTooltipText !== 'function') {
+      return null;
     }
-    lines.forEach((line) => {
-      const node = doc && typeof doc.createElement === 'function'
-        ? doc.createElement('span')
-        : null;
-      if (!node) {
-        element.textContent += line;
-        return;
-      }
-      if (line === DIVIDER_MARKER) {
-        addClass(node, DIVIDER_CLASS);
-      } else {
-        addClass(node, LINE_CLASS);
-        node.textContent = line;
-      }
-      element.appendChild(node);
-    });
+    tooltipView.renderTooltipText(element, String(text || ''));
     return element;
   }
 
@@ -388,6 +368,23 @@
     return {
       get element() {
         return ensureElement();
+      },
+      destroy() {
+        token += 1;
+        currentTarget = null;
+        if (hideTimer) {
+          clearTimer(hideTimer);
+          hideTimer = null;
+        }
+        const tooltipView = root && root.LumnoTooltipView;
+        if (element && tooltipView &&
+            typeof tooltipView.destroyTooltipElement === 'function') {
+          tooltipView.destroyTooltipElement(element);
+        }
+        if (element && element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+        element = null;
       },
       show,
       hide,

@@ -112,7 +112,7 @@ afterEach(() => {
 });
 
 describe('Bookmarks React island', () => {
-  it('preserves signatures and the legacy buildCard compatibility path', () => {
+  it('preserves signatures through the React API', () => {
     const item = {
       id: 'docs',
       type: 'bookmark',
@@ -126,24 +126,11 @@ describe('Bookmarks React island', () => {
       'docs::bookmark::Docs::https://example.com/docs::'
     );
 
-    const legacyCard = document.createElement(
-      'div'
-    ) as BookmarkCardElement;
-    const legacyApi = {
-      createBookmarksView: () => ({
-        buildCard: () => legacyCard
-      })
-    };
     const options = createOptions();
-    const view = createBookmarksView(options, legacyApi);
+    const view = createBookmarksView(options);
     views.push(view);
 
-    expect(view.buildCard(item, 0, { viewMode: 'folder' })).toBe(
-      legacyCard
-    );
-    expect(createBookmarksViewApi(legacyApi).implementation).toBe(
-      'react'
-    );
+    expect(createBookmarksViewApi().implementation).toBe('react');
   });
 
   it('renders synchronously with external metadata and stable keyed cards', () => {
@@ -361,15 +348,9 @@ describe('Bookmarks React island', () => {
     expect(copied).toEqual(['https://example.com/docs']);
   });
 
-  it('renders the non-root empty state and delegates legacy cache cleanup', () => {
-    const syncCache = vi.fn();
-    const legacyApi = {
-      createBookmarksView: () => ({
-        syncCardElementCache: syncCache
-      })
-    };
+  it('renders the non-root empty state without a legacy cache', () => {
     const options = createOptions();
-    const view = createBookmarksView(options, legacyApi);
+    const view = createBookmarksView(options);
     views.push(view);
 
     const result = renderItems(view, [], {
@@ -382,9 +363,6 @@ describe('Bookmarks React island', () => {
     ).not.toBeNull();
     expect(view.getCards()).toEqual([]);
 
-    const items = [{ id: 'active', type: 'folder' }];
-    view.syncCardElementCache(items);
-    expect(syncCache).toHaveBeenCalledWith(items);
   });
 });
 

@@ -125,6 +125,8 @@
     let bookmarkCascadeDebugSvg = null;
     let bookmarkCascadeDebugPolygon = null;
     let bookmarkCascadeDebugLabel = null;
+    let bookmarkCascadeDebugOverlayView = null;
+    let bookmarkCascadeDebugControlView = null;
     let bookmarkCascadeDebugLabelFrame = 0;
     let bookmarkCascadeDragMode = false;
     let bookmarkCascadeRefreshInProgress = false;
@@ -332,22 +334,11 @@
           bookmarkCascadeDebugLabel && bookmarkCascadeDebugLabel.parentNode === bookmarkCascadeMenu) {
         return;
       }
-      const svgNamespace = 'http://www.w3.org/2000/svg';
-      bookmarkCascadeDebugSvg = documentObj.createElementNS(svgNamespace, 'svg');
-      bookmarkCascadeDebugSvg.classList.add('x-nt-bookmark-cascade-debug-svg');
-      bookmarkCascadeDebugSvg.setAttribute('aria-hidden', 'true');
-      bookmarkCascadeDebugSvg.setAttribute('focusable', 'false');
-      bookmarkCascadeDebugPolygon = documentObj.createElementNS(svgNamespace, 'polygon');
-      bookmarkCascadeDebugPolygon.classList.add('x-nt-bookmark-cascade-safe-triangle');
-      bookmarkCascadeDebugPolygon.setAttribute('data-visible', 'false');
-      bookmarkCascadeDebugSvg.appendChild(bookmarkCascadeDebugPolygon);
-      bookmarkCascadeMenu.insertBefore(bookmarkCascadeDebugSvg, bookmarkCascadeMenu.firstChild);
-
-      bookmarkCascadeDebugLabel = documentObj.createElement('div');
-      bookmarkCascadeDebugLabel.className = 'x-nt-bookmark-cascade-debug-label';
-      bookmarkCascadeDebugLabel.setAttribute('data-visible', 'false');
-      bookmarkCascadeDebugLabel.setAttribute('aria-hidden', 'true');
-      bookmarkCascadeMenu.appendChild(bookmarkCascadeDebugLabel);
+      bookmarkCascadeDebugOverlayView =
+        view.createDebugOverlay(bookmarkCascadeMenu);
+      bookmarkCascadeDebugSvg = bookmarkCascadeDebugOverlayView.svg;
+      bookmarkCascadeDebugPolygon = bookmarkCascadeDebugOverlayView.polygon;
+      bookmarkCascadeDebugLabel = bookmarkCascadeDebugOverlayView.label;
     }
 
     function hideBookmarkCascadeDebugTriangle() {
@@ -691,13 +682,10 @@
       if (bookmarkCascadeDebugControl || !documentObj) {
         return bookmarkCascadeDebugControl;
       }
-      bookmarkCascadeDebugControl = documentObj.createElement('div');
-      bookmarkCascadeDebugControl.className = 'x-nt-bookmark-cascade-debug-control';
-
-      bookmarkCascadeDebugButton = documentObj.createElement('button');
-      bookmarkCascadeDebugButton.type = 'button';
-      bookmarkCascadeDebugButton.className = 'x-nt-bookmark-cascade-debug-button';
-      bookmarkCascadeDebugButton.innerHTML = getRiSvg('ri-triangle-line', 'ri-size-16');
+      bookmarkCascadeDebugControlView =
+        view.createDebugControl(documentObj);
+      bookmarkCascadeDebugControl = bookmarkCascadeDebugControlView.element;
+      bookmarkCascadeDebugButton = bookmarkCascadeDebugControlView.button;
       bookmarkCascadeDebugButton.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -747,6 +735,10 @@
       }
       bookmarkCascadeAnchor = null;
       bookmarkCascadeLevels = [];
+      if (bookmarkCascadeDebugOverlayView) {
+        bookmarkCascadeDebugOverlayView.destroy();
+        bookmarkCascadeDebugOverlayView = null;
+      }
       if (bookmarkCascadeMenu && bookmarkCascadeMenu.parentNode) {
         bookmarkCascadeMenu.parentNode.removeChild(bookmarkCascadeMenu);
       }
@@ -1301,56 +1293,12 @@
       });
     }
 
-    function createBookmarkCascadeItemIcon(item, index) {
-      if (!documentObj) {
-        return null;
-      }
-      if (!item || item.type === 'folder') {
-        const folderIcon = documentObj.createElement('span');
-        folderIcon.className = 'x-nt-bookmark-cascade-icon x-nt-bookmark-cascade-icon--folder';
-        folderIcon.innerHTML = getFigmaFolderSvg(`${item && item.id ? item.id : 'folder'}-cascade-${index}`);
-        folderIcon.setAttribute('aria-hidden', 'true');
-        initFolderPathMorph(folderIcon);
-        return folderIcon;
-      }
-      const icon = documentObj.createElement('img');
-      const themeUrl = item.themeUrl || item.url || '';
-      const host = item.host || getHostFromUrl(themeUrl) || '';
-      const siteName = getSiteDisplayName(host, item.title);
-      icon.className = 'x-nt-bookmark-cascade-icon';
-      icon.alt = siteName || t('site_icon_alt', '站点');
-      icon.loading = index < 4 ? 'eager' : 'lazy';
-      attachFaviconWithFallbacks(icon, item.url, host, {
-        primaryUrl: getPrimaryFaviconCandidateForBookmark(item.url),
-        browserUrl: getBrowserFaviconCandidateForBookmark(item.url, host)
-      });
-      return icon;
-    }
 
-    function appendBookmarkCascadeLevelTitle(levelElement, folderTitle) {
-      const rawTitle = folderTitle == null ? '' : String(folderTitle).trim();
-      if (!rawTitle || !documentObj) {
-        return null;
-      }
-      const titleText = sanitizeDisplayText(rawTitle);
-      if (!titleText) {
-        return null;
-      }
-      const titleElement = documentObj.createElement('div');
-      titleElement.className = 'x-nt-bookmark-cascade-title';
-      titleElement.setAttribute('role', 'presentation');
-      titleElement.textContent = titleText;
-      titleElement.title = titleText;
-      levelElement.appendChild(titleElement);
-      return titleElement;
-    }
-
-    function createBookmarkCascadeCopyTrigger(itemRow, item, activateLeafItem, existingButton) {
-      if (!documentObj || !itemRow || !item || !item.url) {
+    function createBookmarkCascadeCopyTrigger(itemRow, item, activateLeafItem, copyButton) {
+      if (!itemRow || !item || !item.url || !copyButton) {
         return null;
       }
       const copyLabel = t('bookmarks_copy_url', 'Copy link');
-      const copyButton = existingButton || documentObj.createElement('button');
       const showCopyTooltip = () => {
         cancelBookmarkCascadeHoverIntent();
         hideCursorTooltip();
@@ -1369,13 +1317,6 @@
         }
       };
 
-      if (!existingButton) {
-        copyButton.type = 'button';
-        copyButton.className = 'x-nt-bookmark-cascade-copy-trigger';
-        copyButton.innerHTML = getRiSvg('ri-file-copy-line', 'ri-size-16');
-        copyButton.setAttribute('aria-label', copyLabel);
-        copyButton.setAttribute('data-tooltip', copyLabel);
-      }
       copyButton.addEventListener('pointerenter', showCopyTooltip);
       copyButton.addEventListener('pointerleave', hideCopyTooltip);
       copyButton.addEventListener('focus', showCopyTooltip);
@@ -1405,8 +1346,7 @@
       const items = getBookmarkCascadeItems(folderId).filter((item) => {
         return Boolean(item && (item.url || item.type === 'folder'));
       });
-      const viewController = view && typeof view.createLevel === 'function'
-        ? view.createLevel({
+      const viewController = view.createLevel({
           documentObj,
           levelIndex: safeLevelIndex,
           folderId,
@@ -1419,35 +1359,12 @@
           copyLabel: t('bookmarks_copy_url', 'Copy link'),
           emptyLabel: t('bookmarks_empty_folder', 'No content'),
           siteIconAlt: t('site_icon_alt', '站点')
-        })
-        : null;
-      const levelElement = viewController
-        ? viewController.element
-        : documentObj.createElement('div');
-      if (!viewController) {
-        levelElement.className = 'x-nt-bookmark-cascade-level';
-      }
+        });
+      const levelElement = viewController.element;
       applyBookmarkCascadeLevelSurface(levelElement);
-      if (!viewController && safeLevelIndex > 0) {
-        levelElement.classList.add('x-nt-bookmark-cascade-submenu');
-      }
       levelElement.setAttribute('data-level', String(safeLevelIndex));
       levelElement.setAttribute('role', 'menu');
-      const contentElement = viewController
-        ? viewController.content
-        : documentObj.createElement('div');
-      if (!viewController) {
-        contentElement.className = 'x-nt-bookmark-cascade-content';
-        contentElement.setAttribute('role', 'none');
-        levelElement.appendChild(contentElement);
-        appendBookmarkCascadeLevelTitle(contentElement, folderTitle);
-      }
-      if (!viewController && items.length === 0) {
-        const emptyItem = documentObj.createElement('div');
-        emptyItem.className = 'x-nt-bookmark-cascade-empty';
-        emptyItem.textContent = t('bookmarks_empty_folder', 'No content');
-        contentElement.appendChild(emptyItem);
-      }
+      const contentElement = viewController.content;
 
       items.forEach((item, index) => {
         if (!item || (!item.url && item.type !== 'folder')) {
@@ -1455,37 +1372,9 @@
         }
         const isFolder = item.type === 'folder';
         const titleText = item.title || (item.url ? getUrlDisplay(item.url) : t('bookmarks_heading', 'Bookmarks'));
-        const itemView = viewController && viewController.items
-          ? viewController.items[index]
-          : null;
-        const itemRow = itemView ? itemView.row : documentObj.createElement('div');
-        const itemButton = itemView ? itemView.button : documentObj.createElement('button');
-        if (!itemView) {
-          itemRow.className = 'x-nt-bookmark-cascade-row';
-          itemRow.setAttribute('role', 'none');
-          itemButton.type = 'button';
-          itemButton.className = 'x-nt-bookmark-cascade-item';
-          itemButton.tabIndex = -1;
-          itemButton.setAttribute('role', 'menuitem');
-          itemButton.setAttribute('data-type', isFolder ? 'folder' : 'bookmark');
-          itemButton.setAttribute('data-bookmark-id', String(item.id || ''));
-          itemButton.setAttribute('data-bookmark-parent-id', String(item.parentId || folderId || ''));
-          itemButton.setAttribute(
-            'data-bookmark-index',
-            Number.isFinite(Number(item.index)) ? String(item.index) : ''
-          );
-          itemButton.setAttribute(
-            'data-bookmark-draggable',
-            item.id && (item.parentId || folderId) && Number.isFinite(Number(item.index)) ? 'true' : 'false'
-          );
-          if (isFolder) {
-            itemButton.setAttribute('data-bookmark-drop-folder-id', String(item.id || ''));
-            itemButton.setAttribute('data-bookmark-drop-folder-title', titleText);
-          }
-          itemButton.setAttribute('aria-label', titleText);
-          itemButton.title = titleText;
-          itemButton.draggable = false;
-        }
+        const itemView = viewController.items[index];
+        const itemRow = itemView.row;
+        const itemButton = itemView.button;
         itemButton.addEventListener('dragstart', (event) => {
           event.preventDefault();
         });
@@ -1507,8 +1396,8 @@
           });
         });
 
-        const icon = itemView ? itemView.icon : createBookmarkCascadeItemIcon(item, index);
-        if (itemView && icon) {
+        const icon = itemView.icon;
+        if (icon) {
           if (isFolder) {
             initFolderPathMorph(icon);
           } else {
@@ -1521,16 +1410,6 @@
               browserUrl: getBrowserFaviconCandidateForBookmark(item.url, host)
             });
           }
-        }
-        if (!itemView) {
-          const label = documentObj.createElement('span');
-          label.className = 'x-nt-bookmark-cascade-label';
-          label.textContent = sanitizeDisplayText(titleText);
-          if (icon) {
-            itemButton.appendChild(icon);
-          }
-          itemButton.appendChild(label);
-          itemRow.appendChild(itemButton);
         }
 
         const openNestedLevel = (openOptions) => {
@@ -1585,13 +1464,6 @@
           itemButton.classList.add('x-nt-bookmark-cascade-item--folder');
           itemButton.setAttribute('aria-haspopup', 'menu');
           itemButton.setAttribute('aria-expanded', 'false');
-          if (!itemView) {
-            const arrow = documentObj.createElement('span');
-            arrow.className = 'x-nt-bookmark-cascade-arrow';
-            arrow.innerHTML = getRiSvg('ri-arrow-right-s-line', 'ri-size-16');
-            arrow.setAttribute('aria-hidden', 'true');
-            itemButton.appendChild(arrow);
-          }
           itemButton.addEventListener('pointerenter', (event) => {
             clearBookmarkCascadePointerActiveItem(levelElement, itemButton, event);
             scheduleBookmarkCascadeHoverIntent({
@@ -1635,7 +1507,7 @@
             itemRow,
             item,
             activateLeafItem,
-            itemView ? itemView.copyButton : null
+            itemView.copyButton
           );
           bindCursorTooltip(itemButton, () => titleText, {
             maxWidth: 460,
@@ -1747,12 +1619,7 @@
         if (typeof bookmarkCascadeAnchor._xSetBookmarkMenuVisualActive === 'function') {
           bookmarkCascadeAnchor._xSetBookmarkMenuVisualActive(true);
         }
-        bookmarkCascadeMenu = view && typeof view.createMenu === 'function'
-          ? view.createMenu(documentObj)
-          : documentObj.createElement('div');
-        if (!bookmarkCascadeMenu.className) {
-          bookmarkCascadeMenu.className = 'x-nt-bookmark-cascade-menu';
-        }
+        bookmarkCascadeMenu = view.createMenu(documentObj);
         bookmarkCascadeMenu.setAttribute('role', 'menu');
         setBookmarkCascadeDragMode(dragMode);
         documentObj.body.appendChild(bookmarkCascadeMenu);

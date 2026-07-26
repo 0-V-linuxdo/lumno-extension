@@ -13,7 +13,7 @@ const bookmarkDragJs = fs.readFileSync(
   path.join(repoRoot, 'src', 'newtab', 'bookmark-drag.js'),
   'utf8'
 );
-const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmarks-view.js'), 'utf8');
+const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'react-src', 'newtab', 'bookmarks.tsx'), 'utf8');
 const cascadeJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'), 'utf8');
 const {
   cloneBookmarkSnapshot,
@@ -91,7 +91,7 @@ assert.strictEqual(history.commitUndo().runtime.currentBookmarkId, 'restored-fol
 assert.strictEqual(history.peekRedo().runtime.currentBookmarkId, 'restored-folder-a');
 
 assert.ok(
-  bookmarksViewJs.includes("card.addEventListener('contextmenu'") &&
+  bookmarksViewJs.includes('onContextMenu={(event) => {') &&
     bookmarksViewJs.includes('onItemContextMenu({'),
   'bookmark cards should expose the shared context-menu action'
 );

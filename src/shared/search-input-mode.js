@@ -198,7 +198,16 @@
     let layoutResizeObserver = null;
     let destroyed = false;
 
-    const siteSearchPrefix = applyNoTranslate(doc.createElement('span'));
+    const siteSearchPrefix = applyNoTranslate(parts.modePrefix);
+    const siteSearchPrefixIcon = parts.modePrefixIcon;
+    const siteSearchPrefixText = applyNoTranslate(parts.modePrefixText);
+    const siteSearchTabHint = applyNoTranslate(parts.modeTabHint);
+    const siteSearchTabHintKey = applyNoTranslate(parts.modeTabHintKey);
+    const siteSearchTabHintText = applyNoTranslate(parts.modeTabHintText);
+    if (!siteSearchPrefix || !siteSearchPrefixIcon || !siteSearchPrefixText ||
+        !siteSearchTabHint || !siteSearchTabHintKey || !siteSearchTabHintText) {
+      throw new Error('createInputModeController requires React input mode parts');
+    }
     siteSearchPrefix.id = prefixId;
     siteSearchPrefix.className = 'x-lumno-search-input-mode__prefix';
     siteSearchPrefix.style.cssText = cssText([
@@ -237,9 +246,6 @@
       ['z-index', '1'],
       ['user-select', 'none']
     ], useImportantStyles);
-    container.appendChild(siteSearchPrefix);
-
-    const siteSearchTabHint = applyNoTranslate(doc.createElement('span'));
     siteSearchTabHint.id = tabHintId;
     siteSearchTabHint.className = 'x-lumno-search-input-mode__tab-hint';
     siteSearchTabHint.setAttribute('aria-hidden', 'true');
@@ -272,8 +278,6 @@
       ['user-select', 'none'],
       ['z-index', '1']
     ], useImportantStyles);
-    container.appendChild(siteSearchTabHint);
-
     function shouldReduceInputModeMotion() {
       return Boolean(
         win &&
@@ -374,10 +378,9 @@
     }
 
     function setInputModePrefixContent(prefixText, contentOptions) {
-      siteSearchPrefix.textContent = '';
       const iconUrl = contentOptions && contentOptions.iconUrl ? String(contentOptions.iconUrl || '').trim() : '';
       if (iconUrl) {
-        const icon = doc.createElement('img');
+        const icon = siteSearchPrefixIcon;
         icon.alt = '';
         icon.decoding = 'async';
         icon.referrerPolicy = 'no-referrer';
@@ -391,7 +394,8 @@
           ['display', 'block']
         ], useImportantStyles);
         const removeUnavailableIcon = () => {
-          icon.remove();
+          setStyle(icon, 'display', 'none', useImportantStyles);
+          icon.removeAttribute('src');
           updatePrefixLayout();
         };
         const iconHost = contentOptions && contentOptions.iconHost ? String(contentOptions.iconHost || '').trim() : '';
@@ -416,9 +420,11 @@
             attachFaviconData(icon, iconUrl, iconHost);
           }
         }
-        siteSearchPrefix.appendChild(icon);
+      } else {
+        setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
+        siteSearchPrefixIcon.removeAttribute('src');
       }
-      const text = applyNoTranslate(doc.createElement('span'));
+      const text = siteSearchPrefixText;
       text.textContent = prefixText;
       text.style.cssText = cssText([
         ['all', 'unset'],
@@ -427,7 +433,6 @@
         ['text-overflow', 'ellipsis'],
         ['white-space', 'nowrap']
       ], useImportantStyles);
-      siteSearchPrefix.appendChild(text);
     }
 
     function setInputModePrefixRestState(restOptions) {
@@ -498,7 +503,9 @@
     }
 
     function clearProviderPrefix() {
-      siteSearchPrefix.textContent = '';
+      siteSearchPrefixText.textContent = '';
+      setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
+      siteSearchPrefixIcon.removeAttribute('src');
       setInputModePrefixRestState({ transition: false });
       setStyle(siteSearchPrefix, 'display', 'none', useImportantStyles);
       input.placeholder = getDefaultPlaceholder();
@@ -513,8 +520,7 @@
         : '';
       const label = explicitLabel ||
         formatMessage('site_search_tab_hint', '使用 {site} 搜索', { site });
-      siteSearchTabHint.textContent = '';
-      const keyLabel = applyNoTranslate(doc.createElement('span'));
+      const keyLabel = siteSearchTabHintKey;
       keyLabel.textContent = 'Tab';
       keyLabel.style.cssText = cssText([
         ['all', 'unset'],
@@ -537,7 +543,7 @@
         ['white-space', 'nowrap'],
         ['flex', '0 0 auto']
       ], useImportantStyles);
-      const textLabel = applyNoTranslate(doc.createElement('span'));
+      const textLabel = siteSearchTabHintText;
       textLabel.textContent = label;
       textLabel.style.cssText = cssText([
         ['all', 'unset'],
@@ -555,8 +561,6 @@
         ['letter-spacing', '0'],
         ['flex', '1 1 auto']
       ], useImportantStyles);
-      siteSearchTabHint.appendChild(keyLabel);
-      siteSearchTabHint.appendChild(textLabel);
       if (provider) {
         siteSearchTabHint.setAttribute('title', label);
       } else {
@@ -610,12 +614,8 @@
         layoutResizeObserver.disconnect();
         layoutResizeObserver = null;
       }
-      if (siteSearchPrefix && siteSearchPrefix.parentNode) {
-        siteSearchPrefix.parentNode.removeChild(siteSearchPrefix);
-      }
-      if (siteSearchTabHint && siteSearchTabHint.parentNode) {
-        siteSearchTabHint.parentNode.removeChild(siteSearchTabHint);
-      }
+      clearProviderPrefix();
+      setTabHintVisible(false);
     }
 
     return Object.freeze({

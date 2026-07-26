@@ -6,6 +6,10 @@ const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const cascadeMenuJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/bookmark-cascade-menu.js'), 'utf8');
+const cascadeViewReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/bookmark-cascade-view.tsx'),
+  'utf8'
+);
 
 function assertContains(source, needle, message) {
   assert.ok(source.includes(needle), message);
@@ -32,22 +36,21 @@ function getFunctionBody(source, functionName) {
   throw new Error(`${functionName} body should be parseable`);
 }
 
-const cascadeIconBody = getFunctionBody(cascadeMenuJs, 'createBookmarkCascadeItemIcon');
 const cascadeActiveBody = getFunctionBody(cascadeMenuJs, 'setBookmarkCascadeLevelActiveItem');
 
 assertContains(
-  cascadeIconBody,
-  'getFigmaFolderSvg',
-  'bookmark cascade folder items should reuse the newtab bookmark folder SVG'
+  cascadeViewReact,
+  'getFigmaFolderSvg(',
+  'the React bookmark cascade should reuse the newtab bookmark folder SVG'
 );
 assertContains(
-  cascadeIconBody,
-  'initFolderPathMorph(folderIcon);',
-  'bookmark cascade folder SVGs should initialize the same morph behavior'
+  cascadeMenuJs,
+  'initFolderPathMorph(icon);',
+  'the cascade behavior adapter should initialize the same folder morph behavior'
 );
 assert.ok(
-  !cascadeIconBody.includes("getRiSvg('ri-folder"),
-  'bookmark cascade folder items should not use the Remix folder glyph'
+  !cascadeViewReact.includes("getRiSvg('ri-folder"),
+  'React bookmark cascade folder items should not use the Remix folder glyph'
 );
 assertContains(
   cascadeActiveBody,
@@ -55,9 +58,9 @@ assertContains(
   'bookmark cascade menu item hover/active state should drive the folder SVG morph'
 );
 assertContains(
-  cascadeMenuJs,
-  "arrow.innerHTML = getRiSvg('ri-arrow-right-s-line', 'ri-size-16');",
-  'bookmark cascade disclosure arrows should continue to use Remix Icon'
+  cascadeViewReact,
+  "'ri-arrow-right-s-line'",
+  'React bookmark cascade disclosure arrows should continue to use Remix Icon'
 );
 
 assertContains(

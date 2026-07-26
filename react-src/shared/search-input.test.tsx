@@ -53,6 +53,12 @@ describe('Shared search input React island', () => {
     expect(parts.icon.id).toBe('icon');
     expect(parts.rightIcon.getAttribute('aria-label')).toBe('Settings');
     expect(parts.divider.style.display).toBe('none');
+    expect(parts.modePrefix.parentElement).toBe(parts.container);
+    expect(parts.modePrefixIcon.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixText.parentElement).toBe(parts.modePrefix);
+    expect(parts.modeTabHint.parentElement).toBe(parts.container);
+    expect(parts.modeTabHintKey.parentElement).toBe(parts.modeTabHint);
+    expect(parts.modeTabHintText.parentElement).toBe(parts.modeTabHint);
   });
 
   it('bridges native input, focus, blur, and keyboard events', () => {
@@ -102,5 +108,31 @@ describe('Shared search input React island', () => {
       );
     });
     expect(parts.rightIcon.dataset.hoverActive).toBe('false');
+  });
+
+  it('renders a React-owned secondary action and mode badge', () => {
+    const parts = create({
+      modeBadge: {
+        className: 'mode-badge',
+        id: 'mode-badge',
+        surface: 'overlay',
+        visible: true
+      },
+      secondaryAction: {
+        ariaLabel: 'Close other tabs',
+        className: 'close-tabs',
+        html: '<span aria-hidden="true">×</span>',
+        id: 'close-tabs'
+      }
+    });
+
+    expect(parts.secondaryAction?.id).toBe('close-tabs');
+    expect(parts.secondaryAction?.classList.contains('close-tabs')).toBe(true);
+    expect(parts.secondaryAction?.getAttribute('aria-label')).toBe(
+      'Close other tabs'
+    );
+    expect(parts.modeBadge?.id).toBe('mode-badge');
+    expect(parts.modeBadge?.dataset.surface).toBe('overlay');
+    expect(parts.modeBadge?.hidden).toBe(false);
   });
 });

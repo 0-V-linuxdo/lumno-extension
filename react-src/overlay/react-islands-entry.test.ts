@@ -22,6 +22,12 @@ type OverlayRuntime = typeof globalThis & {
   LumnoSearchInputUIReact?: {
     implementation?: string;
   };
+  LumnoFeatureHintView?: {
+    implementation?: string;
+  };
+  LumnoFeatureHintViewReact?: {
+    implementation?: string;
+  };
   LumnoOverlaySuggestionsView?: {
     implementation?: string;
   };
@@ -46,6 +52,8 @@ afterEach(() => {
   delete runtime.LumnoOverlayShellReact;
   delete runtime.LumnoSearchInputUI;
   delete runtime.LumnoSearchInputUIReact;
+  delete runtime.LumnoFeatureHintView;
+  delete runtime.LumnoFeatureHintViewReact;
   delete runtime.LumnoOverlaySuggestionsView;
   delete runtime.LumnoOverlaySuggestionsViewReact;
   delete runtime.LumnoOverlayTabSwitcherView;
@@ -65,6 +73,10 @@ describe('Overlay React islands entry', () => {
     expect(runtime.LumnoOverlayReactBootstrap).toEqual({ reactReady: true });
     expect(runtime.LumnoSearchInputUI?.implementation).toBe('react');
     expect(runtime.LumnoSearchInputUIReact).toBe(runtime.LumnoSearchInputUI);
+    expect(runtime.LumnoFeatureHintView?.implementation).toBe('react');
+    expect(runtime.LumnoFeatureHintViewReact).toBe(
+      runtime.LumnoFeatureHintView
+    );
     expect(runtime._x_extension_createSearchInput_2024_unique_).toBe(
       runtime.LumnoSearchInputUI?.createSearchInput
     );

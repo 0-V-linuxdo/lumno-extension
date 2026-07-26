@@ -1,126 +1,57 @@
-# React migration
+# React UI architecture
 
-Lumno is migrating incrementally with React islands. Existing extension runtimes
-remain in control of browser APIs, persistence, and cross-page coordination while
-React replaces bounded UI surfaces behind their current public contracts.
+React is the required renderer for Lumno's New Tab, Options, Onboarding, and
+in-page Overlay surfaces. The classic scripts under `src/` remain responsible
+for browser APIs, persistence, navigation, ranking, drag orchestration, viewport
+placement, and other platform behavior. They do not provide a second page
+renderer.
 
-## Guardrails
+## Runtime boundaries
 
-- Keep Manifest V3 scripts local; do not use a CDN, `eval`, or runtime compilation.
-- Preserve the current global controller contract while an island is being proven.
-- Load the legacy implementation first and let the compiled React island replace it.
-- Keep background and content-script runtimes framework-free unless they gain a real UI.
-- Reuse existing CSS classes and localization keys during behavior-preserving stages.
-- Require TypeScript, component tests, legacy contract tests, and store-package checks.
-- Give every entry a measured bundle budget before adding another dependency.
+- `react-src/newtab/` owns the New Tab structure and visible controls, including
+  bookmarks, recent sites, shortcuts, suggestions, wallpaper controls, notices,
+  menus, dialogs, feedback, dock, and wordmark.
+- `react-src/options/` owns Settings navigation, forms, lists, controls,
+  confirmations, shortcut references, and status feedback.
+- `react-src/onboarding/` owns the complete onboarding presentation and
+  interaction surfaces.
+- `react-src/overlay/` owns the injected shell, search input, result rows, empty
+  states, and recent-tab switcher.
+- `react-src/shared/` contains typed renderers reused by more than one route.
+- Background and content scripts stay framework-free unless they host one of the
+  React surfaces above.
 
-## Delivery stages
+The page bootstrap imports the relevant React entry first and starts its classic
+adapter only after the React API is ready. A missing React entry is a startup
+error; there is no timed legacy-renderer fallback.
 
-1. **Foundation and pilot — active**
-   - Vite, TypeScript, Vitest, React, and React DOM.
-   - `ShortcutDialog` as the first island, with its legacy implementation retained as
-     an immediate fallback.
-   - Recent Sites as the second island, sharing the same React runtime bundle and
-     retaining the legacy `buildCard` compatibility path.
-   - Bookmarks as the third island, preserving the card metadata used by drag,
-     cascade-menu, theme, and localization runtimes while retaining the legacy
-     `buildCard` and cache-cleanup compatibility paths.
-   - Suggestions as the fourth island, preserving synchronous keyboard-selection,
-     action-label, favicon, theme, tooltip, and history-delete contracts.
-   - Shortcuts Grid as the fifth island, preserving dock hover, pointer reordering,
-     favicon, custom-icon, tooltip, context-menu, and adaptive-tone metadata.
-   - Toast as the sixth island, preserving synchronous message updates, error
-     styling, auto-hide timers, and the existing controller contract.
-   - Feedback Control as the seventh New Tab island. React owns its trigger,
-     channel menu, WeChat detail, QR refresh state, focus restoration, and
-     outside/Escape dismissal while the adapter keeps remote-link loading,
-     navigation disposition, localization, and shared tooltip placement.
-   - Select Menu as the shared React controller for bookmark/recent display
-     modes and shortcut/bookmark context menus. It preserves the legacy
-     controller contract, portal geometry, keyboard behavior, action rows, and
-     native `change` bridge while allowing the browser adapter to retain data
-     mutations and card-specific actions.
-   - Bottom Dock and Wordmark as structural React islands. React creates the
-     scroll shell, safe corridor, interactive brand mark, and image layers;
-     the existing layout controller, visibility timing, wallpaper tone sampler,
-     and navigation adapter continue to operate on stable element references.
-   - Shared Search Input as a React-owned field, icon, divider, and settings
-     affordance. It preserves stable element IDs, hostile-page inline style
-     fallback, isolated Shadow DOM styles, native event bridges, and direct
-     element references for both New Tab and the upcoming Overlay root.
-   - Overlay Bootstrap and Shell as a self-contained React entry for content-script
-     injection. React now owns the hostile-page mount panel and shared search input
-     inside the existing Shadow DOM boundary while the overlay adapter retains
-     browser messaging, lifecycle, result orchestration, and no-Shadow-DOM fallback.
-   - Shared Suggestions now renders both New Tab and Overlay result rows from one
-     typed React component. The Overlay surface preserves its class and CSS-variable
-     contract, stable keyed rows for delayed completion, favicon/theme continuity,
-     keyboard selection, modifier-aware actions, history removal, and open-tab rows
-     while the injected adapter retains query ranking and browser navigation.
-   - Overlay Tab Switcher now renders its recent-tab cards, thumbnail/fallback
-     layers, favicons, labels, selection state, and live thumbnail crossfades in
-     React. The browser adapter retains command-key timing, viewport/zoom placement,
-     theme detection, outside dismissal, and tab activation messaging.
-   - Options Popconfirm as the first Options leaf island, preserving the existing
-     trigger wrapper, outside-click close behavior, localization hooks, and
-     destructive-action callbacks across static controls and dynamic settings
-     lists.
-   - Options Shortcut Reference as a read-only list island, preserving grouped
-     command metadata, platform-specific key labels, localization refreshes, and
-     the existing browser command adapter.
-   - Options Theme Picker as a controlled visual island, preserving the existing
-     preview gallery and click feedback while leaving storage, system-theme
-     listeners, and document theme application in the browser adapter.
-   - Options Segmented Control as the shared controlled leaf for search-result
-     priority, restricted-page behavior, recent-site ordering, New Tab width, and
-     overlay size. React owns the buttons, indicator, labels, and accessibility
-     state while the Options adapter keeps persistence and refresh side effects.
-   - Options Settings Navigation as the controlled page-tab island, preserving
-     hash routing, sticky layout, scroll resets, localized labels, and the sliding
-     indicator while the adapter continues to own content visibility and data
-     refreshes.
-   - Options Blacklist Lists as controlled search-result and favicon-rule views,
-     including row actions, inline editing, match-mode feedback, and confirmation
-     states. URL normalization, persistence, and New Tab refresh notifications
-     remain in the Options adapter.
-   - Options Site Search Lists as three controlled custom, built-in search, and
-     built-in AI provider views. React owns provider rows, inline editors, duplicate
-     affordances, empty states, and confirmations while the adapter keeps provider
-     normalization, persistence, localization mapping, and remote refreshes.
-   - Options Settings Controls for the eleven persisted switch rows and the required
-     search-result source checkbox group. React owns input state and interaction while
-     the Options adapter keeps normalization, storage writes, and cross-page refreshes.
-   - Options Select Controls for language, recent-site count, bookmark count, and
-     bookmark columns. React owns menu state, keyboard-safe selection, and localized
-     labels while legacy select references remain adapter-only event bridges.
-   - Options Settings Forms for adding site-search providers and search/favicon
-     blacklist rules. React owns expansion, drafts, query-token insertion, match-mode
-     selection, validation feedback, and reset behavior; adapters persist validated data.
-2. **Pilot hardening**
-   - Exercise the unpacked extension in Chrome.
-   - Add extension-level tests for shortcut add, edit, icon replacement, keyboard
-     focus, localization refresh, and persistence failure.
-   - Remove the fallback only after the React implementation has passed a release
-     cycle.
-3. **New Tab leaf views — hardening**
-   - Shortcut Dialog, Shortcuts Grid, Recent Sites, Bookmarks, Suggestions, and Toast
-     now share one local React runtime bundle while keeping their legacy
-     implementations as fallbacks.
-   - Keep data stores and browser adapters outside React and inject their results.
-   - Avoid the recently changed wallpaper, theme, and layout paths until they settle.
-4. **Full-page roots — active**
-   - Onboarding copy, actions, interactions, cursor, navigation, and visual scenes
-     now render through React controllers while the browser adapter remains outside.
-   - Options starts with bounded Popconfirm and Toast leaves before extracting its
-     storage and browser adapters.
-   - Share typed UI primitives only after at least two islands need the same behavior.
-5. **High-coupling surfaces**
-   - Overlay shell, result, and tab-switcher ownership are established; remove their
-     proven legacy render branches after the remaining New Tab surface migration.
-   - Migrate remaining New Tab orchestration and wallpaper controls last.
-   - Preserve hotkeys, IME handling, Picture-in-Picture ownership, and page-bridge
-     boundaries with end-to-end tests before switching ownership to React.
+## Delivery guardrails
 
-Each stage has its own rollback point. A later stage should not start until the
-current stage passes the default test, check, style audit, i18n audit, and store
-package verification commands.
+- Keep Manifest V3 artifacts local: no CDN, runtime compilation, `eval`, or
+  remote code.
+- Preserve stable DOM IDs, CSS classes, localization keys, and controller
+  contracts that browser adapters depend on.
+- Treat classic DOM writes as adapter work only: mount hosts, browser-managed
+  resource elements, measurement probes, drag previews, and updates to elements
+  owned by a React controller.
+- Add visible structure and state to React components, not to classic adapter
+  scripts.
+- Keep the New Tab, Options, Onboarding, and Overlay bundle budgets enforced by
+  `scripts/test-react-migration-contract.js`.
+- Run both Vitest component coverage and classic browser-adapter contract tests.
+
+## Verification
+
+The release gate is:
+
+```sh
+npm test
+npm run check
+npm run audit:i18n
+npm run test:package-store
+git diff --check
+```
+
+Unpacked-extension smoke tests cover all four routes plus delayed search
+completion, tab switching, bookmark drag/cascade behavior, wallpaper controls,
+and settings persistence.

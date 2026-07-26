@@ -237,11 +237,6 @@ export interface BookmarksRenderResult {
 
 export interface BookmarksViewController {
   appendEmptyFolderState(): void;
-  buildCard(
-    item: BookmarkItem,
-    index: number,
-    state?: BookmarksRenderState
-  ): BookmarkCardElement | null;
   clear(): void;
   render(
     items: BookmarkItem[],
@@ -250,14 +245,7 @@ export interface BookmarksViewController {
   getSignature(items: BookmarkItem[]): string;
   getCacheKey(item: BookmarkItem): string;
   setFolderIconsVisible(value: boolean): boolean;
-  syncCardElementCache(items?: BookmarkItem[]): void;
   getCards(): BookmarkCardElement[];
-}
-
-export interface LegacyBookmarksApi {
-  createBookmarksView?: (
-    options?: BookmarksViewOptions
-  ) => Partial<BookmarksViewController>;
 }
 
 function fallbackFormatMessage(
@@ -1139,20 +1127,12 @@ function EmptyFolderState({
 }
 
 function createNoopController(
-  rawOptions: BookmarksViewOptions,
-  legacyApi?: LegacyBookmarksApi | null
+  rawOptions: BookmarksViewOptions
 ): BookmarksViewController {
   const cards = Array.isArray(rawOptions.cards) ? rawOptions.cards : [];
-  const legacyView = legacyApi?.createBookmarksView?.(rawOptions);
   return {
-    appendEmptyFolderState() {
-      legacyView?.appendEmptyFolderState?.();
-    },
-    buildCard(item, index, state) {
-      return legacyView?.buildCard?.(item, index, state) || null;
-    },
+    appendEmptyFolderState() {},
     clear() {
-      legacyView?.clear?.();
       cards.length = 0;
     },
     render(items, state = {}) {
@@ -1177,10 +1157,7 @@ function createNoopController(
     getSignature: getBookmarksSignature,
     getCacheKey: getBookmarkCacheKey,
     setFolderIconsVisible(value) {
-      return legacyView?.setFolderIconsVisible?.(value) ?? value !== false;
-    },
-    syncCardElementCache(items) {
-      legacyView?.syncCardElementCache?.(items);
+      return value !== false;
     },
     getCards() {
       return cards;
@@ -1189,15 +1166,13 @@ function createNoopController(
 }
 
 export function createBookmarksView(
-  rawOptions: BookmarksViewOptions = {},
-  legacyApi?: LegacyBookmarksApi | null
+  rawOptions: BookmarksViewOptions = {}
 ): BookmarksViewController {
   const normalizedOptions = normalizeOptions(rawOptions);
   if (!normalizedOptions) {
-    return createNoopController(rawOptions, legacyApi);
+    return createNoopController(rawOptions);
   }
   const options: NormalizedBookmarksOptions = normalizedOptions;
-  const legacyView = legacyApi?.createBookmarksView?.(rawOptions);
   const reactRoot: Root = createRoot(options.grid);
   options.grid.setAttribute('data-react-island', 'bookmarks');
 
@@ -1292,23 +1267,16 @@ export function createBookmarksView(
 
   return {
     appendEmptyFolderState,
-    buildCard(item, index, state) {
-      return legacyView?.buildCard?.(item, index, state) || null;
-    },
     clear,
     render,
     getSignature: getBookmarksSignature,
     getCacheKey: getBookmarkCacheKey,
     setFolderIconsVisible(value) {
-      legacyView?.setFolderIconsVisible?.(value);
       options.folderIconsVisible.current = value !== false;
       options.cards.forEach((card) => {
         card._xSyncBookmarkFolderExpandedState?.();
       });
       return options.folderIconsVisible.current;
-    },
-    syncCardElementCache(items) {
-      legacyView?.syncCardElementCache?.(items);
     },
     getCards() {
       return options.cards;
@@ -1316,13 +1284,11 @@ export function createBookmarksView(
   };
 }
 
-export function createBookmarksViewApi(
-  legacyApi?: LegacyBookmarksApi | null
-) {
+export function createBookmarksViewApi() {
   return Object.freeze({
     implementation: 'react',
     createBookmarksView(options?: BookmarksViewOptions) {
-      return createBookmarksView(options, legacyApi);
+      return createBookmarksView(options);
     },
     getBookmarkCacheKey,
     getBookmarksSignature

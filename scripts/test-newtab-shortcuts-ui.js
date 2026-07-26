@@ -10,7 +10,14 @@ const pageStructureReact = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/page-structure.tsx'),
   'utf8'
 );
-const shortcutDialogJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/shortcut-dialog.js'), 'utf8');
+const shortcutsReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/shortcuts.tsx'),
+  'utf8'
+);
+const shortcutDialogJs = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/shortcut-dialog.tsx'),
+  'utf8'
+);
 const shortcutDialogCss = fs.readFileSync(path.join(repoRoot, 'src/newtab/shortcut-dialog.css'), 'utf8');
 const wallpaperAdaptiveToneJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper-adaptive-tone.js'), 'utf8');
 const tooltipJs = fs.readFileSync(path.join(repoRoot, 'src/shared/tooltip.js'), 'utf8');
@@ -527,8 +534,8 @@ assertContains(
 
 assert.ok(
   newtabHtml.indexOf('<script src="shortcut-icon-store.js"></script>') <
-    newtabHtml.indexOf('<script src="shortcut-dialog.js"></script>'),
-  'shortcut icon processing should load before the dialog component'
+    newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
+  'shortcut icon processing should load before the bootstrap starts the React dialog'
 );
 
 [
@@ -1029,9 +1036,9 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  "addShortcutButton.className = 'x-nt-shortcut-tile x-nt-shortcut-tile--add';",
-  'newtab runtime should render a Chrome-like add shortcut tile'
+  shortcutsReact,
+  'className="x-nt-shortcut-tile x-nt-shortcut-tile--add"',
+  'the React shortcuts view should render a Chrome-like add shortcut tile'
 );
 
 assertContains(
@@ -1041,27 +1048,27 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  "tile.setAttribute('data-tooltip', title);",
-  'shortcut tiles should expose full titles through the anchored tooltip attribute'
+  shortcutsReact,
+  'data-tooltip={title}',
+  'React shortcut tiles should expose full titles through the anchored tooltip attribute'
 );
 
 assertContains(
-  newtabJs,
-  "tile.setAttribute('data-shortcut-id', shortcut.id || shortcut.url || '');",
-  'shortcut tiles should expose stable ids for drag reordering'
+  shortcutsReact,
+  'data-shortcut-id={shortcutId}',
+  'React shortcut tiles should expose stable ids for drag reordering'
 );
 
 assertContains(
-  newtabJs,
-  "tile.setAttribute('data-shortcut-draggable', 'true');",
-  'shortcut tiles should opt into pointer drag reordering'
+  shortcutsReact,
+  'data-shortcut-draggable="true"',
+  'React shortcut tiles should opt into pointer drag reordering'
 );
 
 assertContains(
-  newtabJs,
-  "tile.addEventListener('dragstart', handleShortcutNativeDragStart);",
-  'shortcut tiles should block native child image drags while preserving pointer reordering'
+  shortcutsReact,
+  'onDragStart={options.onNativeDragStart}',
+  'React shortcut tiles should delegate native drag suppression to the behavior adapter'
 );
 
 assertContains(
@@ -1071,21 +1078,21 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  'img.draggable = false;',
-  'shortcut favicon images should not be individually draggable'
+  shortcutsReact,
+  'draggable={false}',
+  'React shortcut favicon images should not be individually draggable'
 );
 
 assertContains(
-  getFunctionSource(newtabJs, 'renderShortcutTile'),
-  "tile.setAttribute('data-shortcut-custom-icon', 'true');",
-  'shortcut tiles should mark and render a locally uploaded icon before favicon fallbacks'
+  shortcutsReact,
+  "data-shortcut-custom-icon={localIconDataUrl ? 'true' : undefined}",
+  'React shortcut tiles should mark a locally uploaded icon before favicon fallbacks'
 );
 
 assertContains(
-  getFunctionSource(newtabJs, 'renderShortcutTile'),
+  shortcutsReact,
   'customIconDataUrl: localIconDataUrl',
-  'shortcut tiles should pass uploaded image data into their theme suggestion'
+  'React shortcut tiles should pass uploaded image data into their theme suggestion'
 );
 
 assertContains(
@@ -1408,27 +1415,27 @@ assertNotContains(
 );
 
 assertContains(
-  getFunctionSource(newtabJs, 'renderShortcutTile'),
-  "url: shortcut.url,\n      title,\n      customIconDataUrl: localIconDataUrl",
-  'shortcut tiles should resolve themes from their destination URL or uploaded icon'
+  shortcutsReact,
+  'url,\n    title,\n    customIconDataUrl: localIconDataUrl',
+  'React shortcut tiles should resolve themes from their destination URL or uploaded icon'
 );
 
 assertContains(
-  newtabJs,
-  'queueThemeForTarget(tile, themeSuggestion, (theme) => {',
-  'shortcut tiles should refresh when async favicon or meta theme resolution completes'
+  shortcutsReact,
+  'options.queueThemeForTarget(',
+  'React shortcut tiles should refresh when async favicon or meta theme resolution completes'
 );
 
 assertContains(
-  newtabJs,
-  "faviconMask.className = 'x-nt-shortcut-favicon-mask';",
-  'shortcut favicons should be wrapped in the rounded-rectangle mask'
+  shortcutsReact,
+  'className="x-nt-shortcut-favicon-mask"',
+  'React shortcut favicons should be wrapped in the rounded-rectangle mask'
 );
 
 assertContains(
-  newtabJs,
-  'bindShortcutTooltip(tile, () => tile.getAttribute(\'data-shortcut-title\') || title,',
-  'shortcut title anchored tooltips should be bound even without visible labels'
+  shortcutsReact,
+  "() => tile.getAttribute('data-shortcut-title') || title",
+  'React shortcut title tooltips should be bound even without visible labels'
 );
 
 assertContains(
@@ -1516,9 +1523,9 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  'bindShortcutTooltip(addShortcutButton, () =>',
-  'add shortcut tile should bind the anchored shortcut tooltip'
+  shortcutsReact,
+  'options.bindTooltip(\n        addButton,',
+  'the React add shortcut tile should bind the anchored shortcut tooltip'
 );
 
 assertContains(
@@ -1673,13 +1680,13 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'const shortcutContextMenuSelectFactory =',
+  'const shortcutContextMenuSelectController =',
   'shortcut context menu should resolve a reusable select-menu controller'
 );
 
 assertContains(
   newtabJs,
-  'typeof NEWTAB_SELECT_MENU.createController',
+  'const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};',
   'shortcut context menu should prefer the React select-menu controller'
 );
 
@@ -1792,9 +1799,9 @@ assertNotContains(
 );
 
 assertContains(
-  newtabJs,
-  "tile.addEventListener('contextmenu', handleShortcutContextMenu);",
-  'each rendered shortcut tile should bind the right-click context menu'
+  shortcutsReact,
+  'onContextMenu={options.onContextMenu}',
+  'each React shortcut tile should bind the adapter-owned right-click context menu'
 );
 
 assertContains(
@@ -1877,56 +1884,56 @@ assertContains(
 
 assertContains(
   shortcutDialogJs,
-  'function setEnterDirection(sourceElement)',
+  'function setEnterDirection(',
   'shortcut dialog component should calculate its enter direction from the trigger position'
 );
 
 assertContains(
   shortcutDialogJs,
-  "dialog.style.setProperty('--x-nt-shortcut-dialog-enter-x'",
+  "'--x-nt-shortcut-dialog-enter-x'",
   'shortcut dialog should write a trigger-aware x enter offset'
 );
 
 assertContains(
   shortcutDialogJs,
-  "dialog.style.setProperty('--x-nt-shortcut-dialog-enter-y'",
+  "'--x-nt-shortcut-dialog-enter-y'",
   'shortcut dialog should write a trigger-aware y enter offset'
 );
 
 assertContains(
   shortcutDialogJs,
-  "backdrop.setAttribute('data-open', 'false');\n      backdrop.hidden = false;",
+  "host.setAttribute('data-open', 'false');\n    host.hidden = false;",
   'shortcut dialog should start closed before animating open'
 );
 
 assertContains(
   shortcutDialogJs,
-  "backdrop.setAttribute('data-preparing', 'true');",
+  "host.setAttribute('data-preparing', 'true');",
   'shortcut dialog should prepare its start position before transitions are enabled'
 );
 
 assertContains(
   shortcutDialogJs,
-  'setEnterDirection(openOpts.sourceElement);',
+  'setEnterDirection(openOptions.sourceElement, dialog, options);',
   'shortcut dialog should set its enter direction before animating open'
 );
 
 assertContains(
   shortcutDialogJs,
-  "backdrop.removeAttribute('data-preparing');",
+  "host.removeAttribute('data-preparing');",
   'shortcut dialog should re-enable transitions before opening'
 );
 
 assertContains(
   shortcutDialogJs,
-  "backdrop.setAttribute('data-open', 'true');",
+  "host.setAttribute('data-open', 'true');",
   'shortcut dialog should move into its animated open state'
 );
 
 assertContains(
   shortcutDialogJs,
-  'function handleSubmit(event)',
-  'shortcut dialog component should own form submission behavior'
+  'onSubmit={handleSubmit}',
+  'the React shortcut dialog should own form submission behavior'
 );
 
 assertContains(
@@ -1955,50 +1962,32 @@ assert.match(
 
 assertContains(
   shortcutDialogJs,
-  "cancelButton.className = 'x-lumno-action-button x-lumno-action-button--secondary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--secondary';",
-  'shortcut cancel button should use the Lumno secondary button component'
+  'className="x-lumno-action-button x-lumno-action-button--secondary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--secondary"',
+  'the React shortcut cancel button should use the Lumno secondary button component'
 );
 
 assertContains(
   shortcutDialogJs,
-  "doneButton.className = 'x-lumno-action-button x-lumno-action-button--primary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--primary';",
-  'shortcut done button should use the Lumno primary button component'
+  'className="x-lumno-action-button x-lumno-action-button--primary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--primary"',
+  'the React shortcut done button should use the Lumno primary button component'
 );
 
 assertContains(
   shortcutDialogJs,
-  "nameInput.className = '_x_extension_shortcut_input_2024_unique_';",
-  'shortcut name input should reuse the settings text input component'
+  'className="_x_extension_shortcut_input_2024_unique_"',
+  'React shortcut inputs should reuse the settings text input component'
 );
 
 assertContains(
   shortcutDialogJs,
-  "nameInputShell.className = '_x_extension_shortcut_input_affix_2026_unique_';",
-  'shortcut name input should use the options input affix wrapper'
+  'className="_x_extension_shortcut_input_affix_2026_unique_"',
+  'React shortcut inputs should use the options input affix wrapper'
 );
 
 assertContains(
   shortcutDialogJs,
-  "nameInputShell.setAttribute('data-has-prefix', 'false');",
-  'shortcut name input affix should use the no-prefix options mode'
-);
-
-assertContains(
-  shortcutDialogJs,
-  "urlInput.className = '_x_extension_shortcut_input_2024_unique_';",
-  'shortcut url input should reuse the settings text input component'
-);
-
-assertContains(
-  shortcutDialogJs,
-  "urlInputShell.className = '_x_extension_shortcut_input_affix_2026_unique_';",
-  'shortcut url input should use the options input affix wrapper'
-);
-
-assertContains(
-  shortcutDialogJs,
-  "urlInputShell.setAttribute('data-has-prefix', 'false');",
-  'shortcut url input affix should use the no-prefix options mode'
+  'data-has-prefix="false"',
+  'React shortcut input affixes should use the no-prefix options mode'
 );
 
 const themeBootstrapIndex = newtabJs.indexOf('bootstrapInitialThemeMode();');

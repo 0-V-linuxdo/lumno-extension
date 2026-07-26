@@ -5,7 +5,7 @@ const vm = require('vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
-const newtabSuggestionsSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/suggestions-view.js'), 'utf8');
+const newtabSuggestionsSource = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/suggestions.tsx'), 'utf8');
 const newtabHtmlSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const overlaySource = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
 const overlayCssSource = fs.readFileSync(path.join(repoRoot, 'src/overlay/suggestions-view.css'), 'utf8');
@@ -109,51 +109,6 @@ function assertPlainNavigationSuggestionsPreserved(source, surface, options) {
     /const keywordSuggestions = buildKeywordSuggestions\(query, rules\);[\s\S]*?preSuggestions\.push\(\.\.\.keywordSuggestions\);/,
     `${surface} should retain ordinary keyword navigation candidates`
   );
-}
-
-function createOverlayEmptyStateRenderer() {
-  const suggestionsContainer = {
-    childNodes: [],
-    appendChild(node) {
-      node.parentNode = this;
-      this.childNodes.push(node);
-    },
-    removeChild(node) {
-      const index = this.childNodes.indexOf(node);
-      if (index >= 0) {
-        this.childNodes.splice(index, 1);
-      }
-      node.parentNode = null;
-    },
-    querySelector(selector) {
-      const className = String(selector || '').replace(/^\./, '');
-      return this.childNodes.find((node) => node.className === className) || null;
-    }
-  };
-  const createElement = () => ({
-    className: '',
-    childNodes: [],
-    parentNode: null,
-    appendChild(node) {
-      node.parentNode = this;
-      this.childNodes.push(node);
-    },
-    setAttribute() {}
-  });
-  const functionSource = extractFunction(overlaySource, 'renderOverlayEmptyState');
-  const renderOverlayEmptyState = vm.runInNewContext(`(() => {
-    ${functionSource}
-    return renderOverlayEmptyState;
-  })()`, {
-    suggestionsContainer,
-    document: { createElement },
-    applyNoTranslate() {},
-    isOverlayDarkMode: () => false,
-    getRiSvg: () => '',
-    setProtectedPlainText(node, value) { node.textContent = value; },
-    t: (_key, fallback) => fallback
-  });
-  return { renderOverlayEmptyState, suggestionsContainer };
 }
 
 assertSlashCommandDiscovery(
@@ -290,7 +245,7 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /slashCommandModeActive && allSuggestions\.length === 0[\s\S]*?renderOverlayEmptyState\(t\('slash_command_empty'/,
+  /const emptyMessage = slashCommandModeActive && allSuggestions\.length === 0[\s\S]*?slash_command_empty[\s\S]*?reactView\.render\(\{[\s\S]*?emptyMessage/,
   'overlay should show a command-specific empty state without falling back to search'
 );
 
@@ -324,14 +279,6 @@ assert.match(
   /const emptyMessage = slashCommandModeActive && allSuggestions\.length === 0[\s\S]*?getSuggestionActionContextKey\([\s\S]*?\bemptyMessage\b[\s\S]*?suggestionsView\.render\(\{[\s\S]*?\bemptyMessage\b/,
   'New Tab should pass the same slash empty message to its action context and rendered view'
 );
-{
-  const { renderOverlayEmptyState, suggestionsContainer } = createOverlayEmptyStateRenderer();
-  renderOverlayEmptyState('无匹配命令');
-  renderOverlayEmptyState('无匹配命令');
-  assert.strictEqual(suggestionsContainer.childNodes.length, 1,
-    're-rendering the same unknown slash command should keep one overlay empty state');
-}
-
 localeNames.forEach((localeName) => {
   const messages = JSON.parse(fs.readFileSync(
     path.join(repoRoot, '_locales', localeName, 'messages.json'),
@@ -350,13 +297,13 @@ localeNames.forEach((localeName) => {
 
 assert.match(
   newtabSuggestionsSource,
-  /const isCommandSuggestion = Boolean\(suggestion\.commandText\);[\s\S]*?data-command-row[\s\S]*?x-nt-suggestion-command[\s\S]*?textWrapper\.appendChild\(commandLabel\)[\s\S]*?x-nt-suggestion-command-description/,
+  /data-command-row=\{command \? 'true'[\s\S]*?x-nt-suggestion-command[\s\S]*?x-nt-suggestion-command-description/,
   'New Tab command rows should put the command above the smaller result description'
 );
 assert.match(
-  overlaySource,
-  /const isCommandSuggestion = Boolean\(suggestion\.commandText\);[\s\S]*?data-command-row[\s\S]*?x-ov-suggestion-command[\s\S]*?textWrapper\.appendChild\(commandLabel\)[\s\S]*?x-ov-suggestion-command-description/,
-  'overlay command rows should put the command above the smaller result description'
+  newtabSuggestionsSource,
+  /function surfaceClass\([\s\S]*?options\.surface !== 'overlay'[\s\S]*?replace\(\/\^x-nt-\/, 'x-ov-'\)/,
+  'Overlay command rows should reuse the React command layout with Overlay class names'
 );
 assert.match(
   newtabHtmlSource,

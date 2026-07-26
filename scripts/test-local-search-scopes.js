@@ -45,8 +45,8 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /else if \(localSearchQueryModeActive && allSuggestions\.length === 0\) \{\s*renderOverlayEmptyState\(t\('overlay_empty_result', '无匹配结果'\)\);/,
-  'overlay local search should render its existing empty-state row'
+  /localSearchQueryModeActive && allSuggestions\.length === 0[\s\S]*?t\('overlay_empty_result', '无匹配结果'\)[\s\S]*?reactView\.render\(\{[\s\S]*?emptyMessage/,
+  'overlay local search should pass a visible empty message to the React suggestions view'
 );
 
 assert.match(

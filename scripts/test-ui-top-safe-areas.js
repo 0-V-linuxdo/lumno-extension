@@ -3,7 +3,10 @@ const fs = require('fs');
 
 const newtabHtml = fs.readFileSync('src/newtab/newtab.html', 'utf8');
 const newtabJs = fs.readFileSync('src/newtab/newtab.js', 'utf8');
-const wallpaperJs = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
+const wallpaperViewReact = fs.readFileSync(
+  'react-src/newtab/wallpaper-view.tsx',
+  'utf8'
+);
 const shortcutDialogCss = fs.readFileSync('src/newtab/shortcut-dialog.css', 'utf8');
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const onboardingHtml = fs.readFileSync('src/onboarding/onboarding.html', 'utf8');
@@ -42,9 +45,9 @@ assert.match(
   'the appearance heading should remain outside the panel scroll body'
 );
 assert.match(
-  wallpaperJs,
-  /function createAppearanceSection\(\)[\s\S]*?return \{ header, section \};[\s\S]*?const appearance = createAppearanceSection\(\);[\s\S]*?className:\s*'x-nt-wallpaper-panel-scroll'[\s\S]*?appendChildren\(scrollBody,\s*\[[\s\S]*?appearance\.section,[\s\S]*?appendChildren\(wallpaperPanel,\s*\[appearance\.header,\s*scrollBody\]\);/,
-  'the appearance heading should be a fixed panel row above one shared content scroller'
+  wallpaperViewReact,
+  /className="x-nt-wallpaper-panel"[\s\S]*?className="x-nt-appearance-header"[\s\S]*?className="x-nt-wallpaper-panel-scroll"[\s\S]*?className="x-nt-appearance-section"/,
+  'the React wallpaper view should keep the appearance heading above one shared content scroller'
 );
 assert.match(
   newtabHtml,

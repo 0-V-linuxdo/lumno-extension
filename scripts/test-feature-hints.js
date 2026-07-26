@@ -1,5 +1,4 @@
 const assert = require('assert');
-const featureHints = require('../src/shared/feature-hints.js');
 
 class FakeElement {
   constructor(tagName) {
@@ -62,6 +61,66 @@ function createFakeDocument() {
   };
   return fakeDocument;
 }
+
+global.LumnoFeatureHintView = {
+  implementation: 'react-test-double',
+  createFeatureHintView(options) {
+    const documentObj = options.documentObj;
+    const model = options.model;
+    const element = documentObj.createElement('span');
+    element.id = model.elementId;
+    element.className = ['x-lumno-feature-hint', model.className || '']
+      .filter(Boolean)
+      .join(' ');
+    element.setAttribute('data-react-island', 'feature-hint');
+    element.setAttribute('data-rounded-arrow-tip', model.roundedArrowTip ? 'true' : 'false');
+    element.setAttribute('data-visible', 'false');
+    element.setAttribute('data-dismissed', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    let arrowTip = null;
+    if (model.roundedArrowTip) {
+      arrowTip = documentObj.createElement('span');
+      arrowTip.className = 'x-lumno-feature-hint__arrow-tip';
+      arrowTip.setAttribute('aria-hidden', 'true');
+      element.appendChild(arrowTip);
+    }
+    const badge = documentObj.createElement('span');
+    badge.className = 'x-lumno-feature-hint__badge';
+    element.appendChild(badge);
+    const text = documentObj.createElement('span');
+    text.id = model.textId;
+    text.className = 'x-lumno-feature-hint__text';
+    element.appendChild(text);
+    let linkButton = null;
+    if (model.hasLink) {
+      linkButton = documentObj.createElement('button');
+      linkButton.className = 'x-lumno-feature-hint__link';
+      element.appendChild(linkButton);
+    }
+    const closeButton = documentObj.createElement('button');
+    closeButton.className = 'x-lumno-feature-hint__close';
+    element.appendChild(closeButton);
+    return {
+      arrowTip,
+      badge,
+      closeButton,
+      destroy() {},
+      element,
+      linkButton,
+      text,
+      updateLabels(labels) {
+        badge.setAttribute('aria-label', labels.badge);
+        text.textContent = labels.text;
+        closeButton.setAttribute('aria-label', labels.close);
+        if (linkButton) {
+          linkButton.setAttribute('aria-label', labels.link || '');
+        }
+      }
+    };
+  }
+};
+
+const featureHints = require('../src/shared/feature-hints.js');
 
 function createStorageArea(store) {
   return {

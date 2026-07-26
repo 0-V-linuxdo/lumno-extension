@@ -89,6 +89,8 @@ function createFakeElement(tagName, documentObj) {
         this.id = text;
       } else if (key === 'type') {
         this.type = text;
+      } else if (key === 'src' || key === 'href') {
+        this[key] = text;
       }
     },
     getAttribute(name) {
@@ -145,11 +147,45 @@ function createFakeElement(tagName, documentObj) {
         });
       });
     },
-    querySelector() {
-      return null;
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] || null;
     },
-    querySelectorAll() {
-      return [];
+    querySelectorAll(selector) {
+      const source = String(selector || '').trim();
+      const matches = [];
+      const matchesSelector = (node) => {
+        if (!node || !source) {
+          return false;
+        }
+        const tagMatch = source.match(/^[a-z][a-z0-9-]*/i);
+        if (tagMatch && node.tagName !== tagMatch[0].toUpperCase()) {
+          return false;
+        }
+        const classMatches = Array.from(source.matchAll(/\.([A-Za-z0-9_-]+)/g));
+        if (classMatches.some((match) => !node.classList.contains(match[1]))) {
+          return false;
+        }
+        const attributeMatches = Array.from(
+          source.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)
+        );
+        return attributeMatches.every((match) => {
+          const actual = node.getAttribute(match[1]);
+          return match[2] === undefined ? actual !== null : actual === match[2];
+        });
+      };
+      const visit = (node) => {
+        (node.children || []).forEach((child) => {
+          if (matchesSelector(child)) {
+            matches.push(child);
+          }
+          visit(child);
+        });
+      };
+      visit(this);
+      return matches;
+    },
+    getBoundingClientRect() {
+      return { left: 0, top: 0, right: 120, bottom: 32, width: 120, height: 32 };
     },
     focus() {
       documentObj.activeElement = this;
@@ -179,6 +215,379 @@ function createFakeDocument() {
   documentObj.head = createFakeElement('head', documentObj);
   documentObj.documentElement = createFakeElement('html', documentObj);
   return documentObj;
+}
+
+function createFakeWallpaperViewController(config) {
+  const documentObj = config.documentObj;
+  const model = config.model || {};
+  const refs = Object.create(null);
+  const create = (tagName, className, attributes) => {
+    const element = documentObj.createElement(tagName);
+    element.className = className || '';
+    Object.entries(attributes || {}).forEach(([name, value]) => {
+      element.setAttribute(name, value);
+    });
+    return element;
+  };
+  const add = (parent, tagName, className, attributes, refName) => {
+    const element = create(tagName, className, attributes);
+    parent.appendChild(element);
+    if (refName) {
+      refs[refName] = element;
+    }
+    return element;
+  };
+  const addSwitch = (parent, refName) => {
+    const label = add(parent, 'label', 'x-nt-wallpaper-switch');
+    return add(label, 'input', '', { role: 'switch', type: 'checkbox' }, refName);
+  };
+  const addSliderControl = (parent, names, className) => {
+    const control = add(
+      parent,
+      'div',
+      className || 'x-nt-effect-slider-control',
+      { 'data-visible': 'true', 'aria-hidden': 'false' },
+      names.control
+    );
+    const header = add(control, 'div', 'x-nt-overlay-control-header');
+    add(header, 'span', 'x-nt-effect-slider-label', {}, names.label);
+    const wrap = add(control, 'div', 'x-nt-overlay-slider-wrap');
+    const slider = add(
+      wrap,
+      'input',
+      'x-nt-overlay-slider',
+      { type: 'range', min: '0', max: '100', step: '1' },
+      names.slider
+    );
+    slider.type = 'range';
+    return control;
+  };
+
+  const control = create('div', 'x-nt-wallpaper-control', {
+    'data-panel-open': 'false',
+    'data-react-island': 'newtab-wallpaper'
+  });
+  const panel = add(
+    control,
+    'div',
+    'x-nt-wallpaper-panel',
+    { 'data-open': 'false', role: 'dialog' },
+    'panel'
+  );
+  const appearanceHeader = add(panel, 'div', 'x-nt-appearance-header');
+  const appearanceTitleGroup = add(
+    appearanceHeader,
+    'div',
+    'x-nt-appearance-title-group'
+  );
+  add(
+    appearanceTitleGroup,
+    'div',
+    'x-nt-wallpaper-panel-title',
+    {},
+    'appearanceTitle'
+  );
+  add(
+    appearanceTitleGroup,
+    'button',
+    'x-nt-appearance-info-button',
+    { type: 'button' },
+    'appearanceInfoButton'
+  );
+  const scopeTabs = add(
+    appearanceHeader,
+    'div',
+    'x-nt-appearance-scope-tabs',
+    { role: 'group' },
+    'appearanceScopeTabs'
+  );
+  ['global', 'home'].forEach((scope) => {
+    add(scopeTabs, 'button', 'x-nt-appearance-scope-tab', {
+      type: 'button',
+      'data-theme-scope': scope,
+      'data-selected': 'false'
+    });
+  });
+  const scroll = add(panel, 'div', 'x-nt-wallpaper-panel-scroll');
+  const appearanceSection = add(scroll, 'div', 'x-nt-appearance-section');
+  const appearanceOptions = add(
+    appearanceSection,
+    'div',
+    'x-nt-appearance-options',
+    {},
+    'appearanceOptions'
+  );
+  (model.appearanceOptions || []).forEach((item) => {
+    add(appearanceOptions, 'button', 'x-nt-appearance-option', {
+      type: 'button',
+      'data-theme-mode': item.mode,
+      'data-selected': 'false'
+    });
+  });
+  const widthControl = add(
+    appearanceSection,
+    'div',
+    'x-nt-overlay-control x-nt-search-width-control',
+    { 'data-visible': 'false', 'aria-hidden': 'true' },
+    'searchWidthControl'
+  );
+  const widthHeader = add(widthControl, 'div', 'x-nt-overlay-control-header');
+  add(widthHeader, 'span', 'x-nt-overlay-label', {}, 'searchWidthLabel');
+  add(widthHeader, 'span', 'x-nt-overlay-value', {}, 'searchWidthValue');
+  const widthWrap = add(
+    widthControl,
+    'div',
+    'x-nt-overlay-slider-wrap x-nt-search-width-slider-wrap'
+  );
+  const widthSlider = add(
+    widthWrap,
+    'input',
+    'x-nt-overlay-slider x-nt-search-width-slider',
+    {
+      type: 'range',
+      min: String(model.searchWidth && model.searchWidth.min || 0),
+      max: String(model.searchWidth && model.searchWidth.max || 1200),
+      step: '1'
+    },
+    'searchWidthSlider'
+  );
+  widthSlider.type = 'range';
+  const widthScale = add(widthWrap, 'div', 'x-nt-search-width-scale');
+  (model.searchWidth && model.searchWidth.ticks || []).forEach((tick) => {
+    add(widthScale, 'span', 'x-nt-search-width-tick', {
+      'data-search-width-tick': tick.searchKey || ''
+    });
+  });
+  const moreSettings = add(
+    widthControl,
+    'a',
+    'x-nt-appearance-more-settings',
+    { href: model.moreSettingsUrl || '' },
+    'moreSettingsLink'
+  );
+  add(
+    moreSettings,
+    'span',
+    'x-nt-appearance-more-settings-text',
+    {},
+    'moreSettingsText'
+  );
+
+  const wallpaperSection = add(scroll, 'div', 'x-nt-wallpaper-section');
+  const panelHeader = add(
+    wallpaperSection,
+    'div',
+    'x-nt-wallpaper-panel-header',
+    {},
+    'panelHeader'
+  );
+  add(panelHeader, 'div', 'x-nt-wallpaper-panel-title', {}, 'panelTitle');
+  addSwitch(panelHeader, 'enabledToggle');
+  add(
+    wallpaperSection,
+    'input',
+    'x-nt-wallpaper-file-input',
+    { type: 'file' },
+    'customInput'
+  );
+  const body = add(
+    wallpaperSection,
+    'div',
+    'x-nt-wallpaper-body',
+    { 'data-visible': 'true', 'data-active-tab': model.activeTab || 'built-in' },
+    'body'
+  );
+  const modeSync = add(body, 'div', 'x-nt-wallpaper-mode-sync');
+  add(modeSync, 'span', 'x-nt-wallpaper-mode-sync-title', {}, 'modeSyncTitle');
+  addSwitch(modeSync, 'modeSyncToggle');
+  const modeTabs = add(
+    body,
+    'div',
+    'x-nt-wallpaper-tabs x-nt-wallpaper-mode-tabs',
+    { 'data-visible': 'false' },
+    'modeTabs'
+  );
+  add(modeTabs, 'span', 'x-nt-wallpaper-tabs-indicator', {}, 'modeTabsIndicator');
+  add(
+    modeTabs,
+    'button',
+    'x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
+    { 'data-wallpaper-mode': 'light', 'data-active': 'false' },
+    'lightModeTab'
+  );
+  add(
+    modeTabs,
+    'button',
+    'x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
+    { 'data-wallpaper-mode': 'dark', 'data-active': 'false' },
+    'darkModeTab'
+  );
+  add(
+    body,
+    'div',
+    'x-nt-wallpaper-mode-hint',
+    { 'data-visible': 'false' },
+    'modeHint'
+  );
+  const tabs = add(body, 'div', 'x-nt-wallpaper-tabs', {}, 'tabs');
+  add(tabs, 'span', 'x-nt-wallpaper-tabs-indicator', {}, 'tabsIndicator');
+  add(
+    tabs,
+    'button',
+    'x-nt-wallpaper-tab',
+    { 'data-wallpaper-tab': 'built-in', 'data-active': 'false' },
+    'builtInTab'
+  );
+  add(
+    tabs,
+    'button',
+    'x-nt-wallpaper-tab',
+    { 'data-wallpaper-tab': 'local', 'data-active': 'false' },
+    'localTab'
+  );
+  const builtInGrid = add(
+    body,
+    'div',
+    'x-nt-wallpaper-grid x-nt-wallpaper-grid--built-in',
+    { 'data-wallpaper-panel': 'built-in' },
+    'builtInGrid'
+  );
+  (model.wallpapers || []).forEach((item) => {
+    add(builtInGrid, 'button', 'x-nt-wallpaper-tile', {
+      'data-wallpaper-id': item.id,
+      'data-wallpaper-path': item.path || '',
+      'data-selected': 'false'
+    });
+  });
+  const localGrid = add(
+    body,
+    'div',
+    'x-nt-wallpaper-grid x-nt-wallpaper-grid--local',
+    { 'data-wallpaper-panel': 'local' },
+    'localGrid'
+  );
+  add(
+    localGrid,
+    'div',
+    'x-nt-wallpaper-tile x-nt-wallpaper-upload-tile',
+    { 'data-upload': 'true', 'data-loading': 'false', 'data-selected': 'false' },
+    'uploadTile'
+  );
+  const customItemsHost = add(
+    localGrid,
+    'span',
+    '',
+    { 'data-wallpaper-custom-items': '' },
+    'customItemsHost'
+  );
+  const effectControl = add(body, 'div', 'x-nt-effect-control');
+  addSliderControl(
+    effectControl,
+    { control: 'overlayControl', label: 'overlayLabel', slider: 'overlaySlider' },
+    'x-nt-overlay-control x-nt-overlay-control--effect'
+  );
+  const effectOptions = add(
+    effectControl,
+    'div',
+    'x-nt-effect-options',
+    {},
+    'effectOptions'
+  );
+  add(effectOptions, 'span', 'x-nt-effect-indicator', {}, 'effectTabsIndicator');
+  (model.effectTypes || []).forEach((item) => {
+    add(effectOptions, 'button', 'x-nt-effect-option', {
+      'data-wallpaper-effect-type': item.type,
+      'data-active': 'false',
+      'data-selected': 'false'
+    });
+  });
+  add(effectControl, 'span', 'x-nt-effect-label', {}, 'effectLabel');
+  addSliderControl(effectControl, {
+    control: 'effectStrengthControl',
+    label: 'effectStrengthLabel',
+    slider: 'effectStrengthSlider'
+  });
+  addSliderControl(effectControl, {
+    control: 'effectSizeControl',
+    label: 'effectSizeLabel',
+    slider: 'effectSizeSlider'
+  });
+  addSliderControl(effectControl, {
+    control: 'effectSpacingControl',
+    label: 'effectSpacingLabel',
+    slider: 'effectSpacingSlider'
+  });
+
+  const brandSection = add(scroll, 'div', 'x-nt-wallpaper-section');
+  const logoHeader = add(brandSection, 'div', 'x-nt-wallpaper-panel-header');
+  add(logoHeader, 'div', 'x-nt-wallpaper-panel-title', {}, 'logoTitle');
+  addSwitch(logoHeader, 'logoToggle');
+  const faviconGroup = add(brandSection, 'div', 'x-nt-favicon-group');
+  add(
+    faviconGroup,
+    'div',
+    'x-nt-wallpaper-panel-title x-nt-favicon-title',
+    {},
+    'faviconTitle'
+  );
+  const faviconOptions = add(
+    faviconGroup,
+    'div',
+    'x-nt-favicon-options',
+    {},
+    'faviconOptions'
+  );
+  (model.favicons || []).forEach((item) => {
+    const tile = add(faviconOptions, 'button', 'x-nt-wallpaper-tile x-nt-favicon-option', {
+      'data-newtab-favicon-id': item.id,
+      'data-selected': 'false'
+    });
+    const thumb = add(tile, 'span', 'x-nt-wallpaper-thumb x-nt-favicon-thumb');
+    if (item.inlineSvg) {
+      const preview = add(
+        thumb,
+        'span',
+        'x-nt-favicon-image x-nt-favicon-svg-preview'
+      );
+      preview.innerHTML = item.inlineSvg;
+    } else {
+      add(thumb, 'img', 'x-nt-favicon-image', { src: item.previewUrl || '' });
+    }
+  });
+  const button = add(
+    control,
+    'button',
+    'x-nt-wallpaper-button',
+    { 'data-open': 'false', 'aria-expanded': 'false' },
+    'button'
+  );
+
+  return {
+    control,
+    panel,
+    button,
+    getRefs() {
+      return refs;
+    },
+    renderCustomWallpapers(items) {
+      customItemsHost.children.length = 0;
+      return (Array.isArray(items) ? items : []).map((item) => {
+        const tile = add(
+          customItemsHost,
+          'div',
+          'x-nt-wallpaper-tile x-nt-wallpaper-custom-tile',
+          {
+            'data-wallpaper-id': item.id,
+            'data-custom-wallpaper': 'true',
+            'data-selected': 'false'
+          }
+        );
+        add(tile, 'button', 'x-nt-wallpaper-delete-button');
+        return tile;
+      });
+    },
+    destroy() {}
+  };
 }
 
 function createFakeWindow() {
@@ -257,6 +666,13 @@ function createFakeWindow() {
     removeEventListener: removeWindowListener,
     innerWidth: 1280,
     innerHeight: 800,
+    getComputedStyle() {
+      return {
+        borderLeftWidth: '0',
+        borderTopWidth: '0',
+        transform: 'none'
+      };
+    },
     matchMedia(query) {
       return getMediaQueryList(query);
     },
@@ -519,6 +935,10 @@ function assertBrandMarkCopy() {
 
 function assertThemeAwareAlternateFaviconAsset() {
   const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
+  const wallpaperViewReact = fs.readFileSync(
+    'react-src/newtab/wallpaper-view.tsx',
+    'utf8'
+  );
   assert.match(
     wallpaperSource,
     /id:\s*'alternate'[\s\S]*?file:\s*'assets\/images\/lumno-newtab-favicon\.svg'/,
@@ -530,9 +950,9 @@ function assertThemeAwareAlternateFaviconAsset() {
     'alternate favicon should declare the SVG mime type'
   );
   assert.match(
-    wallpaperSource,
-    /function createNewtabFaviconPreview\(/,
-    'alternate favicon picker preview should render inline so it can follow UI theme'
+    wallpaperViewReact,
+    /item\.inlineSvg[\s\S]*?dangerouslySetInnerHTML=\{\{ __html: item\.inlineSvg \}\}/,
+    'the React favicon picker should render alternate SVG previews inline so they can follow UI theme'
   );
 
   const svg = fs.readFileSync('assets/images/lumno-newtab-favicon.svg', 'utf8');
@@ -830,7 +1250,10 @@ function createWallpaperSandbox(options) {
     },
     LumnoNewtabWallpaperAdaptiveTone: {},
     LumnoNewtabWallpaperEffects: {},
-    LumnoNewtabWallpaperLocalStore: options && options.localStoreApi ? options.localStoreApi : {}
+    LumnoNewtabWallpaperLocalStore: options && options.localStoreApi ? options.localStoreApi : {},
+    LumnoNewtabWallpaperView: {
+      createController: createFakeWallpaperViewController
+    }
   };
   testSandbox.globalThis = testSandbox;
   vm.runInNewContext(fs.readFileSync('src/newtab/wallpaper.js', 'utf8'), testSandbox, {
@@ -860,7 +1283,10 @@ const sandbox = {
   },
   LumnoNewtabWallpaperAdaptiveTone: {},
   LumnoNewtabWallpaperEffects: {},
-  LumnoNewtabWallpaperLocalStore: {}
+  LumnoNewtabWallpaperLocalStore: {},
+  LumnoNewtabWallpaperView: {
+    createController: createFakeWallpaperViewController
+  }
 };
 sandbox.globalThis = sandbox;
 

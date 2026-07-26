@@ -291,12 +291,6 @@ export interface SuggestionsViewController {
   getItems(): SuggestionElement[];
 }
 
-export interface LegacySuggestionsApi {
-  createSuggestionsView?: (
-    options?: SuggestionsViewOptions
-  ) => SuggestionsViewController;
-}
-
 interface NormalizedOptions {
   surface: SuggestionsSurface;
   document: Document;
@@ -716,29 +710,6 @@ function HighlightedText({
   );
 }
 
-function renderHighlightedText(
-  options: NormalizedOptions,
-  target: HTMLElement,
-  text: unknown,
-  query: string
-): HTMLElement {
-  target.textContent = '';
-  getHighlightedParts(options, text, query).forEach((part) => {
-    if (part.highlighted) {
-      const mark = options.document.createElement('mark');
-      mark.className = surfaceClass(
-        options,
-        'x-nt-suggestion-mark'
-      );
-      mark.textContent = part.text;
-      target.appendChild(mark);
-    } else {
-      target.appendChild(options.document.createTextNode(part.text));
-    }
-  });
-  return target;
-}
-
 function isOverflowing(target: HTMLElement): boolean {
   const clientWidth = Number(target.clientWidth);
   const scrollWidth = Number(target.scrollWidth);
@@ -752,7 +723,7 @@ function bindTextTooltip(
   options: NormalizedOptions,
   target: HTMLElement | null,
   text: unknown,
-  query?: string
+  _query?: string
 ): void {
   const safeText = options.sanitizeDisplayText(text);
   if (!options.bindCursorTooltip || !target || !safeText) {
@@ -762,13 +733,7 @@ function bindTextTooltip(
     maxWidth: 520,
     shouldShow: isOverflowing,
     deferHideVisibility: true,
-    preserveVisibleOnTargetSwitch: true,
-    ...(query
-      ? {
-          renderContent: (element: HTMLElement, value: string) =>
-            renderHighlightedText(options, element, value, query)
-        }
-      : {})
+    preserveVisibleOnTargetSwitch: true
   });
 }
 
@@ -1429,6 +1394,35 @@ function SuggestionIcon({
   const isFavicon = spec.kind === 'favicon' && !failed;
 
   useLayoutEffect(() => {
+    const slot =
+      iconSlotRef.current as SuggestionIconSlotElement | null;
+    if (!slot) {
+      return;
+    }
+    const handleFallback = (): void => {
+      setFailed(true);
+    };
+    const handleRetry = (): void => {
+      setFailed(false);
+    };
+    slot.addEventListener(
+      'lumno-favicon-fallback',
+      handleFallback
+    );
+    slot.addEventListener('lumno-favicon-retry', handleRetry);
+    return () => {
+      slot.removeEventListener(
+        'lumno-favicon-fallback',
+        handleFallback
+      );
+      slot.removeEventListener(
+        'lumno-favicon-retry',
+        handleRetry
+      );
+    };
+  }, [iconSlotRef]);
+
+  useLayoutEffect(() => {
     const image = imageRef.current;
     const slot =
       iconSlotRef.current as SuggestionIconSlotElement | null;
@@ -1462,6 +1456,7 @@ function SuggestionIcon({
         'x-nt-suggestion-icon-slot'
       )}
       data-favicon={isFavicon ? 'true' : 'false'}
+      data-favicon-failed={failed ? 'true' : undefined}
     >
       {isFavicon ? (
         <img
@@ -2664,49 +2659,30 @@ function syncItems(options: NormalizedOptions): void {
 }
 
 function createNoopController(
-  rawOptions: SuggestionsViewOptions,
-  legacyApi?: LegacySuggestionsApi | null
+  rawOptions: SuggestionsViewOptions
 ): SuggestionsViewController {
-  const legacy =
-    legacyApi?.createSuggestionsView?.(rawOptions) || null;
   const items = Array.isArray(rawOptions.items)
     ? rawOptions.items
     : [];
   return {
-    render(payload) {
-      legacy?.render(payload);
-    },
-    renderTabs(tabs) {
-      legacy?.renderTabs(tabs);
-    },
-    updateSelection(index) {
-      legacy?.updateSelection(index);
-    },
-    setOpenInCurrentTabModifierActive(active) {
-      legacy?.setOpenInCurrentTabModifierActive(active);
-    },
-    setOpenSwitchInNewTabModifierActive(active) {
-      legacy?.setOpenSwitchInNewTabModifierActive(active);
-    },
-    setOpenInBackgroundTabModifierActive(active) {
-      legacy?.setOpenInBackgroundTabModifierActive(active);
-    },
+    render() {},
+    renderTabs() {},
+    updateSelection() {},
+    setOpenInCurrentTabModifierActive() {},
+    setOpenSwitchInNewTabModifierActive() {},
+    setOpenInBackgroundTabModifierActive() {},
     clear() {
-      legacy?.clear();
       items.length = 0;
     },
     destroy() {
-      legacy?.destroy();
       items.length = 0;
     },
     getAutoHighlightIndex() {
-      return legacy?.getAutoHighlightIndex() ?? -1;
+      return -1;
     },
-    markAutocompleteTop(index) {
-      legacy?.markAutocompleteTop(index);
-    },
+    markAutocompleteTop() {},
     getItems() {
-      return legacy?.getItems() || items;
+      return items;
     }
   };
 }
@@ -2762,12 +2738,11 @@ function getStableRenderKeys<T>(
 }
 
 export function createSuggestionsView(
-  rawOptions: SuggestionsViewOptions = {},
-  legacyApi?: LegacySuggestionsApi | null
+  rawOptions: SuggestionsViewOptions = {}
 ): SuggestionsViewController {
   const normalizedOptions = normalizeOptions(rawOptions);
   if (!normalizedOptions) {
-    return createNoopController(rawOptions, legacyApi);
+    return createNoopController(rawOptions);
   }
   const options: NormalizedOptions = normalizedOptions;
   const root: Root = createRoot(options.container);
@@ -2965,13 +2940,11 @@ export function createSuggestionsView(
   };
 }
 
-export function createSuggestionsViewApi(
-  legacyApi?: LegacySuggestionsApi | null
-) {
+export function createSuggestionsViewApi() {
   return Object.freeze({
     implementation: 'react',
     createSuggestionsView(options?: SuggestionsViewOptions) {
-      return createSuggestionsView(options, legacyApi);
+      return createSuggestionsView(options);
     }
   });
 }

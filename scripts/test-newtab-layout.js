@@ -3,13 +3,12 @@ const fs = require('fs');
 const path = require('path');
 
 require('../src/newtab/layout.js');
-require('../src/newtab/dock.js');
 
 const layoutRuntime = globalThis.LumnoNewtabLayout;
-const dockRuntime = globalThis.LumnoNewtabDock;
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const dockReactSource = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/dock.tsx'), 'utf8');
 
 class FakeStyle {
   constructor() {
@@ -403,109 +402,23 @@ assert.match(
   'new-tab search should capture the existing result height before appending and animate after layout'
 );
 
-function testDockRuntimeOwnsBottomDockComponentParts() {
-  assert.ok(
-    dockRuntime && typeof dockRuntime.createBottomDockRuntime === 'function',
-    'newtab dock runtime should expose a component factory'
-  );
-
-  const body = new FakeElement();
-  const documentObj = {
-    body,
-    createElement() {
-      return new FakeElement();
-    }
-  };
-  const windowObj = {
-    getComputedStyle(element) {
-      return element.computedStyle;
-    },
-    requestAnimationFrame(callback) {
-      callback();
-      return 1;
-    }
-  };
-  const bookmarkSection = new FakeElement();
-  const recentSection = new FakeElement();
-  const shortcutSection = new FakeElement();
-  let layoutOptions = null;
-  const fakeLayoutRuntime = {
-    createLayoutController(options) {
-      layoutOptions = options;
-      return {
-        updateBottomDockLayout() {}
-      };
-    }
-  };
-
-  const runtime = dockRuntime.createBottomDockRuntime({
-    documentObj,
-    windowObj,
-    layoutRuntime: fakeLayoutRuntime,
-    root: new FakeElement(),
-    searchLayer: new FakeElement(),
-    inputParts: { container: new FakeElement() },
-    wordmarkContainer: new FakeElement(),
-    shortcutSection: () => shortcutSection,
-    bookmarkSection,
-    recentSection,
-    suggestionsContainer: new FakeElement(),
-    suggestionsSurface: new FakeElement(),
-    suggestionsOutline: new FakeElement(),
-    constants: {
-      compactDockShortcutGapPx: 11
-    }
-  });
-
-  assert.strictEqual(
-    runtime.element.id,
-    '_x_extension_newtab_bottom_dock_2024_unique_',
-    'dock runtime should create the bottom dock root element'
-  );
-  assert.strictEqual(
-    runtime.scroller.id,
-    '_x_extension_newtab_bottom_dock_scroller_2024_unique_',
-    'dock runtime should create the dock scroller'
-  );
-  assert.strictEqual(
-    runtime.sectionSafeCorridor.id,
-    '_x_extension_newtab_section_safe_corridor_2026_unique_',
-    'dock runtime should create the section safe corridor'
-  );
-  assert.strictEqual(layoutOptions.bottomDock, runtime.element, 'layout should receive the dock element from the component');
-  assert.strictEqual(layoutOptions.sectionSafeCorridor, runtime.sectionSafeCorridor, 'layout should receive the component safe corridor');
-  assert.strictEqual(layoutOptions.shortcutSection(), shortcutSection, 'layout should receive the shortcut section accessor');
-  assert.strictEqual(layoutOptions.constants.compactDockShortcutGapPx, 11, 'component should pass dock layout constants through');
-
-  runtime.mount(body);
-
-  assert.deepStrictEqual(
-    runtime.scroller.children,
-    [bookmarkSection, runtime.sectionSafeCorridor, recentSection],
-    'dock runtime should own the bottom dock section order'
-  );
-  assert.strictEqual(runtime.element.children[0], runtime.scroller, 'dock root should contain the scroller');
-  assert.strictEqual(body.children[0], runtime.element, 'dock runtime should mount the dock root into the body');
-}
-
-testDockRuntimeOwnsBottomDockComponentParts();
 
 function testNewtabLoadsAndUsesDockRuntime() {
   const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
   assert.ok(
-    newtabHtml.indexOf('<script src="layout.js"></script>') <
-      newtabHtml.indexOf('<script src="dock.js"></script>'),
-    'newtab should load the dock runtime after the layout runtime'
-  );
-  assert.ok(
-    newtabHtml.indexOf('<script src="dock.js"></script>') <
-      newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
-    'newtab should load the dock runtime before the app bootstrap'
+    !newtabHtml.includes('<script src="dock.js"></script>') &&
+      newtabHtml.includes('data-react-entry="../react/newtab-islands.js"'),
+    'New Tab should receive its dock implementation from the React entry'
   );
   assert.match(
     newtabJs,
     /const bottomDockRuntime = NEWTAB_DOCK\.createBottomDockRuntime\(/,
-    'newtab should create the bottom dock through the dock component runtime'
+    'the browser adapter should create the bottom dock through the React API'
+  );
+  assert.match(
+    dockReactSource,
+    /export function createBottomDockRuntime\([\s\S]*?bottomDock\.dataset\.reactIsland = 'newtab-bottom-dock'/,
+    'React should own the bottom dock structure and diagnostic marker'
   );
   assert.doesNotMatch(
     newtabJs,

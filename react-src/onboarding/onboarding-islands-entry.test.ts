@@ -43,8 +43,13 @@ type OnboardingRuntime = typeof globalThis & {
   LumnoOnboardingVisualSurfaceReact?: {
     implementation?: string;
   };
+  LumnoOnboardingInfoTooltipContent?: {
+    implementation?: string;
+  };
+  LumnoOnboardingInfoTooltipContentReact?: {
+    implementation?: string;
+  };
   LumnoOnboardingReactBootstrap?: {
-    allowReactUpgrade: boolean;
     reactReady: boolean;
   };
   LumnoOnboardingReactIslands?: unknown;
@@ -67,6 +72,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOnboardingPageStripReact;
   delete runtime.LumnoOnboardingVisualSurface;
   delete runtime.LumnoOnboardingVisualSurfaceReact;
+  delete runtime.LumnoOnboardingInfoTooltipContent;
+  delete runtime.LumnoOnboardingInfoTooltipContentReact;
   delete runtime.LumnoOnboardingReactBootstrap;
   delete runtime.LumnoOnboardingReactIslands;
 }
@@ -79,7 +86,6 @@ afterEach(() => {
 describe('Onboarding React islands entry', () => {
   it('installs the page-strip API and marks the bootstrap ready', async () => {
     runtime.LumnoOnboardingReactBootstrap = {
-      allowReactUpgrade: true,
       reactReady: false
     };
 
@@ -93,6 +99,12 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingVisualSurface?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingVisualSurfaceReact).toBe(
       runtime.LumnoOnboardingVisualSurface
+    );
+    expect(runtime.LumnoOnboardingInfoTooltipContent?.implementation).toBe(
+      'react'
+    );
+    expect(runtime.LumnoOnboardingInfoTooltipContentReact).toBe(
+      runtime.LumnoOnboardingInfoTooltipContent
     );
     expect(runtime.LumnoOnboardingActions?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingActionsReact).toBe(
@@ -121,26 +133,20 @@ describe('Onboarding React islands entry', () => {
       cursorLayer: runtime.LumnoOnboardingCursorLayer,
       interactions: runtime.LumnoOnboardingInteractions,
       pageStrip: runtime.LumnoOnboardingPageStrip,
-      visualSurface: runtime.LumnoOnboardingVisualSurface
+      visualSurface: runtime.LumnoOnboardingVisualSurface,
+      infoTooltipContent: runtime.LumnoOnboardingInfoTooltipContent
     });
   });
 
-  it('does not upgrade APIs after the shared bootstrap has fallen back', async () => {
+  it('installs React APIs when bootstrap is waiting', async () => {
     runtime.LumnoOnboardingReactBootstrap = {
-      allowReactUpgrade: false,
       reactReady: false
     };
 
     await import('./onboarding-islands-entry');
 
-    expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(false);
-    expect(runtime.LumnoOnboardingActions).toBeUndefined();
-    expect(runtime.LumnoOnboardingBodyCopy).toBeUndefined();
-    expect(runtime.LumnoOnboardingCopyHeading).toBeUndefined();
-    expect(runtime.LumnoOnboardingCursorLayer).toBeUndefined();
-    expect(runtime.LumnoOnboardingInteractions).toBeUndefined();
-    expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
-    expect(runtime.LumnoOnboardingVisualSurface).toBeUndefined();
-    expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
+    expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(true);
+    expect(runtime.LumnoOnboardingActions?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingReactIslands).toBeDefined();
   });
 });

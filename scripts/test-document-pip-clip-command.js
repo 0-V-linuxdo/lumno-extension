@@ -7,6 +7,10 @@ const backgroundJs = fs.readFileSync(path.join(repoRoot, 'src/background/backgro
 const contentJs = fs.readFileSync(path.join(repoRoot, 'src/content/document-pip-picker.js'), 'utf8');
 const overlayRuntimeJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/runtime.js'), 'utf8');
 const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+const suggestionsReact = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
+  'utf8'
+);
 const actionModelJs = fs.readFileSync(path.join(repoRoot, 'src/shared/suggestion-action-model.js'), 'utf8');
 
 assert.match(
@@ -64,13 +68,13 @@ assert.match(
 );
 assert.match(
   overlayJs,
-  /case 'commandDocumentPip':[\s\S]*?chrome\.runtime\.sendMessage\(\{\s*action:\s*'openDocumentPipPicker'\s*\}/,
+  /function openDocumentPipPickerFromOverlay\(\)[\s\S]*?chrome\.runtime\.sendMessage\(\{\s*action:\s*'openDocumentPipPicker'\s*\}\)[\s\S]*?selectedSuggestion\.type === 'commandDocumentPip'[\s\S]*?openDocumentPipPickerFromOverlay\(\)/,
   'overlay should activate the web clip command through the background picker action'
 );
 assert.match(
-  overlayJs,
-  /suggestion\.type === 'commandDocumentPip'[\s\S]*?ri-scissors-cut-line/,
-  'web clip command suggestions should render with a dedicated clipping icon'
+  suggestionsReact,
+  /commandDocumentPip:\s*'ri-scissors-cut-line'/,
+  'the React suggestions view should render web clip commands with a dedicated clipping icon'
 );
 assert.match(
   overlayJs,

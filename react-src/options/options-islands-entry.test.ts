@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 type OptionsRuntime = typeof globalThis & {
   LumnoOptionsReactBootstrap?: {
-    allowReactUpgrade: boolean;
     reactReady: boolean;
   };
   LumnoOptionsReactIslands?: unknown;
@@ -54,6 +53,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsShortcutReferenceReact?: {
     implementation?: string;
   };
+  LumnoOptionsShortcutHotkey?: {
+    implementation?: string;
+  };
+  LumnoOptionsShortcutHotkeyReact?: {
+    implementation?: string;
+  };
   LumnoOptionsSiteSearchList?: {
     implementation?: string;
   };
@@ -95,6 +100,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsSettingsFormsReact;
   delete runtime.LumnoOptionsShortcutReference;
   delete runtime.LumnoOptionsShortcutReferenceReact;
+  delete runtime.LumnoOptionsShortcutHotkey;
+  delete runtime.LumnoOptionsShortcutHotkeyReact;
   delete runtime.LumnoOptionsSiteSearchList;
   delete runtime.LumnoOptionsSiteSearchListReact;
   delete runtime.LumnoOptionsThemePicker;
@@ -111,7 +118,6 @@ afterEach(() => {
 describe('Options React islands entry', () => {
   it('installs the Popconfirm and Toast APIs and marks the bootstrap ready', async () => {
     runtime.LumnoOptionsReactBootstrap = {
-      allowReactUpgrade: true,
       reactReady: false
     };
 
@@ -150,6 +156,10 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsShortcutReferenceReact).toBe(
       runtime.LumnoOptionsShortcutReference
     );
+    expect(runtime.LumnoOptionsShortcutHotkey?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsShortcutHotkeyReact).toBe(
+      runtime.LumnoOptionsShortcutHotkey
+    );
     expect(runtime.LumnoOptionsSiteSearchList?.implementation).toBe('react');
     expect(runtime.LumnoOptionsSiteSearchListReact).toBe(
       runtime.LumnoOptionsSiteSearchList
@@ -169,32 +179,22 @@ describe('Options React islands entry', () => {
       settingsControls: runtime.LumnoOptionsSettingsControls,
       settingsForms: runtime.LumnoOptionsSettingsForms,
       shortcutReference: runtime.LumnoOptionsShortcutReference,
+      shortcutHotkey: runtime.LumnoOptionsShortcutHotkey,
       siteSearchList: runtime.LumnoOptionsSiteSearchList,
       themePicker: runtime.LumnoOptionsThemePicker,
       toast: runtime.LumnoOptionsToast
     });
   });
 
-  it('does not upgrade APIs after the shared bootstrap has fallen back', async () => {
+  it('installs React APIs when bootstrap is waiting', async () => {
     runtime.LumnoOptionsReactBootstrap = {
-      allowReactUpgrade: false,
       reactReady: false
     };
 
     await import('./options-islands-entry');
 
-    expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(false);
-    expect(runtime.LumnoOptionsBlacklistList).toBeUndefined();
-    expect(runtime.LumnoOptionsPopconfirm).toBeUndefined();
-    expect(runtime.LumnoOptionsSegmentedControl).toBeUndefined();
-    expect(runtime.LumnoOptionsSelectControl).toBeUndefined();
-    expect(runtime.LumnoOptionsSettingsNavigation).toBeUndefined();
-    expect(runtime.LumnoOptionsSettingsControls).toBeUndefined();
-    expect(runtime.LumnoOptionsSettingsForms).toBeUndefined();
-    expect(runtime.LumnoOptionsShortcutReference).toBeUndefined();
-    expect(runtime.LumnoOptionsSiteSearchList).toBeUndefined();
-    expect(runtime.LumnoOptionsThemePicker).toBeUndefined();
-    expect(runtime.LumnoOptionsToast).toBeUndefined();
-    expect(runtime.LumnoOptionsReactIslands).toBeUndefined();
+    expect(runtime.LumnoOptionsReactBootstrap.reactReady).toBe(true);
+    expect(runtime.LumnoOptionsBlacklistList?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsReactIslands).toBeDefined();
   });
 });

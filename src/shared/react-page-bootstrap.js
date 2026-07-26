@@ -16,7 +16,6 @@
   const reactEntryUrl = new URL(reactEntryPath, currentScript.src).href;
   const pageEntryUrl = new URL(pageEntryPath, currentScript.src).href;
   const bootstrapState = {
-    allowReactUpgrade: true,
     reactReady: false
   };
   let pageStarted = false;
@@ -24,13 +23,12 @@
   runtime[stateKey] = bootstrapState;
   root.dataset.lumnoReactRuntime = 'loading';
 
-  function startPage(mode) {
+  function startPage() {
     if (pageStarted) {
       return;
     }
     pageStarted = true;
-    bootstrapState.allowReactUpgrade = mode === 'react';
-    root.dataset.lumnoReactRuntime = mode;
+    root.dataset.lumnoReactRuntime = 'react';
 
     const pageScript = document.createElement('script');
     pageScript.src = pageEntryUrl;
@@ -38,16 +36,13 @@
     document.body.appendChild(pageScript);
   }
 
-  const fallbackTimer = window.setTimeout(() => {
-    startPage('legacy');
-  }, 1500);
-
   import(reactEntryUrl).then(() => {
-    window.clearTimeout(fallbackTimer);
-    startPage(bootstrapState.reactReady ? 'react' : 'legacy');
+    if (!bootstrapState.reactReady) {
+      throw new Error('React entry loaded without marking the page ready.');
+    }
+    startPage();
   }).catch((error) => {
-    window.clearTimeout(fallbackTimer);
-    console.warn('[Lumno] React islands failed to load; using legacy views.', error);
-    startPage('legacy');
+    root.dataset.lumnoReactRuntime = 'error';
+    console.error('[Lumno] React page failed to start.', error);
   });
 })();

@@ -204,6 +204,8 @@
   const NEWTAB_PAGE_STRUCTURE = globalThis.LumnoNewtabPageStructure || {};
   const NEWTAB_BOOKMARK_CASCADE_VIEW =
     globalThis.LumnoNewtabBookmarkCascadeView || {};
+  const NEWTAB_BOOKMARK_BREADCRUMB =
+    globalThis.LumnoNewtabBookmarkBreadcrumb || {};
   if (typeof NEWTAB_FAVICON_CACHE.createFaviconCache !== 'function' ||
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
@@ -213,6 +215,7 @@
       typeof NEWTAB_BOOKMARKS_STORE.shouldApplyBookmarkCacheHydration !== 'function' ||
       typeof NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime !== 'function' ||
       typeof NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar !== 'function' ||
+      typeof NEWTAB_BOOKMARK_BREADCRUMB.createBookmarkBreadcrumbController !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.canMoveBookmarkToLocation !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.canMoveBookmarkToFolder !== 'function' ||
       typeof NEWTAB_BOOKMARK_MOVE_HISTORY.createBookmarkMoveHistory !== 'function' ||
@@ -385,17 +388,6 @@
   let feedbackControl = null;
   let feedbackReactController = null;
   let feedbackButton = null;
-  let feedbackPopover = null;
-  let feedbackMenu = null;
-  let feedbackXLink = null;
-  let feedbackGithubIssueLink = null;
-  let feedbackChromeReviewLink = null;
-  let feedbackCommunityButton = null;
-  let feedbackDetail = null;
-  let feedbackDetailRefreshButton = null;
-  let feedbackDetailCloseButton = null;
-  let feedbackQrImage = null;
-  let feedbackPopoverCloseTimer = 0;
   let feedbackRefreshResultTooltipTimer = 0;
   let feedbackLinks = LUMNO_FEEDBACK_LINKS_FALLBACK;
   let feedbackLinksLoaded = false;
@@ -422,6 +414,7 @@
   let recentModeMenu = null;
   let recentGrid = null;
   let bookmarkBreadcrumb = null;
+  let bookmarkBreadcrumbController = null;
   let bookmarkPagerPrevButton = null;
   let bookmarkPagerNextButton = null;
   let bookmarkOpenManagerButton = null;
@@ -458,26 +451,15 @@
     storageArea: localStorageArea,
     storageKey: NEWTAB_SHORTCUT_ICONS_STORAGE_KEY
   });
-  const sectionModeSelectFactory =
-    typeof NEWTAB_SELECT_MENU.createController === 'function'
-      ? NEWTAB_SELECT_MENU
-      : globalThis.LumnoCustomSelect;
-  const sectionModeSelectController = sectionModeSelectFactory &&
-      typeof sectionModeSelectFactory.createController === 'function'
-    ? sectionModeSelectFactory.createController({
+  const sectionModeSelectController =
+    NEWTAB_SELECT_MENU.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: hideTopActionTooltip,
       getViewportTopInset: getNewtabViewportTopPaddingPx
-    })
-    : null;
-  const shortcutContextMenuSelectFactory =
-    typeof NEWTAB_SELECT_MENU.createController === 'function'
-      ? NEWTAB_SELECT_MENU
-      : globalThis.LumnoCustomSelect;
-  const shortcutContextMenuSelectController = shortcutContextMenuSelectFactory &&
-      typeof shortcutContextMenuSelectFactory.createController === 'function'
-    ? shortcutContextMenuSelectFactory.createController({
+    });
+  const shortcutContextMenuSelectController =
+    NEWTAB_SELECT_MENU.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: () => {
@@ -485,15 +467,9 @@
         hideTopActionTooltip();
       },
       getViewportTopInset: getNewtabViewportTopPaddingPx
-    })
-    : null;
-  const bookmarkContextMenuSelectFactory =
-    typeof NEWTAB_SELECT_MENU.createController === 'function'
-      ? NEWTAB_SELECT_MENU
-      : globalThis.LumnoCustomSelect;
-  const bookmarkContextMenuSelectController = bookmarkContextMenuSelectFactory &&
-      typeof bookmarkContextMenuSelectFactory.createController === 'function'
-    ? bookmarkContextMenuSelectFactory.createController({
+    });
+  const bookmarkContextMenuSelectController =
+    NEWTAB_SELECT_MENU.createController({
       documentObj: document,
       windowObj: window,
       onBeforeOpen: () => {
@@ -501,8 +477,7 @@
         hideTopActionTooltip();
       },
       getViewportTopInset: getNewtabViewportTopPaddingPx
-    })
-    : null;
+    });
   const BOOKMARK_WHEEL_SWITCH_COOLDOWN_MS = 220;
   const BOOKMARK_HOVER_DELAY_FROM_RECENT_MS = 56;
   const BOOKMARK_HOVER_RECENT_TRANSFER_WINDOW_MS = 220;
@@ -1696,53 +1671,12 @@
     return channel === 'wechat' ? 'wechat' : 'discord';
   }
 
-  function setFeedbackActionLabel(action, label, tooltip) {
-    if (!action) {
-      return;
-    }
-    const actionText = tooltip || label;
-    action.setAttribute('aria-label', actionText);
-    action.setAttribute('data-tooltip', actionText);
-    action.removeAttribute('title');
-  }
-
   function clearFeedbackRefreshResultTooltipTimer() {
     if (!feedbackRefreshResultTooltipTimer) {
       return;
     }
     window.clearTimeout(feedbackRefreshResultTooltipTimer);
     feedbackRefreshResultTooltipTimer = 0;
-  }
-
-  function showFeedbackRefreshResultTooltip(action, text) {
-    clearFeedbackRefreshResultTooltipTimer();
-    showTopActionTooltip(action, text, {
-      placement: 'top',
-      checkActive: false
-    });
-    feedbackRefreshResultTooltipTimer = window.setTimeout(() => {
-      feedbackRefreshResultTooltipTimer = 0;
-      hideTopActionTooltip();
-    }, 1800);
-  }
-
-  function bindFeedbackActionTooltip(action, getLabel) {
-    if (!action || typeof getLabel !== 'function') {
-      return;
-    }
-    const showTooltip = () => {
-      if (!isFeedbackPopoverOpen()) {
-        return;
-      }
-      clearFeedbackRefreshResultTooltipTimer();
-      showTopActionTooltip(action, getLabel(), { placement: 'top' });
-    };
-    action.addEventListener('pointerenter', showTooltip);
-    action.addEventListener('pointerleave', hideTopActionTooltip);
-    action.addEventListener('mouseenter', showTooltip);
-    action.addEventListener('mouseleave', hideTopActionTooltip);
-    action.addEventListener('focus', showTooltip);
-    action.addEventListener('blur', hideTopActionTooltip);
   }
 
   function buildFreshFeedbackQrUrl(value) {
@@ -1786,59 +1720,6 @@
     });
   }
 
-  async function handleFeedbackQrRefresh(event) {
-    const refreshButton = event && event.currentTarget
-      ? event.currentTarget
-      : feedbackDetailRefreshButton;
-    if (!refreshButton || refreshButton.getAttribute('data-loading') === 'true') {
-      return;
-    }
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    clearFeedbackRefreshResultTooltipTimer();
-    hideTopActionTooltip();
-    refreshButton.disabled = true;
-    refreshButton.setAttribute('data-loading', 'true');
-    refreshButton.setAttribute('aria-busy', 'true');
-
-    let resultText = '';
-    try {
-      const links = await loadFeedbackLinks({ force: true });
-      if (!isFeedbackPopoverOpen() || !feedbackDetail || feedbackDetail.hidden) {
-        return;
-      }
-      if (getFeedbackCommunityChannel(links) !== 'wechat') {
-        updateFeedbackContactUi();
-        return;
-      }
-      const refreshedUrl = buildFreshFeedbackQrUrl(
-        (links && links.wechatQr) || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr
-      );
-      const loaded = await preloadFeedbackQrImage(refreshedUrl);
-      if (!isFeedbackPopoverOpen() || !feedbackDetail || feedbackDetail.hidden) {
-        return;
-      }
-      if (loaded && feedbackQrImage) {
-        feedbackQrImage.src = refreshedUrl;
-        resultText = t('newtab_feedback_wechat_refresh_success', 'Latest QR code loaded');
-      } else {
-        resultText = t('newtab_feedback_wechat_refresh_error', 'Could not refresh. Try again.');
-      }
-    } catch (error) {
-      resultText = t('newtab_feedback_wechat_refresh_error', 'Could not refresh. Try again.');
-    } finally {
-      if (refreshButton.isConnected) {
-        refreshButton.disabled = false;
-        refreshButton.removeAttribute('data-loading');
-        refreshButton.removeAttribute('aria-busy');
-      }
-    }
-    if (resultText && refreshButton.isConnected && isFeedbackPopoverOpen()) {
-      showFeedbackRefreshResultTooltip(refreshButton, resultText);
-    }
-  }
 
   function buildFeedbackReactModel() {
     const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
@@ -1884,24 +1765,6 @@
       return;
     }
     feedbackButton = feedbackControl.querySelector('.x-nt-feedback-button');
-    feedbackPopover = feedbackControl.querySelector('.x-nt-feedback-popover');
-    feedbackMenu = feedbackControl.querySelector('.x-nt-feedback-menu');
-    feedbackXLink = feedbackControl.querySelector('.x-nt-feedback-action[href*="x.com"]');
-    feedbackGithubIssueLink = feedbackControl.querySelector('.x-nt-feedback-action[href*="github.com"]');
-    feedbackChromeReviewLink = feedbackControl.querySelector(
-      '.x-nt-feedback-action[href*="chromewebstore.google.com"]'
-    );
-    feedbackCommunityButton = feedbackControl.querySelector(
-      '.x-nt-feedback-action-community'
-    );
-    feedbackDetail = feedbackControl.querySelector('.x-nt-feedback-detail');
-    feedbackDetailRefreshButton = feedbackControl.querySelector(
-      '.x-nt-feedback-detail-refresh'
-    );
-    feedbackDetailCloseButton = feedbackControl.querySelector(
-      '.x-nt-feedback-detail-close'
-    );
-    feedbackQrImage = feedbackControl.querySelector('.x-nt-feedback-qr-image');
   }
 
   function renderFeedbackControlWithReact() {
@@ -1915,155 +1778,7 @@
   }
 
   function updateFeedbackContactUi() {
-    if (renderFeedbackControlWithReact()) {
-      return;
-    }
-    const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
-    const channel = getFeedbackCommunityChannel(links);
-    if (feedbackXLink) {
-      const label = t('newtab_feedback_x_label', 'X');
-      const tooltip = t('newtab_feedback_x_tooltip', 'Contacting on X');
-      feedbackXLink.href = links.x || LUMNO_FEEDBACK_LINKS_FALLBACK.x;
-      setFeedbackActionLabel(feedbackXLink, label, tooltip);
-    }
-    if (feedbackGithubIssueLink) {
-      const label = t('newtab_feedback_github_issue_label', 'GitHub Issue');
-      const tooltip = t('newtab_feedback_github_issue_tooltip', 'Opening a GitHub Issue');
-      feedbackGithubIssueLink.href = links.githubIssue || LUMNO_FEEDBACK_LINKS_FALLBACK.githubIssue;
-      setFeedbackActionLabel(feedbackGithubIssueLink, label, tooltip);
-    }
-    if (feedbackChromeReviewLink) {
-      const label = t('newtab_feedback_chrome_review_label', 'Chrome rating');
-      const tooltip = t('newtab_feedback_chrome_review_tooltip', 'Rate on Chrome Web Store');
-      feedbackChromeReviewLink.href = links.chromeReview || LUMNO_FEEDBACK_LINKS_FALLBACK.chromeReview;
-      setFeedbackActionLabel(feedbackChromeReviewLink, label, tooltip);
-    }
-    if (feedbackCommunityButton) {
-      const label = channel === 'wechat'
-        ? t('newtab_feedback_wechat_label', 'WeChat')
-        : t('newtab_feedback_discord_label', 'Discord');
-      const tooltip = channel === 'wechat'
-        ? t('newtab_feedback_wechat_tooltip', 'Joining WeChat group')
-        : t('newtab_feedback_discord_tooltip', 'Joining Discord');
-      feedbackCommunityButton.innerHTML = getRiSvg(
-        channel === 'wechat' ? 'ri-wechat-fill' : 'ri-discord-fill',
-        'ri-size-16'
-      );
-      setFeedbackActionLabel(feedbackCommunityButton, label, tooltip);
-      feedbackCommunityButton.setAttribute('data-channel', channel);
-      feedbackCommunityButton.setAttribute('aria-haspopup', channel === 'wechat' ? 'true' : 'false');
-      if (channel !== 'wechat') {
-        feedbackCommunityButton.setAttribute('aria-expanded', 'false');
-      }
-    }
-    if (feedbackDetail && !feedbackDetail.hidden) {
-      if (channel === 'wechat') {
-        renderFeedbackDetail();
-      } else {
-        setFeedbackDetailOpen(false);
-      }
-    }
-  }
-
-  function renderFeedbackDetail() {
-    if (!feedbackDetail) {
-      return;
-    }
-    const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
-    const channel = getFeedbackCommunityChannel(links);
-    clearFeedbackRefreshResultTooltipTimer();
-    feedbackDetail.innerHTML = '';
-    feedbackDetail.setAttribute('data-channel', channel);
-    feedbackDetailRefreshButton = null;
-    feedbackDetailCloseButton = null;
-    feedbackQrImage = null;
-
-    const title = document.createElement('div');
-    const header = document.createElement('div');
-    const actions = document.createElement('div');
-
-    header.className = 'x-nt-feedback-detail-header';
-    actions.className = 'x-nt-feedback-detail-actions';
-    title.className = 'x-nt-feedback-detail-title';
-    title.textContent = channel === 'wechat'
-      ? t('newtab_feedback_wechat_panel_title', 'Bug reports & feature requests')
-      : t('newtab_feedback_discord_label', 'Discord');
-
-    feedbackDetailRefreshButton = document.createElement('button');
-    feedbackDetailRefreshButton.type = 'button';
-    feedbackDetailRefreshButton.className =
-      'x-nt-feedback-detail-action x-nt-feedback-detail-refresh';
-    feedbackDetailRefreshButton.setAttribute('role', 'menuitem');
-    feedbackDetailRefreshButton.innerHTML = getRiSvg('ri-refresh-line', 'ri-size-16');
-    setFeedbackActionLabel(
-      feedbackDetailRefreshButton,
-      t('newtab_feedback_wechat_refresh_tooltip', 'Refresh QR code')
-    );
-    feedbackDetailRefreshButton.addEventListener('click', handleFeedbackQrRefresh);
-    bindFeedbackActionTooltip(
-      feedbackDetailRefreshButton,
-      () => feedbackDetailRefreshButton.getAttribute('data-tooltip') ||
-        t('newtab_feedback_wechat_refresh_tooltip', 'Refresh QR code')
-    );
-
-    feedbackDetailCloseButton = document.createElement('button');
-    feedbackDetailCloseButton.type = 'button';
-    feedbackDetailCloseButton.className =
-      'x-nt-feedback-detail-action x-nt-feedback-detail-close';
-    feedbackDetailCloseButton.setAttribute('role', 'menuitem');
-    feedbackDetailCloseButton.innerHTML = getRiSvg('ri-close-line', 'ri-size-16');
-    setFeedbackActionLabel(
-      feedbackDetailCloseButton,
-      t('newtab_feedback_wechat_close_tooltip', 'Close')
-    );
-    feedbackDetailCloseButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      clearFeedbackRefreshResultTooltipTimer();
-      hideTopActionTooltip();
-      closeFeedbackPopover({ restoreFocus: true });
-    });
-    bindFeedbackActionTooltip(
-      feedbackDetailCloseButton,
-      () => feedbackDetailCloseButton.getAttribute('data-tooltip') ||
-        t('newtab_feedback_wechat_close_tooltip', 'Close')
-    );
-
-    header.appendChild(title);
-    actions.appendChild(feedbackDetailRefreshButton);
-    actions.appendChild(feedbackDetailCloseButton);
-    header.appendChild(actions);
-    feedbackDetail.appendChild(header);
-
-    if (channel === 'wechat') {
-      const image = document.createElement('img');
-      image.className = 'x-nt-feedback-qr-image';
-      image.width = 1080;
-      image.height = 1596;
-      image.src = links.wechatQr || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr;
-      image.alt = t('newtab_feedback_wechat_qr_alt', 'Lumno WeChat group QR code');
-      image.loading = 'lazy';
-      feedbackQrImage = image;
-      feedbackDetail.appendChild(image);
-    }
-  }
-
-  function setFeedbackDetailOpen(open) {
-    if (!feedbackDetail || !feedbackCommunityButton) {
-      return;
-    }
-    if (feedbackControl) {
-      feedbackControl.setAttribute('data-detail-open', open ? 'true' : 'false');
-    }
-    if (feedbackPopover) {
-      feedbackPopover.setAttribute('data-detail-open', open ? 'true' : 'false');
-    }
-    feedbackDetail.hidden = !open;
-    feedbackCommunityButton.setAttribute('data-active', open ? 'true' : 'false');
-    feedbackCommunityButton.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) {
-      renderFeedbackDetail();
-    }
+    renderFeedbackControlWithReact();
   }
 
   function openFeedbackExternalUrl(url, disposition) {
@@ -2075,27 +1790,11 @@
   }
 
   function updateFeedbackLanguageStrings() {
-    if (renderFeedbackControlWithReact()) {
-      return;
-    }
-    if (feedbackButton) {
-      const label = t('newtab_feedback_button_aria', 'Send feedback');
-      feedbackButton.setAttribute('aria-label', label);
-      feedbackButton.removeAttribute('title');
-      feedbackButton.setAttribute('aria-expanded', isFeedbackPopoverOpen() ? 'true' : 'false');
-    }
-    if (feedbackPopover) {
-      feedbackPopover.setAttribute('aria-label', t('newtab_feedback_menu_aria', 'Feedback channels'));
-    }
-    updateFeedbackContactUi();
+    renderFeedbackControlWithReact();
   }
 
   function isFeedbackPopoverOpen() {
-    if (feedbackReactController &&
-        typeof feedbackReactController.isOpen === 'function') {
-      return feedbackReactController.isOpen();
-    }
-    return Boolean(feedbackControl && feedbackControl.getAttribute('data-menu-open') === 'true');
+    return feedbackReactController.isOpen();
   }
 
   function closeFeedbackPopover(options) {
@@ -2103,96 +1802,23 @@
   }
 
   function setFeedbackPopoverOpen(open, options) {
-    if (feedbackReactController &&
-        typeof feedbackReactController.setOpen === 'function') {
-      if (!open) {
-        clearFeedbackRefreshResultTooltipTimer();
-        hideTopActionTooltip();
-      }
-      if (open) {
-        feedbackReactController.setOpen(true);
-      } else if (typeof feedbackReactController.close === 'function') {
-        feedbackReactController.close(options);
-      }
-      return;
-    }
-    if (!feedbackControl || !feedbackButton || !feedbackPopover) {
-      return;
-    }
     if (!open) {
       clearFeedbackRefreshResultTooltipTimer();
       hideTopActionTooltip();
     }
-    if (feedbackPopoverCloseTimer) {
-      window.clearTimeout(feedbackPopoverCloseTimer);
-      feedbackPopoverCloseTimer = 0;
-    }
-    feedbackControl.setAttribute('data-menu-open', open ? 'true' : 'false');
-    feedbackButton.setAttribute('data-open', open ? 'true' : 'false');
-    feedbackButton.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open) {
-      feedbackPopover.hidden = false;
-      setFeedbackDetailOpen(false);
-      updateFeedbackContactUi();
-      loadFeedbackLinks({ force: true }).then(() => {
-        updateFeedbackContactUi();
-      });
-      return;
+      feedbackReactController.setOpen(true);
+    } else {
+      feedbackReactController.close(options);
     }
-    setFeedbackDetailOpen(false);
-    feedbackPopoverCloseTimer = window.setTimeout(() => {
-      if (!isFeedbackPopoverOpen() && feedbackPopover) {
-        feedbackPopover.hidden = true;
-      }
-      feedbackPopoverCloseTimer = 0;
-    }, 160);
-    if (options && options.restoreFocus && feedbackButton) {
-      try {
-        feedbackButton.focus({ preventScroll: true });
-      } catch (error) {
-        feedbackButton.focus();
-      }
-    }
-  }
-
-  function toggleFeedbackPopover() {
-    setFeedbackPopoverOpen(!isFeedbackPopoverOpen());
-  }
-
-  async function handleFeedbackCommunityClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    hideTopActionTooltip();
-
-    const currentLinks = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
-    if (getFeedbackCommunityChannel(currentLinks) === 'wechat') {
-      if (isMiddleClick(event)) {
-        return;
-      }
-      setFeedbackDetailOpen(feedbackDetail ? feedbackDetail.hidden : true);
-      return;
-    }
-
-    const disposition = getOpenDisposition(event, 'newTab');
-
-    const links = await loadFeedbackLinks({ force: false });
-    updateFeedbackContactUi();
-    if (getFeedbackCommunityChannel(links) === 'wechat') {
-      setFeedbackDetailOpen(true);
-      return;
-    }
-    closeFeedbackPopover();
-    openFeedbackExternalUrl(
-      (links && links.discord) || LUMNO_FEEDBACK_LINKS_FALLBACK.discord,
-      disposition
-    );
   }
 
   function createFeedbackControls() {
-    if (typeof NEWTAB_FEEDBACK_CONTROL.createFeedbackControlController === 'function') {
-      feedbackControl = document.createElement('div');
-      feedbackReactController =
-        NEWTAB_FEEDBACK_CONTROL.createFeedbackControlController(feedbackControl, {
+    feedbackControl = document.createElement('div');
+    feedbackReactController =
+      NEWTAB_FEEDBACK_CONTROL.createFeedbackControlController(
+        feedbackControl,
+        {
           onHideTooltip() {
             clearFeedbackRefreshResultTooltipTimer();
             hideTopActionTooltip();
@@ -2215,7 +1841,8 @@
                 return {};
               }
               const refreshedUrl = buildFreshFeedbackQrUrl(
-                feedbackLinks.wechatQr || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr
+                feedbackLinks.wechatQr ||
+                  LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr
               );
               const loaded = await preloadFeedbackQrImage(refreshedUrl);
               return loaded
@@ -2247,130 +1874,9 @@
               placement: 'top'
             });
           }
-        });
-      renderFeedbackControlWithReact();
-      return;
-    }
-    feedbackControl = document.createElement('div');
-    feedbackControl.className = 'x-nt-feedback-control';
-    feedbackControl.setAttribute('data-menu-open', 'false');
-    feedbackControl.setAttribute('data-detail-open', 'false');
-
-    feedbackButton = document.createElement('button');
-    feedbackButton.type = 'button';
-    feedbackButton.className = 'x-nt-feedback-button';
-    feedbackButton.setAttribute('aria-haspopup', 'menu');
-    feedbackButton.setAttribute('aria-expanded', 'false');
-    feedbackButton.setAttribute('aria-controls', '_x_extension_newtab_feedback_popover_2026_unique_');
-    feedbackButton.innerHTML = getRiSvg('ri-message-3-line', 'ri-size-20');
-
-    feedbackButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      hideTopActionTooltip();
-      toggleFeedbackPopover();
-    });
-    const showFeedbackButtonTooltip = () => {
-      if (isFeedbackPopoverOpen()) {
-        return;
-      }
-      showTopActionTooltip(feedbackButton, t('newtab_feedback_button_aria', 'Send feedback'), {
-        placement: 'top'
-      });
-    };
-    feedbackButton.addEventListener('mouseenter', showFeedbackButtonTooltip);
-    feedbackButton.addEventListener('mouseleave', hideTopActionTooltip);
-    feedbackButton.addEventListener('focus', showFeedbackButtonTooltip);
-    feedbackButton.addEventListener('blur', hideTopActionTooltip);
-
-    feedbackPopover = document.createElement('div');
-    feedbackPopover.className = 'x-nt-feedback-popover';
-    feedbackPopover.id = '_x_extension_newtab_feedback_popover_2026_unique_';
-    feedbackPopover.hidden = true;
-    feedbackPopover.setAttribute('role', 'menu');
-
-    feedbackMenu = document.createElement('div');
-    feedbackMenu.className = 'x-nt-feedback-menu';
-
-    feedbackXLink = document.createElement('a');
-    feedbackXLink.className = 'x-nt-feedback-action';
-    feedbackXLink.target = '_blank';
-    feedbackXLink.rel = 'noreferrer noopener';
-    feedbackXLink.setAttribute('role', 'menuitem');
-    feedbackXLink.innerHTML = getRiSvg('ri-twitter-x-line', 'ri-size-16');
-    feedbackXLink.addEventListener('click', () => {
-      hideTopActionTooltip();
-      closeFeedbackPopover();
-    });
-    bindFeedbackActionTooltip(
-      feedbackXLink,
-      () => feedbackXLink.getAttribute('data-tooltip') || t('newtab_feedback_x_tooltip', 'Contacting on X')
-    );
-
-    feedbackGithubIssueLink = document.createElement('a');
-    feedbackGithubIssueLink.className = 'x-nt-feedback-action';
-    feedbackGithubIssueLink.target = '_blank';
-    feedbackGithubIssueLink.rel = 'noreferrer noopener';
-    feedbackGithubIssueLink.setAttribute('role', 'menuitem');
-    feedbackGithubIssueLink.innerHTML = getRiSvg('ri-github-line', 'ri-size-16');
-    feedbackGithubIssueLink.addEventListener('click', () => {
-      hideTopActionTooltip();
-      closeFeedbackPopover();
-    });
-    bindFeedbackActionTooltip(
-      feedbackGithubIssueLink,
-      () => feedbackGithubIssueLink.getAttribute('data-tooltip') ||
-        t('newtab_feedback_github_issue_tooltip', 'Opening a GitHub Issue')
-    );
-
-    feedbackChromeReviewLink = document.createElement('a');
-    feedbackChromeReviewLink.className = 'x-nt-feedback-action';
-    feedbackChromeReviewLink.target = '_blank';
-    feedbackChromeReviewLink.rel = 'noreferrer noopener';
-    feedbackChromeReviewLink.setAttribute('role', 'menuitem');
-    feedbackChromeReviewLink.innerHTML = getRiSvg('ri-star-line', 'ri-size-16');
-    feedbackChromeReviewLink.addEventListener('click', () => {
-      hideTopActionTooltip();
-      closeFeedbackPopover();
-    });
-    bindFeedbackActionTooltip(
-      feedbackChromeReviewLink,
-      () => feedbackChromeReviewLink.getAttribute('data-tooltip') ||
-        t('newtab_feedback_chrome_review_tooltip', 'Rate on Chrome Web Store')
-    );
-
-    feedbackCommunityButton = document.createElement('button');
-    feedbackCommunityButton.type = 'button';
-    feedbackCommunityButton.className = 'x-nt-feedback-action x-nt-feedback-action-community';
-    feedbackCommunityButton.setAttribute('role', 'menuitem');
-    feedbackCommunityButton.setAttribute('aria-haspopup', 'false');
-    feedbackCommunityButton.setAttribute('aria-expanded', 'false');
-    feedbackCommunityButton.addEventListener('click', handleFeedbackCommunityClick);
-    feedbackCommunityButton.addEventListener('auxclick', (event) => {
-      if (!isMiddleClick(event)) {
-        return;
-      }
-      handleFeedbackCommunityClick(event);
-    });
-    bindFeedbackActionTooltip(
-      feedbackCommunityButton,
-      () => feedbackCommunityButton.getAttribute('data-tooltip') ||
-        t('newtab_feedback_discord_tooltip', 'Joining Discord')
-    );
-
-    feedbackDetail = document.createElement('div');
-    feedbackDetail.className = 'x-nt-feedback-detail';
-    feedbackDetail.hidden = true;
-
-    feedbackMenu.appendChild(feedbackXLink);
-    feedbackMenu.appendChild(feedbackGithubIssueLink);
-    feedbackMenu.appendChild(feedbackChromeReviewLink);
-    feedbackMenu.appendChild(feedbackCommunityButton);
-    feedbackPopover.appendChild(feedbackMenu);
-    feedbackPopover.appendChild(feedbackDetail);
-    feedbackControl.appendChild(feedbackButton);
-    feedbackControl.appendChild(feedbackPopover);
-    updateFeedbackLanguageStrings();
+        }
+      );
+    renderFeedbackControlWithReact();
   }
 
   function createWallpaperAdaptiveToneTargets() {
@@ -3667,47 +3173,24 @@
   }
 
   function updateBookmarkBreadcrumb() {
-    if (!bookmarkBreadcrumb) {
+    if (!bookmarkBreadcrumbController) {
       return;
     }
     const path = Array.isArray(bookmarkFolderPath) ? bookmarkFolderPath : [];
-    bookmarkBreadcrumb.innerHTML = '';
     if (path.length <= 1) {
-      bookmarkBreadcrumb.style.setProperty('display', 'none');
+      bookmarkBreadcrumbController.render({ items: [] });
       updateBookmarkHeadingRootLinkState(false);
       return;
     }
     updateBookmarkHeadingRootLinkState(true);
-    const pathWithoutRoot = path.slice(1);
-    bookmarkBreadcrumb.style.setProperty('display', 'inline-flex');
-    pathWithoutRoot.forEach((crumb, index) => {
-      const isCurrent = index === (pathWithoutRoot.length - 1);
-      const separator = document.createElement('span');
-      separator.className = 'x-nt-bookmarks-crumb-sep';
-      separator.textContent = '/';
-      bookmarkBreadcrumb.appendChild(separator);
-      const crumbButton = document.createElement('button');
-      crumbButton.type = 'button';
-      crumbButton.className = 'x-nt-bookmarks-crumb';
+    bookmarkBreadcrumbController.render({
+      items: path.slice(1).map((crumb) => {
       const title = String(crumb && crumb.title ? crumb.title : '').trim() || t('bookmarks_heading', '书签');
-      crumbButton.textContent = title;
-      crumbButton.title = title;
-      crumbButton.setAttribute('aria-label', title);
-      crumbButton.setAttribute('data-bookmark-drop-folder-id', String(crumb && crumb.id ? crumb.id : ''));
-      crumbButton.setAttribute('data-bookmark-drop-folder-title', title);
-      if (isCurrent) {
-        crumbButton.setAttribute('aria-current', 'page');
-        crumbButton.disabled = true;
-      } else {
-        crumbButton.addEventListener('click', () => {
-          const targetId = crumb && crumb.id ? String(crumb.id) : '';
-          if (!targetId) {
-            return;
-          }
-          navigateBookmarkFolder(targetId);
-        });
-      }
-      bookmarkBreadcrumb.appendChild(crumbButton);
+        return {
+          id: String(crumb && crumb.id ? crumb.id : ''),
+          title
+        };
+      })
     });
   }
 
@@ -7794,93 +7277,6 @@
     finishShortcutDrag(event, { cancel: true });
   }
 
-  function renderShortcutTile(shortcut) {
-    const title = getShortcutTitle(shortcut);
-    const shortcutHost = shortcut && shortcut.host ? shortcut.host : getHostFromUrl(shortcut && shortcut.url);
-    const localIconDataUrl = getShortcutIconDataUrl(shortcut.id);
-    const themeSuggestion = {
-      type: 'shortcut',
-      url: shortcut.url,
-      title,
-      customIconDataUrl: localIconDataUrl
-    };
-    const immediateTheme = getImmediateThemeForSuggestion(themeSuggestion);
-    const tile = document.createElement('button');
-    tile.type = 'button';
-    tile.className = 'x-nt-shortcut-tile';
-    tile.draggable = false;
-    tile.setAttribute('data-shortcut-id', shortcut.id || shortcut.url || '');
-    tile.setAttribute('data-shortcut-url', shortcut.url || '');
-    tile.setAttribute('data-shortcut-title', title);
-    tile.setAttribute('data-shortcut-draggable', 'true');
-    tile.setAttribute('data-tooltip', title);
-    tile.setAttribute('aria-label', formatMessage('open_prefix', '打开 {title}', { title }));
-    tile._xHost = shortcutHost;
-    tile._xTheme = immediateTheme;
-    applyShortcutTileTheme(tile, immediateTheme, shortcutHost);
-    queueThemeForTarget(tile, themeSuggestion, (theme) => {
-      if (!tile.isConnected) {
-        return;
-      }
-      tile._xTheme = theme || tile._xTheme;
-      applyShortcutTileTheme(tile, theme, shortcutHost);
-    }, { priority: 0 });
-    const activateShortcut = (event) => {
-      if (tile._xShortcutSuppressClick) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      hideShortcutTooltip();
-      openShortcutUrl(shortcut, event);
-    };
-    tile.addEventListener('click', activateShortcut);
-    tile.addEventListener('auxclick', (event) => {
-      if (!isMiddleClick(event)) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      openShortcutUrl(shortcut, event);
-    });
-    tile.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
-      event.preventDefault();
-      activateShortcut(event);
-    });
-    tile.addEventListener('contextmenu', handleShortcutContextMenu);
-    tile.addEventListener('dragstart', handleShortcutNativeDragStart);
-
-    const icon = document.createElement('span');
-    icon.className = 'x-nt-shortcut-icon';
-    const faviconMask = document.createElement('span');
-    faviconMask.className = 'x-nt-shortcut-favicon-mask';
-    const img = document.createElement('img');
-    img.className = 'x-nt-shortcut-favicon';
-    img.alt = '';
-    img.loading = 'lazy';
-    img.draggable = false;
-    img.setAttribute('draggable', 'false');
-    if (localIconDataUrl) {
-      tile.setAttribute('data-shortcut-custom-icon', 'true');
-      img.src = localIconDataUrl;
-    } else {
-      attachFaviconWithFallbacks(img, shortcut.url, shortcut.host, {
-        primaryUrl: getBrowserPageFaviconUrl(shortcut.url)
-      });
-    }
-    faviconMask.appendChild(img);
-    icon.appendChild(faviconMask);
-
-    tile.appendChild(icon);
-    shortcutTiles.push(tile);
-    bindShortcutTooltip(tile, () => tile.getAttribute('data-shortcut-title') || title, {
-      maxWidth: 360
-    });
-    return tile;
-  }
 
   function renderShortcuts() {
     if (!shortcutGrid || !shortcutsView) {
@@ -8129,25 +7525,6 @@
     return persistShortcuts(nextShortcuts, t('newtab_shortcuts_removed', 'Shortcut removed'));
   }
 
-  function createShortcutAddButton() {
-    const addShortcutButton = document.createElement('button');
-    addShortcutButton.type = 'button';
-    addShortcutButton.className = 'x-nt-shortcut-tile x-nt-shortcut-tile--add';
-    addShortcutButton.innerHTML = `
-      <span class="x-nt-shortcut-icon x-nt-shortcut-icon--add">${getRiSvg('ri-add-line', 'ri-size-28')}</span>
-    `;
-    bindShortcutTooltip(addShortcutButton, () =>
-      addShortcutButton.getAttribute('data-tooltip') || t('newtab_shortcuts_add', 'Add shortcut'), {
-        maxWidth: 260
-      });
-    addShortcutButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      hideShortcutTooltip();
-      openShortcutDialog({ sourceElement: event.currentTarget });
-    });
-    return addShortcutButton;
-  }
 
   function createShortcutsSection() {
     shortcutSection = pageStructureRuntime.shortcut.section;
@@ -8158,8 +7535,6 @@
     shortcutsView = NEWTAB_SHORTCUTS_VIEW.createShortcutsView({
       grid: shortcutGrid,
       tiles: shortcutTiles,
-      renderTile: renderShortcutTile,
-      createAddButton: createShortcutAddButton,
       getShortcutTitle,
       getHostFromUrl,
       getShortcutIconDataUrl,
@@ -8223,7 +7598,12 @@
   bookmarkHeading = pageStructureRuntime.bookmark.heading;
   updateBookmarkHeading();
   bookmarkBreadcrumb = pageStructureRuntime.bookmark.breadcrumb;
-  bookmarkBreadcrumb.style.setProperty('display', 'none');
+  bookmarkBreadcrumbController =
+    NEWTAB_BOOKMARK_BREADCRUMB.createBookmarkBreadcrumbController(
+      bookmarkBreadcrumb,
+      { onNavigate: navigateBookmarkFolder }
+    );
+  bookmarkBreadcrumbController.render({ items: [] });
   bookmarkModeMenu = createSectionModeSelect({
     id: '_x_extension_newtab_bookmark_mode_2026_unique_',
     menuTitleKey: 'display_mode_title',
@@ -10627,7 +10007,6 @@
         bookmarkRootTotalCount = bookmarkAllItems.length;
         bookmarkRootVisibleCount = Math.min(getBookmarkLimit(), bookmarkAllItems.length);
       }
-      bookmarksView.syncCardElementCache(bookmarkAllItems);
       const pageCount = getBookmarkPageCount();
       if (bookmarkCurrentPage > (pageCount - 1)) {
         bookmarkCurrentPage = pageCount - 1;
@@ -10910,10 +10289,12 @@
     button.setAttribute('aria-label', label);
     button.setAttribute('data-tooltip', label);
     button.removeAttribute('title');
-    button.innerHTML = getRiSvg(
-      isPinned ? 'ri-pushpin-fill' : 'ri-pushpin-line',
-      'ri-size-16'
-    );
+    const icon = button.querySelector('[data-recent-pin-icon]');
+    if (icon) {
+      icon.className = `ri-icon ri-size-16 ${
+        isPinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'
+      }`;
+    }
   }
 
   function updateRecentDismissButton(button, item) {
@@ -10925,7 +10306,10 @@
     button.setAttribute('aria-label', label);
     button.setAttribute('data-tooltip', label);
     button.removeAttribute('title');
-    button.innerHTML = getRiSvg('ri-subtract-line', 'ri-size-16');
+    const icon = button.querySelector('[data-recent-dismiss-icon]');
+    if (icon) {
+      icon.className = 'ri-icon ri-size-16 ri-subtract-line';
+    }
     button.disabled = !enabled;
     button.tabIndex = enabled ? 0 : -1;
     button.setAttribute('aria-hidden', enabled ? 'false' : 'true');
@@ -14292,113 +13676,26 @@
   const shouldAnimateWordmarkEntry = !window.matchMedia ||
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   wordmarkContainer = document.createElement('div');
-  if (typeof NEWTAB_WORDMARK.createWordmarkController === 'function') {
-    wordmarkController = NEWTAB_WORDMARK.createWordmarkController(
-      wordmarkContainer,
-      {
-        onActivate(disposition) {
-          openWordmarkUrl(disposition);
-        },
-        onEntryAnimationComplete(animationName) {
-          if (!animationName || animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
-            finishWordmarkEntryAnimation();
-          }
-        }
-      }
-    );
-    wordmarkController.render({
-      animateEntry: shouldAnimateWordmarkEntry,
-      ariaLabel: 'Lumno Chrome Web Store',
-      imageSrc: '../../assets/images/lumno-wordmark.svg'
-    });
-    wordmarkImageEl = wordmarkController.getImage();
-    wordmarkSolidEl = wordmarkController.getSolid();
-  } else {
-    wordmarkContainer.id = '_x_extension_newtab_wordmark_2026_unique_';
-    wordmarkContainer.setAttribute('aria-hidden', 'true');
-    wordmarkContainer.style.cssText = `
-      all: unset;
-      width: 90vw;
-      max-width: var(--x-nt-search-max-width, 720px);
-      max-height: 74px;
-      min-height: 0;
-      margin: 0 0 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-sizing: border-box;
-      position: relative;
-      z-index: 3;
-      overflow: hidden;
-      pointer-events: auto;
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-      transition: ${WORDMARK_VISIBILITY_TRANSITION_CSS};
-      user-select: none;
-    `;
-    const wordmarkButton = document.createElement('button');
-    wordmarkButton.type = 'button';
-    wordmarkButton.setAttribute('aria-label', 'Lumno Chrome Web Store');
-    wordmarkButton.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      cursor: pointer;
-      line-height: 0;
-      pointer-events: auto;
-    `;
-    wordmarkButton.addEventListener('click', openWordmarkUrl);
-    wordmarkButton.addEventListener('auxclick', (event) => {
-      if (!isMiddleClick(event)) {
-        return;
-      }
-      openWordmarkUrl(event);
-    });
-    wordmarkContainer.setAttribute('data-enter', shouldAnimateWordmarkEntry ? 'run' : 'done');
-    if (shouldAnimateWordmarkEntry) {
-      wordmarkButton.addEventListener('animationend', (event) => {
-        if (!event || event.animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
+  wordmarkController = NEWTAB_WORDMARK.createWordmarkController(
+    wordmarkContainer,
+    {
+      onActivate(disposition) {
+        openWordmarkUrl(disposition);
+      },
+      onEntryAnimationComplete(animationName) {
+        if (!animationName || animationName === WORDMARK_ENTRY_ANIMATION_NAME) {
           finishWordmarkEntryAnimation();
         }
-      });
-      wordmarkButton.addEventListener('animationcancel', finishWordmarkEntryAnimation);
+      }
     }
-    wordmarkSolidEl = document.createElement('span');
-    wordmarkSolidEl.setAttribute('aria-hidden', 'true');
-    wordmarkSolidEl.style.cssText = `
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      opacity: 0;
-      background: var(--x-nt-wordmark-solid-fill, rgb(31 41 55));
-      -webkit-mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
-      mask: url("../../assets/images/lumno-wordmark-mask.svg") center / contain no-repeat;
-      contain: paint;
-      transition: background-color 180ms ease, opacity 180ms ease;
-    `;
-    wordmarkImageEl = document.createElement('img');
-    wordmarkImageEl.src = '../../assets/images/lumno-wordmark.svg';
-    wordmarkImageEl.alt = '';
-    wordmarkImageEl.draggable = false;
-    wordmarkImageEl.style.cssText = `
-      width: 180px;
-      max-width: 52%;
-      height: auto;
-      display: block;
-      position: relative;
-      z-index: 1;
-      object-fit: contain;
-      opacity: 0.82;
-      filter: none;
-      transform: translateY(0);
-      transition: opacity 180ms ease;
-    `;
-    wordmarkButton.appendChild(wordmarkSolidEl);
-    wordmarkButton.appendChild(wordmarkImageEl);
-    wordmarkContainer.appendChild(wordmarkButton);
-  }
+  );
+  wordmarkController.render({
+    animateEntry: shouldAnimateWordmarkEntry,
+    ariaLabel: 'Lumno Chrome Web Store',
+    imageSrc: '../../assets/images/lumno-wordmark.svg'
+  });
+  wordmarkImageEl = wordmarkController.getImage();
+  wordmarkSolidEl = wordmarkController.getSolid();
   applyNewtabWordmarkVisibility();
   applyWordmarkThemeAppearance();
   updateNoticeController = typeof UPDATE_NOTICE.createUpdateNotice === 'function'

@@ -5,7 +5,7 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
-const suggestionsViewJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/suggestions-view.js'), 'utf8');
+const suggestionsViewJs = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/suggestions.tsx'), 'utf8');
 
 function assertMatches(source, pattern, message) {
   assert.ok(pattern.test(source), message);
@@ -67,7 +67,7 @@ assertMatches(
 
 assertMatches(
   suggestionsViewJs,
-  /suggestion\.type === 'modeSwitch' \|\| suggestion\.type === 'zenSwitch'/,
+  /type === 'modeSwitch' \|\| type === 'zenSwitch'/,
   'Zen suggestions should use the same branded command icon treatment as mode suggestions'
 );
 

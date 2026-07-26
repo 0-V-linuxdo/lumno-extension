@@ -16,20 +16,12 @@ export interface ToastController {
   destroy(): void;
 }
 
-export interface LegacyToastApi {
-  createToastController?: (
-    toastElement: HTMLElement | null,
-    options?: ToastOptions
-  ) => ToastController;
-}
-
 export function createToastController(
   toastElement: HTMLElement | null,
-  options: ToastOptions = {},
-  legacyApi?: LegacyToastApi | null
+  options: ToastOptions = {}
 ): ToastController {
   if (!toastElement) {
-    return legacyApi?.createToastController?.(toastElement, options) || {
+    return {
       show() {},
       hide() {},
       destroy() {}
@@ -107,14 +99,14 @@ export function createToastController(
   });
 }
 
-export function createToastApi(legacyApi?: LegacyToastApi | null) {
+export function createToastApi() {
   return Object.freeze({
     implementation: 'react',
     createToastController(
       toastElement: HTMLElement | null,
       options?: ToastOptions
     ) {
-      return createToastController(toastElement, options, legacyApi);
+      return createToastController(toastElement, options);
     }
   });
 }

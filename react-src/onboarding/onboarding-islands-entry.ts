@@ -5,6 +5,8 @@ import { createCursorLayerApi } from './cursor-layer';
 import { createInteractionsApi } from './interactions';
 import { createPageStripApi } from './page-strip';
 import { createVisualSurfaceApi } from './visual-surface';
+import { createInfoTooltipContentApi } from './info-tooltip-content';
+import { createTooltipViewApi } from '../shared/tooltip-view';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoOnboardingActions?: ReturnType<typeof createActionButtonsApi>;
@@ -21,8 +23,11 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOnboardingPageStripReact?: ReturnType<typeof createPageStripApi>;
   LumnoOnboardingVisualSurface?: ReturnType<typeof createVisualSurfaceApi>;
   LumnoOnboardingVisualSurfaceReact?: ReturnType<typeof createVisualSurfaceApi>;
+  LumnoOnboardingInfoTooltipContent?: ReturnType<typeof createInfoTooltipContentApi>;
+  LumnoOnboardingInfoTooltipContentReact?: ReturnType<typeof createInfoTooltipContentApi>;
+  LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
+  LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
   LumnoOnboardingReactBootstrap?: {
-    allowReactUpgrade: boolean;
     reactReady: boolean;
   };
   LumnoOnboardingReactIslands?: {
@@ -33,12 +38,13 @@ const runtime = globalThis as typeof globalThis & {
     interactions: ReturnType<typeof createInteractionsApi>;
     pageStrip: ReturnType<typeof createPageStripApi>;
     visualSurface: ReturnType<typeof createVisualSurfaceApi>;
+    infoTooltipContent: ReturnType<typeof createInfoTooltipContentApi>;
   };
 };
 
 const bootstrapState = runtime.LumnoOnboardingReactBootstrap;
 
-if (!bootstrapState || bootstrapState.allowReactUpgrade) {
+if (!bootstrapState || !bootstrapState.reactReady) {
   const actionsApi = createActionButtonsApi();
   const bodyCopyApi = createBodyCopyApi();
   const copyHeadingApi = createCopyHeadingApi();
@@ -46,6 +52,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const interactionsApi = createInteractionsApi();
   const pageStripApi = createPageStripApi();
   const visualSurfaceApi = createVisualSurfaceApi();
+  const infoTooltipContentApi = createInfoTooltipContentApi();
+  const tooltipViewApi = createTooltipViewApi();
 
   runtime.LumnoOnboardingActionsReact = actionsApi;
   runtime.LumnoOnboardingActions = actionsApi;
@@ -61,6 +69,10 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOnboardingPageStrip = pageStripApi;
   runtime.LumnoOnboardingVisualSurfaceReact = visualSurfaceApi;
   runtime.LumnoOnboardingVisualSurface = visualSurfaceApi;
+  runtime.LumnoOnboardingInfoTooltipContentReact = infoTooltipContentApi;
+  runtime.LumnoOnboardingInfoTooltipContent = infoTooltipContentApi;
+  runtime.LumnoTooltipViewReact = tooltipViewApi;
+  runtime.LumnoTooltipView = tooltipViewApi;
   runtime.LumnoOnboardingReactIslands = Object.freeze({
     actions: actionsApi,
     bodyCopy: bodyCopyApi,
@@ -68,7 +80,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     cursorLayer: cursorLayerApi,
     interactions: interactionsApi,
     pageStrip: pageStripApi,
-    visualSurface: visualSurfaceApi
+    visualSurface: visualSurfaceApi,
+    infoTooltipContent: infoTooltipContentApi
   });
 
   if (bootstrapState) {

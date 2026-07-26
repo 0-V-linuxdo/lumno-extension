@@ -1,32 +1,25 @@
-import {
-  createBookmarksViewApi,
-  type LegacyBookmarksApi
-} from './bookmarks';
+import { createBookmarksViewApi } from './bookmarks';
 import { createDockApi } from './dock';
 import { createFeedbackControlApi } from './feedback';
-import { createRecentSitesViewApi, type LegacyRecentSitesApi } from './recent-sites';
+import { createRecentSitesViewApi } from './recent-sites';
 import { createSelectMenuApi } from './select-menu';
 import { createShortcutDialogApi } from './shortcut-dialog';
-import {
-  createShortcutsViewApi,
-  type LegacyShortcutsApi
-} from './shortcuts';
-import {
-  createSuggestionsViewApi,
-  type LegacySuggestionsApi
-} from './suggestions';
-import { createToastApi, type LegacyToastApi } from './toast';
+import { createShortcutsViewApi } from './shortcuts';
+import { createSuggestionsViewApi } from './suggestions';
+import { createToastApi } from './toast';
 import { createWordmarkApi } from './wordmark';
 import { createPageStructureApi } from './page-structure';
 import { createBookmarksTopbarApi } from './bookmarks-topbar';
 import { createPageNoticeApi } from './page-notice';
 import { createBookmarkCascadeViewApi } from './bookmark-cascade-view';
 import { createWallpaperViewApi } from './wallpaper-view';
+import { createBookmarkBreadcrumbApi } from './bookmark-breadcrumb';
 import { createSearchInputApi } from '../shared/search-input';
+import { createFeatureHintViewApi } from '../shared/feature-hint-view';
+import { createTooltipViewApi } from '../shared/tooltip-view';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoNewtabReactBootstrap?: {
-    allowReactUpgrade: boolean;
     reactReady: boolean;
   };
   LumnoNewtabReactIslands?: {
@@ -46,8 +39,9 @@ const runtime = globalThis as typeof globalThis & {
     pageNotice: ReturnType<typeof createPageNoticeApi>;
     bookmarkCascadeView: ReturnType<typeof createBookmarkCascadeViewApi>;
     wallpaperView: ReturnType<typeof createWallpaperViewApi>;
+    bookmarkBreadcrumb: ReturnType<typeof createBookmarkBreadcrumbApi>;
   };
-  LumnoNewtabBookmarksView?: LegacyBookmarksApi;
+  LumnoNewtabBookmarksView?: ReturnType<typeof createBookmarksViewApi>;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
   LumnoNewtabFeedbackControl?: ReturnType<typeof createFeedbackControlApi>;
   LumnoNewtabFeedbackControlReact?: ReturnType<typeof createFeedbackControlApi>;
@@ -55,15 +49,15 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabDockReact?: ReturnType<typeof createDockApi>;
   LumnoNewtabShortcutDialog?: ReturnType<typeof createShortcutDialogApi>;
   LumnoNewtabShortcutDialogReact?: ReturnType<typeof createShortcutDialogApi>;
-  LumnoNewtabShortcutsView?: LegacyShortcutsApi;
+  LumnoNewtabShortcutsView?: ReturnType<typeof createShortcutsViewApi>;
   LumnoNewtabShortcutsViewReact?: ReturnType<typeof createShortcutsViewApi>;
-  LumnoNewtabRecentSitesView?: LegacyRecentSitesApi;
+  LumnoNewtabRecentSitesView?: ReturnType<typeof createRecentSitesViewApi>;
   LumnoNewtabRecentSitesViewReact?: ReturnType<typeof createRecentSitesViewApi>;
   LumnoNewtabSelectMenu?: ReturnType<typeof createSelectMenuApi>;
   LumnoNewtabSelectMenuReact?: ReturnType<typeof createSelectMenuApi>;
-  LumnoNewtabSuggestionsView?: LegacySuggestionsApi;
+  LumnoNewtabSuggestionsView?: ReturnType<typeof createSuggestionsViewApi>;
   LumnoNewtabSuggestionsViewReact?: ReturnType<typeof createSuggestionsViewApi>;
-  LumnoNewtabToast?: LegacyToastApi;
+  LumnoNewtabToast?: ReturnType<typeof createToastApi>;
   LumnoNewtabToastReact?: ReturnType<typeof createToastApi>;
   LumnoNewtabWordmark?: ReturnType<typeof createWordmarkApi>;
   LumnoNewtabWordmarkReact?: ReturnType<typeof createWordmarkApi>;
@@ -81,8 +75,14 @@ const runtime = globalThis as typeof globalThis & {
   >;
   LumnoNewtabWallpaperView?: ReturnType<typeof createWallpaperViewApi>;
   LumnoNewtabWallpaperViewReact?: ReturnType<typeof createWallpaperViewApi>;
+  LumnoNewtabBookmarkBreadcrumb?: ReturnType<typeof createBookmarkBreadcrumbApi>;
+  LumnoNewtabBookmarkBreadcrumbReact?: ReturnType<typeof createBookmarkBreadcrumbApi>;
   LumnoSearchInputUI?: ReturnType<typeof createSearchInputApi>;
   LumnoSearchInputUIReact?: ReturnType<typeof createSearchInputApi>;
+  LumnoFeatureHintView?: ReturnType<typeof createFeatureHintViewApi>;
+  LumnoFeatureHintViewReact?: ReturnType<typeof createFeatureHintViewApi>;
+  LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
+  LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
   _x_extension_createSearchInput_2024_unique_?: ReturnType<
     typeof createSearchInputApi
   >['createSearchInput'];
@@ -90,28 +90,26 @@ const runtime = globalThis as typeof globalThis & {
 
 const bootstrapState = runtime.LumnoNewtabReactBootstrap;
 
-if (!bootstrapState || bootstrapState.allowReactUpgrade) {
-  const legacyBookmarksApi = runtime.LumnoNewtabBookmarksView || null;
-  const legacyRecentSitesApi = runtime.LumnoNewtabRecentSitesView || null;
-  const legacyShortcutsApi = runtime.LumnoNewtabShortcutsView || null;
-  const legacySuggestionsApi = runtime.LumnoNewtabSuggestionsView || null;
-  const legacyToastApi = runtime.LumnoNewtabToast || null;
-  const bookmarksApi = createBookmarksViewApi(legacyBookmarksApi);
+if (!bootstrapState || !bootstrapState.reactReady) {
+  const bookmarksApi = createBookmarksViewApi();
   const dockApi = createDockApi();
   const feedbackApi = createFeedbackControlApi();
   const shortcutDialogApi = createShortcutDialogApi();
-  const recentSitesApi = createRecentSitesViewApi(legacyRecentSitesApi);
+  const recentSitesApi = createRecentSitesViewApi();
   const selectMenuApi = createSelectMenuApi();
-  const shortcutsApi = createShortcutsViewApi(legacyShortcutsApi);
-  const suggestionsApi = createSuggestionsViewApi(legacySuggestionsApi);
-  const toastApi = createToastApi(legacyToastApi);
+  const shortcutsApi = createShortcutsViewApi();
+  const suggestionsApi = createSuggestionsViewApi();
+  const toastApi = createToastApi();
   const wordmarkApi = createWordmarkApi();
   const pageStructureApi = createPageStructureApi();
   const bookmarksTopbarApi = createBookmarksTopbarApi();
   const pageNoticeApi = createPageNoticeApi();
   const bookmarkCascadeViewApi = createBookmarkCascadeViewApi();
   const wallpaperViewApi = createWallpaperViewApi();
+  const bookmarkBreadcrumbApi = createBookmarkBreadcrumbApi();
   const searchInputApi = createSearchInputApi();
+  const featureHintViewApi = createFeatureHintViewApi();
+  const tooltipViewApi = createTooltipViewApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
   runtime.LumnoNewtabBookmarksView = bookmarksApi;
@@ -143,8 +141,14 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoNewtabBookmarkCascadeView = bookmarkCascadeViewApi;
   runtime.LumnoNewtabWallpaperViewReact = wallpaperViewApi;
   runtime.LumnoNewtabWallpaperView = wallpaperViewApi;
+  runtime.LumnoNewtabBookmarkBreadcrumbReact = bookmarkBreadcrumbApi;
+  runtime.LumnoNewtabBookmarkBreadcrumb = bookmarkBreadcrumbApi;
   runtime.LumnoSearchInputUIReact = searchInputApi;
   runtime.LumnoSearchInputUI = searchInputApi;
+  runtime.LumnoFeatureHintViewReact = featureHintViewApi;
+  runtime.LumnoFeatureHintView = featureHintViewApi;
+  runtime.LumnoTooltipViewReact = tooltipViewApi;
+  runtime.LumnoTooltipView = tooltipViewApi;
   runtime._x_extension_createSearchInput_2024_unique_ =
     searchInputApi.createSearchInput;
   runtime.LumnoNewtabReactIslands = Object.freeze({
@@ -163,7 +167,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     bookmarksTopbar: bookmarksTopbarApi,
     pageNotice: pageNoticeApi,
     bookmarkCascadeView: bookmarkCascadeViewApi,
-    wallpaperView: wallpaperViewApi
+    wallpaperView: wallpaperViewApi,
+    bookmarkBreadcrumb: bookmarkBreadcrumbApi
   });
 
   if (bootstrapState) {

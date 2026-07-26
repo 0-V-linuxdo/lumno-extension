@@ -150,6 +150,18 @@ input.style.setProperty('padding-left', '44px');
 input.style.setProperty('padding-right', '64px');
 input.style.setProperty('caret-color', '#2563eb');
 const container = new FakeElement('div');
+const modePrefix = new FakeElement('span');
+const modePrefixIcon = new FakeElement('img');
+const modePrefixText = new FakeElement('span');
+const modeTabHint = new FakeElement('span');
+const modeTabHintKey = new FakeElement('span');
+const modeTabHintText = new FakeElement('span');
+modePrefix.appendChild(modePrefixIcon);
+modePrefix.appendChild(modePrefixText);
+modeTabHint.appendChild(modeTabHintKey);
+modeTabHint.appendChild(modeTabHintText);
+container.appendChild(modePrefix);
+container.appendChild(modeTabHint);
 const badge = new FakeElement('span');
 badge._layoutWidth = 48;
 badge.setAttribute('data-visible', 'true');
@@ -158,7 +170,16 @@ delete global.LumnoSearchInputMode;
 require(path.resolve(__dirname, '../src/shared/search-input-mode.js'));
 
 const controller = global.LumnoSearchInputMode.createInputModeController(
-  { container, input },
+  {
+    container,
+    input,
+    modePrefix,
+    modePrefixIcon,
+    modePrefixText,
+    modeTabHint,
+    modeTabHintKey,
+    modeTabHintText
+  },
   {
     document: documentObj,
     windowObj,
@@ -212,5 +233,15 @@ assert.strictEqual(
 
 controller.destroy();
 assert.strictEqual(resizeObservers[0].disconnected, true, 'destroy should disconnect the layout observer');
+assert.strictEqual(
+  modePrefix.parentNode,
+  container,
+  'destroy should preserve the React-owned mode prefix node'
+);
+assert.strictEqual(
+  modeTabHint.parentNode,
+  container,
+  'destroy should preserve the React-owned Tab hint node'
+);
 
 console.log('search input mode layout tests passed');

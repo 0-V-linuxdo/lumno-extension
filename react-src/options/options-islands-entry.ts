@@ -1,7 +1,4 @@
-import {
-  createToastApi,
-  type LegacyToastApi
-} from '../shared/toast';
+import { createToastApi } from '../shared/toast';
 import { createBlacklistListApi } from './blacklist-list';
 import { createPopconfirmApi } from './popconfirm';
 import { createSegmentedControlApi } from './segmented-control';
@@ -10,12 +7,13 @@ import { createSettingsNavigationApi } from './settings-navigation';
 import { createSettingsControlsApi } from './settings-controls';
 import { createSettingsFormsApi } from './settings-forms';
 import { createShortcutReferenceApi } from './shortcut-reference';
+import { createShortcutHotkeyApi } from './shortcut-hotkey';
 import { createSiteSearchListApi } from './site-search-list';
 import { createThemePickerApi } from './theme-picker';
+import { createTooltipViewApi } from '../shared/tooltip-view';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoOptionsReactBootstrap?: {
-    allowReactUpgrade: boolean;
     reactReady: boolean;
   };
   LumnoOptionsReactIslands?: {
@@ -27,6 +25,7 @@ const runtime = globalThis as typeof globalThis & {
     settingsControls: ReturnType<typeof createSettingsControlsApi>;
     settingsForms: ReturnType<typeof createSettingsFormsApi>;
     shortcutReference: ReturnType<typeof createShortcutReferenceApi>;
+    shortcutHotkey: ReturnType<typeof createShortcutHotkeyApi>;
     siteSearchList: ReturnType<typeof createSiteSearchListApi>;
     themePicker: ReturnType<typeof createThemePickerApi>;
     toast: ReturnType<typeof createToastApi>;
@@ -47,17 +46,21 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsSettingsFormsReact?: ReturnType<typeof createSettingsFormsApi>;
   LumnoOptionsShortcutReference?: ReturnType<typeof createShortcutReferenceApi>;
   LumnoOptionsShortcutReferenceReact?: ReturnType<typeof createShortcutReferenceApi>;
+  LumnoOptionsShortcutHotkey?: ReturnType<typeof createShortcutHotkeyApi>;
+  LumnoOptionsShortcutHotkeyReact?: ReturnType<typeof createShortcutHotkeyApi>;
   LumnoOptionsSiteSearchList?: ReturnType<typeof createSiteSearchListApi>;
   LumnoOptionsSiteSearchListReact?: ReturnType<typeof createSiteSearchListApi>;
   LumnoOptionsThemePicker?: ReturnType<typeof createThemePickerApi>;
   LumnoOptionsThemePickerReact?: ReturnType<typeof createThemePickerApi>;
-  LumnoOptionsToast?: LegacyToastApi;
+  LumnoOptionsToast?: ReturnType<typeof createToastApi>;
   LumnoOptionsToastReact?: ReturnType<typeof createToastApi>;
+  LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
+  LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
 };
 
 const bootstrapState = runtime.LumnoOptionsReactBootstrap;
 
-if (!bootstrapState || bootstrapState.allowReactUpgrade) {
+if (!bootstrapState || !bootstrapState.reactReady) {
   const blacklistListApi = createBlacklistListApi();
   const popconfirmApi = createPopconfirmApi();
   const segmentedControlApi = createSegmentedControlApi();
@@ -66,9 +69,11 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const settingsControlsApi = createSettingsControlsApi();
   const settingsFormsApi = createSettingsFormsApi();
   const shortcutReferenceApi = createShortcutReferenceApi();
+  const shortcutHotkeyApi = createShortcutHotkeyApi();
   const siteSearchListApi = createSiteSearchListApi();
   const themePickerApi = createThemePickerApi();
-  const toastApi = createToastApi(runtime.LumnoOptionsToast || null);
+  const toastApi = createToastApi();
+  const tooltipViewApi = createTooltipViewApi();
 
   runtime.LumnoOptionsBlacklistListReact = blacklistListApi;
   runtime.LumnoOptionsBlacklistList = blacklistListApi;
@@ -86,12 +91,16 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOptionsSettingsForms = settingsFormsApi;
   runtime.LumnoOptionsShortcutReferenceReact = shortcutReferenceApi;
   runtime.LumnoOptionsShortcutReference = shortcutReferenceApi;
+  runtime.LumnoOptionsShortcutHotkeyReact = shortcutHotkeyApi;
+  runtime.LumnoOptionsShortcutHotkey = shortcutHotkeyApi;
   runtime.LumnoOptionsSiteSearchListReact = siteSearchListApi;
   runtime.LumnoOptionsSiteSearchList = siteSearchListApi;
   runtime.LumnoOptionsThemePickerReact = themePickerApi;
   runtime.LumnoOptionsThemePicker = themePickerApi;
   runtime.LumnoOptionsToastReact = toastApi;
   runtime.LumnoOptionsToast = toastApi;
+  runtime.LumnoTooltipViewReact = tooltipViewApi;
+  runtime.LumnoTooltipView = tooltipViewApi;
   runtime.LumnoOptionsReactIslands = Object.freeze({
     blacklistList: blacklistListApi,
     popconfirm: popconfirmApi,
@@ -101,6 +110,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     settingsControls: settingsControlsApi,
     settingsForms: settingsFormsApi,
     shortcutReference: shortcutReferenceApi,
+    shortcutHotkey: shortcutHotkeyApi,
     siteSearchList: siteSearchListApi,
     themePicker: themePickerApi,
     toast: toastApi
