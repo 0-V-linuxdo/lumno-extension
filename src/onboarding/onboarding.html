@@ -141,9 +141,17 @@
         min-height: 100vh;
         margin: 0 auto;
         padding:
-          max(16px, calc(var(--onboarding-shell-padding-y) - var(--onboarding-shell-lift-y)))
-          var(--onboarding-shell-padding-x)
-          calc(var(--onboarding-shell-padding-y) + var(--onboarding-shell-lift-y));
+          max(
+            16px,
+            calc(var(--onboarding-shell-padding-y) - var(--onboarding-shell-lift-y)),
+            calc(env(safe-area-inset-top) + 12px)
+          )
+          max(var(--onboarding-shell-padding-x), env(safe-area-inset-right))
+          max(
+            calc(var(--onboarding-shell-padding-y) + var(--onboarding-shell-lift-y)),
+            calc(env(safe-area-inset-bottom) + 12px)
+          )
+          max(var(--onboarding-shell-padding-x), env(safe-area-inset-left));
         display: grid;
         grid-template-rows: auto;
         place-items: center;
@@ -177,7 +185,11 @@
         position: relative;
         min-width: 0;
         min-height: 0;
-        padding: var(--onboarding-copy-padding-y) var(--onboarding-copy-padding-x);
+        padding:
+          max(var(--onboarding-copy-padding-y), calc(env(safe-area-inset-top) + 12px))
+          max(var(--onboarding-copy-padding-x), env(safe-area-inset-right))
+          max(var(--onboarding-copy-padding-y), calc(env(safe-area-inset-bottom) + 12px))
+          max(var(--onboarding-copy-padding-x), env(safe-area-inset-left));
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto;
         align-content: stretch;
@@ -189,7 +201,10 @@
       .onboarding-newtab-watermark {
         position: absolute;
         left: var(--onboarding-copy-padding-x);
-        top: var(--onboarding-copy-padding-y);
+        top: max(
+          var(--onboarding-copy-padding-y),
+          calc(env(safe-area-inset-top) + 12px)
+        );
         z-index: 1;
         width: 118px;
         height: 27px;
@@ -1230,7 +1245,6 @@
         .copy-panel {
           --onboarding-copy-padding-x: 44px;
           --onboarding-copy-padding-y: 36px;
-          padding: var(--onboarding-copy-padding-y) var(--onboarding-copy-padding-x);
           gap: 22px;
         }
 
@@ -1273,7 +1287,6 @@
           --onboarding-copy-padding-x: 42px;
           --onboarding-copy-padding-y: 42px;
           min-height: var(--onboarding-stacked-copy-min-height);
-          padding: var(--onboarding-copy-padding-y) var(--onboarding-copy-padding-x);
           gap: 26px;
           border-right: 0;
           border-bottom: 1px solid var(--surface-border);
@@ -1301,7 +1314,6 @@
         .copy-panel {
           --onboarding-copy-padding-x: 28px;
           --onboarding-copy-padding-y: 32px;
-          padding: var(--onboarding-copy-padding-y) var(--onboarding-copy-padding-x);
         }
 
         .title {
@@ -1383,7 +1395,6 @@
           --onboarding-copy-padding-y: clamp(18px, 4vh, 24px);
           --onboarding-copy-row-gap: clamp(10px, 2.1vh, 14px);
           min-height: 0;
-          padding: var(--onboarding-copy-padding-y) var(--onboarding-copy-padding-x);
           gap: var(--onboarding-copy-row-gap);
           border-right: 0;
           border-bottom: 1px solid var(--surface-border);
@@ -1394,7 +1405,10 @@
         }
 
         .onboarding-newtab-watermark {
-          top: clamp(32px, 4.6vh, 44px);
+          top: max(
+            clamp(32px, 4.6vh, 44px),
+            calc(env(safe-area-inset-top) + 12px)
+          );
           width: 104px;
           height: 24px;
           opacity: 0.54;

@@ -82,12 +82,12 @@ assert.match(
 );
 assert.match(
   copyPanelStyle ? copyPanelStyle[0] : '',
-  /--onboarding-copy-padding-x:\s*56px;[\s\S]*?--onboarding-copy-padding-y:\s*56px;[\s\S]*?position:\s*relative;[\s\S]*?padding:\s*var\(--onboarding-copy-padding-y\) var\(--onboarding-copy-padding-x\);/,
-  'copy panel should expose padding variables so the absolute watermark aligns with the copy inset'
+  /--onboarding-copy-padding-x:\s*56px;[\s\S]*?--onboarding-copy-padding-y:\s*56px;[\s\S]*?position:\s*relative;[\s\S]*?padding:\s*max\(var\(--onboarding-copy-padding-y\),\s*calc\(env\(safe-area-inset-top\) \+ 12px\)\)[\s\S]*?max\(var\(--onboarding-copy-padding-x\),\s*env\(safe-area-inset-left\)\);/,
+  'copy panel should expose reusable padding variables while clearing viewport safe areas'
 );
 assert.match(
   newtabWatermarkStyle ? newtabWatermarkStyle[0] : '',
-  /position:\s*absolute;[\s\S]*?left:\s*var\(--onboarding-copy-padding-x\);[\s\S]*?top:\s*var\(--onboarding-copy-padding-y\);[\s\S]*?width:\s*118px;[\s\S]*?height:\s*27px;[\s\S]*?pointer-events:\s*none;[\s\S]*?transform:\s*translateY\(12px\);/,
+  /position:\s*absolute;[\s\S]*?left:\s*var\(--onboarding-copy-padding-x\);[\s\S]*?top:\s*max\([\s\S]*?var\(--onboarding-copy-padding-y\),[\s\S]*?calc\(env\(safe-area-inset-top\) \+ 12px\)[\s\S]*?\);[\s\S]*?width:\s*118px;[\s\S]*?height:\s*27px;[\s\S]*?pointer-events:\s*none;[\s\S]*?transform:\s*translateY\(12px\);/,
   'newtab watermark should sit smaller and closer to the title without adding layout height or stealing input'
 );
 assert.match(
@@ -117,8 +117,8 @@ assert.match(
 );
 assert.match(
   html,
-  /\.onboarding-shell\s*\{[\s\S]*?--onboarding-shell-lift-y:\s*clamp\(14px,\s*2\.4vh,\s*24px\);[\s\S]*?padding:\s*max\(16px,\s*calc\(var\(--onboarding-shell-padding-y\) - var\(--onboarding-shell-lift-y\)\)\)\s+var\(--onboarding-shell-padding-x\)\s+calc\(var\(--onboarding-shell-padding-y\) \+ var\(--onboarding-shell-lift-y\)\);[\s\S]*?\}/,
-  'onboarding shell should bias desktop content slightly upward with balanced responsive padding'
+  /\.onboarding-shell\s*\{[\s\S]*?--onboarding-shell-lift-y:\s*clamp\(14px,\s*2\.4vh,\s*24px\);[\s\S]*?padding:\s*max\([\s\S]*?calc\(var\(--onboarding-shell-padding-y\) - var\(--onboarding-shell-lift-y\)\),[\s\S]*?calc\(env\(safe-area-inset-top\) \+ 12px\)[\s\S]*?\)[\s\S]*?max\(var\(--onboarding-shell-padding-x\),\s*env\(safe-area-inset-right\)\)[\s\S]*?max\([\s\S]*?calc\(var\(--onboarding-shell-padding-y\) \+ var\(--onboarding-shell-lift-y\)\),[\s\S]*?calc\(env\(safe-area-inset-bottom\) \+ 12px\)[\s\S]*?\)[\s\S]*?max\(var\(--onboarding-shell-padding-x\),\s*env\(safe-area-inset-left\)\);[\s\S]*?\}/,
+  'onboarding shell should keep its upward bias while clearing every viewport safe area'
 );
 assert.match(
   html,
@@ -172,12 +172,12 @@ assert.match(
 );
 assert.match(
   html,
-  /@media \(max-width:\s*859px\), \(max-height:\s*559px\)[\s\S]*?\.copy-panel\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?padding:\s*var\(--onboarding-copy-padding-y\) var\(--onboarding-copy-padding-x\);[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[\s\S]*?align-content:\s*stretch;[\s\S]*?\}[\s\S]*?\.interaction-slots\s*\{[\s\S]*?align-self:\s*end;[\s\S]*?\}[\s\S]*?\.onboarding-copy-actions\s*\{[\s\S]*?align-self:\s*end;[\s\S]*?\}/,
+  /@media \(max-width:\s*859px\), \(max-height:\s*559px\)[\s\S]*?\.copy-panel\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[\s\S]*?align-content:\s*stretch;[\s\S]*?\}[\s\S]*?\.interaction-slots\s*\{[\s\S]*?align-self:\s*end;[\s\S]*?\}[\s\S]*?\.onboarding-copy-actions\s*\{[\s\S]*?align-self:\s*end;[\s\S]*?\}/,
   'compact vertical onboarding should keep a single-column top information flow that distributes across the available height'
 );
 assert.match(
   html,
-  /@media \(max-width:\s*859px\), \(max-height:\s*559px\)[\s\S]*?\.onboarding-newtab-watermark\s*\{[\s\S]*?top:\s*clamp\(32px,\s*4\.6vh,\s*44px\);[\s\S]*?width:\s*104px;[\s\S]*?height:\s*24px;[\s\S]*?opacity:\s*0\.54;[\s\S]*?transform:\s*none;[\s\S]*?\}[\s\S]*?\.onboarding-newtab-watermark__image\s*\{[\s\S]*?width:\s*104px;[\s\S]*?\}/,
+  /@media \(max-width:\s*859px\), \(max-height:\s*559px\)[\s\S]*?\.onboarding-newtab-watermark\s*\{[\s\S]*?top:\s*max\([\s\S]*?clamp\(32px,\s*4\.6vh,\s*44px\),[\s\S]*?calc\(env\(safe-area-inset-top\) \+ 12px\)[\s\S]*?\);[\s\S]*?width:\s*104px;[\s\S]*?height:\s*24px;[\s\S]*?opacity:\s*0\.54;[\s\S]*?transform:\s*none;[\s\S]*?\}[\s\S]*?\.onboarding-newtab-watermark__image\s*\{[\s\S]*?width:\s*104px;[\s\S]*?\}/,
   'compact intro layout should keep the Lumno wordmark separated from the title'
 );
 assert.match(

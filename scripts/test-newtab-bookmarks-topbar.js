@@ -260,6 +260,11 @@ assert.ok(
   'topbar folder SVG should receive a 1px optical baseline correction'
 );
 assert.ok(
+  /\.x-nt-bookmark-title\s*\{[\s\S]*?font-weight:\s*500;/.test(newtabHtml) &&
+    /\.x-nt-bookmarks-topbar \.x-nt-bookmark-title\s*\{[\s\S]*?font-size:\s*12px;[\s\S]*?font-weight:\s*500;/.test(newtabHtml),
+  'topbar bookmark labels should use smaller type without changing other bookmark modes'
+);
+assert.ok(
   bookmarksViewJs.includes("state && state.viewMode === 'top'") &&
     bookmarksViewJs.includes('!isFolder && !isTopbarMode') &&
     bookmarksViewJs.includes('typeof documentObj.createDocumentFragment'),
@@ -278,7 +283,7 @@ assert.ok(
 );
 assert.ok(
   newtabHtml.includes('body[data-nt-top-occupied="true"]') &&
-    newtabHtml.includes('--x-nt-top-occupied-inset: 36px;') &&
+    /--x-nt-top-occupied-inset:\s*calc\([\s\S]*?36px \+ var\(--x-nt-top-safe-inset\)[\s\S]*?\);/.test(newtabHtml) &&
     newtabHtml.includes('calc(var(--x-nt-top-occupied-inset, 0px) + var(--x-nt-top-floating-gap, 12px))') &&
     newtabJs.includes('onVisibilityChange: setNewtabTopOccupied'),
   'topbar visibility should define a shared safe top inset for floating newtab UI'
@@ -290,8 +295,9 @@ assert.ok(
 );
 assert.ok(
   newtabJs.includes('const initialBookmarkViewModeReadyPromise = new Promise') &&
-    /Promise\.all\(\[[\s\S]*initialBookmarkViewModeReadyPromise[\s\S]*\]\)\.then/.test(newtabJs),
-  'new tab must wait for the saved bookmark mode before revealing its content'
+    /Promise\.all\(\[[\s\S]*initialBookmarkViewModeReadyPromise[\s\S]*\]\)\.then/.test(newtabJs) &&
+    /body:not\(\[data-nt-ready="1"\]\) #_x_extension_newtab_bottom_dock_2024_unique_\s*\{[\s\S]*?visibility:\s*hidden;/.test(newtabHtml),
+  'new tab must wait for the saved bookmark mode before revealing either layout'
 );
 
 console.log('New tab bookmarks topbar tests passed.');

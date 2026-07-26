@@ -338,7 +338,13 @@
         const finish = (dataUrl) => {
           const value = String(dataUrl || '').trim();
           if (value && value.startsWith('data:')) {
-            faviconDataCache.set(sourceUrl, value);
+            if (faviconViewCore && typeof faviconViewCore.cacheFaviconData === 'function') {
+              faviconViewCore.cacheFaviconData(sourceUrl, value);
+            } else if (typeof faviconUtils.setBoundedCacheEntry === 'function') {
+              faviconUtils.setBoundedCacheEntry(faviconDataCache, sourceUrl, value, 256);
+            } else {
+              faviconDataCache.set(sourceUrl, value);
+            }
             resolve(value);
             return;
           }

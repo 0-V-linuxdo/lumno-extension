@@ -502,8 +502,8 @@ assert.match(
 );
 assert.match(
   panelBlock,
-  /top:\s*50%;/,
-  'tab switcher panel should sit at the vertical center of the screen'
+  /left:\s*var\(--x-tab-switcher-center-left,\s*50%\);[\s\S]*top:\s*var\(--x-tab-switcher-center-top,\s*50%\);/,
+  'tab switcher panel should use visual-viewport-aware center tokens'
 );
 assert.match(
   panelBlock,

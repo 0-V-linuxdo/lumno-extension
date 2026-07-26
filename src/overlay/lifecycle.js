@@ -164,6 +164,7 @@
       targetWindow.removeEventListener('resize', resizeHandler);
       if (visualViewportTarget && typeof visualViewportTarget.removeEventListener === 'function') {
         visualViewportTarget.removeEventListener('resize', resizeHandler);
+        visualViewportTarget.removeEventListener('scroll', resizeHandler);
       }
       resizeHandler = null;
       visualViewportTarget = null;
@@ -190,6 +191,7 @@
       targetWindow.addEventListener('resize', resizeHandler);
       if (visualViewport && typeof visualViewport.addEventListener === 'function') {
         visualViewport.addEventListener('resize', resizeHandler);
+        visualViewport.addEventListener('scroll', resizeHandler);
         visualViewportTarget = visualViewport;
       }
       apply(overlayElement);

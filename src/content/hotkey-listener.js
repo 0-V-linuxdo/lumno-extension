@@ -183,7 +183,7 @@
       style.textContent = `
         #${PAGE_TOAST_ID} {
           position: fixed;
-          top: 24px;
+          top: max(24px, calc(env(safe-area-inset-top) + 12px));
           left: 50%;
           transform: translateX(-50%) translateY(-18px) scale(0.96);
           background: rgba(17, 24, 39, 0.92);

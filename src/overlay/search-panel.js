@@ -2091,6 +2091,45 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     window._x_extension_theme_color_cache_2024_unique_ = themeColorCache;
     const themeHostCache = window._x_extension_theme_host_cache_2024_unique_ || new Map();
     window._x_extension_theme_host_cache_2024_unique_ = themeHostCache;
+    const OVERLAY_THEME_COLOR_CACHE_MAX_ENTRIES = 384;
+    const OVERLAY_THEME_HOST_CACHE_MAX_ENTRIES = 256;
+    function setBoundedOverlayCacheEntry(cache, key, value, maxEntries) {
+      if (typeof FAVICON_UTILS.setBoundedCacheEntry === 'function') {
+        return FAVICON_UTILS.setBoundedCacheEntry(cache, key, value, maxEntries);
+      }
+      if (!cache || typeof cache.set !== 'function') {
+        return value;
+      }
+      if (typeof cache.delete === 'function' && typeof cache.has === 'function' && cache.has(key)) {
+        cache.delete(key);
+      }
+      cache.set(key, value);
+      while (cache.size > maxEntries && typeof cache.keys === 'function' &&
+          typeof cache.delete === 'function') {
+        const oldest = cache.keys().next();
+        if (!oldest || oldest.done) {
+          break;
+        }
+        cache.delete(oldest.value);
+      }
+      return value;
+    }
+    function cacheOverlayThemeColor(key, value) {
+      return setBoundedOverlayCacheEntry(
+        themeColorCache,
+        key,
+        value,
+        OVERLAY_THEME_COLOR_CACHE_MAX_ENTRIES
+      );
+    }
+    function cacheOverlayThemeHost(key, value) {
+      return setBoundedOverlayCacheEntry(
+        themeHostCache,
+        key,
+        value,
+        OVERLAY_THEME_HOST_CACHE_MAX_ENTRIES
+      );
+    }
 
     const faviconDataCache = window._x_extension_overlay_favicon_data_cache_2026_unique_ || new Map();
     window._x_extension_overlay_favicon_data_cache_2026_unique_ = faviconDataCache;
@@ -3349,9 +3388,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (brandAccent) {
         const brandTheme = buildTheme(brandAccent);
         brandTheme._xIsBrand = true;
-        themeColorCache.set(url, brandTheme);
+        cacheOverlayThemeColor(url, brandTheme);
         if (useHostCache) {
-          themeHostCache.set(hostKey, brandTheme);
+          cacheOverlayThemeHost(hostKey, brandTheme);
         }
         return Promise.resolve(brandTheme);
       }
@@ -3362,20 +3401,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           image.onload = function() {
             const avg = extractAverageColor(image);
             if (!avg) {
-              themeColorCache.set(url, defaultTheme);
+              cacheOverlayThemeColor(url, defaultTheme);
               resolve(defaultTheme);
               return;
             }
             const theme = buildTheme(avg);
             theme._xIsBrand = true;
-            themeColorCache.set(url, theme);
+            cacheOverlayThemeColor(url, theme);
             if (useHostCache) {
-              themeHostCache.set(hostKey, theme);
+              cacheOverlayThemeHost(hostKey, theme);
             }
             resolve(theme);
           };
           image.onerror = function() {
-            themeColorCache.set(url, defaultTheme);
+            cacheOverlayThemeColor(url, defaultTheme);
             resolve(defaultTheme);
           };
           image.src = cachedFaviconData;
@@ -3384,7 +3423,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (isProxy) {
         return requestFaviconData(url).then((dataUrl) => {
           if (!dataUrl) {
-            themeColorCache.set(url, defaultTheme);
+            cacheOverlayThemeColor(url, defaultTheme);
             return defaultTheme;
           }
           return new Promise((resolve) => {
@@ -3392,20 +3431,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             image.onload = function() {
               const avg = extractAverageColor(image);
               if (!avg) {
-                themeColorCache.set(url, defaultTheme);
+                cacheOverlayThemeColor(url, defaultTheme);
                 resolve(defaultTheme);
                 return;
               }
               const theme = buildTheme(avg);
               theme._xIsBrand = true;
-              themeColorCache.set(url, theme);
+              cacheOverlayThemeColor(url, theme);
               if (useHostCache) {
-                themeHostCache.set(hostKey, theme);
+                cacheOverlayThemeHost(hostKey, theme);
               }
               resolve(theme);
             };
             image.onerror = function() {
-              themeColorCache.set(url, defaultTheme);
+              cacheOverlayThemeColor(url, defaultTheme);
               resolve(defaultTheme);
             };
             image.src = dataUrl;
@@ -3418,20 +3457,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         image.onload = function() {
           const avg = extractAverageColor(image);
           if (!avg) {
-            themeColorCache.set(url, defaultTheme);
+            cacheOverlayThemeColor(url, defaultTheme);
             resolve(defaultTheme);
             return;
           }
           const theme = buildTheme(avg);
           theme._xIsBrand = true;
-          themeColorCache.set(url, theme);
+          cacheOverlayThemeColor(url, theme);
           if (useHostCache) {
-            themeHostCache.set(hostKey, theme);
+            cacheOverlayThemeHost(hostKey, theme);
           }
           resolve(theme);
         };
         image.onerror = function() {
-          themeColorCache.set(url, defaultTheme);
+          cacheOverlayThemeColor(url, defaultTheme);
           resolve(defaultTheme);
         };
         image.src = url;
@@ -3453,9 +3492,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       const brandTheme = buildTheme(brandAccent);
       brandTheme._xIsBrand = true;
-      themeHostCache.set(normalizedHost, brandTheme);
+      cacheOverlayThemeHost(normalizedHost, brandTheme);
       if (iconUrl) {
-        themeColorCache.set(iconUrl, brandTheme);
+        cacheOverlayThemeColor(iconUrl, brandTheme);
       }
       return brandTheme;
     }
@@ -3613,9 +3652,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
         const theme = buildTheme(avg);
         theme._xIsBrand = true;
-        themeColorCache.set(url, theme);
+        cacheOverlayThemeColor(url, theme);
         if (useHostCache) {
-          themeHostCache.set(hostKey, theme);
+          cacheOverlayThemeHost(hostKey, theme);
         }
       };
       image.onerror = function() {};

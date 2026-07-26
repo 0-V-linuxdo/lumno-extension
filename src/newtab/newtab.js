@@ -36,6 +36,63 @@
     }
     return new URL(`../../${normalizedPath}`, window.location.href).href;
   }
+  function sendRuntimeMessage(message, callback) {
+    if (typeof chrome === 'undefined' ||
+        !chrome.runtime ||
+        typeof chrome.runtime.sendMessage !== 'function') {
+      return false;
+    }
+    try {
+      chrome.runtime.sendMessage(message, callback);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+  function getNewtabVisualViewportInsets() {
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) {
+      return { top: 0, bottom: 0 };
+    }
+    const top = Number.isFinite(Number(visualViewport.offsetTop))
+      ? Math.max(0, Number(visualViewport.offsetTop))
+      : 0;
+    const viewportHeight = Number.isFinite(Number(visualViewport.height))
+      ? Math.max(0, Number(visualViewport.height))
+      : Math.max(0, Number(window.innerHeight) || 0);
+    const layoutHeight = Math.max(0, Number(window.innerHeight) || viewportHeight);
+    const bottom = Math.max(0, layoutHeight - top - viewportHeight);
+    return { top, bottom };
+  }
+  function syncNewtabVisualViewportInsets() {
+    if (!document.documentElement || !document.documentElement.style) {
+      return;
+    }
+    const insets = getNewtabVisualViewportInsets();
+    document.documentElement.style.setProperty(
+      '--x-nt-visual-viewport-top-inset',
+      `${Math.round(insets.top)}px`
+    );
+    document.documentElement.style.setProperty(
+      '--x-nt-visual-viewport-bottom-inset',
+      `${Math.round(insets.bottom)}px`
+    );
+  }
+  syncNewtabVisualViewportInsets();
+  window.addEventListener('resize', syncNewtabVisualViewportInsets, { passive: true });
+  if (window.visualViewport &&
+      typeof window.visualViewport.addEventListener === 'function') {
+    window.visualViewport.addEventListener(
+      'resize',
+      syncNewtabVisualViewportInsets,
+      { passive: true }
+    );
+    window.visualViewport.addEventListener(
+      'scroll',
+      syncNewtabVisualViewportInsets,
+      { passive: true }
+    );
+  }
 
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
@@ -390,7 +447,8 @@
       onBeforeOpen: () => {
         hideShortcutTooltip();
         hideTopActionTooltip();
-      }
+      },
+      getViewportTopInset: getNewtabViewportTopPaddingPx
     })
     : null;
   const bookmarkContextMenuSelectController = globalThis.LumnoCustomSelect &&
@@ -3117,10 +3175,12 @@
   }
 
   function getNewtabTopOccupiedInsetPx() {
-    return document.body &&
+    const visualViewportTopInset = getNewtabVisualViewportInsets().top;
+    const bookmarkTopbarInset = document.body &&
       document.body.getAttribute('data-nt-top-occupied') === 'true'
       ? BOOKMARK_TOPBAR_HEIGHT_PX
       : 0;
+    return visualViewportTopInset + bookmarkTopbarInset;
   }
 
   function getNewtabViewportTopPaddingPx() {
@@ -11716,7 +11776,8 @@
         disabled: SITE_SEARCH_DISABLED_STORAGE_KEY
       },
       defaultProviders: defaultSiteSearchProviders,
-      mergeCustomProviders: SEARCH_UTILS.mergeCustomProviders
+      mergeCustomProviders: SEARCH_UTILS.mergeCustomProviders,
+      getResourceUrl: getExtensionResourceUrl
     }).then((items) => {
       siteSearchProvidersCache = items;
       return items;
@@ -12975,7 +13036,7 @@
       }
       renderSuggestions([], requestQuery);
     }, immediate ? 1200 : 1300);
-    chrome.runtime.sendMessage({
+    const localRequestSent = sendRuntimeMessage({
       action: 'getSearchSuggestions',
       query: requestQuery,
       context: 'newtab',
@@ -13005,7 +13066,7 @@
         if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
           return;
         }
-        chrome.runtime.sendMessage({
+        sendRuntimeMessage({
           action: 'getSearchEngineSuggestions',
           query: requestQuery,
           context: 'newtab',
@@ -13027,6 +13088,15 @@
         });
       }, remoteDelay);
     });
+    if (!localRequestSent) {
+      if (suggestionRequestWatchdogTimer) {
+        clearTimeout(suggestionRequestWatchdogTimer);
+        suggestionRequestWatchdogTimer = null;
+      }
+      if (requestSeq === suggestionRequestSeq && requestQuery === latestQuery) {
+        renderSuggestions([], requestQuery);
+      }
+    }
   }
 
   inputParts = createSearchInput({
@@ -13815,11 +13885,16 @@
     rightIcon.addEventListener('click', function(event) {
       event.preventDefault();
       event.stopPropagation();
-      if (chrome.runtime.openOptionsPage) {
-        chrome.runtime.openOptionsPage();
+      const runtime = typeof chrome !== 'undefined' && chrome && chrome.runtime
+        ? chrome.runtime
+        : null;
+      if (runtime && typeof runtime.openOptionsPage === 'function') {
+        runtime.openOptionsPage();
         return;
       }
-      const optionsUrl = typeof EXTENSION_ROUTES.buildOptionsUrl === 'function'
+      const optionsUrl = runtime &&
+          typeof runtime.getURL === 'function' &&
+          typeof EXTENSION_ROUTES.buildOptionsUrl === 'function'
         ? EXTENSION_ROUTES.buildOptionsUrl(chrome)
         : getExtensionResourceUrl('src/options/options.html');
       window.open(optionsUrl, '_blank');

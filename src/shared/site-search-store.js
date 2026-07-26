@@ -99,11 +99,14 @@
     const storageKeys = settings.storageKeys || STORAGE_KEYS;
     const defaultProviders = Array.isArray(settings.defaultProviders) ? settings.defaultProviders : [];
     const mergeCustomProviders = settings.mergeCustomProviders;
+    const getResourceUrl = typeof settings.getResourceUrl === 'function'
+      ? settings.getResourceUrl
+      : (path) => getRuntimeUrl(chromeApi, path);
     const getValues = typeof settings.getStorageValues === 'function'
       ? settings.getStorageValues
       : (keys) => getStorageValues(storageArea, keys);
 
-    const loadLocalProviders = fetch(getRuntimeUrl(chromeApi, 'assets/data/site-search.json'))
+    const loadLocalProviders = fetch(getResourceUrl('assets/data/site-search.json'))
       .then((response) => response.json())
       .then((data) => (data && Array.isArray(data.items) ? data.items : []))
       .catch(() => []);

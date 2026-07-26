@@ -2,6 +2,9 @@
   'use strict';
 
   const EFFECT_TYPES = ['none', 'grain', 'halftone', 'ascii'];
+  const ASCII_LIGHT_WALLPAPER_THRESHOLD = 0.58;
+  const MAX_EFFECT_CANVAS_PIXELS = 1920 * 1080;
+  const PARAMETER_RENDER_DEBOUNCE_MS = 72;
   const DEFAULT_PREFS = {
     version: 3,
     type: 'none',
@@ -29,6 +32,61 @@
       return min;
     }
     return Math.min(max, Math.max(min, number));
+  }
+
+  function getEffectCanvasScale(devicePixelRatio, viewportWidth, viewportHeight) {
+    const width = Math.max(1, Number(viewportWidth) || 1);
+    const height = Math.max(1, Number(viewportHeight) || 1);
+    const pixelBudgetScale = Math.sqrt(MAX_EFFECT_CANVAS_PIXELS / (width * height));
+    return clampNumber(
+      Math.min(Number(devicePixelRatio) || 1, pixelBudgetScale),
+      0.72,
+      1
+    );
+  }
+
+  function analyzeImageData(data) {
+    if (!data || typeof data.length !== 'number' || data.length < 4) {
+      return {
+        averageLuminance: 0.5,
+        lowLuminance: 0.1,
+        highLuminance: 0.9,
+        useDarkInk: false
+      };
+    }
+    const pixelCount = Math.floor(data.length / 4);
+    const sampleStride = Math.max(1, Math.floor(pixelCount / 12000));
+    let luminanceTotal = 0;
+    let sampledPixels = 0;
+    const luminanceSamples = [];
+    for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += sampleStride) {
+      const index = pixelIndex * 4;
+      const alpha = clampNumber(Number(data[index + 3]) / 255, 0, 1);
+      const red = (Number(data[index]) * alpha) + (255 * (1 - alpha));
+      const green = (Number(data[index + 1]) * alpha) + (255 * (1 - alpha));
+      const blue = (Number(data[index + 2]) * alpha) + (255 * (1 - alpha));
+      const luminance = ((red * 0.299) + (green * 0.587) + (blue * 0.114)) / 255;
+      luminanceTotal += luminance;
+      luminanceSamples.push(luminance);
+      sampledPixels += 1;
+    }
+    const averageLuminance = sampledPixels > 0
+      ? clampNumber(luminanceTotal / sampledPixels, 0, 1)
+      : 0.5;
+    luminanceSamples.sort((first, second) => first - second);
+    const lastSampleIndex = Math.max(0, luminanceSamples.length - 1);
+    const lowLuminance = luminanceSamples.length > 0
+      ? luminanceSamples[Math.round(lastSampleIndex * 0.08)]
+      : 0.1;
+    const highLuminance = luminanceSamples.length > 0
+      ? luminanceSamples[Math.round(lastSampleIndex * 0.92)]
+      : 0.9;
+    return {
+      averageLuminance,
+      lowLuminance: clampNumber(lowLuminance, 0, 1),
+      highLuminance: clampNumber(highLuminance, 0, 1),
+      useDarkInk: averageLuminance >= ASCII_LIGHT_WALLPAPER_THRESHOLD
+    };
   }
 
   function normalizePrefs(value) {
@@ -74,7 +132,7 @@
       '#_x_extension_newtab_section_safe_corridor_2026_unique_'
     ];
     const HOVER_SAFE_ZONE_RECT_CACHE_MS = 80;
-    const ASCII_CHARS = '  .,:;irsXA253hMHGS#9B&@';
+    const ASCII_CHARS = '  .,:;-=+xX08S#&@';
 
     let canvas = null;
     let context = null;
@@ -100,8 +158,10 @@
     let hoverSafeZoneElements = null;
     let hoverSafeZoneRectCache = null;
     let hoverSafeZoneRectCacheTime = 0;
-    let backgroundLuminanceCache = null;
     let asciiGlyphMetricsCache = null;
+    let effectBaseCanvas = null;
+    let effectBaseContext = null;
+    let effectBaseCacheKey = '';
 
     function requestFrame(callback) {
       if (windowObj && typeof windowObj.requestAnimationFrame === 'function') {
@@ -132,37 +192,12 @@
       };
     }
 
-    function getDeviceScale() {
-      return clampNumber(windowObj.devicePixelRatio || 1, 1, 1.5);
-    }
-
-    function getThemeMode() {
-      return documentObj.body && documentObj.body.getAttribute('data-theme') === 'dark'
-        ? 'dark'
-        : 'light';
-    }
-
-    function getBackgroundColor() {
-      const fallback = getThemeMode() === 'dark'
-        ? { red: 17, green: 17, blue: 17 }
-        : { red: 255, green: 255, blue: 255 };
-      if (!windowObj || typeof windowObj.getComputedStyle !== 'function' || !documentObj.body) {
-        return fallback;
-      }
-      const color = windowObj.getComputedStyle(documentObj.body).backgroundColor || '';
-      const match = color.match(/rgba?\(([^)]+)\)/i);
-      if (!match) {
-        return fallback;
-      }
-      const channels = match[1].split(/[\s,\/]+/).filter(Boolean).slice(0, 3).map(Number);
-      if (channels.length < 3 || channels.some((channel) => !Number.isFinite(channel))) {
-        return fallback;
-      }
-      return {
-        red: clampChannel(channels[0]),
-        green: clampChannel(channels[1]),
-        blue: clampChannel(channels[2])
-      };
+    function getDeviceScale(viewport) {
+      return getEffectCanvasScale(
+        windowObj.devicePixelRatio || 1,
+        viewport.width,
+        viewport.height
+      );
     }
 
     function getLuminanceFromRgb(red, green, blue) {
@@ -203,18 +238,16 @@
       observer = new root.MutationObserver((mutations) => {
         const shouldRefresh = mutations.some((mutation) => {
           return mutation.type === 'attributes' &&
-            (mutation.attributeName === 'data-theme' ||
-              mutation.attributeName === 'data-wallpaper-active');
+            mutation.attributeName === 'data-wallpaper-active';
         });
         if (shouldRefresh) {
           clearHoverSafeZoneRectCache();
-          clearBackgroundLuminanceCache();
           scheduleRender();
         }
       });
       observer.observe(documentObj.body, {
         attributes: true,
-        attributeFilter: ['data-theme', 'data-wallpaper-active']
+        attributeFilter: ['data-wallpaper-active']
       });
     }
 
@@ -242,8 +275,10 @@
       hoverSafeZoneRectCacheTime = 0;
     }
 
-    function clearBackgroundLuminanceCache() {
-      backgroundLuminanceCache = null;
+    function clearEffectBaseCache() {
+      effectBaseCanvas = null;
+      effectBaseContext = null;
+      effectBaseCacheKey = '';
     }
 
     function getHoverSafeZoneElements() {
@@ -400,7 +435,7 @@
         return null;
       }
       const viewport = getViewportSize();
-      const scale = getDeviceScale();
+      const scale = getDeviceScale(viewport);
       const width = Math.max(1, Math.round(viewport.width * scale));
       const height = Math.max(1, Math.round(viewport.height * scale));
       if (canvas.width !== width || canvas.height !== height) {
@@ -425,6 +460,7 @@
         clearTimeout(renderTimer);
         renderTimer = 0;
       }
+      clearEffectBaseCache();
       if (canvas && context) {
         const viewport = getViewportSize();
         context.clearRect(0, 0, viewport.width, viewport.height);
@@ -491,6 +527,7 @@
       } catch (e) {
         return null;
       }
+      const analysis = analyzeImageData(data);
       return {
         width: sourceCanvas.width,
         height: sourceCanvas.height,
@@ -498,6 +535,10 @@
         naturalHeight,
         scaleX: sourceCanvas.width / naturalWidth,
         scaleY: sourceCanvas.height / naturalHeight,
+        averageLuminance: analysis.averageLuminance,
+        lowLuminance: analysis.lowLuminance,
+        highLuminance: analysis.highLuminance,
+        useDarkInk: analysis.useDarkInk,
         data
       };
     }
@@ -506,6 +547,7 @@
       if (loadedSampler && loadedSamplerUrl === imageUrl) {
         return loadedSampler;
       }
+      clearEffectBaseCache();
       loadedSampler = createSampler(image);
       loadedSamplerUrl = loadedSampler ? imageUrl : '';
       return loadedSampler;
@@ -521,7 +563,9 @@
       return {
         scale,
         offsetX: (viewport.width - renderedWidth) / 2,
-        offsetY: (viewport.height - renderedHeight) / 2
+        offsetY: (viewport.height - renderedHeight) / 2,
+        renderedWidth,
+        renderedHeight
       };
     }
 
@@ -544,16 +588,6 @@
 
     function getLuminance(color) {
       return getLuminanceFromRgb(color.red, color.green, color.blue);
-    }
-
-    function getBackgroundLuminance() {
-      const theme = getThemeMode();
-      if (backgroundLuminanceCache && backgroundLuminanceCache.theme === theme) {
-        return backgroundLuminanceCache.value;
-      }
-      const value = getLuminance(getBackgroundColor());
-      backgroundLuminanceCache = { theme, value };
-      return value;
     }
 
     function shiftSampleColor(color, amount, lighten) {
@@ -604,15 +638,29 @@
       return (leveled * (1 - amount)) + (curved * amount);
     }
 
-    function getEffectTone(luminance, darkMode, strength) {
-      const sourceTone = darkMode ? luminance : (1 - luminance);
-      return applyToneCurve(sourceTone, strength);
+    function getLayerEffectTone(luminance, sampler, strength) {
+      const useLightInk = sampler.useDarkInk !== true;
+      const rawTone = useLightInk ? luminance : (1 - luminance);
+      const low = clampNumber(sampler.lowLuminance, 0, 1);
+      const high = clampNumber(sampler.highLuminance, 0, 1);
+      const range = high - low;
+      if (range < 0.025) {
+        return applyToneCurve(rawTone, strength);
+      }
+      const normalizedTone = useLightInk
+        ? clampNumber((luminance - low) / range, 0, 1)
+        : clampNumber((high - luminance) / range, 0, 1);
+      const contrastMix = 0.72 + ((clampNumber(strength, 0, 100) / 100) * 0.14);
+      return applyToneCurve(
+        (rawTone * (1 - contrastMix)) + (normalizedTone * contrastMix),
+        strength
+      );
     }
 
-    function getCurvedEffectColor(color, darkMode, tone, saturation) {
+    function getCurvedEffectColor(color, useLightInk, tone, saturation) {
       const saturated = boostSampleColor(color, saturation);
       const contrastShift = 0.04 + (tone * 0.12);
-      return shiftSampleColor(saturated, contrastShift, darkMode);
+      return shiftSampleColor(saturated, contrastShift, useLightInk);
     }
 
     function getControlRange(value, minValue, maxValue) {
@@ -620,7 +668,7 @@
       return minValue + ((maxValue - minValue) * ratio);
     }
 
-    function getAsciiGlyphMetrics(fontSize, font) {
+    function getAsciiGlyphMetrics(fontSize, font, targetContext) {
       if (asciiGlyphMetricsCache &&
           asciiGlyphMetricsCache.fontSize === fontSize &&
           asciiGlyphMetricsCache.font === font) {
@@ -630,10 +678,10 @@
         if (char === ' ') {
           return maxWidth;
         }
-        const metrics = context.measureText(char);
+        const metrics = targetContext.measureText(char);
         return Math.max(maxWidth, metrics.width || 0);
       }, fontSize * 0.62);
-      const glyphMetrics = context.measureText('@');
+      const glyphMetrics = targetContext.measureText('@');
       const glyphHeight = (glyphMetrics.actualBoundingBoxAscent || 0) +
         (glyphMetrics.actualBoundingBoxDescent || 0);
       asciiGlyphMetricsCache = {
@@ -733,8 +781,10 @@
         const blended = getOverlayBlendLuminance(baseLuminance, effectLuminance);
         return (baseLuminance * (1 - canvasAlpha)) + (blended * canvasAlpha);
       }
-      const backgroundLuminance = getBackgroundLuminance();
-      return (backgroundLuminance * (1 - canvasAlpha)) + (effectLuminance * canvasAlpha);
+      if (!Number.isFinite(baseLuminance)) {
+        return null;
+      }
+      return (baseLuminance * (1 - canvasAlpha)) + (effectLuminance * canvasAlpha);
     }
 
     function drawGrain(viewport, strength) {
@@ -763,19 +813,108 @@
       setCanvasVisuals('grain', 0.08 + getEffectAlpha(0.22, strength), 'overlay');
     }
 
-    function drawHalftone(viewport, sampler, strength, size, spacing) {
-      beginHoverRender();
+    function getHoverRadius(viewport) {
+      return viewport.width < 720 ? 92 : 132;
+    }
+
+    function getGridStart(step, minimum) {
+      const first = step / 2;
+      if (minimum <= first) {
+        return first;
+      }
+      return first + (Math.floor((minimum - first) / step) * step);
+    }
+
+    function getEffectBaseKey(type, viewport, sampler, strength, size, spacing) {
+      return [
+        type,
+        loadedImageUrl,
+        canvas ? canvas.width : 0,
+        canvas ? canvas.height : 0,
+        viewport.width,
+        viewport.height,
+        sampler.useDarkInk ? 1 : 0,
+        strength,
+        size,
+        spacing
+      ].join(':');
+    }
+
+    function ensureEffectBaseCanvas(viewport) {
+      if (!canvas || !documentObj || typeof documentObj.createElement !== 'function') {
+        return null;
+      }
+      if (!effectBaseCanvas) {
+        effectBaseCanvas = documentObj.createElement('canvas');
+      }
+      if (effectBaseCanvas.width !== canvas.width) {
+        effectBaseCanvas.width = canvas.width;
+      }
+      if (effectBaseCanvas.height !== canvas.height) {
+        effectBaseCanvas.height = canvas.height;
+      }
+      effectBaseContext = effectBaseCanvas.getContext('2d', { alpha: true });
+      if (!effectBaseContext) {
+        clearEffectBaseCache();
+        return null;
+      }
+      const scale = effectBaseCanvas.width / viewport.width;
+      effectBaseContext.setTransform(scale, 0, 0, scale, 0, 0);
+      return effectBaseCanvas;
+    }
+
+    function copyEffectBaseToVisible(viewport) {
+      context.clearRect(0, 0, viewport.width, viewport.height);
+      if (!effectBaseCanvas) {
+        return;
+      }
+      context.drawImage(
+        effectBaseCanvas,
+        0,
+        0,
+        effectBaseCanvas.width,
+        effectBaseCanvas.height,
+        0,
+        0,
+        viewport.width,
+        viewport.height
+      );
+    }
+
+    function drawHalftoneLayer(targetContext, viewport, sampler, strength, size, spacing, hoverOnly) {
       const metrics = getRenderedMetrics(sampler, viewport);
-      const step = getControlRange(spacing, viewport.width < 720 ? 9 : 10, viewport.width < 720 ? 23 : 26);
-      const sizeRadius = getControlRange(size, viewport.width < 720 ? 1.4 : 1.6, viewport.width < 720 ? 13 : 15);
+      const step = getControlRange(
+        spacing,
+        viewport.width < 720 ? 9 : 10,
+        viewport.width < 720 ? 23 : 26
+      );
+      const sizeRadius = getControlRange(
+        size,
+        viewport.width < 720 ? 1.4 : 1.6,
+        viewport.width < 720 ? 13 : 15
+      );
       const maxRadius = Math.min(sizeRadius, step * 0.78);
-      const darkMode = getThemeMode() === 'dark';
-      for (let y = step / 2; y < viewport.height + step; y += step) {
-        for (let x = step / 2; x < viewport.width + step; x += step) {
+      const useLightInk = sampler.useDarkInk !== true;
+      const hoverRadius = getHoverRadius(viewport);
+      const minimumX = hoverOnly ? hoverPointer.x - hoverRadius - step : 0;
+      const maximumX = hoverOnly ? hoverPointer.x + hoverRadius + step : viewport.width + step;
+      const minimumY = hoverOnly ? hoverPointer.y - hoverRadius - step : 0;
+      const maximumY = hoverOnly ? hoverPointer.y + hoverRadius + step : viewport.height + step;
+      for (let y = getGridStart(step, minimumY); y <= maximumY; y += step) {
+        if (y < 0 || y > viewport.height + step) {
+          continue;
+        }
+        for (let x = getGridStart(step, minimumX); x <= maximumX; x += step) {
+          if (x < 0 || x > viewport.width + step) {
+            continue;
+          }
+          const hover = hoverOnly ? getHoverInfluence(x, y) : 0;
+          if (hoverOnly && hover <= 0) {
+            continue;
+          }
           const color = sampleColor(sampler, metrics, x, y);
           const luminance = getLuminance(color);
-          const tone = getEffectTone(luminance, darkMode, strength);
-          const hover = getHoverInfluence(x, y);
+          const tone = getLayerEffectTone(luminance, sampler, strength);
           const nextTone = clampNumber(tone + (hover * 0.24), 0, 1);
           if (nextTone <= 0.01) {
             continue;
@@ -785,61 +924,146 @@
             0.7,
             maxRadius * 1.24
           );
-          const ink = getCurvedEffectColor(color, darkMode, nextTone, 0.2 + (hover * 0.24));
-          context.globalAlpha = clampNumber(0.28 + (nextTone * 0.72) + (hover * 0.14), 0.12, 1);
-          context.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`;
-          context.beginPath();
-          context.arc(x, y, radius, 0, Math.PI * 2);
-          context.fill();
+          const curvedInk = getCurvedEffectColor(
+            color,
+            useLightInk,
+            nextTone,
+            0.2 + (hover * 0.24)
+          );
+          const ink = shiftSampleColor(
+            curvedInk,
+            useLightInk
+              ? 0.24 + (nextTone * 0.28)
+              : 0.2 + (nextTone * 0.3),
+            useLightInk
+          );
+          targetContext.globalAlpha = clampNumber(
+            0.24 + (nextTone * 0.58) + (hover * 0.12),
+            0.1,
+            0.88
+          );
+          targetContext.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`;
+          targetContext.beginPath();
+          targetContext.arc(x, y, radius, 0, Math.PI * 2);
+          targetContext.fill();
         }
       }
-      context.globalAlpha = 1;
-      setCanvasVisuals('halftone', 1, 'normal');
-      finishHoverRender();
+      targetContext.globalAlpha = 1;
     }
 
-    function drawAscii(viewport, sampler, strength, size, spacing) {
-      beginHoverRender();
+    function drawAsciiLayer(targetContext, viewport, sampler, strength, size, spacing, hoverOnly) {
       const metrics = getRenderedMetrics(sampler, viewport);
-      const darkMode = getThemeMode() === 'dark';
-      const fontSize = Math.round(getControlRange(size, 8, viewport.width < 720 ? 24 : 26));
-      context.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-      context.textBaseline = 'middle';
-      context.textAlign = 'center';
-      const glyphMetrics = getAsciiGlyphMetrics(fontSize, context.font);
+      const useLightInk = sampler.useDarkInk !== true;
+      const strengthRatio = clampNumber(strength, 0, 100) / 100;
+      const fontSize = Math.round(getControlRange(size, 7, viewport.width < 720 ? 22 : 24));
+      targetContext.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      targetContext.textBaseline = 'middle';
+      targetContext.textAlign = 'center';
+      const glyphMetrics = getAsciiGlyphMetrics(fontSize, targetContext.font, targetContext);
       const xStep = Math.max(
-        getControlRange(spacing, viewport.width < 720 ? 8 : 9, viewport.width < 720 ? 24 : 27),
-        glyphMetrics.glyphWidth * 1.12
+        getControlRange(spacing, viewport.width < 720 ? 7 : 8, viewport.width < 720 ? 22 : 24),
+        glyphMetrics.glyphWidth * 1.08
       );
       const lineHeight = Math.max(
-        getControlRange(spacing, 10, viewport.width < 720 ? 26 : 28),
-        (glyphMetrics.glyphHeight || fontSize) * 1.16,
-        fontSize * 1.08
+        getControlRange(spacing, 9, viewport.width < 720 ? 24 : 26),
+        (glyphMetrics.glyphHeight || fontSize) * 1.12,
+        fontSize * 1.04
       );
-      for (let y = lineHeight / 2; y < viewport.height + lineHeight; y += lineHeight) {
-        for (let x = xStep / 2; x < viewport.width + xStep; x += xStep) {
-          const color = sampleColor(sampler, metrics, x, y);
-          const luminance = getLuminance(color);
-          const tone = getEffectTone(luminance, darkMode, strength);
-          const hover = getHoverInfluence(x, y);
-          const nextTone = clampNumber(tone + (hover * 0.22), 0, 1);
-          if (nextTone <= 0.015) {
+      const hoverRadius = getHoverRadius(viewport);
+      const minimumX = hoverOnly ? hoverPointer.x - hoverRadius - xStep : 0;
+      const maximumX = hoverOnly ? hoverPointer.x + hoverRadius + xStep : viewport.width + xStep;
+      const minimumY = hoverOnly ? hoverPointer.y - hoverRadius - lineHeight : 0;
+      const maximumY = hoverOnly ? hoverPointer.y + hoverRadius + lineHeight : viewport.height + lineHeight;
+      for (let y = getGridStart(lineHeight, minimumY); y <= maximumY; y += lineHeight) {
+        if (y < 0 || y > viewport.height + lineHeight) {
+          continue;
+        }
+        for (let x = getGridStart(xStep, minimumX); x <= maximumX; x += xStep) {
+          if (x < 0 || x > viewport.width + xStep) {
             continue;
           }
-          const index = Math.round(nextTone * (ASCII_CHARS.length - 1));
+          const hover = hoverOnly ? getHoverInfluence(x, y) : 0;
+          if (hoverOnly && hover <= 0) {
+            continue;
+          }
+          const color = sampleColor(sampler, metrics, x, y);
+          const luminance = getLuminance(color);
+          const tone = getLayerEffectTone(luminance, sampler, strength);
+          const nextTone = clampNumber(tone + (hover * 0.2), 0, 1);
+          if (nextTone <= 0.02) {
+            continue;
+          }
+          const characterTone = tone > 0.02 ? tone : nextTone;
+          const index = Math.round(characterTone * (ASCII_CHARS.length - 1));
           const char = ASCII_CHARS[clampNumber(index, 0, ASCII_CHARS.length - 1)];
           if (char === ' ') {
             continue;
           }
-          const ink = getCurvedEffectColor(color, darkMode, nextTone, 0.42 + (hover * 0.24));
-          context.globalAlpha = clampNumber(0.12 + (nextTone * 0.88) + (hover * 0.1), 0.08, 1);
-          context.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`;
-          context.fillText(char, x, y);
+          const curvedInk = getCurvedEffectColor(
+            color,
+            useLightInk,
+            nextTone,
+            0.5 + (strengthRatio * 0.22) + (hover * 0.2)
+          );
+          const ink = shiftSampleColor(
+            curvedInk,
+            useLightInk
+              ? 0.32 + (nextTone * 0.3)
+              : 0.2 + (nextTone * 0.24),
+            useLightInk
+          );
+          const alpha = (0.12 + (nextTone * 0.7) + (hover * 0.1)) *
+            (0.72 + (strengthRatio * 0.28));
+          targetContext.globalAlpha = clampNumber(alpha, 0.06, 0.94);
+          targetContext.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`;
+          targetContext.fillText(char, x, y);
         }
       }
-      context.globalAlpha = 1;
-      setCanvasVisuals('ascii', 1, 'normal');
+      targetContext.globalAlpha = 1;
+    }
+
+    function drawCachedLayeredEffect(type, viewport, sampler, strength, size, spacing, drawLayer) {
+      const baseCanvas = ensureEffectBaseCanvas(viewport);
+      if (!baseCanvas) {
+        return;
+      }
+      const cacheKey = getEffectBaseKey(type, viewport, sampler, strength, size, spacing);
+      if (effectBaseCacheKey !== cacheKey) {
+        effectBaseContext.clearRect(0, 0, viewport.width, viewport.height);
+        drawLayer(effectBaseContext, viewport, sampler, strength, size, spacing, false);
+        effectBaseCacheKey = cacheKey;
+      }
+      copyEffectBaseToVisible(viewport);
+      beginHoverRender();
+      if (hoverRenderIntensity > 0) {
+        drawLayer(context, viewport, sampler, strength, size, spacing, true);
+      }
+      setCanvasVisuals(type, 1, 'normal');
       finishHoverRender();
+    }
+
+    function drawHalftone(viewport, sampler, strength, size, spacing) {
+      drawCachedLayeredEffect(
+        'halftone',
+        viewport,
+        sampler,
+        strength,
+        size,
+        spacing,
+        drawHalftoneLayer
+      );
+    }
+
+    function drawAscii(viewport, sampler, strength, size, spacing) {
+      drawCachedLayeredEffect(
+        'ascii',
+        viewport,
+        sampler,
+        strength,
+        size,
+        spacing,
+        drawAsciiLayer
+      );
     }
 
     function renderNow() {
@@ -909,8 +1133,20 @@
     }
 
     function apply(nextPrefs) {
-      const previousType = normalizePrefs(prefs).type;
+      const previousPrefs = normalizePrefs(prefs);
       prefs = normalizePrefs(nextPrefs);
+      const previousType = previousPrefs.type;
+      const visualPrefsChanged = previousType !== prefs.type ||
+        previousPrefs.strength !== prefs.strength ||
+        previousPrefs.size !== prefs.size ||
+        previousPrefs.spacing !== prefs.spacing;
+      const hoverChanged = previousPrefs.hover !== prefs.hover;
+      if (!visualPrefsChanged && !hoverChanged) {
+        return;
+      }
+      if (prefs.type !== 'ascii' && prefs.type !== 'halftone') {
+        clearEffectBaseCache();
+      }
       if (prefs.hover === false || (prefs.type !== 'halftone' && prefs.type !== 'ascii')) {
         resetHoverPointer();
       }
@@ -923,6 +1159,10 @@
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
         scheduleRender(EFFECT_CROSSFADE_MS);
+        return;
+      }
+      if (visualPrefsChanged && previousType === prefs.type) {
+        scheduleRender(PARAMETER_RENDER_DEBOUNCE_MS);
         return;
       }
       scheduleRender();
@@ -957,9 +1197,11 @@
   }
 
   root.LumnoNewtabWallpaperEffects = {
+    analyzeImageData,
     DEFAULT_PREFS,
     EFFECT_TYPES,
     createWallpaperEffects,
+    getEffectCanvasScale,
     normalizePrefs
   };
 })(globalThis);

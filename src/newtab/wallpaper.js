@@ -3888,8 +3888,8 @@
       });
       appendChildren(titleGroup, [wallpaperAppearanceTitle, wallpaperAppearanceInfoButton]);
       appendChildren(header, [titleGroup, wallpaperAppearanceScopeTabs]);
-      appendChildren(section, [header, wallpaperAppearanceOptions, createSearchWidthControl()]);
-      return section;
+      appendChildren(section, [wallpaperAppearanceOptions, createSearchWidthControl()]);
+      return { header, section };
     }
 
     function createEffectOptions() {
@@ -4436,13 +4436,16 @@
       }
       wallpaperPanelRendered = true;
       const effectControl = createWallpaperEffectControl();
-      appendChildren(wallpaperPanel, [
-        createAppearanceSection(),
+      const appearance = createAppearanceSection();
+      const scrollBody = createDomElement('div', { className: 'x-nt-wallpaper-panel-scroll' });
+      appendChildren(scrollBody, [
+        appearance.section,
         createPanelDivider(),
         createWallpaperSection(effectControl),
         createPanelDivider(),
         createLogoSection()
       ]);
+      appendChildren(wallpaperPanel, [appearance.header, scrollBody]);
       updateWallpaperLanguageStrings();
       syncWallpaperSourceTabToEditMode();
       updateCustomWallpaperUploadTile();

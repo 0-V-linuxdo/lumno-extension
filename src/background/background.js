@@ -2980,7 +2980,12 @@ function warmSwitcherTabThemeColor(host, url) {
       const sharedHost = getSwitcherRegistrableThemeHost(normalizedHost);
       if (accentRgb && sharedHost && sharedHost !== normalizedHost) {
         const sharedKey = `${sharedHost}::${parsed.origin}::auto`;
-        siteThemeColorCache.set(sharedKey, result);
+        setBoundedBackgroundCacheEntry(
+          siteThemeColorCache,
+          sharedKey,
+          result,
+          BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
+        );
         persistSiteThemeColorForSwitcher(sharedHost, result);
       }
     })
@@ -5546,10 +5551,35 @@ const titlePinyinCache = new Map();
 const siteThemeColorCache = new Map();
 const siteThemeColorPending = new Map();
 const switcherThemeColorWarmups = new Set();
+const BACKGROUND_FAVICON_DATA_CACHE_MAX_ENTRIES = 256;
+const BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES = 512;
+const BACKGROUND_TITLE_PINYIN_CACHE_MAX_ENTRIES = 2048;
 let backgroundFaviconCacheRuntime = null;
 const logBackgroundFaviconDecision = typeof FAVICON_UTILS.createFaviconDecisionLogger === 'function'
   ? FAVICON_UTILS.createFaviconDecisionLogger({ surface: 'background' })
   : (() => false);
+
+function setBoundedBackgroundCacheEntry(cache, key, value, maxEntries) {
+  if (typeof FAVICON_UTILS.setBoundedCacheEntry === 'function') {
+    return FAVICON_UTILS.setBoundedCacheEntry(cache, key, value, maxEntries);
+  }
+  if (!cache || typeof cache.set !== 'function') {
+    return value;
+  }
+  if (typeof cache.delete === 'function' && typeof cache.has === 'function' && cache.has(key)) {
+    cache.delete(key);
+  }
+  cache.set(key, value);
+  while (cache.size > maxEntries && typeof cache.keys === 'function' &&
+      typeof cache.delete === 'function') {
+    const oldest = cache.keys().next();
+    if (!oldest || oldest.done) {
+      break;
+    }
+    cache.delete(oldest.value);
+  }
+  return value;
+}
 
 function logBlockedLocalFavicon(url, candidateKind, reason, pageUrl) {
   return logBackgroundFaviconDecision(url, reason || 'local-rule', {
@@ -6366,7 +6396,12 @@ function resolveSiteThemeColor(targetUrl, hostOverride, preferredTheme) {
       return siteThemeColorPending.get(cacheKey);
     }
     if (!canFetchPageForFavicon(inputUrl)) {
-      siteThemeColorCache.set(cacheKey, null);
+      setBoundedBackgroundCacheEntry(
+        siteThemeColorCache,
+        cacheKey,
+        null,
+        BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
+      );
       return null;
     }
     const promise = fetch(inputUrl, { cache: 'force-cache' })
@@ -6382,7 +6417,12 @@ function resolveSiteThemeColor(targetUrl, hostOverride, preferredTheme) {
       })
       .then((result) => {
         const finalResult = result || null;
-        siteThemeColorCache.set(cacheKey, finalResult);
+        setBoundedBackgroundCacheEntry(
+          siteThemeColorCache,
+          cacheKey,
+          finalResult,
+          BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
+        );
         if (finalResult) {
           persistSiteThemeColorForSwitcher(normalizedHost, finalResult);
         }
@@ -6390,7 +6430,12 @@ function resolveSiteThemeColor(targetUrl, hostOverride, preferredTheme) {
         return finalResult;
       })
       .catch(() => {
-        siteThemeColorCache.set(cacheKey, null);
+        setBoundedBackgroundCacheEntry(
+          siteThemeColorCache,
+          cacheKey,
+          null,
+          BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
+        );
         siteThemeColorPending.delete(cacheKey);
         return null;
       });
@@ -6583,7 +6628,12 @@ function fetchFaviconData(url, pageUrl) {
       })
       .then((dataUrl) => {
         if (dataUrl) {
-          faviconDataCache.set(url, dataUrl);
+          setBoundedBackgroundCacheEntry(
+            faviconDataCache,
+            url,
+            dataUrl,
+            BACKGROUND_FAVICON_DATA_CACHE_MAX_ENTRIES
+          );
         }
         faviconPending.delete(url);
         return dataUrl;
@@ -7606,7 +7656,12 @@ function buildTitlePinyinIndex(title) {
     initials: initials,
     chineseLength: chineseChars.length
   };
-  titlePinyinCache.set(rawTitle, result);
+  setBoundedBackgroundCacheEntry(
+    titlePinyinCache,
+    rawTitle,
+    result,
+    BACKGROUND_TITLE_PINYIN_CACHE_MAX_ENTRIES
+  );
   return result;
 }
 

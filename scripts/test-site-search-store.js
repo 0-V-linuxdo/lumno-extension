@@ -31,6 +31,7 @@ async function run() {
   assert.deepStrictEqual(runtimeLoaded, runtimeItems);
 
   const originalFetch = global.fetch;
+  let requestedResourceUrl = '';
   global.fetch = async () => ({
     json: async () => ({
       items: baseProviders
@@ -56,12 +57,21 @@ async function run() {
           callback({ [key]: storageValues[key] });
         }
       },
-      defaultProviders: baseProviders
+      defaultProviders: baseProviders,
+      getResourceUrl: (resourcePath) => {
+        requestedResourceUrl = `https://example.test/${resourcePath}`;
+        return requestedResourceUrl;
+      }
     });
     assert.strictEqual(fallbackLoaded.length, 1);
     assert.strictEqual(fallbackLoaded[0].key, 'gm');
     assert.strictEqual(fallbackLoaded[0].action, 'openAndSubmit');
     assert.strictEqual(fallbackLoaded[0].submitStrategy, 'geminiPrompt');
+    assert.strictEqual(
+      requestedResourceUrl,
+      'https://example.test/assets/data/site-search.json',
+      'site search store should honor the caller resource URL resolver'
+    );
   } finally {
     global.fetch = originalFetch;
   }

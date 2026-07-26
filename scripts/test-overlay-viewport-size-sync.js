@@ -87,6 +87,12 @@ function createFakeWindow(options) {
       if (handler) {
         handler();
       }
+    },
+    triggerVisualViewportScroll() {
+      const handler = visualViewportListeners.get('scroll');
+      if (handler) {
+        handler();
+      }
     }
   };
   return win;
@@ -235,6 +241,14 @@ assert.doesNotMatch(
     overlay.style.getPropertyValue('top'),
     '160px',
     'overlay should resync the original vh position when the visual viewport offset changes'
+  );
+
+  win.visualViewport.offsetTop = 100;
+  win.triggerVisualViewportScroll();
+  assert.strictEqual(
+    overlay.style.getPropertyValue('top'),
+    '180px',
+    'overlay should follow visual viewport scrolling without waiting for a resize'
   );
 }
 

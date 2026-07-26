@@ -892,11 +892,15 @@ assert.strictEqual(documentObj.activeElement, null, 'closing the appearance pane
 const appearanceButton = control.children[1];
 appearanceButton.click();
 const renderedPanel = control.children[0];
-const appearanceSection = getChildByClassName(renderedPanel, 'x-nt-appearance-section');
+const appearanceHeader = getChildByClassName(renderedPanel, 'x-nt-appearance-header');
+const appearanceScrollBody = getChildByClassName(renderedPanel, 'x-nt-wallpaper-panel-scroll');
+const appearanceSection = getChildByClassName(appearanceScrollBody, 'x-nt-appearance-section');
 const searchWidthControl = getChildByClassName(appearanceSection, 'x-nt-search-width-control');
 const searchWidthSlider = searchWidthControl.children[1].children[0];
 const moreSettingsLink = searchWidthControl.children[2];
 
+assert.ok(appearanceHeader, 'appearance header should be a direct panel child above the scrollable content');
+assert.ok(appearanceScrollBody, 'appearance panel content should use one dedicated internal scroll container');
 assert.strictEqual(searchWidthControl.getAttribute('data-visible'), 'true');
 assert.strictEqual(searchWidthSlider.disabled, false, 'global scope should still show the search width slider');
 assert.strictEqual(searchWidthSlider.tabIndex, 0, 'global scope search width slider should be tabbable');
@@ -913,7 +917,8 @@ const scopedRuntime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
 scopedRuntime.createControls();
 const scopedControl = scopedRuntime.getControlElement();
 scopedControl.children[1].click();
-const scopedAppearanceSection = getChildByClassName(scopedControl.children[0], 'x-nt-appearance-section');
+const scopedScrollBody = getChildByClassName(scopedControl.children[0], 'x-nt-wallpaper-panel-scroll');
+const scopedAppearanceSection = getChildByClassName(scopedScrollBody, 'x-nt-appearance-section');
 const scopedSearchWidthControl = getChildByClassName(scopedAppearanceSection, 'x-nt-search-width-control');
 const scopedSearchWidthSlider = scopedSearchWidthControl.children[1].children[0];
 const scopedMoreSettingsLink = scopedSearchWidthControl.children[2];
@@ -938,8 +943,10 @@ const switchingRuntime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
 switchingRuntime.createControls();
 const switchingControl = switchingRuntime.getControlElement();
 switchingControl.children[1].click();
-const switchingAppearanceSection = getChildByClassName(switchingControl.children[0], 'x-nt-appearance-section');
-const switchingHeader = getChildByClassName(switchingAppearanceSection, 'x-nt-appearance-header');
+const switchingPanel = switchingControl.children[0];
+const switchingScrollBody = getChildByClassName(switchingPanel, 'x-nt-wallpaper-panel-scroll');
+const switchingAppearanceSection = getChildByClassName(switchingScrollBody, 'x-nt-appearance-section');
+const switchingHeader = getChildByClassName(switchingPanel, 'x-nt-appearance-header');
 const switchingScopeTabs = getChildByClassName(switchingHeader, 'x-nt-appearance-scope-tabs');
 const switchingSearchWidthControl = getChildByClassName(switchingAppearanceSection, 'x-nt-search-width-control');
 

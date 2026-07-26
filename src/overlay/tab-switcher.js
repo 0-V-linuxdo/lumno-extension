@@ -567,6 +567,36 @@
     return 1;
   }
 
+  function applySwitcherViewportPlacement(panel, win) {
+    if (!panel || !panel.style) {
+      return;
+    }
+    const targetWindow = win || window;
+    const visualViewport = targetWindow && targetWindow.visualViewport
+      ? targetWindow.visualViewport
+      : null;
+    const viewportWidth = visualViewport && Number.isFinite(Number(visualViewport.width))
+      ? Math.max(0, Number(visualViewport.width))
+      : Math.max(0, Number(targetWindow && targetWindow.innerWidth) || 0);
+    const viewportHeight = visualViewport && Number.isFinite(Number(visualViewport.height))
+      ? Math.max(0, Number(visualViewport.height))
+      : Math.max(0, Number(targetWindow && targetWindow.innerHeight) || 0);
+    const offsetLeft = visualViewport && Number.isFinite(Number(visualViewport.offsetLeft))
+      ? Math.max(0, Number(visualViewport.offsetLeft))
+      : 0;
+    const offsetTop = visualViewport && Number.isFinite(Number(visualViewport.offsetTop))
+      ? Math.max(0, Number(visualViewport.offsetTop))
+      : 0;
+    panel.style.setProperty(
+      '--x-tab-switcher-center-left',
+      `${Math.round(offsetLeft + (viewportWidth / 2))}px`
+    );
+    panel.style.setProperty(
+      '--x-tab-switcher-center-top',
+      `${Math.round(offsetTop + (viewportHeight / 2))}px`
+    );
+  }
+
   function applySwitcherZoomCompensation(panel, tabZoomFactor, visualViewportScale) {
     if (!panel) {
       return;
@@ -620,8 +650,8 @@
         --x-tab-switcher-title-icon-gap: 5px;
         color-scheme: light;
         position: fixed;
-        left: 50%;
-        top: 50%;
+        left: var(--x-tab-switcher-center-left, 50%);
+        top: var(--x-tab-switcher-center-top, 50%);
         transform: translate3d(-50%, -50%, 0) scale(var(--x-tab-switcher-visible-scale));
         transform-origin: center center;
         z-index: 2147483647;
@@ -971,9 +1001,11 @@
     panel.setAttribute('aria-label', getMessage('tab_switcher_title', 'Recent tabs'));
     panel.setAttribute('data-visible', 'true');
     panel.style.setProperty('--x-tab-count', String(Math.max(1, Math.min(5, tabs.length))));
+    applySwitcherViewportPlacement(panel, window);
     applySwitcherZoomCompensation(panel, context.tabZoomFactor, getSwitcherVisualViewportScale(window));
 
     function syncSwitcherZoomCompensation() {
+      applySwitcherViewportPlacement(panel, window);
       applySwitcherZoomCompensation(panel, context.tabZoomFactor, getSwitcherVisualViewportScale(window));
     }
 
@@ -1284,6 +1316,7 @@
       window.removeEventListener('keyup', handleKeyup, true);
       if (switcherVisualViewport && typeof switcherVisualViewport.removeEventListener === 'function') {
         switcherVisualViewport.removeEventListener('resize', syncSwitcherZoomCompensation);
+        switcherVisualViewport.removeEventListener('scroll', syncSwitcherZoomCompensation);
       }
       document.removeEventListener('pointerdown', handlePointerDown, true);
       document.removeEventListener(TAB_SWITCHER_ADVANCE_EVENT, handleExternalAdvance, true);
@@ -1294,6 +1327,7 @@
     window.addEventListener('keyup', handleKeyup, true);
     if (switcherVisualViewport) {
       switcherVisualViewport.addEventListener('resize', syncSwitcherZoomCompensation, { passive: true });
+      switcherVisualViewport.addEventListener('scroll', syncSwitcherZoomCompensation, { passive: true });
     }
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener(TAB_SWITCHER_ADVANCE_EVENT, handleExternalAdvance, true);

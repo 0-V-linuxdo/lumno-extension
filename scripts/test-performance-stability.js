@@ -71,6 +71,16 @@ assert.strictEqual(
   1,
   'new tab extension resources should resolve through the guarded URL helper'
 );
+assertMatches(
+  newtabJs,
+  /function sendRuntimeMessage\(message, callback\) \{[\s\S]*?typeof chrome === 'undefined'[\s\S]*?try \{[\s\S]*?chrome\.runtime\.sendMessage\(message, callback\);[\s\S]*?catch/,
+  'new tab runtime messages should use a guarded transport helper'
+);
+assertMatches(
+  newtabJs,
+  /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderSuggestions\(\[\], requestQuery\)/,
+  'new tab suggestions should fall back locally when the extension runtime is unavailable'
+);
 
 htmlFiles.forEach((relativePath) => {
   const html = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');

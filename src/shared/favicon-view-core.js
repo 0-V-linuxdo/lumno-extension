@@ -46,6 +46,47 @@
     const iconPreloadCache = config.iconPreloadCache || new Map();
     const extensionFaviconPlaceholderProbeCache = new Map();
     const ignoreLastWorkingWhenFallback = Boolean(config.ignoreLastWorkingWhenFallback);
+    const faviconDataCacheMaxEntries = Number.isFinite(config.faviconDataCacheMaxEntries)
+      ? Math.max(1, Math.floor(config.faviconDataCacheMaxEntries))
+      : 256;
+    const iconPreloadCacheMaxEntries = Number.isFinite(config.iconPreloadCacheMaxEntries)
+      ? Math.max(1, Math.floor(config.iconPreloadCacheMaxEntries))
+      : 192;
+    const placeholderProbeCacheMaxEntries = Number.isFinite(config.placeholderProbeCacheMaxEntries)
+      ? Math.max(1, Math.floor(config.placeholderProbeCacheMaxEntries))
+      : 32;
+    const faviconUtils = (root && root.LumnoFaviconUtils) || {};
+
+    function setBoundedCacheEntry(cache, key, value, maxEntries) {
+      if (typeof faviconUtils.setBoundedCacheEntry === 'function') {
+        return faviconUtils.setBoundedCacheEntry(cache, key, value, maxEntries);
+      }
+      if (!cache || typeof cache.set !== 'function') {
+        return value;
+      }
+      if (typeof cache.delete === 'function' && typeof cache.has === 'function' && cache.has(key)) {
+        cache.delete(key);
+      }
+      cache.set(key, value);
+      while (cache.size > maxEntries && typeof cache.keys === 'function' &&
+          typeof cache.delete === 'function') {
+        const oldest = cache.keys().next();
+        if (!oldest || oldest.done) {
+          break;
+        }
+        cache.delete(oldest.value);
+      }
+      return value;
+    }
+
+    function cacheFaviconData(url, dataUrl) {
+      return setBoundedCacheEntry(
+        faviconDataCache,
+        url,
+        dataUrl,
+        faviconDataCacheMaxEntries
+      );
+    }
 
     function createImage() {
       return typeof ImageCtor === 'function'
@@ -119,7 +160,12 @@
         return Promise.resolve('');
       }
       if (!extensionFaviconPlaceholderProbeCache.has(probeUrl)) {
-        extensionFaviconPlaceholderProbeCache.set(probeUrl, loadImageSignature(probeUrl));
+        setBoundedCacheEntry(
+          extensionFaviconPlaceholderProbeCache,
+          probeUrl,
+          loadImageSignature(probeUrl),
+          placeholderProbeCacheMaxEntries
+        );
       }
       return extensionFaviconPlaceholderProbeCache.get(probeUrl);
     }
@@ -267,7 +313,7 @@
         chromeApi.runtime.sendMessage({ action: 'getFaviconData', url: url, pageUrl: pageUrl || '' }, (response) => {
           const dataUrl = response && response.data ? response.data : '';
           if (dataUrl) {
-            faviconDataCache.set(url, dataUrl);
+            cacheFaviconData(url, dataUrl);
           }
           faviconDataPending.delete(url);
           resolve(dataUrl || null);
@@ -466,7 +512,7 @@
       img.decoding = 'async';
       img.referrerPolicy = 'no-referrer';
       img.src = url;
-      iconPreloadCache.set(url, img);
+      setBoundedCacheEntry(iconPreloadCache, url, img, iconPreloadCacheMaxEntries);
     }
 
     function warmIconCache(list) {
@@ -524,6 +570,7 @@
       setFaviconLoadState,
       applyFaviconOpticalShift,
       applyFaviconOpticalAlignment,
+      cacheFaviconData,
       requestFaviconData,
       setFaviconSrcWithAnimation,
       canReuseCurrentFavicon,
