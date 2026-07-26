@@ -11,8 +11,7 @@
     type: 'none',
     strength: 50,
     size: 50,
-    spacing: 50,
-    hover: true
+    spacing: 50
   };
 
   function getOption(options, key, fallback) {
@@ -109,8 +108,7 @@
       type,
       strength: Math.round(clampNumber(rawStrength, 0, 100)),
       size: Math.round(clampNumber(rawSize, 0, 100)),
-      spacing: Math.round(clampNumber(rawSpacing, 0, 100)),
-      hover: value.hover === false ? false : DEFAULT_PREFS.hover
+      spacing: Math.round(clampNumber(rawSpacing, 0, 100))
     };
   }
 
@@ -124,15 +122,7 @@
       return '';
     });
     const onRender = getFunction(options, 'onRender');
-    const HOVER_FADE_DURATION_MS = 240;
     const EFFECT_CROSSFADE_MS = 150;
-    const HOVER_SAFE_ZONE_PADDING_PX = 36;
-    const HOVER_SAFE_ZONE_SELECTORS = [
-      '#_x_extension_newtab_bookmarks_2024_unique_',
-      '#_x_extension_newtab_recent_sites_2024_unique_',
-      '#_x_extension_newtab_section_safe_corridor_2026_unique_'
-    ];
-    const HOVER_SAFE_ZONE_RECT_CACHE_MS = 80;
     const ASCII_CHARS = '  .,:;-=+xX08S#&@';
 
     let canvas = null;
@@ -146,22 +136,7 @@
     let loadedSampler = null;
     let loadedSamplerUrl = '';
     let observer = null;
-    let pointerBound = false;
-    let hoverPointer = {
-      active: false,
-      x: 0,
-      y: 0,
-      intensity: 0,
-      fadeStartedAt: 0,
-      fadeFrom: 0
-    };
-    let hoverRenderIntensity = 0;
-    let hoverSafeZoneElements = null;
-    let hoverSafeZoneRectCache = null;
-    let hoverSafeZoneRectCacheTime = 0;
     let asciiGlyphMetricsCache = null;
-    let hoverCanvas = null;
-    let hoverContext = null;
     let effectBaseCacheKey = '';
 
     function requestFrame(callback) {
@@ -213,7 +188,6 @@
 
     function ensureCanvas() {
       if (canvas && context) {
-        ensureHoverCanvas();
         return canvas;
       }
       if (!documentObj || !documentObj.createElement || !documentObj.body) {
@@ -228,32 +202,8 @@
         return null;
       }
       documentObj.body.insertBefore(canvas, documentObj.body.firstChild || null);
-      ensureHoverCanvas();
       bindObservers();
-      bindPointer();
       return canvas;
-    }
-
-    function ensureHoverCanvas() {
-      if (hoverCanvas && hoverContext) {
-        return hoverCanvas;
-      }
-      if (!documentObj || !documentObj.createElement || !documentObj.body) {
-        return null;
-      }
-      hoverCanvas = documentObj.createElement('canvas');
-      hoverCanvas.className = 'x-nt-wallpaper-effect-hover-canvas';
-      hoverCanvas.setAttribute('aria-hidden', 'true');
-      hoverContext = hoverCanvas.getContext('2d', { alpha: true });
-      if (!hoverContext) {
-        hoverCanvas = null;
-        return null;
-      }
-      const referenceNode = canvas && canvas.nextSibling
-        ? canvas.nextSibling
-        : (documentObj.body.firstChild || null);
-      documentObj.body.insertBefore(hoverCanvas, referenceNode);
-      return hoverCanvas;
     }
 
     function bindObservers() {
@@ -266,7 +216,6 @@
             mutation.attributeName === 'data-wallpaper-active';
         });
         if (shouldRefresh) {
-          clearHoverSafeZoneRectCache();
           scheduleRender();
         }
       });
@@ -276,181 +225,8 @@
       });
     }
 
-    function isHoverEnabled() {
-      const normalized = normalizePrefs(prefs);
-      const type = normalized.type;
-      return normalized.hover !== false && (type === 'halftone' || type === 'ascii') && isWallpaperActive();
-    }
-
-    function isInteractivePointerTarget(target) {
-      if (!target || typeof target.closest !== 'function') {
-        return false;
-      }
-      return Boolean(target.closest(
-        '#_x_extension_newtab_root_2024_unique_, ' +
-        '#_x_extension_newtab_wordmark_2026_unique_, ' +
-        HOVER_SAFE_ZONE_SELECTORS.join(', ') + ', ' +
-        '.x-nt-wallpaper-panel, ' +
-        'button, a, input, textarea, select, [role="button"], [contenteditable="true"]'
-      ));
-    }
-
-    function clearHoverSafeZoneRectCache() {
-      hoverSafeZoneRectCache = null;
-      hoverSafeZoneRectCacheTime = 0;
-    }
-
     function clearEffectBaseCache() {
       effectBaseCacheKey = '';
-    }
-
-    function getHoverSafeZoneElements() {
-      if (!documentObj || typeof documentObj.querySelectorAll !== 'function') {
-        return [];
-      }
-      if (!hoverSafeZoneElements ||
-          hoverSafeZoneElements.length < HOVER_SAFE_ZONE_SELECTORS.length ||
-          hoverSafeZoneElements.some((element) => !element || !element.isConnected)) {
-        hoverSafeZoneElements = Array.from(documentObj.querySelectorAll(HOVER_SAFE_ZONE_SELECTORS.join(',')));
-      }
-      return hoverSafeZoneElements;
-    }
-
-    function getHoverSafeZoneRects() {
-      const now = getNow();
-      if (hoverSafeZoneRectCache &&
-          (now - hoverSafeZoneRectCacheTime) < HOVER_SAFE_ZONE_RECT_CACHE_MS) {
-        return hoverSafeZoneRectCache;
-      }
-      hoverSafeZoneRectCache = getHoverSafeZoneElements().reduce((entries, element) => {
-        if (!element || typeof element.getBoundingClientRect !== 'function') {
-          return entries;
-        }
-        const rect = element.getBoundingClientRect();
-        if (!rect || rect.width <= 0 || rect.height <= 0) {
-          return entries;
-        }
-        entries.push({
-          rect,
-          padding: element.id === '_x_extension_newtab_section_safe_corridor_2026_unique_'
-            ? 0
-            : HOVER_SAFE_ZONE_PADDING_PX
-        });
-        return entries;
-      }, []);
-      hoverSafeZoneRectCacheTime = now;
-      return hoverSafeZoneRectCache;
-    }
-
-    function isPointerInHoverSafeZone(clientX, clientY) {
-      if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-        return false;
-      }
-      return getHoverSafeZoneRects().some((entry) => {
-        const rect = entry.rect;
-        const padding = entry.padding;
-        return clientX >= rect.left - padding &&
-          clientX <= rect.right + padding &&
-          clientY >= rect.top - padding &&
-          clientY <= rect.bottom + padding;
-      });
-    }
-
-    function getNow() {
-      if (root.performance && typeof root.performance.now === 'function') {
-        return root.performance.now();
-      }
-      return Date.now();
-    }
-
-    function getCurrentHoverIntensity() {
-      if (hoverPointer.active) {
-        return 1;
-      }
-      if (!hoverPointer.fadeStartedAt) {
-        return clampNumber(hoverPointer.intensity, 0, 1);
-      }
-      const progress = clampNumber((getNow() - hoverPointer.fadeStartedAt) / HOVER_FADE_DURATION_MS, 0, 1);
-      return clampNumber(hoverPointer.fadeFrom * (1 - smoothstep(progress)), 0, 1);
-    }
-
-    function resetHoverPointer() {
-      hoverPointer = {
-        active: false,
-        x: 0,
-        y: 0,
-        intensity: 0,
-        fadeStartedAt: 0,
-        fadeFrom: 0
-      };
-      hoverRenderIntensity = 0;
-    }
-
-    function clearHoverPointer() {
-      const hadHover = hoverPointer.active || hoverPointer.intensity > 0 || hoverPointer.fadeStartedAt;
-      if (!hadHover) {
-        return;
-      }
-      resetHoverPointer();
-      scheduleRender();
-    }
-
-    function fadeHoverPointer() {
-      if (!hoverPointer.active && hoverPointer.fadeStartedAt) {
-        return;
-      }
-      const intensity = getCurrentHoverIntensity();
-      if (intensity <= 0.01) {
-        clearHoverPointer();
-        return;
-      }
-      hoverPointer = {
-        active: false,
-        x: hoverPointer.x,
-        y: hoverPointer.y,
-        intensity,
-        fadeStartedAt: getNow(),
-        fadeFrom: intensity
-      };
-      scheduleRender();
-    }
-
-    function updateHoverPointer(event) {
-      if (!isHoverEnabled()) {
-        clearHoverPointer();
-        return;
-      }
-      const nextX = Number(event.clientX);
-      const nextY = Number(event.clientY);
-      if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
-        clearHoverPointer();
-        return;
-      }
-      if (isInteractivePointerTarget(event.target) || isPointerInHoverSafeZone(nextX, nextY)) {
-        fadeHoverPointer();
-        return;
-      }
-      hoverPointer = {
-        active: true,
-        x: nextX,
-        y: nextY,
-        intensity: 1,
-        fadeStartedAt: 0,
-        fadeFrom: 1
-      };
-      scheduleRender();
-    }
-
-    function bindPointer() {
-      if (pointerBound || !windowObj || typeof windowObj.addEventListener !== 'function') {
-        return;
-      }
-      pointerBound = true;
-      windowObj.addEventListener('pointermove', updateHoverPointer, { passive: true });
-      windowObj.addEventListener('pointerleave', clearHoverPointer, { passive: true });
-      windowObj.addEventListener('blur', clearHoverPointer);
-      windowObj.addEventListener('resize', clearHoverSafeZoneRectCache, { passive: true });
-      windowObj.addEventListener('scroll', clearHoverSafeZoneRectCache, { passive: true });
     }
 
     function resizeCanvas() {
@@ -469,22 +245,11 @@
       canvas.style.width = `${viewport.width}px`;
       canvas.style.height = `${viewport.height}px`;
       context.setTransform(scale, 0, 0, scale, 0, 0);
-      if (ensureHoverCanvas() && hoverContext) {
-        if (hoverCanvas.width !== width || hoverCanvas.height !== height) {
-          hoverCanvas.width = width;
-          hoverCanvas.height = height;
-        }
-        hoverCanvas.style.width = `${viewport.width}px`;
-        hoverCanvas.style.height = `${viewport.height}px`;
-        hoverContext.setTransform(scale, 0, 0, scale, 0, 0);
-        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
-      }
       return viewport;
     }
 
     function clearCanvas() {
       renderToken += 1;
-      resetHoverPointer();
       if (renderFrame) {
         cancelFrame(renderFrame);
         renderFrame = 0;
@@ -500,13 +265,6 @@
         canvas.removeAttribute('data-effect');
         canvas.style.opacity = '0';
         canvas.style.mixBlendMode = 'normal';
-      }
-      if (hoverCanvas && hoverContext) {
-        const viewport = getViewportSize();
-        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
-        hoverCanvas.removeAttribute('data-effect');
-        hoverCanvas.style.opacity = '0';
-        hoverCanvas.style.mixBlendMode = 'normal';
       }
       onRender();
     }
@@ -742,35 +500,6 @@
       return 1 - (2 * (1 - base) * (1 - source));
     }
 
-    function getHoverInfluence(viewportX, viewportY) {
-      if (hoverRenderIntensity <= 0) {
-        return 0;
-      }
-      const viewport = getViewportSize();
-      const radius = viewport.width < 720 ? 92 : 132;
-      const distance = Math.hypot(viewportX - hoverPointer.x, viewportY - hoverPointer.y);
-      if (distance > radius) {
-        return 0;
-      }
-      const falloff = 1 - clampNumber(distance / radius, 0, 1);
-      return Math.pow(smoothstep(falloff), 1.18) * hoverRenderIntensity;
-    }
-
-    function beginHoverRender() {
-      hoverRenderIntensity = getCurrentHoverIntensity();
-    }
-
-    function finishHoverRender() {
-      if (hoverPointer.active || !hoverPointer.fadeStartedAt) {
-        return;
-      }
-      if (hoverRenderIntensity <= 0.01) {
-        resetHoverPointer();
-        return;
-      }
-      scheduleRender();
-    }
-
     function setCanvasVisuals(type, opacity, blendMode) {
       if (!canvas) {
         return;
@@ -778,13 +507,6 @@
       canvas.setAttribute('data-effect', type);
       canvas.style.opacity = String(clampNumber(opacity, 0, 1));
       canvas.style.mixBlendMode = blendMode || 'normal';
-      if (hoverCanvas) {
-        hoverCanvas.setAttribute('data-effect', type);
-        hoverCanvas.style.opacity = type === 'grain'
-          ? '0'
-          : String(clampNumber(opacity, 0, 1));
-        hoverCanvas.style.mixBlendMode = blendMode || 'normal';
-      }
       onRender();
     }
 
@@ -861,10 +583,6 @@
       setCanvasVisuals('grain', 0.08 + getEffectAlpha(0.22, strength), 'overlay');
     }
 
-    function getHoverRadius(viewport) {
-      return viewport.width < 720 ? 92 : 132;
-    }
-
     function getGridStart(step, minimum) {
       const first = step / 2;
       if (minimum <= first) {
@@ -888,7 +606,7 @@
       ].join(':');
     }
 
-    function drawHalftoneLayer(targetContext, viewport, sampler, strength, size, spacing, hoverOnly) {
+    function drawHalftoneLayer(targetContext, viewport, sampler, strength, size, spacing) {
       const metrics = getRenderedMetrics(sampler, viewport);
       const step = getControlRange(
         spacing,
@@ -902,50 +620,40 @@
       );
       const maxRadius = Math.min(sizeRadius, step * 0.78);
       const useLightInk = sampler.useDarkInk !== true;
-      const hoverRadius = getHoverRadius(viewport);
-      const minimumX = hoverOnly ? hoverPointer.x - hoverRadius - step : 0;
-      const maximumX = hoverOnly ? hoverPointer.x + hoverRadius + step : viewport.width + step;
-      const minimumY = hoverOnly ? hoverPointer.y - hoverRadius - step : 0;
-      const maximumY = hoverOnly ? hoverPointer.y + hoverRadius + step : viewport.height + step;
-      for (let y = getGridStart(step, minimumY); y <= maximumY; y += step) {
+      for (let y = getGridStart(step, 0); y <= viewport.height + step; y += step) {
         if (y < 0 || y > viewport.height + step) {
           continue;
         }
-        for (let x = getGridStart(step, minimumX); x <= maximumX; x += step) {
+        for (let x = getGridStart(step, 0); x <= viewport.width + step; x += step) {
           if (x < 0 || x > viewport.width + step) {
-            continue;
-          }
-          const hover = hoverOnly ? getHoverInfluence(x, y) : 0;
-          if (hoverOnly && hover <= 0) {
             continue;
           }
           const color = sampleColor(sampler, metrics, x, y);
           const luminance = getLuminance(color);
           const tone = getLayerEffectTone(luminance, sampler, strength);
-          const nextTone = clampNumber(tone + (hover * 0.24), 0, 1);
-          if (nextTone <= 0.01) {
+          if (tone <= 0.01) {
             continue;
           }
           const radius = clampNumber(
-            nextTone * maxRadius * (1 + (hover * 0.26)),
+            tone * maxRadius,
             0.7,
-            maxRadius * 1.24
+            maxRadius
           );
           const curvedInk = getCurvedEffectColor(
             color,
             useLightInk,
-            nextTone,
-            0.2 + (hover * 0.24)
+            tone,
+            0.2
           );
           const ink = shiftSampleColor(
             curvedInk,
             useLightInk
-              ? 0.24 + (nextTone * 0.28)
-              : 0.2 + (nextTone * 0.3),
+              ? 0.24 + (tone * 0.28)
+              : 0.2 + (tone * 0.3),
             useLightInk
           );
           targetContext.globalAlpha = clampNumber(
-            0.24 + (nextTone * 0.58) + (hover * 0.12),
+            0.24 + (tone * 0.58),
             0.1,
             0.88
           );
@@ -958,7 +666,7 @@
       targetContext.globalAlpha = 1;
     }
 
-    function drawAsciiLayer(targetContext, viewport, sampler, strength, size, spacing, hoverOnly) {
+    function drawAsciiLayer(targetContext, viewport, sampler, strength, size, spacing) {
       const metrics = getRenderedMetrics(sampler, viewport);
       const useLightInk = sampler.useDarkInk !== true;
       const strengthRatio = clampNumber(strength, 0, 100) / 100;
@@ -978,32 +686,21 @@
         (glyphMetrics.glyphHeight || fontSize) * 1.12,
         fontSize * 1.04
       );
-      const hoverRadius = getHoverRadius(viewport);
-      const minimumX = hoverOnly ? hoverPointer.x - hoverRadius - xStep : 0;
-      const maximumX = hoverOnly ? hoverPointer.x + hoverRadius + xStep : viewport.width + xStep;
-      const minimumY = hoverOnly ? hoverPointer.y - hoverRadius - lineHeight : 0;
-      const maximumY = hoverOnly ? hoverPointer.y + hoverRadius + lineHeight : viewport.height + lineHeight;
-      for (let y = getGridStart(lineHeight, minimumY); y <= maximumY; y += lineHeight) {
+      for (let y = getGridStart(lineHeight, 0); y <= viewport.height + lineHeight; y += lineHeight) {
         if (y < 0 || y > viewport.height + lineHeight) {
           continue;
         }
-        for (let x = getGridStart(xStep, minimumX); x <= maximumX; x += xStep) {
+        for (let x = getGridStart(xStep, 0); x <= viewport.width + xStep; x += xStep) {
           if (x < 0 || x > viewport.width + xStep) {
-            continue;
-          }
-          const hover = hoverOnly ? getHoverInfluence(x, y) : 0;
-          if (hoverOnly && hover <= 0) {
             continue;
           }
           const color = sampleColor(sampler, metrics, x, y);
           const luminance = getLuminance(color);
           const tone = getLayerEffectTone(luminance, sampler, strength);
-          const nextTone = clampNumber(tone + (hover * 0.2), 0, 1);
-          if (nextTone <= 0.02) {
+          if (tone <= 0.02) {
             continue;
           }
-          const characterTone = tone > 0.02 ? tone : nextTone;
-          const index = Math.round(characterTone * (ASCII_CHARS.length - 1));
+          const index = Math.round(tone * (ASCII_CHARS.length - 1));
           const char = ASCII_CHARS[clampNumber(index, 0, ASCII_CHARS.length - 1)];
           if (char === ' ') {
             continue;
@@ -1011,17 +708,17 @@
           const curvedInk = getCurvedEffectColor(
             color,
             useLightInk,
-            nextTone,
-            0.5 + (strengthRatio * 0.22) + (hover * 0.2)
+            tone,
+            0.5 + (strengthRatio * 0.22)
           );
           const ink = shiftSampleColor(
             curvedInk,
             useLightInk
-              ? 0.32 + (nextTone * 0.3)
-              : 0.2 + (nextTone * 0.24),
+              ? 0.32 + (tone * 0.3)
+              : 0.2 + (tone * 0.24),
             useLightInk
           );
-          const alpha = (0.12 + (nextTone * 0.7) + (hover * 0.1)) *
+          const alpha = (0.12 + (tone * 0.7)) *
             (0.72 + (strengthRatio * 0.28));
           targetContext.globalAlpha = clampNumber(alpha, 0.06, 0.94);
           targetContext.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`;
@@ -1035,18 +732,10 @@
       const cacheKey = getEffectBaseKey(type, viewport, sampler, strength, size, spacing);
       if (effectBaseCacheKey !== cacheKey) {
         context.clearRect(0, 0, viewport.width, viewport.height);
-        drawLayer(context, viewport, sampler, strength, size, spacing, false);
+        drawLayer(context, viewport, sampler, strength, size, spacing);
         effectBaseCacheKey = cacheKey;
       }
-      beginHoverRender();
-      if (hoverContext) {
-        hoverContext.clearRect(0, 0, viewport.width, viewport.height);
-        if (hoverRenderIntensity > 0) {
-          drawLayer(hoverContext, viewport, sampler, strength, size, spacing, true);
-        }
-      }
       setCanvasVisuals(type, 1, 'normal');
-      finishHoverRender();
     }
 
     function drawHalftone(viewport, sampler, strength, size, spacing) {
@@ -1147,15 +836,11 @@
         previousPrefs.strength !== prefs.strength ||
         previousPrefs.size !== prefs.size ||
         previousPrefs.spacing !== prefs.spacing;
-      const hoverChanged = previousPrefs.hover !== prefs.hover;
-      if (!visualPrefsChanged && !hoverChanged) {
+      if (!visualPrefsChanged) {
         return;
       }
       if (prefs.type !== 'ascii' && prefs.type !== 'halftone') {
         clearEffectBaseCache();
-      }
-      if (prefs.hover === false || (prefs.type !== 'halftone' && prefs.type !== 'ascii')) {
-        resetHoverPointer();
       }
       if (canvas &&
           context &&
@@ -1165,9 +850,6 @@
           prefs.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
-        if (hoverCanvas) {
-          hoverCanvas.style.opacity = '0';
-        }
         scheduleRender(EFFECT_CROSSFADE_MS);
         return;
       }
@@ -1186,9 +868,6 @@
           normalized.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
-        if (hoverCanvas) {
-          hoverCanvas.style.opacity = '0';
-        }
         scheduleRender(EFFECT_CROSSFADE_MS);
         return;
       }

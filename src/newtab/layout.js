@@ -71,6 +71,7 @@
     const narrowTopInsetPx = getOptionNumber(constants, 'narrowTopInsetPx', 0);
     const shortViewportMaxHeightPx = getOptionNumber(constants, 'shortViewportMaxHeightPx', 0);
     const shortMinTopPx = getOptionNumber(constants, 'shortMinTopPx', minTopPx);
+    const occupiedTopUpshiftMaxPx = getOptionNumber(constants, 'occupiedTopUpshiftMaxPx', 36);
     const bottomDockTopReservePx = getOptionNumber(constants, 'bottomDockTopReservePx', 240);
     const compactDockViewportMaxHeightPx = getOptionNumber(constants, 'compactDockViewportMaxHeightPx', 0);
     const compactDockSearchGapPx = getOptionNumber(constants, 'compactDockSearchGapPx', 32);
@@ -78,8 +79,17 @@
     const compactDockMinTopReservePx = getOptionNumber(constants, 'compactDockMinTopReservePx', 168);
     const mobileFlowBreakpointPx = getOptionNumber(constants, 'mobileFlowBreakpointPx', 0);
     const suggestionsBottomInsetPx = getOptionNumber(constants, 'suggestionsBottomInsetPx', 14);
+    const suggestionsResizeDurationMs = getOptionNumber(constants, 'suggestionsResizeDurationMs', 180);
+    const suggestionsResizeEasing = typeof constants.suggestionsResizeEasing === 'string' &&
+      constants.suggestionsResizeEasing.trim()
+      ? constants.suggestionsResizeEasing.trim()
+      : 'cubic-bezier(0.22, 1, 0.36, 1)';
     const visibleAttribute = 'data-visible';
     const suggestionsOpenAttribute = 'data-nt-suggestions-open';
+    let suggestionsResizeAnimationFrame = 0;
+    let suggestionsResizeAnimationTimer = 0;
+    let suggestionsResizeTransitionEndHandler = null;
+    let suggestionsResizeTargetHeight = 0;
     const getTopInsetPx = typeof options.getTopInsetPx === 'function'
       ? options.getTopInsetPx
       : function() {
@@ -166,6 +176,168 @@
       setPixelStyle(element, 'top', frame.top);
       setPixelStyle(element, 'width', frame.width);
       setPixelStyle(element, 'height', frame.height);
+    }
+
+    function getRenderedHeight(element) {
+      if (!element) {
+        return 0;
+      }
+      const rect = typeof element.getBoundingClientRect === 'function'
+        ? element.getBoundingClientRect()
+        : null;
+      const rectHeight = Math.max(0, Number(rect && rect.height) || 0);
+      if (rectHeight > 0) {
+        return rectHeight;
+      }
+      const inlineHeight = element.style
+        ? Number.parseFloat(element.style.getPropertyValue('height'))
+        : 0;
+      return Math.max(0, Number.isFinite(inlineHeight) ? inlineHeight : 0);
+    }
+
+    function prefersReducedMotion() {
+      return Boolean(
+        windowObj &&
+        typeof windowObj.matchMedia === 'function' &&
+        windowObj.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+    }
+
+    function updateSuggestionsSurfaceFrame() {
+      const suggestionsContainer = getSuggestionsContainer();
+      const inputParts = getInputParts();
+      if (!suggestionsContainer || !inputParts || !inputParts.container) {
+        return;
+      }
+      const searchLayer = getSearchLayer();
+      const root = getRoot();
+      const suggestionsSurface = getSuggestionsSurface();
+      const suggestionsOutline = getSuggestionsOutline();
+      if (!suggestionsSurface && !suggestionsOutline) {
+        return;
+      }
+      const anchor = searchLayer || inputParts.container;
+      const anchorRect = anchor.getBoundingClientRect();
+      const rootRect = root ? root.getBoundingClientRect() : anchorRect;
+      const suggestionsRect = suggestionsContainer.getBoundingClientRect();
+      const surfaceBottom = Math.max(rootRect.bottom, suggestionsRect.bottom);
+      const surfaceFrame = {
+        left: rootRect.left,
+        top: rootRect.top,
+        width: Math.max(0, rootRect.width),
+        height: Math.max(0, surfaceBottom - rootRect.top)
+      };
+      setFixedFrame(suggestionsSurface, surfaceFrame);
+      setFixedFrame(suggestionsOutline, surfaceFrame);
+    }
+
+    function cancelSuggestionsResizeAnimation(syncLayout) {
+      const suggestionsContainer = getSuggestionsContainer();
+      if (suggestionsResizeAnimationFrame &&
+          typeof windowObj.cancelAnimationFrame === 'function') {
+        windowObj.cancelAnimationFrame(suggestionsResizeAnimationFrame);
+      }
+      suggestionsResizeAnimationFrame = 0;
+      if (suggestionsResizeAnimationTimer) {
+        windowObj.clearTimeout(suggestionsResizeAnimationTimer);
+        suggestionsResizeAnimationTimer = 0;
+      }
+      if (suggestionsContainer && suggestionsResizeTransitionEndHandler) {
+        suggestionsContainer.removeEventListener(
+          'transitionend',
+          suggestionsResizeTransitionEndHandler
+        );
+      }
+      suggestionsResizeTransitionEndHandler = null;
+      suggestionsResizeTargetHeight = 0;
+      if (suggestionsContainer && suggestionsContainer.style) {
+        suggestionsContainer.style.removeProperty('height');
+        suggestionsContainer.style.removeProperty('overflow');
+        suggestionsContainer.style.removeProperty('transition');
+        suggestionsContainer.removeAttribute('data-resizing');
+      }
+      if (syncLayout !== false) {
+        updateSuggestionsFloatingLayout();
+      }
+    }
+
+    function captureSuggestionsResizeState() {
+      const suggestionsContainer = getSuggestionsContainer();
+      if (!suggestionsContainer ||
+          suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
+        return null;
+      }
+      const height = getRenderedHeight(suggestionsContainer);
+      cancelSuggestionsResizeAnimation(false);
+      return height > 0 ? { height } : null;
+    }
+
+    function syncSuggestionsSurfaceDuringResize() {
+      if (!suggestionsResizeTargetHeight) {
+        return;
+      }
+      updateSuggestionsSurfaceFrame();
+      suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(
+        syncSuggestionsSurfaceDuringResize
+      );
+    }
+
+    function animateSuggestionsResize(previousState) {
+      const suggestionsContainer = getSuggestionsContainer();
+      const fromHeight = Math.max(
+        0,
+        Number(previousState && previousState.height) || 0
+      );
+      if (!suggestionsContainer || !fromHeight ||
+          suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
+        return false;
+      }
+      updateSuggestionsFloatingLayout();
+      const toHeight = getRenderedHeight(suggestionsContainer);
+      if (prefersReducedMotion() ||
+          suggestionsResizeDurationMs <= 0 ||
+          Math.abs(toHeight - fromHeight) <= 1) {
+        cancelSuggestionsResizeAnimation();
+        return false;
+      }
+      cancelSuggestionsResizeAnimation(false);
+      suggestionsResizeTargetHeight = toHeight;
+      suggestionsContainer.setAttribute('data-resizing', 'true');
+      suggestionsContainer.style.setProperty('height', `${fromHeight}px`, 'important');
+      suggestionsContainer.style.setProperty('overflow', 'hidden', 'important');
+      suggestionsContainer.style.setProperty('transition', 'none', 'important');
+      updateSuggestionsSurfaceFrame();
+      void suggestionsContainer.offsetHeight;
+      suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(() => {
+        suggestionsResizeAnimationFrame = 0;
+        suggestionsContainer.style.setProperty(
+          'transition',
+          `height ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`,
+          'important'
+        );
+        suggestionsContainer.style.setProperty('height', `${toHeight}px`, 'important');
+        updateSuggestionsSurfaceFrame();
+        suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(
+          syncSuggestionsSurfaceDuringResize
+        );
+      });
+      suggestionsResizeTransitionEndHandler = (event) => {
+        if (event && (
+          (event.target && event.target !== suggestionsContainer) ||
+          (event.propertyName && event.propertyName !== 'height')
+        )) {
+          return;
+        }
+        cancelSuggestionsResizeAnimation();
+      };
+      suggestionsContainer.addEventListener(
+        'transitionend',
+        suggestionsResizeTransitionEndHandler
+      );
+      suggestionsResizeAnimationTimer = windowObj.setTimeout(() => {
+        cancelSuggestionsResizeAnimation();
+      }, suggestionsResizeDurationMs + 80);
+      return true;
     }
 
     function applyWidthMode(config) {
@@ -328,6 +500,10 @@
         upshiftMaxPx,
         Math.max(upshiftMinPx, centeringHeight * upshiftRatio)
       ) + extraUpshift;
+      const occupiedTopUpshift = Math.min(
+        occupiedTopHeight,
+        Math.max(0, occupiedTopUpshiftMaxPx)
+      );
       const effectiveMinTopPx = occupiedTopHeight + minimumTopGap;
       const maxTop = Math.max(
         effectiveMinTopPx,
@@ -335,7 +511,8 @@
       );
       let targetTop =
         ((centeringHeight - searchBlockHeight) / 2) -
-        upwardOffset;
+        upwardOffset -
+        occupiedTopUpshift;
       if (!Number.isFinite(targetTop)) {
         targetTop = effectiveMinTopPx;
       }
@@ -437,6 +614,9 @@
         return;
       }
       setSuggestionsOpenState(shouldShow);
+      if (!shouldShow) {
+        cancelSuggestionsResizeAnimation(false);
+      }
       if (shouldShow) {
         updateSuggestionsFloatingLayout();
       }
@@ -459,12 +639,8 @@
         return;
       }
       const searchLayer = getSearchLayer();
-      const root = getRoot();
-      const suggestionsSurface = getSuggestionsSurface();
-      const suggestionsOutline = getSuggestionsOutline();
       const anchor = searchLayer || inputParts.container;
       const anchorRect = anchor.getBoundingClientRect();
-      const rootRect = root ? root.getBoundingClientRect() : anchorRect;
       const visualViewport = windowObj.visualViewport;
       const viewportBottom = visualViewport && Number.isFinite(visualViewport.height)
         ? visualViewport.offsetTop + visualViewport.height
@@ -484,22 +660,7 @@
       setPixelStyle(suggestionsContainer, 'top', top);
       setPixelStyle(suggestionsContainer, 'width', width);
       setPixelStyle(suggestionsContainer, 'max-height', maxHeight);
-      if (suggestionsSurface) {
-        const suggestionsRect = suggestionsContainer.getBoundingClientRect();
-        const surfaceLeft = rootRect.left;
-        const surfaceTop = rootRect.top;
-        const surfaceWidth = Math.max(0, rootRect.width);
-        const surfaceBottom = Math.max(rootRect.bottom, suggestionsRect.bottom);
-        const surfaceHeight = Math.max(0, surfaceBottom - rootRect.top);
-        const surfaceFrame = {
-          left: surfaceLeft,
-          top: surfaceTop,
-          width: surfaceWidth,
-          height: surfaceHeight
-        };
-        setFixedFrame(suggestionsSurface, surfaceFrame);
-        setFixedFrame(suggestionsOutline, surfaceFrame);
-      }
+      updateSuggestionsSurfaceFrame();
     }
 
     return {
@@ -507,7 +668,9 @@
       updateBottomDockLayout,
       updateSearchEntryLayout,
       setSuggestionsVisible,
-      updateSuggestionsFloatingLayout
+      updateSuggestionsFloatingLayout,
+      captureSuggestionsResizeState,
+      animateSuggestionsResize
     };
   }
 

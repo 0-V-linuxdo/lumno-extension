@@ -153,10 +153,6 @@
     const rect = state.card.getBoundingClientRect();
     const preview = state.card.cloneNode(true);
     const isCascadeSource = state.sourceKind === 'cascade';
-    const previewRoot = config.previewRoot &&
-      typeof config.previewRoot.appendChild === 'function'
-      ? config.previewRoot
-      : documentObj.body;
     const previewWidth = isCascadeSource
       ? Math.min(rect.width, 196)
       : Math.min(rect.width, 208);
@@ -206,7 +202,7 @@
     preview.style.width = `${previewWidth}px`;
     preview.style.height = `${rect.height}px`;
     preview.style.willChange = 'transform';
-    previewRoot.appendChild(preview);
+    documentObj.body.appendChild(preview);
     state.dragPreviewElement = preview;
     state.baseLeft = rect.left;
     state.baseTop = rect.top;

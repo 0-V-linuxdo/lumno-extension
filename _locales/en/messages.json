@@ -698,9 +698,6 @@
   "newtab_wallpaper_effect_spacing": {
     "message": "Spacing"
   },
-  "newtab_wallpaper_effect_hover": {
-    "message": "Hover effect"
-  },
   "newtab_wallpaper_effect_none": {
     "message": "Off"
   },
@@ -1050,7 +1047,7 @@
     "message": "Top bookmarks bar"
   },
   "bookmark_topbar_color_pick": {
-    "message": "Pick browser toolbar color…"
+    "message": "Pick background color"
   },
   "bookmark_topbar_color_reset": {
     "message": "Restore automatic colors"

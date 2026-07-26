@@ -204,6 +204,141 @@ const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/bookmarks-view.js'), 'utf8');
+
+function getFunctionSource(source, name) {
+  const marker = `function ${name}(`;
+  const start = source.indexOf(marker);
+  assert.ok(start >= 0, `${name} should exist`);
+  const bodyStart = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      depth += 1;
+    } else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  assert.fail(`${name} should have a complete body`);
+}
+
+{
+  const writes = [];
+  const documentForTheme = {
+    body: {
+      theme: 'light',
+      getAttribute(name) {
+        return name === 'data-theme' ? this.theme : '';
+      }
+    }
+  };
+  const createPersist = new Function(
+    'chrome',
+    'storageArea',
+    'document',
+    'NEWTAB_BOOKMARKS_TOPBAR',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY',
+    `${getFunctionSource(newtabJs, 'normalizeBookmarkTopbarSurfaceColor')}
+    ${getFunctionSource(newtabJs, 'normalizeBookmarkTopbarResolvedTheme')}
+    ${getFunctionSource(newtabJs, 'getCurrentBookmarkTopbarResolvedTheme')}
+    ${getFunctionSource(newtabJs, 'getBookmarkTopbarSurfaceColorStorageKey')}
+    ${getFunctionSource(newtabJs, 'persistBookmarkTopbarSurfaceColor')}
+    return persistBookmarkTopbarSurfaceColor;`
+  );
+  const persistBookmarkTopbarSurfaceColor = createPersist(
+    {
+      storage: {
+        sync: {
+          set(payload) {
+            writes.push(payload);
+          }
+        }
+      }
+    },
+    null,
+    documentForTheme,
+    { normalizeSurfaceColor },
+    'light-color-key',
+    'dark-color-key'
+  );
+
+  persistBookmarkTopbarSurfaceColor('#edf4fe');
+  documentForTheme.body.theme = 'dark';
+  persistBookmarkTopbarSurfaceColor('#111827');
+
+  assert.deepStrictEqual(writes, [
+    { 'light-color-key': '#edf4fe' },
+    { 'dark-color-key': '#111827' }
+  ], 'topbar color sampling should persist independent values for the resolved light and dark themes');
+}
+
+{
+  const documentForTheme = {
+    body: {
+      theme: 'light',
+      getAttribute(name) {
+        return name === 'data-theme' ? this.theme : '';
+      }
+    }
+  };
+  const createThemeState = new Function(
+    'document',
+    'NEWTAB_BOOKMARKS_TOPBAR',
+    `
+    let currentBookmarkTopbarSurfaceColor = '';
+    const bookmarkTopbarSurfaceColors = { light: '', dark: '' };
+    const bookmarkTopbarSurfaceColorRevisions = { light: 0, dark: 0 };
+    const appliedColors = [];
+    let menuUpdates = 0;
+    const bookmarkTopbarRuntime = {
+      setSurfaceColor(color) {
+        appliedColors.push(color);
+      }
+    };
+    function updateBookmarkModeMenu() {
+      menuUpdates += 1;
+    }
+    function persistBookmarkTopbarSurfaceColor() {}
+    ${getFunctionSource(newtabJs, 'normalizeBookmarkTopbarSurfaceColor')}
+    ${getFunctionSource(newtabJs, 'normalizeBookmarkTopbarResolvedTheme')}
+    ${getFunctionSource(newtabJs, 'getCurrentBookmarkTopbarResolvedTheme')}
+    ${getFunctionSource(newtabJs, 'applyBookmarkTopbarSurfaceColor')}
+    ${getFunctionSource(newtabJs, 'syncBookmarkTopbarSurfaceColorForTheme')}
+    return {
+      applyBookmarkTopbarSurfaceColor,
+      syncBookmarkTopbarSurfaceColorForTheme,
+      getState() {
+        return {
+          current: currentBookmarkTopbarSurfaceColor,
+          colors: { ...bookmarkTopbarSurfaceColors },
+          appliedColors: [...appliedColors],
+          menuUpdates
+        };
+      }
+    };`
+  );
+  const themeState = createThemeState(documentForTheme, { normalizeSurfaceColor });
+  themeState.applyBookmarkTopbarSurfaceColor('#edf4fe', { resolvedTheme: 'light' });
+  themeState.applyBookmarkTopbarSurfaceColor('#111827', { resolvedTheme: 'dark' });
+  assert.deepStrictEqual(themeState.getState().appliedColors, ['#edf4fe']);
+
+  documentForTheme.body.theme = 'dark';
+  themeState.syncBookmarkTopbarSurfaceColorForTheme('dark');
+
+  assert.deepStrictEqual(themeState.getState(), {
+    current: '#111827',
+    colors: {
+      light: '#edf4fe',
+      dark: '#111827'
+    },
+    appliedColors: ['#edf4fe', '#111827'],
+    menuUpdates: 2
+  }, 'switching the resolved theme should apply only that theme’s stored topbar color');
+}
+
 assert.ok(
   newtabHtml.includes('<script src="bookmarks-topbar.js"></script>'),
   'new tab should load the atomic topbar surface before its entrypoint'
@@ -277,9 +412,12 @@ assert.ok(
 );
 assert.ok(
   newtabJs.includes('new window.EyeDropper().open()') &&
-    newtabJs.includes('BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY') &&
+    newtabJs.includes('BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY') &&
+    newtabJs.includes('BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY') &&
+    newtabJs.includes('syncBookmarkTopbarSurfaceColorForTheme(resolved);') &&
+    newtabJs.includes('migrateLegacyBookmarkTopbarSurfaceColor') &&
     newtabJs.includes('bookmarkTopbarRuntime.setSurfaceColor'),
-  'topbar color sampling should use the atomic surface API and sync its selected color'
+  'topbar color sampling should use the atomic surface API and switch independent theme colors'
 );
 assert.ok(
   newtabHtml.includes('body[data-nt-top-occupied="true"]') &&

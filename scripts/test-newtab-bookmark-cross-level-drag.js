@@ -307,10 +307,11 @@ assert.ok(
   'card drags should use a compact floating preview that stays close to the pointer'
 );
 assert.ok(
-  bookmarkDragJs.includes('previewRoot.appendChild(preview);') &&
-    newtabJs.includes("state.card.closest('.x-nt-bookmark-cascade-menu')") &&
-    newtabJs.includes('previewRoot,'),
-  'cascade drag previews should render inside the cascade overlay so menu rows cannot cover them'
+  bookmarkDragJs.includes('documentObj.body.appendChild(preview);') &&
+    !newtabJs.includes("state.card.closest('.x-nt-bookmark-cascade-menu')") &&
+    !bookmarkDragJs.includes('previewRoot.appendChild(preview);') &&
+    /\.x-nt-bookmark-cascade-drag-preview\s*\{[\s\S]*?z-index:\s*2147483645;/s.test(newtabHtml),
+  'cascade drag previews should render in an independent body layer without recompositing the menu overlay'
 );
 assert.ok(
   /\.x-nt-bookmark-card\[data-bookmark-dragging="true"\]:not\(\.x-nt-bookmark-card-drag-preview\)\s*\{\s*opacity:\s*0\.36;/s.test(newtabHtml) &&
@@ -399,8 +400,14 @@ assert.ok(
 );
 assert.ok(
   newtabJs.includes("const shouldKeepCascadeOpen = state.sourceKind === 'cascade';") &&
+    cascadeJs.includes('!bookmarkCascadeMenu || bookmarkCascadeDragMode || bookmarkCascadeCloseTimer') &&
     cascadeJs.includes('cancelBookmarkCascadeDelayedClose();'),
-  'a cascade drag should remain open after moving to an explicit parent or grid target'
+  'a cascade drag should remain open while crossing levels and after moving to an explicit target'
+);
+assert.ok(
+  newtabJs.includes("if (bookmarkDragState.sourceKind !== 'cascade') {") &&
+    newtabJs.includes("bookmarkGrid.setAttribute('data-bookmark-dragging', 'true');"),
+  'dragging from a cascade should not toggle the topbar grid into its card-drag rendering state'
 );
 assert.ok(
   cascadeJs.includes('rebindAnchor: rebindBookmarkCascadeAnchor') &&

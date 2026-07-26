@@ -722,6 +722,28 @@ async function openCascadeWithSubmenu(overrides) {
   }
 
   {
+    const { anchor, clock, documentObj, runtime } = createCascadeRuntimeFixture();
+    runtime.open({ id: 'root', title: 'Root' }, anchor);
+    await flushPromises();
+    const levels = getMenuLevels(documentObj);
+    setLevelLayout(levels[0], { left: 40, top: 70, width: 210, height: 140 });
+
+    runtime.setDragMode(true);
+    documentObj.dispatchEvent(createFakeEvent('pointermove', {
+      clientX: 900,
+      clientY: 650,
+      target: documentObj.body
+    }));
+    clock.advance(getJsConstNumber(cascadeMenuJs, 'BOOKMARK_CASCADE_CLOSE_DELAY_MS') + 1);
+
+    assert.strictEqual(
+      runtime.isOpen(),
+      true,
+      'an active cascade drag should not close or detach the menu when crossing outside its current levels'
+    );
+  }
+
+  {
     const { clock, documentObj } = await openCascadeWithSubmenu();
     let levels = getMenuLevels(documentObj);
     let rootItems = getMenuItems(levels[0]);

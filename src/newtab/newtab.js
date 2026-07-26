@@ -135,6 +135,10 @@
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
   const BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY =
     '_x_extension_bookmark_topbar_surface_color_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY =
+    '_x_extension_bookmark_topbar_surface_color_light_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY =
+    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const BOOKMARK_CASCADE_DEBUG_STORAGE_KEY = '_x_extension_bookmark_cascade_debug_2026_unique_';
   const BOOKMARK_TOPBAR_PICK_COLOR_ACTION = 'pick-bookmark-topbar-color';
@@ -344,7 +348,14 @@
   let currentBookmarkViewMode = 'folder';
   let bookmarkViewModeRevision = 0;
   let currentBookmarkTopbarSurfaceColor = '';
-  let bookmarkTopbarSurfaceColorRevision = 0;
+  const bookmarkTopbarSurfaceColors = {
+    light: '',
+    dark: ''
+  };
+  const bookmarkTopbarSurfaceColorRevisions = {
+    light: 0,
+    dark: 0
+  };
   let bookmarkFolderIconsVisible = true;
   let tabRankScoreDebugEnabled = false;
   let searchLayer = null;
@@ -662,7 +673,26 @@
     return /^#[0-9a-f]{6}$/.test(raw) ? raw : '';
   }
 
-  function persistBookmarkTopbarSurfaceColor(value) {
+  function normalizeBookmarkTopbarResolvedTheme(value) {
+    return value === 'dark' ? 'dark' : 'light';
+  }
+
+  function getCurrentBookmarkTopbarResolvedTheme() {
+    return normalizeBookmarkTopbarResolvedTheme(
+      document.body ? document.body.getAttribute('data-theme') : 'light'
+    );
+  }
+
+  function getBookmarkTopbarSurfaceColorStorageKey(resolvedTheme) {
+    return normalizeBookmarkTopbarResolvedTheme(resolvedTheme) === 'dark'
+      ? BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY
+      : BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY;
+  }
+
+  function persistBookmarkTopbarSurfaceColor(value, resolvedTheme) {
+    const theme = normalizeBookmarkTopbarResolvedTheme(
+      resolvedTheme || getCurrentBookmarkTopbarResolvedTheme()
+    );
     const color = normalizeBookmarkTopbarSurfaceColor(value);
     const syncArea = chrome && chrome.storage && chrome.storage.sync
       ? chrome.storage.sync
@@ -670,32 +700,81 @@
     if (!syncArea || typeof syncArea.set !== 'function') {
       return false;
     }
-    syncArea.set({ [BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]: color });
+    syncArea.set({ [getBookmarkTopbarSurfaceColorStorageKey(theme)]: color });
     return true;
   }
 
   function applyBookmarkTopbarSurfaceColor(value, options) {
     const config = options && typeof options === 'object' ? options : {};
+    const theme = normalizeBookmarkTopbarResolvedTheme(
+      config.resolvedTheme || getCurrentBookmarkTopbarResolvedTheme()
+    );
     if (Object.prototype.hasOwnProperty.call(config, 'expectedRevision') &&
-        config.expectedRevision !== bookmarkTopbarSurfaceColorRevision) {
-      return currentBookmarkTopbarSurfaceColor;
+        config.expectedRevision !== bookmarkTopbarSurfaceColorRevisions[theme]) {
+      return bookmarkTopbarSurfaceColors[theme];
     }
     const color = normalizeBookmarkTopbarSurfaceColor(value);
-    if (color !== currentBookmarkTopbarSurfaceColor) {
-      bookmarkTopbarSurfaceColorRevision += 1;
+    if (color !== bookmarkTopbarSurfaceColors[theme]) {
+      bookmarkTopbarSurfaceColorRevisions[theme] += 1;
     }
-    currentBookmarkTopbarSurfaceColor = color;
-    if (bookmarkTopbarRuntime &&
-        typeof bookmarkTopbarRuntime.setSurfaceColor === 'function') {
-      bookmarkTopbarRuntime.setSurfaceColor(color);
-    }
-    if (config.updateMenu !== false) {
-      updateBookmarkModeMenu();
+    bookmarkTopbarSurfaceColors[theme] = color;
+    if (theme === getCurrentBookmarkTopbarResolvedTheme()) {
+      currentBookmarkTopbarSurfaceColor = color;
+      if (bookmarkTopbarRuntime &&
+          typeof bookmarkTopbarRuntime.setSurfaceColor === 'function') {
+        bookmarkTopbarRuntime.setSurfaceColor(color);
+      }
+      if (config.updateMenu !== false) {
+        updateBookmarkModeMenu();
+      }
     }
     if (config.persist === true) {
-      persistBookmarkTopbarSurfaceColor(color);
+      persistBookmarkTopbarSurfaceColor(color, theme);
     }
     return color;
+  }
+
+  function syncBookmarkTopbarSurfaceColorForTheme(resolvedTheme, options) {
+    const theme = normalizeBookmarkTopbarResolvedTheme(resolvedTheme);
+    return applyBookmarkTopbarSurfaceColor(bookmarkTopbarSurfaceColors[theme], {
+      resolvedTheme: theme,
+      updateMenu: !options || options.updateMenu !== false
+    });
+  }
+
+  function removeLegacyBookmarkTopbarSurfaceColor() {
+    if (!storageArea || typeof storageArea.remove !== 'function') {
+      return false;
+    }
+    storageArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
+    return true;
+  }
+
+  function migrateLegacyBookmarkTopbarSurfaceColor(value) {
+    const color = normalizeBookmarkTopbarSurfaceColor(value);
+    if (!color) {
+      removeLegacyBookmarkTopbarSurfaceColor();
+      return;
+    }
+    const theme = getCurrentBookmarkTopbarResolvedTheme();
+    const storageKey = getBookmarkTopbarSurfaceColorStorageKey(theme);
+    if (!storageArea || typeof storageArea.get !== 'function') {
+      applyBookmarkTopbarSurfaceColor(color, {
+        resolvedTheme: theme,
+        persist: true
+      });
+      removeLegacyBookmarkTopbarSurfaceColor();
+      return;
+    }
+    storageArea.get([storageKey], (result) => {
+      if (!result || typeof result[storageKey] === 'undefined') {
+        applyBookmarkTopbarSurfaceColor(color, {
+          resolvedTheme: theme,
+          persist: true
+        });
+      }
+      removeLegacyBookmarkTopbarSurfaceColor();
+    });
   }
 
   function pickBookmarkTopbarSurfaceColor() {
@@ -3568,6 +3647,7 @@
     const previousResolved = document.body ? document.body.getAttribute('data-theme') : '';
     const resolved = resolveTheme(mode, mediaMatchesOverride);
     document.body.setAttribute('data-theme', resolved);
+    syncBookmarkTopbarSurfaceColorForTheme(resolved);
     if (document.documentElement) {
       document.documentElement.removeAttribute('data-wallpaper-preload-theme');
       document.documentElement.style.colorScheme = resolved;
@@ -3889,12 +3969,35 @@
       }
       applyBookmarkViewMode(nextMode, { force: true });
     }
-    if (changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]) {
-      const rawColor = changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY].newValue;
-      const color = applyBookmarkTopbarSurfaceColor(rawColor, { updateMenu: true });
-      if (rawColor && rawColor !== color) {
-        persistBookmarkTopbarSurfaceColor(color);
+    [
+      {
+        key: BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+        resolvedTheme: 'light'
+      },
+      {
+        key: BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
+        resolvedTheme: 'dark'
       }
+    ].forEach((entry) => {
+      if (!changes[entry.key]) {
+        return;
+      }
+      const rawColor = changes[entry.key].newValue;
+      const color = applyBookmarkTopbarSurfaceColor(rawColor, {
+        resolvedTheme: entry.resolvedTheme,
+        updateMenu: true
+      });
+      if (rawColor && rawColor !== color) {
+        persistBookmarkTopbarSurfaceColor(color, entry.resolvedTheme);
+      }
+    });
+    if (changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY] &&
+        typeof changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY].newValue !== 'undefined') {
+      initialThemeReadyPromise.then(() => {
+        migrateLegacyBookmarkTopbarSurfaceColor(
+          changes[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY].newValue
+        );
+      });
     }
     if (changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY]) {
       const raw = changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY].newValue;
@@ -4090,17 +4193,43 @@
       }
     });
     loadInitialBookmarkViewMode();
-    const bookmarkTopbarSurfaceColorReadRevision = bookmarkTopbarSurfaceColorRevision;
-    storageArea.get([BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY], (result) => {
-      if (bookmarkTopbarSurfaceColorRevision !== bookmarkTopbarSurfaceColorReadRevision) {
-        return;
-      }
-      const rawColor = result[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
-      const color = applyBookmarkTopbarSurfaceColor(rawColor, {
-        updateMenu: true
+    const bookmarkTopbarSurfaceColorReadRevisions = {
+      light: bookmarkTopbarSurfaceColorRevisions.light,
+      dark: bookmarkTopbarSurfaceColorRevisions.dark
+    };
+    storageArea.get([
+      BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+      BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
+      BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
+    ], (result) => {
+      [
+        {
+          key: BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+          resolvedTheme: 'light'
+        },
+        {
+          key: BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
+          resolvedTheme: 'dark'
+        }
+      ].forEach((entry) => {
+        if (bookmarkTopbarSurfaceColorRevisions[entry.resolvedTheme] !==
+            bookmarkTopbarSurfaceColorReadRevisions[entry.resolvedTheme]) {
+          return;
+        }
+        const rawColor = result[entry.key];
+        const color = applyBookmarkTopbarSurfaceColor(rawColor, {
+          resolvedTheme: entry.resolvedTheme,
+          updateMenu: true
+        });
+        if (rawColor && rawColor !== color) {
+          persistBookmarkTopbarSurfaceColor(color, entry.resolvedTheme);
+        }
       });
-      if (rawColor && rawColor !== color) {
-        persistBookmarkTopbarSurfaceColor(color);
+      const legacyColor = result[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
+      if (typeof legacyColor !== 'undefined') {
+        initialThemeReadyPromise.then(() => {
+          migrateLegacyBookmarkTopbarSurfaceColor(legacyColor);
+        });
       }
     });
     storageArea.get([BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY], (result) => {
@@ -4620,6 +4749,8 @@
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
     BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     BOOKMARK_CASCADE_DEBUG_STORAGE_KEY,
     TAB_RANK_SCORE_DEBUG_STORAGE_KEY,
@@ -6156,7 +6287,7 @@
       value: '__pick_bookmark_topbar_color__',
       action: BOOKMARK_TOPBAR_PICK_COLOR_ACTION,
       labelKey: 'bookmark_topbar_color_pick',
-      fallback: 'Pick browser toolbar color…',
+      fallback: 'Pick background color',
       iconClass: 'ri-dropper-line',
       dividerBefore: true
     });
@@ -8763,13 +8894,8 @@
   }
 
   function createBookmarkCascadeDragPreview(state) {
-    const previewRoot = state && state.sourceKind === 'cascade' &&
-      state.card && typeof state.card.closest === 'function'
-      ? state.card.closest('.x-nt-bookmark-cascade-menu')
-      : null;
     return NEWTAB_BOOKMARK_DRAG.createPreview(state, {
       documentObj: document,
-      previewRoot,
       renderClosedFolderIcon: ({ bookmarkId, folderIcon }) => {
         folderIcon.innerHTML = getFigmaFolderSvg(`${bookmarkId}-drag-preview`);
         initFolderPathMorph(folderIcon);
@@ -9613,7 +9739,9 @@
     } else {
       closeBookmarkCascadeMenu();
     }
-    bookmarkGrid.setAttribute('data-bookmark-dragging', 'true');
+    if (bookmarkDragState.sourceKind !== 'cascade') {
+      bookmarkGrid.setAttribute('data-bookmark-dragging', 'true');
+    }
     card.setAttribute('data-bookmark-dragging', 'true');
     card.setAttribute('aria-grabbed', 'true');
     if (typeof card._xDeactivateBookmarkHoverVisual === 'function') {
@@ -12984,6 +13112,17 @@
         actionContextKey === lastRenderedActionContextKey &&
         isSuggestionPrefix(currentSuggestions, allSuggestions);
       const startIndex = canAppend ? currentSuggestions.length : 0;
+      const shouldAnimateSuggestionsResize = Boolean(
+        canAppend &&
+        startIndex > 0 &&
+        startIndex < allSuggestions.length &&
+        layoutController &&
+        typeof layoutController.captureSuggestionsResizeState === 'function' &&
+        typeof layoutController.animateSuggestionsResize === 'function'
+      );
+      const previousSuggestionsResizeState = shouldAnimateSuggestionsResize
+        ? layoutController.captureSuggestionsResizeState()
+        : null;
 
       currentSuggestions = allSuggestions;
       lastRenderedQuery = query;
@@ -13003,6 +13142,9 @@
       });
       updateSelection();
       setSuggestionsVisible(true);
+      if (previousSuggestionsResizeState) {
+        layoutController.animateSuggestionsResize(previousSuggestionsResizeState);
+      }
     });
   }
 

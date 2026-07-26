@@ -39,6 +39,8 @@
     '--x-nt-shortcut-add-bg',
     '--x-nt-shortcut-add-color'
   ];
+  const WORDMARK_MIN_CONTRAST = 3.25;
+  const WORDMARK_TEXTURED_MIN_CONTRAST = 4.5;
 
   function mixNumber(start, end, amount) {
     return start + ((end - start) * clampNumber(amount, 0, 1));
@@ -58,6 +60,27 @@
 
   function getColorLuminance(color) {
     return ((color.red * 0.299) + (color.green * 0.587) + (color.blue * 0.114)) / 255;
+  }
+
+  function getRelativeLuminance(color) {
+    const resolvedColor = getValidToneColor(color);
+    function linearize(channel) {
+      const value = clampNumber(channel, 0, 255) / 255;
+      return value <= 0.04045
+        ? value / 12.92
+        : Math.pow((value + 0.055) / 1.055, 2.4);
+    }
+    return (0.2126 * linearize(resolvedColor.red)) +
+      (0.7152 * linearize(resolvedColor.green)) +
+      (0.0722 * linearize(resolvedColor.blue));
+  }
+
+  function getContrastRatio(firstColor, secondColor) {
+    const firstLuminance = getRelativeLuminance(firstColor);
+    const secondLuminance = getRelativeLuminance(secondColor);
+    const lighter = Math.max(firstLuminance, secondLuminance);
+    const darker = Math.min(firstLuminance, secondLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
   }
 
   function mixColor(color, target, amount) {
@@ -117,25 +140,54 @@
       lightTarget,
       clampNumber(baseLift + textureLift, 0, 0.94)
     );
-    return ensureLightWordmarkReadable(
+    const contrastBackground = effectType && effectType !== 'none'
+      ? {
+          red: clampNumber(luminance, 0, 1) * 255,
+          green: clampNumber(luminance, 0, 1) * 255,
+          blue: clampNumber(luminance, 0, 1) * 255
+        }
+      : baseColor;
+    return ensureWordmarkReadable(
       mixColor(preferredColor, lightTarget, overlayAmount * 0.36),
-      luminance,
+      contrastBackground,
+      ink,
       highTexture
     );
   }
 
-  function ensureLightWordmarkReadable(color, backgroundLuminance, highTexture) {
-    const background = clampNumber(backgroundLuminance, 0, 1);
-    const colorLuminance = getColorLuminance(color);
-    const separation = highTexture ? 0.2 : 0.16;
-    if (Math.abs(colorLuminance - background) >= separation) {
+  function ensureWordmarkReadable(color, backgroundColor, ink, highTexture) {
+    const background = getValidToneColor(backgroundColor);
+    const minimumContrast = highTexture
+      ? WORDMARK_TEXTURED_MIN_CONTRAST
+      : WORDMARK_MIN_CONTRAST;
+    if (getContrastRatio(color, background) >= minimumContrast) {
       return color;
     }
-    if (background < 0.72) {
-      return color;
+    const lightTarget = { red: 248, green: 250, blue: 252 };
+    const darkTarget = { red: 15, green: 23, blue: 42 };
+    const preferredTarget = ink === 'dark' ? darkTarget : lightTarget;
+    const alternateTarget = ink === 'dark' ? lightTarget : darkTarget;
+    const target = getContrastRatio(preferredTarget, background) >= minimumContrast
+      ? preferredTarget
+      : alternateTarget;
+    return mixColorToMinContrast(color, target, background, minimumContrast);
+  }
+
+  function mixColorToMinContrast(color, target, backgroundColor, minimumContrast) {
+    let low = 0;
+    let high = 1;
+    let best = target;
+    for (let index = 0; index < 10; index += 1) {
+      const amount = (low + high) / 2;
+      const mixed = mixColor(color, target, amount);
+      if (getContrastRatio(mixed, backgroundColor) >= minimumContrast) {
+        best = mixed;
+        high = amount;
+      } else {
+        low = amount;
+      }
     }
-    const targetLuminance = clampNumber(background - separation, 0.6, 0.82);
-    return mixColorToMaxLuminance(color, { red: 100, green: 116, blue: 139 }, targetLuminance);
+    return best;
   }
 
   function mixColorToMaxLuminance(color, target, maxLuminance) {

@@ -117,6 +117,37 @@ assert(
     /migrateStorageIfNeeded\(\[[\s\S]*BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
   'bookmark topbar surface color should migrate to sync storage on every extension surface'
 );
+[
+  [
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY',
+    '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
+    'light'
+  ],
+  [
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY',
+    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
+    'dark'
+  ]
+].forEach(([constantName, storageKey, theme]) => {
+  [
+    ['new tab', newtabSource],
+    ['options', optionsSource],
+    ['background', backgroundSource]
+  ].forEach(([surface, source]) => {
+    assert(
+      new RegExp(`${constantName}\\s*=\\s*[\\s\\S]*?['"]${storageKey}['"]`).test(source),
+      `${surface} should define the ${theme} bookmark topbar surface color storage key`
+    );
+    assert(
+      new RegExp(`migrateStorageIfNeeded\\(\\[[\\s\\S]*${constantName}[\\s\\S]*\\]\\);`).test(source),
+      `${surface} should migrate the ${theme} bookmark topbar surface color`
+    );
+  });
+  assert(
+    new RegExp(`const SYNC_KEYS = \\[[\\s\\S]*${constantName}[\\s\\S]*\\];`).test(optionsSource),
+    `${theme} bookmark topbar surface color should be included in options sync/export/import keys`
+  );
+});
 localeNames.forEach((locale) => {
   [
     'bookmark_topbar_color_pick',

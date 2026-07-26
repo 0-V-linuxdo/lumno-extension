@@ -698,9 +698,6 @@
   "newtab_wallpaper_effect_spacing": {
     "message": "間隔"
   },
-  "newtab_wallpaper_effect_hover": {
-    "message": "ホバー効果"
-  },
   "newtab_wallpaper_effect_none": {
     "message": "オフ"
   },
@@ -1050,7 +1047,7 @@
     "message": "上部ブックマークバー"
   },
   "bookmark_topbar_color_pick": {
-    "message": "ブラウザ上部バーから色を取得…"
+    "message": "背景色を取得"
   },
   "bookmark_topbar_color_reset": {
     "message": "自動配色に戻す"

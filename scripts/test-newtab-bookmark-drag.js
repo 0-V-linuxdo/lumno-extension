@@ -139,28 +139,19 @@ const documentBody = {
     child.parentNode = this;
   }
 };
-const cascadePreviewRoot = {
-  children: [],
-  appendChild(child) {
-    this.children.push(child);
-    child.parentNode = this;
-  }
-};
 const previewSession = {
   card: previewSourceCard,
   isFolder: false,
   sourceKind: 'cascade'
 };
 const cascadePreview = createPreview(previewSession, {
-  documentObj: { body: documentBody },
-  previewRoot: cascadePreviewRoot
+  documentObj: { body: documentBody }
 });
 assert.strictEqual(cascadePreview, previewNode);
-assert.deepStrictEqual(cascadePreviewRoot.children, [previewNode]);
 assert.deepStrictEqual(
   documentBody.children,
-  [],
-  'a cascade drag preview should stay inside the cascade overlay stacking context'
+  [previewNode],
+  'a cascade drag preview should use an independent body-level fixed layer'
 );
 assert.strictEqual(previewClasses.has('x-nt-bookmark-cascade-drag-preview'), true);
 assert.strictEqual(previewAttributes.get('data-bookmark-drag-preview'), 'true');

@@ -84,6 +84,7 @@ const normalized = effects.normalizePrefs({
   strength: 140,
   size: -4,
   spacing: 60,
+  // Legacy stored values may still contain this removed preference.
   hover: false
 });
 assert.deepStrictEqual(
@@ -93,8 +94,7 @@ assert.deepStrictEqual(
     type: 'ascii',
     strength: 100,
     size: 0,
-    spacing: 60,
-    hover: false
+    spacing: 60
   }
 );
 
@@ -111,15 +111,75 @@ assert.doesNotMatch(
 );
 
 const effectsSource = fs.readFileSync('src/newtab/wallpaper-effects.js', 'utf8');
-assert.match(
-  effectsSource,
-  /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(context,[\s\S]*?false\);[\s\S]*?hoverContext\.clearRect[\s\S]*?drawLayer\(hoverContext,[\s\S]*?true\);/,
-  'pointer movement should preserve the high-resolution static layer and redraw only the local hover layer'
+const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
+vm.runInNewContext(wallpaperSource, sandbox, {
+  filename: 'src/newtab/wallpaper.js'
+});
+const wallpaper = sandbox.LumnoNewtabWallpaper;
+assert.ok(wallpaper, 'wallpaper runtime module should initialize');
+assert.strictEqual(
+  wallpaper.WALLPAPER_EFFECT_MODE_STORAGE_VERSION,
+  4,
+  'mode-aware wallpaper effect storage should have an explicit schema version'
+);
+const legacyEffectPrefs = {
+  version: 3,
+  type: 'grain',
+  strength: 64,
+  size: 35,
+  spacing: 72
+};
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(wallpaper.normalizeWallpaperEffectStoragePrefs(legacyEffectPrefs))),
+  {
+    version: 4,
+    light: legacyEffectPrefs,
+    dark: legacyEffectPrefs
+  },
+  'legacy shared wallpaper effects should migrate to identical light and dark preferences'
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(wallpaper.normalizeWallpaperEffectStoragePrefs({
+    version: 4,
+    light: { type: 'halftone', strength: 31, size: 42, spacing: 53 },
+    dark: { type: 'ascii', strength: 82, size: 73, spacing: 64 }
+  }))),
+  {
+    version: 4,
+    light: { version: 3, type: 'halftone', strength: 31, size: 42, spacing: 53 },
+    dark: { version: 3, type: 'ascii', strength: 82, size: 73, spacing: 64 }
+  },
+  'mode-aware wallpaper effects should preserve independent light and dark values'
 );
 assert.match(
+  effectsSource,
+  /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(context,[\s\S]*?effectBaseCacheKey = cacheKey;/,
+  'layered wallpaper filters should cache their high-resolution static canvas'
+);
+assert.doesNotMatch(
   newtabHtml,
-  /\.x-nt-wallpaper-effect-canvas,\s*\.x-nt-wallpaper-effect-hover-canvas\s*\{/,
-  'base and hover canvases should share the same composited viewport styling'
+  /x-nt-wallpaper-effect-hover-canvas/,
+  'new tab styles should not retain the removed wallpaper hover canvas'
+);
+assert.doesNotMatch(
+  effectsSource,
+  /pointermove|pointerleave|hoverPointer|hoverContext|prefs\.hover/,
+  'wallpaper filters should not bind pointer-driven hover rendering'
+);
+assert.doesNotMatch(
+  wallpaperSource,
+  /newtab_wallpaper_effect_hover|wallpaperEffectHover|createEffectToggleControl/,
+  'wallpaper settings should not render or localize a hover-effect control'
+);
+assert.match(
+  wallpaperSource,
+  /currentWallpaperPrefs && currentWallpaperPrefs\.sameForModes === false[\s\S]*?\\? \[editMode\][\s\S]*?: NEWTAB_WALLPAPER_MODES/,
+  'split wallpapers should save effects only to the mode currently being edited'
+);
+assert.match(
+  wallpaperSource,
+  /function handleThemeModeChange\([\s\S]*?applyWallpaperEffectForResolvedMode\(\)/,
+  'theme changes should apply the effect stored for the resolved wallpaper mode'
 );
 assert.match(
   effectsSource,

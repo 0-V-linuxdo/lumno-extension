@@ -341,8 +341,7 @@
       .x-nt-wallpaper-transition-layer[data-exit="true"] {
         opacity: 0;
       }
-      .x-nt-wallpaper-effect-canvas,
-      .x-nt-wallpaper-effect-hover-canvas {
+      .x-nt-wallpaper-effect-canvas {
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -355,9 +354,7 @@
         contain: strict;
       }
       body:not([data-wallpaper-active="true"]) .x-nt-wallpaper-effect-canvas,
-      body:not([data-wallpaper-active="true"]) .x-nt-wallpaper-effect-hover-canvas,
-      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-canvas,
-      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-hover-canvas {
+      body[data-wallpaper-effect="none"] .x-nt-wallpaper-effect-canvas {
         opacity: 0 !important;
       }
       body[data-wallpaper-active="true"][data-wallpaper-effect="ascii"] {
@@ -387,7 +384,6 @@
       @media (prefers-reduced-motion: reduce) {
         .x-nt-wallpaper-transition-layer,
         .x-nt-wallpaper-effect-canvas,
-        .x-nt-wallpaper-effect-hover-canvas,
         body::after {
           transition: none;
         }
@@ -2555,7 +2551,7 @@
         opacity: 0;
         pointer-events: none;
         transition: opacity 160ms ease, transform 200ms ease, top 180ms ease;
-        z-index: 9999;
+        z-index: 10080;
       }
       ._x_extension_toast_2024_unique_[data-show="true"] {
         opacity: 1;

@@ -698,9 +698,6 @@
   "newtab_wallpaper_effect_spacing": {
     "message": "間距"
   },
-  "newtab_wallpaper_effect_hover": {
-    "message": "懸停效果"
-  },
   "newtab_wallpaper_effect_none": {
     "message": "關閉"
   },
@@ -1050,7 +1047,7 @@
     "message": "頂部書籤列"
   },
   "bookmark_topbar_color_pick": {
-    "message": "從瀏覽器頂部列取色…"
+    "message": "背景取色"
   },
   "bookmark_topbar_color_reset": {
     "message": "恢復自動配色"

@@ -214,6 +214,22 @@ function testCopyActionIntegration() {
     /\.x-nt-bookmark-cascade-copy-tooltip\s*\{[\s\S]*?--x-extension-tooltip-z-index:\s*10005/,
     'The dedicated copy tooltip should render above the cascade menu layer'
   );
+  const toastZIndex = Number.parseInt(
+    html.match(/\._x_extension_toast_2024_unique_\s*\{[^}]*z-index:\s*(\d+)/)[1],
+    10
+  );
+  const cascadeZIndex = Number.parseInt(
+    html.match(/\.x-nt-bookmark-cascade-menu\s*\{[^}]*z-index:\s*(\d+)/)[1],
+    10
+  );
+  const bookmarkContextMenuZIndex = Number.parseInt(
+    newtabSource.match(/const BOOKMARK_CONTEXT_MENU_PORTAL_Z_INDEX\s*=\s*(\d+)/)[1],
+    10
+  );
+  assert.ok(
+    toastZIndex > Math.max(cascadeZIndex, bookmarkContextMenuZIndex),
+    'Copy confirmation toasts should render above bookmark cascade and context menus'
+  );
   const copyIconHoverRule = html.match(
     /\.x-nt-bookmark-cascade-copy-trigger:hover,\s*\.x-nt-bookmark-cascade-copy-trigger:focus-visible\s*\{([^}]*)\}/
   );

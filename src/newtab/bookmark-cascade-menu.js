@@ -584,7 +584,7 @@
     }
 
     function scheduleBookmarkCascadeDelayedClose() {
-      if (!bookmarkCascadeMenu || bookmarkCascadeCloseTimer) {
+      if (!bookmarkCascadeMenu || bookmarkCascadeDragMode || bookmarkCascadeCloseTimer) {
         return;
       }
       bookmarkCascadeCloseTask = {

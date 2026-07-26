@@ -9,6 +9,7 @@ const layoutRuntime = globalThis.LumnoNewtabLayout;
 const dockRuntime = globalThis.LumnoNewtabDock;
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 
 class FakeStyle {
   constructor() {
@@ -136,10 +137,24 @@ class FakeElement {
     this._listeners = this._listeners || [];
     this._listeners.push({ type, listener, options });
   }
+
+  removeEventListener(type, listener) {
+    this._listeners = (this._listeners || []).filter((entry) => (
+      entry.type !== type || entry.listener !== listener
+    ));
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
 }
 
 function createFixture(options) {
   const config = options || {};
+  let animationFrameId = 0;
+  let timerId = 0;
+  const animationFrames = new Map();
+  const timers = new Map();
   const body = new FakeElement({ display: 'flex' });
   const documentElement = new FakeElement();
   const documentObj = {
@@ -154,8 +169,27 @@ function createFixture(options) {
       return element.computedStyle;
     },
     requestAnimationFrame(callback) {
+      animationFrameId += 1;
+      if (config.deferAnimationFrame) {
+        animationFrames.set(animationFrameId, callback);
+        return animationFrameId;
+      }
       callback();
-      return 1;
+      return animationFrameId;
+    },
+    cancelAnimationFrame(id) {
+      animationFrames.delete(id);
+    },
+    setTimeout(callback) {
+      timerId += 1;
+      timers.set(timerId, callback);
+      return timerId;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
+    matchMedia() {
+      return { matches: false };
     }
   };
 
@@ -234,8 +268,16 @@ function createFixture(options) {
     body,
     bottomDock,
     shortcutSection,
+    suggestionsContainer,
+    suggestionsSurface,
+    suggestionsOutline,
     controller,
-    windowObj
+    windowObj,
+    flushAnimationFrames() {
+      const pendingFrames = Array.from(animationFrames.entries());
+      animationFrames.clear();
+      pendingFrames.forEach(([, callback]) => callback());
+    }
   };
 }
 
@@ -278,7 +320,7 @@ function testOccupiedTopSurfaceShiftsMinimumSearchInset() {
 
 testOccupiedTopSurfaceShiftsMinimumSearchInset();
 
-function testOccupiedTopSurfaceKeepsDesktopSearchPositionStable() {
+function testOccupiedTopSurfaceUpshiftsDesktopSearchPosition() {
   const regular = createFixture({
     innerHeight: 900
   });
@@ -291,13 +333,75 @@ function testOccupiedTopSurfaceKeepsDesktopSearchPositionStable() {
   withTopbar.controller.updateSearchEntryLayout();
 
   assert.strictEqual(
-    withTopbar.body.style.getPropertyValue('padding-top'),
-    regular.body.style.getPropertyValue('padding-top'),
-    'an occupied top surface should protect against overlap without recentering the logo and search entry'
+    Number.parseFloat(regular.body.style.getPropertyValue('padding-top')) -
+      Number.parseFloat(withTopbar.body.style.getPropertyValue('padding-top')),
+    36,
+    'a desktop top bar should pull the logo and search entry upward by its capped occupied height'
   );
 }
 
-testOccupiedTopSurfaceKeepsDesktopSearchPositionStable();
+testOccupiedTopSurfaceUpshiftsDesktopSearchPosition();
+
+function testSuggestionAppendAnimatesContainerAndSurfaceFrame() {
+  const {
+    controller,
+    suggestionsContainer,
+    suggestionsSurface,
+    flushAnimationFrames
+  } = createFixture({
+    deferAnimationFrame: true
+  });
+  suggestionsContainer.setAttribute('data-visible', 'true');
+  suggestionsContainer.setRect({ top: 254, height: 120, bottom: 374 });
+  suggestionsContainer.scrollHeight = 120;
+  controller.updateSuggestionsFloatingLayout();
+
+  const previousState = controller.captureSuggestionsResizeState();
+  assert.deepStrictEqual(
+    previousState,
+    { height: 120 },
+    'visible suggestions should expose their rendered height before rows are appended'
+  );
+
+  suggestionsContainer.setRect({ top: 254, height: 236, bottom: 490 });
+  suggestionsContainer.scrollHeight = 236;
+  assert.strictEqual(
+    controller.animateSuggestionsResize(previousState),
+    true,
+    'a changed suggestions height should start a resize transition'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '120px',
+    'the appended results should begin from the prior clipped height'
+  );
+
+  flushAnimationFrames();
+
+  assert.match(
+    suggestionsContainer.style.getPropertyValue('transition'),
+    /height 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\)/,
+    'the suggestions container should animate height with the shared resize timing'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '236px',
+    'the transition should target the supplemented results height'
+  );
+  assert.strictEqual(
+    suggestionsSurface.style.getPropertyValue('height'),
+    '290px',
+    'the search surface should track the container bottom during the resize'
+  );
+}
+
+testSuggestionAppendAnimatesContainerAndSurfaceFrame();
+
+assert.match(
+  newtabSource,
+  /const previousSuggestionsResizeState = shouldAnimateSuggestionsResize[\s\S]*?captureSuggestionsResizeState\(\)[\s\S]*?suggestionsView\.render\([\s\S]*?setSuggestionsVisible\(true\);[\s\S]*?animateSuggestionsResize\(previousSuggestionsResizeState\)/,
+  'new-tab search should capture the existing result height before appending and animate after layout'
+);
 
 function testDockRuntimeOwnsBottomDockComponentParts() {
   assert.ok(

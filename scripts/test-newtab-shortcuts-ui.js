@@ -123,7 +123,34 @@ function getTestColorLuminance(color) {
   return ((color.red * 0.299) + (color.green * 0.587) + (color.blue * 0.114)) / 255;
 }
 
+function getTestRelativeLuminance(color) {
+  function linearize(channel) {
+    const value = channel / 255;
+    return value <= 0.04045
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  }
+  return (0.2126 * linearize(color.red)) +
+    (0.7152 * linearize(color.green)) +
+    (0.0722 * linearize(color.blue));
+}
+
+function getTestContrastRatio(firstColor, secondColor) {
+  const firstLuminance = getTestRelativeLuminance(firstColor);
+  const secondLuminance = getTestRelativeLuminance(secondColor);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
 async function assertDarkWallpaperShortcutAdaptiveTone() {
+  const wordmark = createToneElement({
+    left: 390,
+    top: 54,
+    right: 610,
+    bottom: 126,
+    width: 220,
+    height: 72
+  });
   const shortcutTile = createToneElement();
   const addTile = createToneElement();
   const disabledTarget = createToneElement();
@@ -131,7 +158,7 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   disabledTarget.setAttribute('data-wallpaper-ink', 'light');
   disabledTarget.setAttribute('data-wallpaper-icon-bg', 'true');
   disabledTarget.style.setProperty('--x-nt-wallpaper-icon-solid-bg', 'rgb(20 28 45)');
-  const pixel = { red: 18, green: 20, blue: 22 };
+  const pixel = { red: 17, green: 85, blue: 101 };
   const canvas = {
     width: 0,
     height: 0,
@@ -212,6 +239,12 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
     getTargets() {
       return [
         {
+          element: wordmark,
+          sampleElement: wordmark,
+          minWidth: 220,
+          minHeight: 72
+        },
+        {
           element: shortcutTile,
           sampleElement: shortcutTile,
           minWidth: 42,
@@ -258,6 +291,9 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   runtime.refresh();
   await new Promise((resolve) => setTimeout(resolve, 5));
 
+  const wordmarkColor = parseSolidRgb(
+    wordmark.style.getPropertyValue('--x-nt-wallpaper-wordmark-ink')
+  );
   const shortcutBackground = parseSolidRgb(
     shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg')
   );
@@ -273,6 +309,10 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
     ''
   );
 
+  assert.ok(
+    getTestContrastRatio(wordmarkColor, pixel) >= 3.25,
+    'wallpaper wordmark should keep accessible contrast on a similarly colored dark background'
+  );
   assert.ok(
     getTestColorLuminance(shortcutBackground) < 0.36,
     'dark wallpaper URL fallback shortcut backgrounds should stay in the dark-mode surface range'
@@ -292,6 +332,14 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
 }
 
 async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
+  const wordmark = createToneElement({
+    left: 390,
+    top: 54,
+    right: 610,
+    bottom: 126,
+    width: 220,
+    height: 72
+  });
   const shortcutTile = createToneElement();
   const addTile = createToneElement();
   shortcutTile.setAttribute('data-shortcut-theme-default', 'true');
@@ -377,6 +425,12 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
     getTargets() {
       return [
         {
+          element: wordmark,
+          sampleElement: wordmark,
+          minWidth: 220,
+          minHeight: 72
+        },
+        {
           element: shortcutTile,
           sampleElement: shortcutTile,
           minWidth: 42,
@@ -415,6 +469,9 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
   runtime.refresh();
   await new Promise((resolve) => setTimeout(resolve, 5));
 
+  const wordmarkColor = parseSolidRgb(
+    wordmark.style.getPropertyValue('--x-nt-wallpaper-wordmark-ink')
+  );
   const shortcutBackground = parseSolidRgb(
     shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg')
   );
@@ -424,6 +481,10 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
   const addBackground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-bg'));
   const addForeground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-color'));
 
+  assert.ok(
+    getTestContrastRatio(wordmarkColor, pixel) >= 3.25,
+    'wallpaper wordmark should keep accessible contrast on a similarly colored light background'
+  );
   assert.ok(
     getTestColorLuminance(shortcutBackground) < 0.36,
     'dark theme URL fallback shortcut backgrounds should stay dark even on a light wallpaper'
