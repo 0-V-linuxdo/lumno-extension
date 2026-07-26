@@ -249,6 +249,9 @@
   const ghostActionButton = document.querySelector('.onboarding-action-button--ghost');
   const onboardingPageStripApi = globalThis.LumnoOnboardingPageStrip || {};
   const onboardingActionsApi = globalThis.LumnoOnboardingActions || {};
+  const onboardingBodyCopyApi = globalThis.LumnoOnboardingBodyCopy || {};
+  const onboardingCopyHeadingApi = globalThis.LumnoOnboardingCopyHeading || {};
+  const onboardingCursorLayerApi = globalThis.LumnoOnboardingCursorLayer || {};
   const onboardingInteractionsApi = globalThis.LumnoOnboardingInteractions || {};
   const pageStripController = pageStrip &&
       typeof onboardingPageStripApi.createPageStripController === 'function'
@@ -288,6 +291,25 @@
         hideOnboardingInfoTooltip();
       }
     })
+    : null;
+  const bodyCopyController = body &&
+      typeof onboardingBodyCopyApi.createBodyCopyController === 'function'
+    ? onboardingBodyCopyApi.createBodyCopyController(body)
+    : null;
+  const copyHeadingController = (eyebrow || title) &&
+      typeof onboardingCopyHeadingApi.createCopyHeadingController === 'function'
+    ? onboardingCopyHeadingApi.createCopyHeadingController(
+      { eyebrow, title },
+      {
+        onTitleFitNeeded() {
+          scheduleTitleFitUpdate();
+        }
+      }
+    )
+    : null;
+  const cursorLayerController = cursorLayer &&
+      typeof onboardingCursorLayerApi.createCursorLayerController === 'function'
+    ? onboardingCursorLayerApi.createCursorLayerController(cursorLayer)
     : null;
   let blueprint = null;
   let state = null;
@@ -3094,7 +3116,7 @@
     }
     visualStage.textContent = '';
     visualStage.dataset.visualKind = slide.visual.kind;
-    if (cursorLayer) {
+    if (cursorLayer && !cursorLayerController) {
       cursorLayer.textContent = '';
       cursorLayer.dataset.cursorEnabled = 'false';
       cursorLayer.dataset.cursorMode = '';
@@ -3203,6 +3225,13 @@
     if (!cursorLayer) {
       return;
     }
+    if (cursorLayerController) {
+      cursorLayerController.render({
+        enabled: slide.cursor.enabled,
+        mode: slide.cursor.enabled ? slide.id : ''
+      });
+      return;
+    }
     cursorLayer.textContent = '';
     cursorLayer.dataset.cursorEnabled = slide.cursor.enabled ? 'true' : 'false';
     cursorLayer.dataset.cursorMode = slide.cursor.enabled ? slide.id : '';
@@ -3219,6 +3248,17 @@
       return;
     }
     const note = String(slide.copy.note || '');
+    if (bodyCopyController) {
+      bodyCopyController.render({
+        note,
+        shortcutLabel: currentShortcutLabel,
+        shortcutPlaceholder: SHORTCUT_PLACEHOLDER,
+        shortcutTokens: getShortcutDisplayTokens(currentShortcutValue),
+        shortcutValue: normalizeShortcutValue(currentShortcutValue),
+        value
+      });
+      return;
+    }
     body.dataset.empty = value || note ? 'false' : 'true';
     if (bodyNote) {
       bodyNote.textContent = String(slide.copy.note || '');
@@ -3675,6 +3715,20 @@
     stopTitleCycle();
     const text = String(slide.copy.title || '');
     const lines = Array.isArray(slide.copy.titleLines) ? slide.copy.titleLines : [];
+    if (copyHeadingController) {
+      copyHeadingController.render({
+        cycleFirstDelayMs: TITLE_CYCLE_FIRST_DELAY_MS,
+        cycleIntervalMs: TITLE_CYCLE_INTERVAL_MS,
+        eyebrow: String(slide.copy.eyebrow || ''),
+        reducedMotion: prefersReducedMotion(),
+        swapDurationMs: getTextSwapDurationMs(),
+        title: text,
+        titleCycle: slide.copy.titleCycle || null,
+        titleLines: lines,
+        titleLogo: slide.copy.titleLogo || null
+      });
+      return;
+    }
     title.dataset.empty = text ? 'false' : 'true';
     title.textContent = '';
     title.removeAttribute('aria-label');
@@ -3721,7 +3775,9 @@
       copyPanel.dataset.slideId = slide.id;
     }
     renderPageStrip();
-    setText(eyebrow, slide.copy.eyebrow);
+    if (!copyHeadingController) {
+      setText(eyebrow, slide.copy.eyebrow);
+    }
     renderTitleCopy(slide);
     renderBodyCopy(slide);
     renderInteractions(slide);

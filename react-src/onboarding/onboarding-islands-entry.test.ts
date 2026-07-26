@@ -7,6 +7,24 @@ type OnboardingRuntime = typeof globalThis & {
   LumnoOnboardingActionsReact?: {
     implementation?: string;
   };
+  LumnoOnboardingBodyCopy?: {
+    implementation?: string;
+  };
+  LumnoOnboardingBodyCopyReact?: {
+    implementation?: string;
+  };
+  LumnoOnboardingCopyHeading?: {
+    implementation?: string;
+  };
+  LumnoOnboardingCopyHeadingReact?: {
+    implementation?: string;
+  };
+  LumnoOnboardingCursorLayer?: {
+    implementation?: string;
+  };
+  LumnoOnboardingCursorLayerReact?: {
+    implementation?: string;
+  };
   LumnoOnboardingInteractions?: {
     implementation?: string;
   };
@@ -31,6 +49,12 @@ const runtime = globalThis as OnboardingRuntime;
 function clearRuntime(): void {
   delete runtime.LumnoOnboardingActions;
   delete runtime.LumnoOnboardingActionsReact;
+  delete runtime.LumnoOnboardingBodyCopy;
+  delete runtime.LumnoOnboardingBodyCopyReact;
+  delete runtime.LumnoOnboardingCopyHeading;
+  delete runtime.LumnoOnboardingCopyHeadingReact;
+  delete runtime.LumnoOnboardingCursorLayer;
+  delete runtime.LumnoOnboardingCursorLayerReact;
   delete runtime.LumnoOnboardingInteractions;
   delete runtime.LumnoOnboardingInteractionsReact;
   delete runtime.LumnoOnboardingPageStrip;
@@ -62,12 +86,27 @@ describe('Onboarding React islands entry', () => {
     expect(runtime.LumnoOnboardingActionsReact).toBe(
       runtime.LumnoOnboardingActions
     );
+    expect(runtime.LumnoOnboardingBodyCopy?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingBodyCopyReact).toBe(
+      runtime.LumnoOnboardingBodyCopy
+    );
+    expect(runtime.LumnoOnboardingCopyHeading?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingCopyHeadingReact).toBe(
+      runtime.LumnoOnboardingCopyHeading
+    );
+    expect(runtime.LumnoOnboardingCursorLayer?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingCursorLayerReact).toBe(
+      runtime.LumnoOnboardingCursorLayer
+    );
     expect(runtime.LumnoOnboardingInteractions?.implementation).toBe('react');
     expect(runtime.LumnoOnboardingInteractionsReact).toBe(
       runtime.LumnoOnboardingInteractions
     );
     expect(runtime.LumnoOnboardingReactIslands).toEqual({
       actions: runtime.LumnoOnboardingActions,
+      bodyCopy: runtime.LumnoOnboardingBodyCopy,
+      copyHeading: runtime.LumnoOnboardingCopyHeading,
+      cursorLayer: runtime.LumnoOnboardingCursorLayer,
       interactions: runtime.LumnoOnboardingInteractions,
       pageStrip: runtime.LumnoOnboardingPageStrip
     });
@@ -83,6 +122,9 @@ describe('Onboarding React islands entry', () => {
 
     expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(false);
     expect(runtime.LumnoOnboardingActions).toBeUndefined();
+    expect(runtime.LumnoOnboardingBodyCopy).toBeUndefined();
+    expect(runtime.LumnoOnboardingCopyHeading).toBeUndefined();
+    expect(runtime.LumnoOnboardingCursorLayer).toBeUndefined();
     expect(runtime.LumnoOnboardingInteractions).toBeUndefined();
     expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
     expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
