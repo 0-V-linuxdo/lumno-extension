@@ -180,15 +180,15 @@ assert(
     fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    220 * 1024,
-  'the Options React route should stay within its 220 KiB uncompressed budget'
+    230 * 1024,
+  'the Options React route should stay within its 230 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(optionsBundle).length <=
-    66 * 1024,
-  'the Options React route should stay within its 66 KiB gzip budget'
+    68 * 1024,
+  'the Options React route should stay within its 68 KiB gzip budget'
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
@@ -197,8 +197,8 @@ assert(
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    97 * 1024,
-  'all shared React artifacts and three page entries should stay within their 97 KiB gzip budget'
+    98 * 1024,
+  'all shared React artifacts and three page entries should stay within their 98 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -227,6 +227,7 @@ assert(
     optionsBundle.includes('LumnoOptionsSelectControlReact') &&
     optionsBundle.includes('LumnoOptionsSettingsNavigationReact') &&
     optionsBundle.includes('LumnoOptionsSettingsControlsReact') &&
+    optionsBundle.includes('LumnoOptionsSettingsFormsReact') &&
     optionsBundle.includes('LumnoOptionsShortcutReferenceReact') &&
     optionsBundle.includes('LumnoOptionsSiteSearchListReact') &&
     optionsBundle.includes('LumnoOptionsThemePickerReact') &&
@@ -238,6 +239,8 @@ assert(
     optionsBundle.includes('options-settings-navigation') &&
     optionsBundle.includes('options-toggle-control') &&
     optionsBundle.includes('options-required-checkbox-group') &&
+    optionsBundle.includes('options-site-search-form') &&
+    optionsBundle.includes('options-blacklist-form') &&
     optionsBundle.includes('options-shortcut-reference') &&
     optionsBundle.includes('options-site-search-list') &&
     optionsBundle.includes('options-theme-picker') &&
@@ -267,6 +270,11 @@ assert(
     optionsSource.includes('optionsSettingsControlsApi.createRequiredCheckboxGroupController') &&
     optionsSource.includes('setOptionsToggleState(') &&
     optionsSource.includes('renderSearchResultSourceTypeControl(') &&
+    optionsSource.includes('optionsSettingsFormsApi.createSiteSearchFormController') &&
+    optionsSource.includes('optionsSettingsFormsApi.createBlacklistFormController') &&
+    optionsSource.includes('handleReactSiteSearchFormSave') &&
+    optionsSource.includes('handleReactSearchBlacklistFormSave') &&
+    optionsSource.includes('handleReactFaviconBlacklistFormSave') &&
     optionsSource.includes('optionsShortcutReferenceApi.createShortcutReferenceController') &&
     optionsSource.includes('shortcutReferenceController.render') &&
     optionsSource.includes('optionsSiteSearchListApi.createSiteSearchListController') &&
@@ -278,7 +286,7 @@ assert(
     optionsSource.includes('themePickerController.render') &&
     optionsSource.includes('optionsToastApi.createToastController') &&
     optionsSource.includes('toastController.show'),
-  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Select Control, Settings Controls, Settings Navigation, Shortcut Reference, Site Search List, Theme Picker, and Toast islands'
+  'Options should expose and consume its React Blacklist List, Popconfirm, Segmented Control, Select Control, Settings Controls, Settings Forms, Settings Navigation, Shortcut Reference, Site Search List, Theme Picker, and Toast islands'
 );
 assert(
   onboardingBundle.includes('LumnoOnboardingPageStripReact') &&

@@ -8,6 +8,7 @@ import { createSegmentedControlApi } from './segmented-control';
 import { createSelectControlApi } from './select-control';
 import { createSettingsNavigationApi } from './settings-navigation';
 import { createSettingsControlsApi } from './settings-controls';
+import { createSettingsFormsApi } from './settings-forms';
 import { createShortcutReferenceApi } from './shortcut-reference';
 import { createSiteSearchListApi } from './site-search-list';
 import { createThemePickerApi } from './theme-picker';
@@ -24,6 +25,7 @@ const runtime = globalThis as typeof globalThis & {
     selectControl: ReturnType<typeof createSelectControlApi>;
     settingsNavigation: ReturnType<typeof createSettingsNavigationApi>;
     settingsControls: ReturnType<typeof createSettingsControlsApi>;
+    settingsForms: ReturnType<typeof createSettingsFormsApi>;
     shortcutReference: ReturnType<typeof createShortcutReferenceApi>;
     siteSearchList: ReturnType<typeof createSiteSearchListApi>;
     themePicker: ReturnType<typeof createThemePickerApi>;
@@ -41,6 +43,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsSettingsNavigationReact?: ReturnType<typeof createSettingsNavigationApi>;
   LumnoOptionsSettingsControls?: ReturnType<typeof createSettingsControlsApi>;
   LumnoOptionsSettingsControlsReact?: ReturnType<typeof createSettingsControlsApi>;
+  LumnoOptionsSettingsForms?: ReturnType<typeof createSettingsFormsApi>;
+  LumnoOptionsSettingsFormsReact?: ReturnType<typeof createSettingsFormsApi>;
   LumnoOptionsShortcutReference?: ReturnType<typeof createShortcutReferenceApi>;
   LumnoOptionsShortcutReferenceReact?: ReturnType<typeof createShortcutReferenceApi>;
   LumnoOptionsSiteSearchList?: ReturnType<typeof createSiteSearchListApi>;
@@ -60,6 +64,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   const selectControlApi = createSelectControlApi();
   const settingsNavigationApi = createSettingsNavigationApi();
   const settingsControlsApi = createSettingsControlsApi();
+  const settingsFormsApi = createSettingsFormsApi();
   const shortcutReferenceApi = createShortcutReferenceApi();
   const siteSearchListApi = createSiteSearchListApi();
   const themePickerApi = createThemePickerApi();
@@ -77,6 +82,8 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
   runtime.LumnoOptionsSettingsNavigation = settingsNavigationApi;
   runtime.LumnoOptionsSettingsControlsReact = settingsControlsApi;
   runtime.LumnoOptionsSettingsControls = settingsControlsApi;
+  runtime.LumnoOptionsSettingsFormsReact = settingsFormsApi;
+  runtime.LumnoOptionsSettingsForms = settingsFormsApi;
   runtime.LumnoOptionsShortcutReferenceReact = shortcutReferenceApi;
   runtime.LumnoOptionsShortcutReference = shortcutReferenceApi;
   runtime.LumnoOptionsSiteSearchListReact = siteSearchListApi;
@@ -92,6 +99,7 @@ if (!bootstrapState || bootstrapState.allowReactUpgrade) {
     selectControl: selectControlApi,
     settingsNavigation: settingsNavigationApi,
     settingsControls: settingsControlsApi,
+    settingsForms: settingsFormsApi,
     shortcutReference: shortcutReferenceApi,
     siteSearchList: siteSearchListApi,
     themePicker: themePickerApi,

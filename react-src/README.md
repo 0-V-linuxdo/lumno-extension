@@ -63,6 +63,9 @@ React replaces bounded UI surfaces behind their current public contracts.
    - Options Select Controls for language, recent-site count, bookmark count, and
      bookmark columns. React owns menu state, keyboard-safe selection, and localized
      labels while legacy select references remain adapter-only event bridges.
+   - Options Settings Forms for adding site-search providers and search/favicon
+     blacklist rules. React owns expansion, drafts, query-token insertion, match-mode
+     selection, validation feedback, and reset behavior; adapters persist validated data.
 2. **Pilot hardening**
    - Exercise the unpacked extension in Chrome.
    - Add extension-level tests for shortcut add, edit, icon replacement, keyboard
