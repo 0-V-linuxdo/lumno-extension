@@ -286,6 +286,7 @@ async function flushPromises() {
 
   const faviconCalls = [];
   const copyCalls = [];
+  const openUrlCalls = [];
   const tooltipCalls = [];
   const runtime = createBookmarkCascadeMenuRuntime({
     documentObj,
@@ -350,7 +351,9 @@ async function flushPromises() {
       copyCalls.push(url);
       return Promise.resolve(true);
     },
-    navigateToUrl() {}
+    openUrl(url, options) {
+      openUrlCalls.push({ url, options });
+    }
   });
 
   runtime.open({ id: 'root', title: 'Root' }, anchor);
@@ -473,6 +476,45 @@ async function flushPromises() {
     false,
     'closing the cascade menu should release the trigger folder card visual active state'
   );
+
+  runtime.open({ id: 'root', title: 'Root' }, anchor);
+  await flushPromises();
+  levels = documentObj.body.querySelectorAll('.x-nt-bookmark-cascade-level');
+  rootItems = getMenuItems(levels[0]);
+  rootItems[2].dispatchEvent(createFakeEvent('click'));
+  assert.deepStrictEqual(
+    openUrlCalls[0],
+    {
+      url: 'https://example.com/archive',
+      options: { openInBackgroundTab: false }
+    },
+    'clicking a leaf inside the folder menu should open its bookmark'
+  );
+  assert.strictEqual(
+    runtime.isOpen(),
+    false,
+    'foreground bookmark activation should close the folder menu'
+  );
+
+  runtime.open({ id: 'root', title: 'Root' }, anchor);
+  await flushPromises();
+  levels = documentObj.body.querySelectorAll('.x-nt-bookmark-cascade-level');
+  rootItems = getMenuItems(levels[0]);
+  rootItems[2].dispatchEvent(createFakeEvent('auxclick', { button: 1 }));
+  assert.deepStrictEqual(
+    openUrlCalls[1],
+    {
+      url: 'https://example.com/archive',
+      options: { openInBackgroundTab: true }
+    },
+    'middle-clicking a leaf should open it in the background'
+  );
+  assert.strictEqual(
+    runtime.isOpen(),
+    true,
+    'background bookmark activation should keep the folder menu open'
+  );
+  runtime.close();
 
   console.log('newtab bookmark cascade keyboard tests passed');
 })();

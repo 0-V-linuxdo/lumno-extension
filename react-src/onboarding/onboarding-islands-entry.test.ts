@@ -1,0 +1,62 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+type OnboardingRuntime = typeof globalThis & {
+  LumnoOnboardingPageStrip?: {
+    implementation?: string;
+  };
+  LumnoOnboardingPageStripReact?: {
+    implementation?: string;
+  };
+  LumnoOnboardingReactBootstrap?: {
+    allowReactUpgrade: boolean;
+    reactReady: boolean;
+  };
+  LumnoOnboardingReactIslands?: unknown;
+};
+
+const runtime = globalThis as OnboardingRuntime;
+
+function clearRuntime(): void {
+  delete runtime.LumnoOnboardingPageStrip;
+  delete runtime.LumnoOnboardingPageStripReact;
+  delete runtime.LumnoOnboardingReactBootstrap;
+  delete runtime.LumnoOnboardingReactIslands;
+}
+
+afterEach(() => {
+  clearRuntime();
+  vi.resetModules();
+});
+
+describe('Onboarding React islands entry', () => {
+  it('installs the page-strip API and marks the bootstrap ready', async () => {
+    runtime.LumnoOnboardingReactBootstrap = {
+      allowReactUpgrade: true,
+      reactReady: false
+    };
+
+    await import('./onboarding-islands-entry');
+
+    expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(true);
+    expect(runtime.LumnoOnboardingPageStrip?.implementation).toBe('react');
+    expect(runtime.LumnoOnboardingPageStripReact).toBe(
+      runtime.LumnoOnboardingPageStrip
+    );
+    expect(runtime.LumnoOnboardingReactIslands).toEqual({
+      pageStrip: runtime.LumnoOnboardingPageStrip
+    });
+  });
+
+  it('does not upgrade APIs after the shared bootstrap has fallen back', async () => {
+    runtime.LumnoOnboardingReactBootstrap = {
+      allowReactUpgrade: false,
+      reactReady: false
+    };
+
+    await import('./onboarding-islands-entry');
+
+    expect(runtime.LumnoOnboardingReactBootstrap.reactReady).toBe(false);
+    expect(runtime.LumnoOnboardingPageStrip).toBeUndefined();
+    expect(runtime.LumnoOnboardingReactIslands).toBeUndefined();
+  });
+});

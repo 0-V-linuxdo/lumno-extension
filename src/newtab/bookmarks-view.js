@@ -257,6 +257,10 @@
       card.className = 'x-nt-bookmark-card';
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
+      card.setAttribute(
+        'data-bookmark-view-mode',
+        isTopbarMode ? 'top' : 'grid'
+      );
       card.draggable = false;
       if (isFolder) {
         card.classList.add('x-nt-bookmark-card--folder');

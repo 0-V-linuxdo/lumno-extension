@@ -1,0 +1,56 @@
+# React migration
+
+Lumno is migrating incrementally with React islands. Existing extension runtimes
+remain in control of browser APIs, persistence, and cross-page coordination while
+React replaces bounded UI surfaces behind their current public contracts.
+
+## Guardrails
+
+- Keep Manifest V3 scripts local; do not use a CDN, `eval`, or runtime compilation.
+- Preserve the current global controller contract while an island is being proven.
+- Load the legacy implementation first and let the compiled React island replace it.
+- Keep background and content-script runtimes framework-free unless they gain a real UI.
+- Reuse existing CSS classes and localization keys during behavior-preserving stages.
+- Require TypeScript, component tests, legacy contract tests, and store-package checks.
+- Give every entry a measured bundle budget before adding another dependency.
+
+## Delivery stages
+
+1. **Foundation and pilot — active**
+   - Vite, TypeScript, Vitest, React, and React DOM.
+   - `ShortcutDialog` as the first island, with its legacy implementation retained as
+     an immediate fallback.
+   - Recent Sites as the second island, sharing the same React runtime bundle and
+     retaining the legacy `buildCard` compatibility path.
+   - Bookmarks as the third island, preserving the card metadata used by drag,
+     cascade-menu, theme, and localization runtimes while retaining the legacy
+     `buildCard` and cache-cleanup compatibility paths.
+   - Suggestions as the fourth island, preserving synchronous keyboard-selection,
+     action-label, favicon, theme, tooltip, and history-delete contracts.
+   - Shortcuts Grid as the fifth island, preserving dock hover, pointer reordering,
+     favicon, custom-icon, tooltip, context-menu, and adaptive-tone metadata.
+   - Toast as the sixth island, preserving synchronous message updates, error
+     styling, auto-hide timers, and the existing controller contract.
+2. **Pilot hardening**
+   - Exercise the unpacked extension in Chrome.
+   - Add extension-level tests for shortcut add, edit, icon replacement, keyboard
+     focus, localization refresh, and persistence failure.
+   - Remove the fallback only after the React implementation has passed a release
+     cycle.
+3. **New Tab leaf views — hardening**
+   - Shortcut Dialog, Shortcuts Grid, Recent Sites, Bookmarks, Suggestions, and Toast
+     now share one local React runtime bundle while keeping their legacy
+     implementations as fallbacks.
+   - Keep data stores and browser adapters outside React and inject their results.
+   - Avoid the recently changed wallpaper, theme, and layout paths until they settle.
+4. **Full-page roots**
+   - Move Options and Onboarding after extracting their storage and browser adapters.
+   - Share typed UI primitives only after at least two islands need the same behavior.
+5. **High-coupling surfaces**
+   - Migrate New Tab orchestration and overlay search last.
+   - Preserve hotkeys, IME handling, Picture-in-Picture ownership, and page-bridge
+     boundaries with end-to-end tests before switching ownership to React.
+
+Each stage has its own rollback point. A later stage should not start until the
+current stage passes the default test, check, style audit, i18n audit, and store
+package verification commands.

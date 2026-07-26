@@ -192,6 +192,7 @@
   const NEWTAB_SHORTCUTS_STORE = globalThis.LumnoNewtabShortcutsStore || {};
   const NEWTAB_SHORTCUT_ICON_STORE = globalThis.LumnoNewtabShortcutIconStore || {};
   const NEWTAB_SHORTCUT_DIALOG = globalThis.LumnoNewtabShortcutDialog || {};
+  const NEWTAB_SHORTCUTS_VIEW = globalThis.LumnoNewtabShortcutsView || {};
   const NEWTAB_WALLPAPER_LOCAL_STORE = globalThis.LumnoNewtabWallpaperLocalStore || {};
   const NEWTAB_WALLPAPER_ADAPTIVE_TONE = globalThis.LumnoNewtabWallpaperAdaptiveTone || {};
   const NEWTAB_WALLPAPER_EFFECTS = globalThis.LumnoNewtabWallpaperEffects || {};
@@ -238,6 +239,7 @@
       typeof NEWTAB_SHORTCUT_ICON_STORE.createShortcutIconStore !== 'function' ||
       typeof NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap !== 'function' ||
       typeof NEWTAB_SHORTCUT_DIALOG.createShortcutDialog !== 'function' ||
+      typeof NEWTAB_SHORTCUTS_VIEW.createShortcutsView !== 'function' ||
       typeof NEWTAB_WALLPAPER_LOCAL_STORE.createWallpaperLocalStore !== 'function' ||
       typeof NEWTAB_WALLPAPER_ADAPTIVE_TONE.createWallpaperAdaptiveTone !== 'function' ||
       typeof NEWTAB_WALLPAPER_EFFECTS.createWallpaperEffects !== 'function' ||
@@ -280,6 +282,7 @@
   const BOOKMARK_REORDER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
   const BOOKMARK_DRAG_CLICK_SUPPRESS_MS = 420;
   const BOOKMARK_DRAG_PAGE_SWITCH_DELAY_MS = 640;
+  const BOOKMARK_DRAG_FOLDER_SWITCH_DELAY_MS = 640;
   const NEWTAB_SECTION_CACHE_TTL_MS = 1000 * 60 * 5;
   const NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS = 120;
   const pageSearchParams = new URLSearchParams(window.location.search || '');
@@ -421,6 +424,7 @@
   let recentMouseLeftAt = 0;
   let recentSitesView = null;
   let bookmarksView = null;
+  let shortcutsView = null;
   let shortcutSection = null;
   let shortcutGrid = null;
   let addShortcutButton = null;
@@ -506,6 +510,7 @@
   const WORDMARK_ENTRY_ANIMATION_TOTAL_MS = 660;
   const WORDMARK_WALLPAPER_COVER_DARK_OPACITY = '0.32';
   const WORDMARK_WALLPAPER_COVER_LIGHT_OPACITY = '0.32';
+  const WORDMARK_WALLPAPER_SOLID_OPACITY = '0.6';
   const WORDMARK_VISIBILITY_TRANSITION_MS = 260;
   const WORDMARK_VISIBILITY_TRANSITION_CSS =
     'max-height 260ms cubic-bezier(0.22, 1, 0.36, 1), ' +
@@ -1054,7 +1059,10 @@
     if (!wordmarkSolidEl) {
       return;
     }
-    wordmarkSolidEl.style.setProperty('opacity', visible ? '1' : '0');
+    wordmarkSolidEl.style.setProperty(
+      'opacity',
+      visible ? WORDMARK_WALLPAPER_SOLID_OPACITY : '0'
+    );
   }
 
   function applyWordmarkThemeAppearance(resolvedTheme) {
@@ -5423,9 +5431,49 @@
     return true;
   }
 
+  function getCustomShortcutThemeImageDataUrl(suggestion) {
+    const dataUrl = String(
+      suggestion && suggestion.customIconDataUrl
+        ? suggestion.customIconDataUrl
+        : ''
+    ).trim();
+    return /^data:image\/(?:png|jpe?g|webp);base64,/i.test(dataUrl)
+      ? dataUrl
+      : '';
+  }
+
+  function getCustomShortcutThemeCacheKey(dataUrl) {
+    const source = String(dataUrl || '');
+    return source
+      ? `shortcut-custom-icon:${source.length}:${stableHashCode(source)}`
+      : '';
+  }
+
+  function markCustomShortcutTheme(theme) {
+    if (theme && theme !== defaultTheme && !theme._xIsDefault) {
+      theme._xIsCustomShortcutIcon = true;
+    }
+    return theme || defaultTheme;
+  }
+
   function getThemeForSuggestion(suggestion) {
     if (!shouldUseBrandTheme(suggestion)) {
       return Promise.resolve(defaultTheme);
+    }
+    const customShortcutIcon = getCustomShortcutThemeImageDataUrl(suggestion);
+    if (customShortcutIcon) {
+      const customThemeCacheKey = getCustomShortcutThemeCacheKey(customShortcutIcon);
+      if (customThemeCacheKey && themeColorCache.has(customThemeCacheKey)) {
+        return Promise.resolve(markCustomShortcutTheme(
+          themeColorCache.get(customThemeCacheKey)
+        ));
+      }
+      return loadThemeFromImageSource(
+        customThemeCacheKey,
+        customShortcutIcon,
+        '',
+        false
+      ).then(markCustomShortcutTheme);
     }
     if (suggestion && suggestion.provider) {
       return getThemeForProvider(suggestion.provider);
@@ -5449,6 +5497,13 @@
   function getImmediateThemeForSuggestion(suggestion) {
     if (!shouldUseBrandTheme(suggestion)) {
       return defaultTheme;
+    }
+    const customShortcutIcon = getCustomShortcutThemeImageDataUrl(suggestion);
+    if (customShortcutIcon) {
+      const customThemeCacheKey = getCustomShortcutThemeCacheKey(customShortcutIcon);
+      return customThemeCacheKey && themeColorCache.has(customThemeCacheKey)
+        ? markCustomShortcutTheme(themeColorCache.get(customThemeCacheKey))
+        : defaultTheme;
     }
     if (suggestion && suggestion.provider) {
       const hostKey = getProviderThemeHost(suggestion.provider);
@@ -7462,6 +7517,7 @@
         event.preventDefault();
       }
       persistShortcutOrder().then(() => {
+        renderShortcuts();
         scheduleWallpaperAdaptiveToneUpdate();
       });
       return;
@@ -7555,7 +7611,13 @@
   function renderShortcutTile(shortcut) {
     const title = getShortcutTitle(shortcut);
     const shortcutHost = shortcut && shortcut.host ? shortcut.host : getHostFromUrl(shortcut && shortcut.url);
-    const themeSuggestion = { type: 'shortcut', url: shortcut.url, title };
+    const localIconDataUrl = getShortcutIconDataUrl(shortcut.id);
+    const themeSuggestion = {
+      type: 'shortcut',
+      url: shortcut.url,
+      title,
+      customIconDataUrl: localIconDataUrl
+    };
     const immediateTheme = getImmediateThemeForSuggestion(themeSuggestion);
     const tile = document.createElement('button');
     tile.type = 'button';
@@ -7615,7 +7677,6 @@
     img.loading = 'lazy';
     img.draggable = false;
     img.setAttribute('draggable', 'false');
-    const localIconDataUrl = getShortcutIconDataUrl(shortcut.id);
     if (localIconDataUrl) {
       tile.setAttribute('data-shortcut-custom-icon', 'true');
       img.src = localIconDataUrl;
@@ -7636,21 +7697,17 @@
   }
 
   function renderShortcuts() {
-    if (!shortcutGrid || !addShortcutButton) {
+    if (!shortcutGrid || !shortcutsView) {
       return;
     }
     hideShortcutTooltip();
     closeShortcutContextMenu();
-    shortcutGrid.innerHTML = '';
-    shortcutTiles.length = 0;
     const items = NEWTAB_SHORTCUTS_STORE.normalizeShortcuts
       ? NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(newtabShortcuts, getShortcutStoreOptions())
       : [];
     newtabShortcuts = items;
-    items.forEach((shortcut) => {
-      shortcutGrid.appendChild(renderShortcutTile(shortcut));
-    });
-    shortcutGrid.appendChild(addShortcutButton);
+    shortcutsView.render(items);
+    addShortcutButton = shortcutsView.getAddButton();
     if (shortcutSection) {
       shortcutSection.setAttribute('data-count', String(items.length));
     }
@@ -7886,16 +7943,8 @@
     return persistShortcuts(nextShortcuts, t('newtab_shortcuts_removed', 'Shortcut removed'));
   }
 
-  function createShortcutsSection() {
-    shortcutSection = document.createElement('section');
-    shortcutSection.id = '_x_extension_newtab_shortcuts_2026_unique_';
-    shortcutSection.className = 'x-nt-shortcuts-section';
-    shortcutSection.setAttribute('aria-label', t('newtab_shortcuts_section_label', 'Shortcuts'));
-
-    shortcutGrid = document.createElement('div');
-    shortcutGrid.className = 'x-nt-shortcuts-grid';
-
-    addShortcutButton = document.createElement('button');
+  function createShortcutAddButton() {
+    const addShortcutButton = document.createElement('button');
     addShortcutButton.type = 'button';
     addShortcutButton.className = 'x-nt-shortcut-tile x-nt-shortcut-tile--add';
     addShortcutButton.innerHTML = `
@@ -7911,8 +7960,47 @@
       hideShortcutTooltip();
       openShortcutDialog({ sourceElement: event.currentTarget });
     });
+    return addShortcutButton;
+  }
 
-    shortcutGrid.appendChild(addShortcutButton);
+  function createShortcutsSection() {
+    shortcutSection = document.createElement('section');
+    shortcutSection.id = '_x_extension_newtab_shortcuts_2026_unique_';
+    shortcutSection.className = 'x-nt-shortcuts-section';
+    shortcutSection.setAttribute('aria-label', t('newtab_shortcuts_section_label', 'Shortcuts'));
+
+    shortcutGrid = document.createElement('div');
+    shortcutGrid.className = 'x-nt-shortcuts-grid';
+
+    shortcutsView = NEWTAB_SHORTCUTS_VIEW.createShortcutsView({
+      grid: shortcutGrid,
+      tiles: shortcutTiles,
+      renderTile: renderShortcutTile,
+      createAddButton: createShortcutAddButton,
+      getShortcutTitle,
+      getHostFromUrl,
+      getShortcutIconDataUrl,
+      getBrowserPageFaviconUrl,
+      getImmediateThemeForSuggestion,
+      applyShortcutTileTheme,
+      queueThemeForTarget,
+      attachFaviconWithFallbacks,
+      bindTooltip: bindShortcutTooltip,
+      hideTooltip: hideShortcutTooltip,
+      formatOpenLabel: (title) => formatMessage('open_prefix', '打开 {title}', { title }),
+      isMiddleClick,
+      openShortcut: openShortcutUrl,
+      onContextMenu: handleShortcutContextMenu,
+      onNativeDragStart: handleShortcutNativeDragStart,
+      getAddLabel: () => t('newtab_shortcuts_add', 'Add shortcut'),
+      getAddIconSvg: () => getRiSvg('ri-add-line', 'ri-size-28'),
+      onAdd: (sourceElement) => {
+        hideShortcutTooltip();
+        openShortcutDialog({ sourceElement });
+      }
+    });
+    shortcutsView.render([]);
+    addShortcutButton = shortcutsView.getAddButton();
     shortcutGrid.addEventListener('pointerdown', handleShortcutDragPointerDown);
     shortcutGrid.addEventListener('pointerover', handleShortcutDockPointerOver);
     shortcutGrid.addEventListener('pointermove', handleShortcutDockPointerMove);
@@ -8362,6 +8450,13 @@
 
   function updateBookmarkGridHeightLock() {
     if (!bookmarkGrid) {
+      return;
+    }
+    if (bookmarkGrid.getAttribute('data-bookmark-empty-drop-surface') === 'true') {
+      bookmarkGrid.style.setProperty(
+        'min-height',
+        `${isBookmarkTopbarMode() ? 44 : 64}px`
+      );
       return;
     }
     if (isBookmarkTopbarMode()) {
@@ -9217,6 +9312,78 @@
     state.pageSwitchDirection = 0;
   }
 
+  function clearBookmarkDragFolderSwitch(state) {
+    if (!state) {
+      return;
+    }
+    if (state.folderSwitchTimerId) {
+      window.clearTimeout(state.folderSwitchTimerId);
+      state.folderSwitchTimerId = 0;
+    }
+    if (state.folderSwitchElement) {
+      state.folderSwitchElement.removeAttribute(
+        'data-bookmark-drag-folder-target'
+      );
+    }
+    state.folderSwitchElement = null;
+    state.folderSwitchTargetId = '';
+  }
+
+  function scheduleBookmarkDragFolderSwitch(state, dropTarget) {
+    const switchTarget = NEWTAB_BOOKMARK_DRAG.getFolderSwitchTarget(
+      bookmarkCurrentFolderId,
+      dropTarget
+    );
+    if (!state || !switchTarget || bookmarkDragState !== state ||
+        !state.isDragging) {
+      clearBookmarkDragFolderSwitch(state);
+      return false;
+    }
+    if (state.folderSwitchTargetId !== switchTarget.folderId ||
+        state.folderSwitchElement !== switchTarget.element) {
+      clearBookmarkDragFolderSwitch(state);
+      state.folderSwitchTargetId = switchTarget.folderId;
+      state.folderSwitchElement = switchTarget.element;
+      if (state.folderSwitchElement) {
+        state.folderSwitchElement.setAttribute(
+          'data-bookmark-drag-folder-target',
+          'true'
+        );
+      }
+    }
+    if (state.folderSwitchTimerId) {
+      return true;
+    }
+    state.folderSwitchTimerId = window.setTimeout(() => {
+      state.folderSwitchTimerId = 0;
+      if (bookmarkDragState !== state || !state.isDragging) {
+        clearBookmarkDragFolderSwitch(state);
+        return;
+      }
+      const activeTarget = NEWTAB_BOOKMARK_DRAG.getFolderSwitchTarget(
+        bookmarkCurrentFolderId,
+        state.dropTarget
+      );
+      if (!activeTarget ||
+          activeTarget.folderId !== state.folderSwitchTargetId) {
+        clearBookmarkDragFolderSwitch(state);
+        return;
+      }
+      const targetFolderId = activeTarget.folderId;
+      clearBookmarkDragFolderSwitch(state);
+      clearBookmarkDragDropTarget(state);
+      restoreBookmarkDragPreview(state);
+      setBookmarkDragCardTransform(
+        state,
+        Number(state.pendingPointerX),
+        Number(state.pendingPointerY)
+      );
+      state.folderSwitchPendingId = targetFolderId;
+      navigateBookmarkFolder(targetFolderId);
+    }, BOOKMARK_DRAG_FOLDER_SWITCH_DELAY_MS);
+    return true;
+  }
+
   function scheduleBookmarkDragPageSwitch(state, direction) {
     const normalizedDirection = direction < 0 ? -1 : direction > 0 ? 1 : 0;
     if (!state || !normalizedDirection || bookmarkDragState !== state || !state.isDragging) {
@@ -9253,6 +9420,7 @@
         return;
       }
       clearBookmarkDragDropTarget(state);
+      clearBookmarkDragFolderSwitch(state);
       restoreBookmarkDragPreview(state);
       if (!switchBookmarkPageDuringDrag(bookmarkCurrentPage + normalizedDirection)) {
         clearBookmarkDragPageSwitch(state);
@@ -9279,6 +9447,12 @@
     if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
       return;
     }
+    if (state.folderSwitchPendingId) {
+      clearBookmarkDragPageSwitch(state);
+      clearBookmarkDragDropTarget(state);
+      setBookmarkDragCardTransform(state, pointerX, pointerY);
+      return;
+    }
     const topbarScrollDelta = bookmarkTopbarRuntime &&
       bookmarkTopbarRuntime.isActive() &&
       bookmarkTopbarRuntime.isVisible()
@@ -9291,6 +9465,7 @@
     setBookmarkDragCardTransform(state, pointerX, pointerY);
     const pageSwitchDirection = getBookmarkDragPageSwitchDirection(pointerX, pointerY);
     if (pageSwitchDirection) {
+      clearBookmarkDragFolderSwitch(state);
       clearBookmarkDragDropTarget(state);
       restoreBookmarkDragPreview(state);
       setBookmarkDragCardTransform(state, pointerX, pointerY);
@@ -9300,11 +9475,13 @@
     clearBookmarkDragPageSwitch(state);
     const crossLevelTarget = getBookmarkCrossLevelDropTarget(state, pointerX, pointerY);
     if (crossLevelTarget) {
+      scheduleBookmarkDragFolderSwitch(state, crossLevelTarget);
       restoreBookmarkDragPreview(state);
       setBookmarkDragCardTransform(state, pointerX, pointerY);
       setBookmarkDragDropTarget(state, crossLevelTarget);
       return;
     }
+    clearBookmarkDragFolderSwitch(state);
     clearBookmarkDragDropTarget(state);
     restoreBookmarkDragPreview(state);
     setBookmarkDragCardTransform(state, pointerX, pointerY);
@@ -9820,24 +9997,32 @@
       processBookmarkDragMove(state);
     }
     clearBookmarkDragPageSwitch(state);
+    clearBookmarkDragFolderSwitch(state);
     const canceled = Boolean(finishOptions && finishOptions.canceled);
     const dropTarget = canceled ? null : state.dropTarget;
     state.draggedVisualRect = state.isDragging && dropTarget
       ? getBookmarkDragVisualRect(state)
       : null;
     clearBookmarkDragDropTarget(state);
-    const shouldKeepCascadeOpen = state.sourceKind === 'cascade';
+    const shouldKeepCascadeOpen =
+      NEWTAB_BOOKMARK_DRAG.shouldKeepCascadeOpenAfterDrop(
+        state.sourceKind,
+        dropTarget
+    );
     state.keepCascadeOpenAfterDrop = Boolean(dropTarget && shouldKeepCascadeOpen);
-    if (shouldKeepCascadeOpen && bookmarkCascadeRuntime &&
-        typeof bookmarkCascadeRuntime.setDragMode === 'function') {
-      bookmarkCascadeRuntime.setDragMode(false);
-    } else {
-      closeBookmarkCascadeMenu();
+    if (state.isDragging) {
+      if (shouldKeepCascadeOpen && bookmarkCascadeRuntime &&
+          typeof bookmarkCascadeRuntime.setDragMode === 'function') {
+        bookmarkCascadeRuntime.setDragMode(false);
+      } else {
+        closeBookmarkCascadeMenu();
+      }
     }
     if (canceled) {
       restoreBookmarkDragPreview(state);
     }
     bookmarkDragState = null;
+    state.folderSwitchPendingId = '';
     const card = state.card;
     if (bookmarkGrid) {
       bookmarkGrid.removeAttribute('data-bookmark-dragging');
@@ -9894,6 +10079,13 @@
         draggedRect: state.draggedVisualRect
       });
       persistBookmarkDragOrder(state);
+    } else if (
+      state.isDragging &&
+      bookmarkGrid &&
+      bookmarkGrid.getAttribute('data-bookmark-empty-drop-surface') ===
+        'true'
+    ) {
+      renderCurrentBookmarkPage();
     }
   }
 
@@ -9938,13 +10130,6 @@
     }
     if (typeof card._xDeactivateBookmarkHoverVisual === 'function') {
       card._xDeactivateBookmarkHoverVisual();
-    }
-    if (typeof card.setPointerCapture === 'function') {
-      try {
-        card.setPointerCapture(event.pointerId);
-      } catch (error) {
-        // Pointer capture can fail if the browser already canceled the pointer.
-      }
     }
     return true;
   }
@@ -10007,6 +10192,19 @@
   function renderBookmarks(items) {
     const normalizedItems = Array.isArray(items) ? items : [];
     const isAtRoot = String(bookmarkCurrentFolderId || '') === String(bookmarkRootFolderId || '1');
+    const keepEmptyRootVisibleForDrag = Boolean(
+      isAtRoot &&
+      normalizedItems.length === 0 &&
+      bookmarkDragState &&
+      bookmarkDragState.isDragging
+    );
+    if (bookmarkGrid) {
+      if (keepEmptyRootVisibleForDrag) {
+        bookmarkGrid.setAttribute('data-bookmark-empty-drop-surface', 'true');
+      } else {
+        bookmarkGrid.removeAttribute('data-bookmark-empty-drop-surface');
+      }
+    }
     const renderResult = bookmarksView.render(normalizedItems, {
       signature: bookmarkRenderSignature,
       folderId: bookmarkCurrentFolderId,
@@ -10014,10 +10212,30 @@
       viewMode: currentBookmarkViewMode,
       menuMode: currentBookmarkViewMode === 'list' || isBookmarkTopbarMode()
     });
+    if (bookmarkDragState &&
+        bookmarkDragState.isDragging &&
+        bookmarkDragState.folderSwitchPendingId ===
+          String(bookmarkCurrentFolderId || '')) {
+      const activeDragState = bookmarkDragState;
+      activeDragState.folderSwitchPendingId = '';
+      updateBookmarkDragLayoutCache(activeDragState);
+      setBookmarkDragCardTransform(
+        activeDragState,
+        Number(activeDragState.pendingPointerX),
+        Number(activeDragState.pendingPointerY)
+      );
+      scheduleBookmarkDragMove(
+        activeDragState,
+        Number(activeDragState.pendingPointerX),
+        Number(activeDragState.pendingPointerY)
+      );
+    }
     syncOpenBookmarkCascadeAnchorVisual();
     if (!renderResult.changed) {
       if (normalizedItems.length === 0) {
-        setBookmarkSurfaceVisible(!isAtRoot);
+        setBookmarkSurfaceVisible(!isAtRoot || keepEmptyRootVisibleForDrag);
+        updateBookmarkGridHeightLock();
+        updateBookmarkSectionPosition();
       } else {
         setBookmarkSurfaceVisible(true);
         updateBookmarkGridHeightLock();
@@ -10028,7 +10246,7 @@
     }
     bookmarkRenderSignature = renderResult.signature;
     if (normalizedItems.length === 0) {
-      setBookmarkSurfaceVisible(!isAtRoot);
+      setBookmarkSurfaceVisible(!isAtRoot || keepEmptyRootVisibleForDrag);
       updateBookmarkGridHeightLock();
       updateBookmarkSectionPosition();
       updateBookmarkPagerState();
@@ -11455,6 +11673,9 @@
   }
 
   function isShortcutThemeDefaultForWallpaper(theme) {
+    if (theme && theme._xIsCustomShortcutIcon) {
+      return false;
+    }
     const source = getThemeSource(theme);
     if (!theme || theme._xIsDefault || source === 'fallback') {
       return true;

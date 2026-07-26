@@ -1,0 +1,394 @@
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createBookmarksView,
+  createBookmarksViewApi,
+  getBookmarkCacheKey,
+  getBookmarksSignature,
+  type BookmarkCardElement,
+  type BookmarkItem,
+  type BookmarksViewController,
+  type BookmarksViewOptions
+} from './bookmarks';
+
+let views: BookmarksViewController[] = [];
+
+function createOptions(
+  overrides: Partial<BookmarksViewOptions> = {}
+): BookmarksViewOptions {
+  const grid = document.createElement('div');
+  document.body.appendChild(grid);
+  return {
+    documentObj: document,
+    windowObj: window,
+    grid,
+    cards: [],
+    cardElementCache: new Map(),
+    folderIconsVisible: true,
+    t: (_key, fallback) => fallback,
+    formatMessage: (_key, fallback, values) =>
+      fallback.replace('{title}', values.title),
+    sanitizeDisplayText: (value) => String(value || ''),
+    getHostFromUrl: () => 'example.com',
+    getSiteDisplayName: (_host, title) => title || 'Example',
+    getUrlDisplay: (url) => url,
+    getRiSvg: (id, sizeClass = '') =>
+      `<i class="${sizeClass} ${id}"></i>`,
+    getFigmaFolderSvg: (id) =>
+      `<svg data-folder-id="${id}"></svg>`,
+    initFolderPathMorph: () => {},
+    playFolderPathMorph: () => {},
+    stableHashCode: () => 0,
+    normalizeHost: (host) => host,
+    attachFaviconWithFallbacks: (image) => {
+      image.src = 'data:image/png;base64,dGVzdA==';
+    },
+    isLocalNetworkHost: () => false,
+    getChromeFaviconUrl: () => 'chrome://favicon/',
+    getBrowserPageFaviconUrl: () => 'chrome-extension://favicon/',
+    getImmediateThemeForSuggestion: () => ({ accent: 'blue' }),
+    queueThemeForTarget: () => {},
+    applyCardTheme: (card) => {
+      card.dataset.themed = 'true';
+    },
+    shouldDelayHoverFromRecent: () => false,
+    shouldSuppressHover: () => false,
+    bindCursorTooltip: () => null,
+    hideCursorTooltip: () => {},
+    openFolder: () => {},
+    openFolderMenu: () => {},
+    copyUrl: () => Promise.resolve(true),
+    openUrl: () => {},
+    onItemContextMenu: () => {},
+    ...overrides
+  };
+}
+
+function createView(
+  overrides: Partial<BookmarksViewOptions> = {}
+): {
+  view: BookmarksViewController;
+  options: BookmarksViewOptions;
+} {
+  const options = createOptions(overrides);
+  const view = createBookmarksView(options);
+  views.push(view);
+  return { view, options };
+}
+
+function renderItems(
+  view: BookmarksViewController,
+  items: BookmarkItem[],
+  state: {
+    signature?: string;
+    folderId?: string;
+    rootFolderId?: string;
+    viewMode?: string;
+    menuMode?: boolean;
+  } = {}
+) {
+  let result = {
+    changed: false,
+    count: 0,
+    isAtRoot: true,
+    signature: ''
+  };
+  act(() => {
+    result = view.render(items, {
+      folderId: '1',
+      rootFolderId: '1',
+      viewMode: 'folder',
+      ...state
+    });
+  });
+  return result;
+}
+
+afterEach(() => {
+  act(() => {
+    views.forEach((view) => view.clear());
+  });
+  views = [];
+});
+
+describe('Bookmarks React island', () => {
+  it('preserves signatures and the legacy buildCard compatibility path', () => {
+    const item = {
+      id: 'docs',
+      type: 'bookmark',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    };
+    expect(getBookmarksSignature([item])).toBe(
+      '0::docs::bookmark::Docs::https://example.com/docs::'
+    );
+    expect(getBookmarkCacheKey(item)).toBe(
+      'docs::bookmark::Docs::https://example.com/docs::'
+    );
+
+    const legacyCard = document.createElement(
+      'div'
+    ) as BookmarkCardElement;
+    const legacyApi = {
+      createBookmarksView: () => ({
+        buildCard: () => legacyCard
+      })
+    };
+    const options = createOptions();
+    const view = createBookmarksView(options, legacyApi);
+    views.push(view);
+
+    expect(view.buildCard(item, 0, { viewMode: 'folder' })).toBe(
+      legacyCard
+    );
+    expect(createBookmarksViewApi(legacyApi).implementation).toBe(
+      'react'
+    );
+  });
+
+  it('renders synchronously with external metadata and stable keyed cards', () => {
+    const attachFavicon = vi.fn();
+    const bindTooltip = vi.fn();
+    const applyTheme = vi.fn((card: BookmarkCardElement) => {
+      card.dataset.themed = 'true';
+    });
+    const { view, options } = createView({
+      attachFaviconWithFallbacks: attachFavicon,
+      bindCursorTooltip: bindTooltip,
+      applyCardTheme: applyTheme
+    });
+    const first: BookmarkItem = {
+      id: 'first',
+      parentId: '1',
+      index: 0,
+      type: 'bookmark',
+      title: 'First',
+      url: 'https://example.com/first'
+    };
+    const second: BookmarkItem = {
+      id: 'second',
+      parentId: '1',
+      index: 1,
+      type: 'bookmark',
+      title: 'Second',
+      url: 'https://example.com/second'
+    };
+
+    const initial = renderItems(view, [first, second]);
+    const initialCards = view.getCards().slice();
+    const grid = options.grid as HTMLElement;
+
+    expect(initial.changed).toBe(true);
+    expect(grid.dataset.reactIsland).toBe('bookmarks');
+    expect(initialCards).toHaveLength(2);
+    expect(initialCards[0]._xBookmarkItem).toBe(first);
+    expect(initialCards[0]._xBookmarkPageIndex).toBe(0);
+    expect(initialCards[0]._xTitleText).toBe('First');
+    expect(initialCards[0]._xHost).toBe('example.com');
+    expect(initialCards[0].dataset.bookmarkDraggable).toBe('true');
+    expect(initialCards[0].dataset.themed).toBe('true');
+    expect(attachFavicon).toHaveBeenCalledTimes(2);
+    expect(bindTooltip).toHaveBeenCalledTimes(2);
+    expect(applyTheme).toHaveBeenCalledTimes(2);
+
+    const next = renderItems(view, [second, first], {
+      signature: initial.signature
+    });
+    const reorderedCards = view.getCards();
+    expect(next.changed).toBe(true);
+    expect(reorderedCards[0]).toBe(initialCards[1]);
+    expect(reorderedCards[1]).toBe(initialCards[0]);
+    expect(reorderedCards[0]._xBookmarkPageIndex).toBe(0);
+    expect(reorderedCards[1]._xBookmarkPageIndex).toBe(1);
+
+    const unchanged = renderItems(view, [second, first], {
+      signature: next.signature
+    });
+    expect(unchanged.changed).toBe(false);
+    expect(view.getCards()[0]).toBe(initialCards[1]);
+  });
+
+  it('keeps folder hover, menu locking, and live icon visibility hooks', () => {
+    const morphStates: boolean[] = [];
+    const openedFolders: Array<{
+      item: BookmarkItem;
+      card: BookmarkCardElement;
+    }> = [];
+    const { view } = createView({
+      playFolderPathMorph: (_icon, active) => {
+        morphStates.push(active);
+      },
+      openFolderMenu: (item, card) => {
+        openedFolders.push({ item, card });
+      }
+    });
+    const folder: BookmarkItem = {
+      id: 'design',
+      parentId: '1',
+      index: 0,
+      type: 'folder',
+      title: 'Design',
+      previewUrls: ['https://example.com/one']
+    };
+    renderItems(view, [folder], {
+      viewMode: 'list',
+      menuMode: true
+    });
+    const card = view.getCards()[0];
+
+    act(() => {
+      card.dispatchEvent(new PointerEvent('pointerover', {
+        bubbles: true,
+        pointerType: 'mouse'
+      }));
+    });
+    expect(card.classList.contains('x-nt-bookmark-card--hover')).toBe(
+      true
+    );
+    expect(
+      card.classList.contains(
+        'x-nt-bookmark-card--folder-expanded'
+      )
+    ).toBe(true);
+    expect(card.dataset.bookmarkViewMode).toBe('grid');
+
+    act(() => {
+      view.setFolderIconsVisible(false);
+    });
+    expect(
+      card.classList.contains(
+        'x-nt-bookmark-card--folder-expanded'
+      )
+    ).toBe(false);
+
+    act(() => {
+      card.click();
+    });
+    expect(openedFolders).toEqual([{ item: folder, card }]);
+    expect(
+      card.classList.contains(
+        'x-nt-bookmark-card--folder-expanded'
+      )
+    ).toBe(true);
+
+    act(() => {
+      card.setAttribute('aria-expanded', 'false');
+      card._xSetBookmarkMenuVisualActive?.(false);
+    });
+    expect(card.classList.contains('x-nt-bookmark-card--hover')).toBe(
+      false
+    );
+    expect(morphStates).toEqual([true, false, true, false]);
+  });
+
+  it('marks topbar cards so drag previews keep the compact layout', () => {
+    const { view } = createView();
+    renderItems(view, [{
+      id: 'design',
+      parentId: '1',
+      index: 0,
+      type: 'folder',
+      title: '设计规范分布'
+    }], {
+      viewMode: 'top',
+      menuMode: true
+    });
+
+    expect(view.getCards()[0].dataset.bookmarkViewMode).toBe('top');
+  });
+
+  it('preserves background opening, drag click suppression, and copy action', async () => {
+    const opened: OpenedBookmark[] = [];
+    const copied: string[] = [];
+    const { view } = createView({
+      openUrl: (url, options) => {
+        opened.push({
+          url: String(url || ''),
+          background: Boolean(options?.openInBackgroundTab)
+        });
+      },
+      copyUrl: (url) => {
+        copied.push(String(url || ''));
+        return Promise.resolve(true);
+      }
+    });
+    renderItems(view, [{
+      id: 'docs',
+      parentId: '1',
+      index: 0,
+      type: 'bookmark',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    }]);
+    const card = view.getCards()[0];
+    const copyButton = card.querySelector<HTMLButtonElement>(
+      '.x-nt-bookmark-copy-action'
+    );
+
+    act(() => {
+      card.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        ctrlKey: true
+      }));
+      card.dispatchEvent(new MouseEvent('auxclick', {
+        bubbles: true,
+        button: 1
+      }));
+    });
+    expect(opened).toEqual([
+      {
+        url: 'https://example.com/docs',
+        background: true
+      },
+      {
+        url: 'https://example.com/docs',
+        background: true
+      }
+    ]);
+
+    card._xBookmarkSuppressClick = true;
+    act(() => {
+      card.click();
+    });
+    expect(opened).toHaveLength(2);
+
+    expect(copyButton).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => {
+      copyButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(copied).toEqual(['https://example.com/docs']);
+  });
+
+  it('renders the non-root empty state and delegates legacy cache cleanup', () => {
+    const syncCache = vi.fn();
+    const legacyApi = {
+      createBookmarksView: () => ({
+        syncCardElementCache: syncCache
+      })
+    };
+    const options = createOptions();
+    const view = createBookmarksView(options, legacyApi);
+    views.push(view);
+
+    const result = renderItems(view, [], {
+      folderId: 'child',
+      rootFolderId: '1'
+    });
+    expect(result.isAtRoot).toBe(false);
+    expect(
+      options.grid?.querySelector('.x-nt-bookmark-empty')
+    ).not.toBeNull();
+    expect(view.getCards()).toEqual([]);
+
+    const items = [{ id: 'active', type: 'folder' }];
+    view.syncCardElementCache(items);
+    expect(syncCache).toHaveBeenCalledWith(items);
+  });
+});
+
+interface OpenedBookmark {
+  url: string;
+  background: boolean;
+}

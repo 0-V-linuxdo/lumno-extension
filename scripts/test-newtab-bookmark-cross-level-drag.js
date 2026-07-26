@@ -169,8 +169,8 @@ assert.ok(
 );
 assert.ok(
   newtabHtml.indexOf('<script src="bookmark-drag.js"></script>') <
-    newtabHtml.indexOf('<script src="newtab.js"></script>'),
-  'new tab should load the bookmark drag runtime before the main runtime'
+    newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
+  'new tab should load the bookmark drag runtime before the page bootstrap'
 );
 assert.ok(
   newtabHtml.includes('.x-nt-bookmarks-crumb[data-bookmark-drop-target="true"]'),
@@ -207,6 +207,30 @@ assert.ok(
     /@keyframes _x_nt_bookmark_insert_line_extend_a_2026_unique_\s*\{[^}]*transform:\s*scaleY\(0\);[\s\S]*?transform:\s*scaleY\(1\);/s
       .test(newtabHtml),
   'folder targets should keep a crisp edge while grid insertion lines extend into place'
+);
+assert.ok(
+  /\.x-nt-bookmarks-topbar[\s\S]*?\.x-nt-bookmark-card--folder\[data-bookmark-drop-target="true"\]\s*\{[^}]*border-color:[^}]*background:\s*var\(--x-nt-bookmarks-topbar-folder-hover\);/s
+    .test(newtabHtml),
+  'top bookmark folders should keep a visible background while accepting a dragged bookmark'
+);
+const beginPointerTrackingSource = newtabJs.slice(
+  newtabJs.indexOf('function beginBookmarkDragPointerTracking('),
+  newtabJs.indexOf('function handleBookmarkDragPointerDown(')
+);
+const startBookmarkDragSource = newtabJs.slice(
+  newtabJs.indexOf('function startBookmarkDrag('),
+  newtabJs.indexOf('function clearBookmarkDragCardVisual(')
+);
+assert.ok(
+  beginPointerTrackingSource &&
+    !beginPointerTrackingSource.includes('setPointerCapture') &&
+    startBookmarkDragSource &&
+    startBookmarkDragSource.includes('setPointerCapture'),
+  'bookmark rows should capture the pointer only after movement crosses the drag threshold so menu clicks remain intact'
+);
+assert.ok(
+  /state\.keepCascadeOpenAfterDrop[\s\S]*?if \(state\.isDragging\) \{[\s\S]*?if \(shouldKeepCascadeOpen && bookmarkCascadeRuntime &&[\s\S]*?closeBookmarkCascadeMenu\(\);/.test(newtabJs),
+  'releasing a cascade row before the drag threshold should keep it mounted for the following click event'
 );
 assert.ok(
     newtabJs.includes("previousTarget.markerPosition !== target.markerPosition") &&
@@ -254,10 +278,10 @@ assert.ok(
   'a forward cross-page drop at the visible page start should compensate for source removal exactly once'
 );
 assert.ok(
-  newtabJs.includes("const shouldKeepCascadeOpen = state.sourceKind === 'cascade';") &&
+  newtabJs.includes('NEWTAB_BOOKMARK_DRAG.shouldKeepCascadeOpenAfterDrop(') &&
     newtabJs.includes('bookmarkCascadeRuntime.refresh') &&
     newtabJs.includes('markBookmarkTreeDirty({ preserveCascadeOpen: keepCascadeOpen })'),
-  'successful moves from the cascade should keep and refresh the open menu'
+  'only moves that remain inside the cascade should keep and refresh its menu'
 );
 assert.ok(
   bookmarksRuntimeJs.includes("'onMoved'") &&
@@ -305,6 +329,15 @@ assert.ok(
     bookmarkDragJs.includes('DEFAULT_PREVIEW_POINTER_GAP_PX = 10') &&
     bookmarkDragJs.includes('top = pointerY - previewHeight - pointerGapPx'),
   'card drags should use a compact floating preview that stays close to the pointer'
+);
+assert.ok(
+  bookmarkDragJs.includes("'data-bookmark-view-mode') === 'top'") &&
+    bookmarkDragJs.includes("'x-nt-bookmark-card-drag-preview--topbar'") &&
+    /\.x-nt-bookmark-card-drag-preview--topbar\s*\{[^}]*padding:\s*4px 8px;[^}]*gap:\s*7px;/s
+      .test(newtabHtml) &&
+    /\.x-nt-bookmark-card-drag-preview--topbar \.x-nt-bookmark-title\s*\{[^}]*max-width:\s*none;[^}]*font-size:\s*12px;[^}]*line-height:\s*18px;/s
+      .test(newtabHtml),
+  'topbar drag previews should preserve enough compact content space to show the folder title'
 );
 assert.ok(
   bookmarkDragJs.includes('documentObj.body.appendChild(preview);') &&
@@ -399,10 +432,19 @@ assert.ok(
   'an already-open cascade should be able to enter drag routing mode'
 );
 assert.ok(
-  newtabJs.includes("const shouldKeepCascadeOpen = state.sourceKind === 'cascade';") &&
+  newtabJs.includes('NEWTAB_BOOKMARK_DRAG.shouldKeepCascadeOpenAfterDrop(') &&
     cascadeJs.includes('!bookmarkCascadeMenu || bookmarkCascadeDragMode || bookmarkCascadeCloseTimer') &&
     cascadeJs.includes('cancelBookmarkCascadeDelayedClose();'),
-  'a cascade drag should remain open while crossing levels and after moving to an explicit target'
+  'a cascade drag should remain open while crossing levels and only after an internal drop'
+);
+assert.ok(
+  newtabJs.includes('BOOKMARK_DRAG_FOLDER_SWITCH_DELAY_MS = 640') &&
+    newtabJs.includes('function scheduleBookmarkDragFolderSwitch(state, dropTarget)') &&
+    newtabJs.includes('NEWTAB_BOOKMARK_DRAG.getFolderSwitchTarget(') &&
+    newtabJs.includes('state.folderSwitchPendingId = targetFolderId;') &&
+    newtabJs.includes('navigateBookmarkFolder(targetFolderId);') &&
+    newtabJs.includes("data-bookmark-empty-drop-surface"),
+  'holding a drag over the Bookmarks heading should enter the root folder while keeping an empty root available as a drop surface'
 );
 assert.ok(
   newtabJs.includes("if (bookmarkDragState.sourceKind !== 'cascade') {") &&

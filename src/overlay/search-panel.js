@@ -1395,7 +1395,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         height: '56px',
         'min-height': '56px',
         'max-height': '56px',
-        'border-radius': 'var(--x-ov-panel-radius, 16px) var(--x-ov-panel-radius, 16px) 0 0',
+        'border-radius': 'var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px) 0 0',
         overflow: 'visible'
       },
       inputStyleOverrides: {
@@ -1654,14 +1654,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       setOverlayPanelScopedStyle(
         overlay,
         'border-radius',
-        'var(--x-ov-panel-radius, 16px)'
+        'var(--x-ov-panel-radius, 32px)'
       );
       setInputScopedStyle(
         inputContainer,
         'border-radius',
         shouldCollapse
-          ? 'var(--x-ov-panel-radius, 16px)'
-          : 'var(--x-ov-panel-radius, 16px) var(--x-ov-panel-radius, 16px) 0 0'
+          ? 'var(--x-ov-panel-radius, 32px)'
+          : 'var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px) 0 0'
       );
       if (shouldCollapse) {
         deferredSuggestionsHeightQuery = '';
@@ -3768,12 +3768,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return true;
     }
 
-    function createAttachedSuggestionFavicon(suggestion, index, fallbackIconFactory) {
-      const favicon = document.createElement('img');
+    function createAttachedSuggestionFavicon(suggestion, index, fallbackIconFactory, options) {
+      const renderOptions = options && typeof options === 'object' ? options : {};
+      const reusableFavicon = renderOptions.reuseFavicon &&
+          renderOptions.reuseFavicon.tagName === 'IMG'
+        ? renderOptions.reuseFavicon
+        : null;
+      const favicon = reusableFavicon || document.createElement('img');
       favicon.className = 'x-ov-suggestion-favicon';
       favicon.decoding = 'async';
       favicon.loading = 'eager';
       favicon.referrerPolicy = 'no-referrer';
+      if (renderOptions.preserveLoadedState === true) {
+        favicon.setAttribute('data-favicon-has-appeared', 'true');
+      }
       if (index < 4) {
         favicon.fetchPriority = 'high';
       }
@@ -4007,6 +4015,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return SUGGESTION_ACTION_MODEL.getSearchResultOpenDisposition(config) === 'backgroundTab';
       }
       return Boolean(config.openInBackgroundTab && !config.openInCurrentTab);
+    }
+
+    function finishOverlayResultActivation(event, canOpenInBackground) {
+      if (canOpenInBackground !== false &&
+          shouldOpenSearchResultInBackgroundTab(event)) {
+        searchInput.focus({ preventScroll: true });
+        return false;
+      }
+      removeOverlay(overlay);
+      return true;
     }
 
     function isMiddleClick(event) {
@@ -5583,6 +5601,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           // Check if we're showing search suggestions or tab suggestions
           const activeItem = suggestionItems[activeSuggestionIndex];
           const isSearchSuggestion = Boolean(activeItem._xIsSearchSuggestion);
+          let canKeepOverlayOpen = false;
 
           if (isSearchSuggestion && currentSuggestions[activeSuggestionIndex]) {
             const selectedSuggestion = currentSuggestions[activeSuggestionIndex];
@@ -5638,15 +5657,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             }
             if (selectedSuggestion.provider && selectedSuggestion.searchQuery) {
               if (openSiteSearchProviderQuery(selectedSuggestion.provider, selectedSuggestion.searchQuery, e)) {
-                removeOverlay(overlay);
-                document.removeEventListener('click', clickOutsideHandler);
-                document.removeEventListener('keydown', keydownHandler);
-                document.removeEventListener('keydown', captureTabHandler, true);
+                finishOverlayResultActivation(e, true);
               }
               return;
             }
             if (shouldSwitchMatchedTabSuggestion(selectedSuggestion, activeSuggestionIndex)) {
               openMatchedTabSuggestion(selectedSuggestion, e, activeItem, query);
+              canKeepOverlayOpen = Boolean(selectedSuggestion.url);
             } else if (selectedSuggestion.forceSearch && selectedSuggestion.searchQuery) {
               if (shouldOpenSearchResultInBackgroundTab(e) && selectedSuggestion.url) {
                 recordSearchSuggestionSelectionFromSuggestion(selectedSuggestion, query, 'overlay');
@@ -5662,6 +5679,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                   forceSearch: true
                 });
               }
+              canKeepOverlayOpen = Boolean(selectedSuggestion.url);
             } else {
               // Navigate to the suggested URL
               recordSearchSuggestionSelectionFromSuggestion(selectedSuggestion, query, 'overlay');
@@ -5670,6 +5688,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 url: selectedSuggestion.url,
                 disposition: getSearchResultCreateDisposition(selectedSuggestion, e, activeItem)
               });
+              canKeepOverlayOpen = true;
             }
           } else if (!isSearchSuggestion) {
             if (activeItem && activeItem._xIsOpenTabsModeEntry) {
@@ -5680,6 +5699,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             // Switch to existing tab
             if (activeItem && activeItem._xIsRenderedTabSuggestion && activeItem._xSuggestion) {
               openMatchedTabSuggestion(activeItem._xSuggestion, e, activeItem, query);
+              canKeepOverlayOpen = Boolean(activeItem._xSuggestion.url);
             } else if (activeItem && typeof activeItem._xTabId === 'number') {
               chrome.runtime.sendMessage({
                 action: 'switchToTab',
@@ -5687,10 +5707,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               });
             }
           }
-          removeOverlay(overlay);
-          document.removeEventListener('click', clickOutsideHandler);
-          document.removeEventListener('keydown', keydownHandler);
-          document.removeEventListener('keydown', captureTabHandler, true);
+          finishOverlayResultActivation(e, canKeepOverlayOpen);
         } else if (query) {
           if (!localSearchScopeState && isSlashCommandInput(query)) {
             updateSearchSuggestions([], query);
@@ -5701,10 +5718,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           }
           if (siteSearchState) {
             if (openSiteSearchProviderQuery(siteSearchState, query, e)) {
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
+              finishOverlayResultActivation(e, true);
               return;
             }
           }
@@ -5724,10 +5738,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             } else {
               return;
             }
-            removeOverlay(overlay);
-            document.removeEventListener('click', clickOutsideHandler);
-            document.removeEventListener('keydown', keydownHandler);
-            document.removeEventListener('keydown', captureTabHandler, true);
+            finishOverlayResultActivation(e, true);
             return;
           }
           if (autocompleteState && autocompleteState.url) {
@@ -5741,10 +5752,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               url: autocompleteState.url,
               disposition: getSearchResultNewTabDisposition(e)
             });
-            removeOverlay(overlay);
-            document.removeEventListener('click', clickOutsideHandler);
-            document.removeEventListener('keydown', keydownHandler);
-            document.removeEventListener('keydown', captureTabHandler, true);
+            finishOverlayResultActivation(e, true);
             return;
           }
           resolveQuickNavigation(query).then((targetUrl) => {
@@ -5767,10 +5775,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 query: query
               });
             }
-            removeOverlay(overlay);
-            document.removeEventListener('click', clickOutsideHandler);
-            document.removeEventListener('keydown', keydownHandler);
-            document.removeEventListener('keydown', captureTabHandler, true);
+            finishOverlayResultActivation(e, true);
           });
         }
       }
@@ -6669,8 +6674,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
         const activateRenderedTabSuggestion = function(event) {
           openMatchedTabSuggestion(suggestionItem._xSuggestion, event, suggestionItem, searchInput.value.trim());
-          removeOverlay(overlay);
-          document.removeEventListener('keydown', keydownHandler);
+          finishOverlayResultActivation(event, Boolean(
+            suggestionItem._xSuggestion && suggestionItem._xSuggestion.url
+          ));
         };
 
         // Add click handler to switch to tab
@@ -6973,6 +6979,79 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const providerA = a.provider && a.provider.key ? a.provider.key : '';
       const providerB = b.provider && b.provider.key ? b.provider.key : '';
       return providerA === providerB;
+    }
+
+    function getSuggestionVisualIdentity(suggestion) {
+      if (!suggestion || typeof suggestion !== 'object') {
+        return '';
+      }
+      const type = String(suggestion.type || '');
+      const providerKey = suggestion.provider && suggestion.provider.key
+        ? String(suggestion.provider.key)
+        : '';
+      const matchedTabId = typeof suggestion._xMatchedTabId === 'number'
+        ? String(suggestion._xMatchedTabId)
+        : '';
+      const url = String(suggestion.url || '');
+      const commandText = String(suggestion.commandText || '');
+      const searchQuery = String(suggestion.searchQuery || '');
+      const fallbackTitle = (!url && !commandText) ? String(suggestion.title || '') : '';
+      return [
+        type,
+        matchedTabId ? `tab:${matchedTabId}` : '',
+        url ? `url:${url}` : '',
+        providerKey ? `provider:${providerKey}` : '',
+        commandText ? `command:${commandText}` : '',
+        searchQuery ? `query:${searchQuery}` : '',
+        fallbackTitle ? `title:${fallbackTitle}` : ''
+      ].join('\u001f');
+    }
+
+    function captureSuggestionVisualStateByIdentity(suggestions, items) {
+      const visualStateByIdentity = new Map();
+      if (!Array.isArray(suggestions) || !Array.isArray(items)) {
+        return visualStateByIdentity;
+      }
+      suggestions.forEach((suggestion, index) => {
+        const identity = getSuggestionVisualIdentity(suggestion);
+        const item = items[index];
+        if (!identity || !item) {
+          return;
+        }
+        const favicon = typeof item.querySelector === 'function'
+          ? item.querySelector('.x-ov-suggestion-favicon')
+          : null;
+        const faviconHadAppeared = Boolean(
+          favicon &&
+          favicon.getAttribute('data-favicon-has-appeared') === 'true' &&
+          favicon.getAttribute('data-fallback-icon') !== 'true' &&
+          favicon.getAttribute('data-favicon-placeholder') !== 'true'
+        );
+        const visualStates = visualStateByIdentity.get(identity) || [];
+        visualStates.push({
+          theme: item._xTheme || null,
+          favicon: faviconHadAppeared ? favicon : null,
+          faviconHadAppeared
+        });
+        visualStateByIdentity.set(identity, visualStates);
+      });
+      return visualStateByIdentity;
+    }
+
+    function takeSuggestionVisualState(visualStateByIdentity, suggestion) {
+      if (!visualStateByIdentity || typeof visualStateByIdentity.get !== 'function') {
+        return null;
+      }
+      const identity = getSuggestionVisualIdentity(suggestion);
+      const visualStates = identity ? visualStateByIdentity.get(identity) : null;
+      if (!visualStates || visualStates.length === 0) {
+        return null;
+      }
+      const visualState = visualStates.shift();
+      if (visualStates.length === 0) {
+        visualStateByIdentity.delete(identity);
+      }
+      return visualState;
     }
 
     function isSuggestionPrefix(previous, next) {
@@ -7356,6 +7435,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           currentSuggestions,
           allSuggestions
         });
+        const shouldPreserveVisualState = !canAppend &&
+          !forceFullRerender &&
+          query === lastRenderedQuery;
+        const previousVisualStateByIdentity = shouldPreserveVisualState
+          ? captureSuggestionVisualStateByIdentity(currentSuggestions, suggestionItems)
+          : new Map();
+        const previousScrollTop = shouldPreserveVisualState
+          ? Math.max(0, Number(suggestionsContainer.scrollTop) || 0)
+          : 0;
         const startIndex = canAppend ? currentSuggestions.length : 0;
         const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
         if (!canAppend) {
@@ -7394,7 +7482,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             (primaryHighlightReason === 'openTab' || primaryHighlightReason === 'currentOpenTab') &&
             shouldSwitchMatchedTabSuggestion(suggestion, index);
           const isPrimarySearchSuggest = isPrimaryHighlight && suggestion.type === 'googleSuggest';
-          let immediateTheme = getImmediateThemeForSuggestion(suggestion) || defaultTheme;
+          const preservedVisualState = takeSuggestionVisualState(
+            previousVisualStateByIdentity,
+            suggestion
+          );
+          const faviconContinuityOptions = preservedVisualState
+            ? {
+                reuseFavicon: preservedVisualState.favicon,
+                preserveLoadedState: preservedVisualState.faviconHadAppeared
+              }
+            : null;
+          let immediateTheme = (preservedVisualState && preservedVisualState.theme) ||
+            getImmediateThemeForSuggestion(suggestion) ||
+            defaultTheme;
           if (suggestion.type === 'directUrl' || suggestion.type === 'browserPage') {
             immediateTheme = urlHighlightTheme;
           }
@@ -7430,13 +7530,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             const browserPageFavicon = suggestion.type === 'browserPage'
               ? (suggestion.favicon || getPageFaviconCandidateUrl(suggestion.url || ''))
               : suggestion.favicon;
-            if (browserPageFavicon) {
+            if (browserPageFavicon ||
+                (faviconContinuityOptions && faviconContinuityOptions.reuseFavicon)) {
               iconNode = createAttachedSuggestionFavicon(
                 browserPageFavicon === suggestion.favicon
                   ? suggestion
                   : { ...suggestion, favicon: browserPageFavicon },
                 index,
-                createLinkIcon
+                createLinkIcon,
+                faviconContinuityOptions
               );
             } else {
               iconNode = suggestion.type === 'browserPage'
@@ -7477,8 +7579,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             iconNode = createSearchIcon('subtext');
           } else {
             const suggestionHost = suggestion.url ? getHostFromUrl(suggestion.url) : '';
-            if (suggestion.favicon) {
-              iconNode = createAttachedSuggestionFavicon(suggestion, index, createLinkIcon);
+            if (suggestion.favicon ||
+                (faviconContinuityOptions && faviconContinuityOptions.reuseFavicon)) {
+              iconNode = createAttachedSuggestionFavicon(
+                suggestion,
+                index,
+                createLinkIcon,
+                faviconContinuityOptions
+              );
             } else if (suggestionHost && shouldBlockOverlayFaviconForHost(suggestionHost)) {
               iconNode = createLinkIcon();
             } else {
@@ -7737,18 +7845,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             }
             if (shouldSwitchMatchedTabSuggestion(suggestion, index)) {
               openMatchedTabSuggestion(suggestion, e, suggestionItem, query);
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
+              finishOverlayResultActivation(e, Boolean(suggestion.url));
               return;
             }
             if (suggestion.provider && suggestion.searchQuery) {
               openSiteSearchProviderQuery(suggestion.provider, suggestion.searchQuery, e);
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
+              finishOverlayResultActivation(e, true);
               return;
             }
             if (suggestion.forceSearch && suggestion.searchQuery) {
@@ -7774,10 +7876,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 disposition: getSearchResultCreateDisposition(suggestion, e, suggestionItem)
               });
             }
-            removeOverlay(overlay);
-            document.removeEventListener('click', clickOutsideHandler);
-            document.removeEventListener('keydown', keydownHandler);
-            document.removeEventListener('keydown', captureTabHandler, true);
+            finishOverlayResultActivation(
+              e,
+              !(suggestion.forceSearch && !suggestion.url)
+            );
           };
           visitButton.addEventListener('click', activateVisitButton);
           visitButton.addEventListener('auxclick', function(event) {
@@ -7842,18 +7944,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             }
             if (shouldSwitchMatchedTabSuggestion(suggestion, index)) {
               openMatchedTabSuggestion(suggestion, event, suggestionItem, query);
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
+              finishOverlayResultActivation(event, Boolean(suggestion.url));
               return;
             }
             if (suggestion.provider && suggestion.searchQuery) {
               openSiteSearchProviderQuery(suggestion.provider, suggestion.searchQuery, event);
-              removeOverlay(overlay);
-              document.removeEventListener('click', clickOutsideHandler);
-              document.removeEventListener('keydown', keydownHandler);
-              document.removeEventListener('keydown', captureTabHandler, true);
+              finishOverlayResultActivation(event, true);
               return;
             }
             if (suggestion.forceSearch && suggestion.searchQuery) {
@@ -7877,10 +7973,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 disposition: getSearchResultCreateDisposition(suggestion, event, suggestionItem)
               });
             }
-            removeOverlay(overlay);
-            document.removeEventListener('click', clickOutsideHandler);
-            document.removeEventListener('keydown', keydownHandler);
-            document.removeEventListener('keydown', captureTabHandler, true);
+            finishOverlayResultActivation(
+              event,
+              !(suggestion.forceSearch && !suggestion.url)
+            );
           };
           suggestionItem.addEventListener('click', activateSuggestionItem);
           suggestionItem.addEventListener('auxclick', function(event) {
@@ -7931,6 +8027,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             });
           }
         });
+        if (shouldPreserveVisualState) {
+          suggestionsContainer.scrollTop = previousScrollTop;
+        }
         syncSuggestionLastState();
         updateSelection();
         const heightHeldForRemoteMix = holdSuggestionsHeightForRemoteMix(

@@ -133,6 +133,14 @@
   const confirmOk = document.getElementById('_x_extension_confirm_ok_2024_unique_');
   const confirmCancel = document.getElementById('_x_extension_confirm_cancel_2024_unique_');
   const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
+  const optionsToastApi = globalThis.LumnoOptionsToast || {};
+  const toastController = typeof optionsToastApi.createToastController === 'function'
+    ? optionsToastApi.createToastController(toastElement, {
+        windowObj: window,
+        duration: 2200,
+        errorBackground: 'rgba(153, 27, 27, 0.92)'
+      })
+    : null;
 
   // 使用系统字体，避免外链字体依赖。
   if (!panel || themeButtons.length === 0 || tabButtons.length === 0) {
@@ -1443,6 +1451,12 @@
   }
 
   function showToast(message, isError) {
+    if (toastController) {
+      toastController.show(message, {
+        error: Boolean(isError)
+      });
+      return;
+    }
     if (!toastElement) {
       return;
     }

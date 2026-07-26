@@ -247,6 +247,15 @@
   const primaryActionButton = document.querySelector('.onboarding-action-button--primary');
   const secondaryActionButton = document.querySelector('.onboarding-action-button--secondary');
   const ghostActionButton = document.querySelector('.onboarding-action-button--ghost');
+  const onboardingPageStripApi = globalThis.LumnoOnboardingPageStrip || {};
+  const pageStripController = pageStrip &&
+      typeof onboardingPageStripApi.createPageStripController === 'function'
+    ? onboardingPageStripApi.createPageStripController(pageStrip, {
+      onNavigate(slideIndex) {
+        dispatch({ type: 'GOTO', index: slideIndex });
+      }
+    })
+    : null;
   let blueprint = null;
   let state = null;
   let currentShortcutValue = getDefaultShortcutValue();
@@ -3214,7 +3223,6 @@
     const wasPageStripHidden = pageStrip.hidden;
     pageStrip.hidden = state.index <= 0;
     pageStrip.dataset.entering = wasPageStripHidden && !pageStrip.hidden ? 'true' : 'false';
-    pageStrip.textContent = '';
     const pageCount = Math.max(1, blueprint.slides.length - 1);
     const currentPageIndex = Math.max(0, state.index - 1);
     pageStrip.style.setProperty('--page-strip-count', String(pageCount));
@@ -3222,6 +3230,23 @@
       getRuntimeMiscText('pageStripAriaTemplate', 'Onboarding navigation, page {current} of {total}'),
       { current: currentPageIndex + 1, total: pageCount }
     ));
+    if (pageStripController) {
+      pageStripController.render({
+        pageCount,
+        currentPageIndex,
+        hidden: pageStrip.hidden,
+        entering: pageStrip.dataset.entering === 'true',
+        ariaLabel: pageStrip.getAttribute('aria-label') || '',
+        segmentAriaLabels: Array.from({ length: pageCount }, (_, pageIndex) => (
+          formatRuntimeTemplate(
+            getRuntimeMiscText('pageSegmentAriaTemplate', 'Page {page}'),
+            { page: pageIndex + 1 }
+          )
+        ))
+      });
+      return;
+    }
+    pageStrip.textContent = '';
     if (pageStrip.hidden) {
       return;
     }

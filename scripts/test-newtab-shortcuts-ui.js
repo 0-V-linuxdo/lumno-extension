@@ -511,8 +511,8 @@ assertContains(
 
 assert.ok(
   newtabHtml.indexOf('<script src="shortcuts-store.js"></script>') <
-    newtabHtml.indexOf('<script src="newtab.js"></script>'),
-  'shortcuts store should load before newtab.js'
+    newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
+  'shortcuts store should load before the page bootstrap'
 );
 
 assertContains(
@@ -1073,6 +1073,30 @@ assertContains(
 );
 
 assertContains(
+  getFunctionSource(newtabJs, 'renderShortcutTile'),
+  'customIconDataUrl: localIconDataUrl',
+  'shortcut tiles should pass uploaded image data into their theme suggestion'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'getThemeForSuggestion'),
+  'loadThemeFromImageSource(',
+  'custom shortcut images should resolve a theme directly from their image data'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'getThemeForSuggestion'),
+  "customShortcutIcon,\n        '',\n        false",
+  'custom shortcut image themes should not overwrite the website host theme cache'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'isShortcutThemeDefaultForWallpaper'),
+  'theme._xIsCustomShortcutIcon',
+  'neutral custom-image themes should remain authoritative over wallpaper adaptive colors'
+);
+
+assertContains(
   newtabJs,
   "tile.setAttribute('data-dock-distance', String(distance));",
   'shortcut dock should mark each visible neighbor by distance from the hovered tile'
@@ -1374,9 +1398,9 @@ assertNotContains(
 );
 
 assertContains(
-  newtabJs,
-  "const themeSuggestion = { type: 'shortcut', url: shortcut.url, title };",
-  'shortcut tiles should resolve themes from their destination URL'
+  getFunctionSource(newtabJs, 'renderShortcutTile'),
+  "url: shortcut.url,\n      title,\n      customIconDataUrl: localIconDataUrl",
+  'shortcut tiles should resolve themes from their destination URL or uploaded icon'
 );
 
 assertContains(

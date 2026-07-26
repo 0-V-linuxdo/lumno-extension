@@ -96,10 +96,36 @@
       pageSwitchTimerId: 0,
       pageSwitchDirection: 0,
       pageSwitchButton: null,
+      folderSwitchTimerId: 0,
+      folderSwitchTargetId: '',
+      folderSwitchElement: null,
+      folderSwitchPendingId: '',
       keepCascadeOpenAfterDrop: false,
       isDragging: false,
       hasReordered: false
     };
+  }
+
+  function getFolderSwitchTarget(currentFolderId, dropTarget) {
+    if (!dropTarget || dropTarget.kind !== 'breadcrumb') {
+      return null;
+    }
+    const folderId = String(dropTarget.folderId || '').trim();
+    if (!folderId || folderId === String(currentFolderId || '')) {
+      return null;
+    }
+    return {
+      folderId,
+      element: dropTarget.element || null
+    };
+  }
+
+  function shouldKeepCascadeOpenAfterDrop(sourceKind, dropTarget) {
+    return Boolean(
+      sourceKind === 'cascade' &&
+      dropTarget &&
+      dropTarget.surface === 'cascade'
+    );
   }
 
   function getVisualElement(state) {
@@ -153,6 +179,10 @@
     const rect = state.card.getBoundingClientRect();
     const preview = state.card.cloneNode(true);
     const isCascadeSource = state.sourceKind === 'cascade';
+    const isTopbarCardSource = Boolean(
+      !isCascadeSource &&
+      getAttribute(state.card, 'data-bookmark-view-mode') === 'top'
+    );
     const previewWidth = isCascadeSource
       ? Math.min(rect.width, 196)
       : Math.min(rect.width, 208);
@@ -161,6 +191,11 @@
         ? 'x-nt-bookmark-cascade-drag-preview'
         : 'x-nt-bookmark-card-drag-preview'
     );
+    if (isTopbarCardSource) {
+      preview.classList.add(
+        'x-nt-bookmark-card-drag-preview--topbar'
+      );
+    }
     [
       'id',
       'data-bookmark-drop-target',
@@ -448,12 +483,14 @@
     DEFAULT_PREVIEW_VIEWPORT_EDGE_PX,
     createPreview,
     createSession,
+    getFolderSwitchTarget,
     getFloatingPreviewPosition,
     getGridInsertionTarget,
     getVisualElement,
     isPointInsideElement,
     removePreview,
     resetPreviewFolderVisual,
+    shouldKeepCascadeOpenAfterDrop,
     updateVisualPosition
   });
 });

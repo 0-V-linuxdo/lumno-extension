@@ -1,0 +1,1 @@
+import{c as s}from"./react-shared.js";import"./react-runtime.js";const t=globalThis,o=t.LumnoOptionsReactBootstrap;if(!o||o.allowReactUpgrade){const a=s(t.LumnoOptionsToast||null);t.LumnoOptionsToastReact=a,t.LumnoOptionsToast=a,t.LumnoOptionsReactIslands=Object.freeze({toast:a}),o&&(o.reactReady=!0)}

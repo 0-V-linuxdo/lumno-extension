@@ -499,8 +499,8 @@ function testNewtabLoadsAndUsesDockRuntime() {
   );
   assert.ok(
     newtabHtml.indexOf('<script src="dock.js"></script>') <
-      newtabHtml.indexOf('<script src="newtab.js"></script>'),
-    'newtab should load the dock runtime before the app entry'
+      newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
+    'newtab should load the dock runtime before the app bootstrap'
   );
   assert.match(
     newtabJs,

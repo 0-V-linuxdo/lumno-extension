@@ -436,8 +436,8 @@ async function run() {
   );
   assert.ok(
     newtabHtml.indexOf('<script src="shortcut-dialog.js"></script>') <
-      newtabHtml.indexOf('<script src="newtab.js"></script>'),
-    'shortcut dialog component should load before the page runtime'
+      newtabHtml.indexOf('src="../shared/react-page-bootstrap.js"'),
+    'shortcut dialog component should load before the page bootstrap'
   );
   assert.ok(
     !newtabHtml.includes('.x-nt-shortcut-dialog {'),

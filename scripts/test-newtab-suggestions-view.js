@@ -2081,6 +2081,59 @@ function testOverlayFocusedInputIsolatesUnmodifiedKeyboardEvents() {
   });
 }
 
+function testOverlayBackgroundActivationKeepsSearchOpen() {
+  const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+  assert.match(
+    overlayJs,
+    /function finishOverlayResultActivation\(event, canOpenInBackground\)[\s\S]*?shouldOpenSearchResultInBackgroundTab\(event\)[\s\S]*?searchInput\.focus\(\{ preventScroll: true \}\);[\s\S]*?return false;[\s\S]*?removeOverlay\(overlay\);/,
+    'background result activation should refocus the overlay instead of removing it'
+  );
+  assert.match(
+    overlayJs,
+    /const activateRenderedTabSuggestion = function\(event\)[\s\S]*?openMatchedTabSuggestion\([\s\S]*?finishOverlayResultActivation\(event, Boolean\(/,
+    'direct open-tab rows should preserve the overlay when opened in the background'
+  );
+  assert.match(
+    overlayJs,
+    /const activateVisitButton = function\(e\)[\s\S]*?finishOverlayResultActivation\([\s\S]*?e,[\s\S]*?!\(suggestion\.forceSearch && !suggestion\.url\)/,
+    'visit-button background activation should preserve the overlay'
+  );
+  assert.match(
+    overlayJs,
+    /const activateSuggestionItem = function\(event\)[\s\S]*?finishOverlayResultActivation\([\s\S]*?event,[\s\S]*?!\(suggestion\.forceSearch && !suggestion\.url\)/,
+    'row background activation should preserve the overlay'
+  );
+}
+
+function testOverlayDelayedCompletionPreservesVisualState() {
+  const overlayJs = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+  assert.match(
+    overlayJs,
+    /function captureSuggestionVisualStateByIdentity\(suggestions, items\)[\s\S]*?theme: item\._xTheme \|\| null,[\s\S]*?favicon: faviconHadAppeared \? favicon : null/,
+    'same-query overlay refreshes should capture the resolved row theme and reusable favicon'
+  );
+  assert.match(
+    overlayJs,
+    /const shouldPreserveVisualState = !canAppend &&[\s\S]*?!forceFullRerender &&[\s\S]*?query === lastRenderedQuery;[\s\S]*?captureSuggestionVisualStateByIdentity\(currentSuggestions, suggestionItems\)/,
+    'overlay should preserve visual state only for a same-query delayed completion refresh'
+  );
+  assert.match(
+    overlayJs,
+    /const favicon = reusableFavicon \|\| document\.createElement\('img'\);[\s\S]*?renderOptions\.preserveLoadedState === true[\s\S]*?data-favicon-has-appeared/,
+    'reused overlay favicons should keep their loaded state instead of replaying the first-appearance animation'
+  );
+  assert.match(
+    overlayJs,
+    /let immediateTheme = \(preservedVisualState && preservedVisualState\.theme\) \|\|[\s\S]*?getImmediateThemeForSuggestion\(suggestion\)/,
+    'same-query overlay rows should keep their resolved theme while delayed results are merged'
+  );
+  assert.match(
+    overlayJs,
+    /const previousScrollTop = shouldPreserveVisualState[\s\S]*?suggestionsContainer\.scrollTop = previousScrollTop;/,
+    'same-query overlay refreshes should not reset the visible result position'
+  );
+}
+
 function testNewtabIncrementalSearchSuggestionContract() {
   const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
   assert.ok(
@@ -2126,6 +2179,8 @@ testNewtabCommandEnterOpensFocusedResultInBackgroundTab();
 testOverlayCommandEnterOpensFocusedResultInBackgroundTab();
 testOverlayDirectOpenTabsUseShiftAwareSwitchAction();
 testOverlayFocusedInputIsolatesUnmodifiedKeyboardEvents();
+testOverlayBackgroundActivationKeepsSearchOpen();
+testOverlayDelayedCompletionPreservesVisualState();
 testNewtabIncrementalSearchSuggestionContract();
 
 testLocalUrlSuggestionUsesFallbackTheme()

@@ -8,6 +8,10 @@ const lifecycle = globalThis.LumnoOverlayLifecycle;
 const lifecycleSource = fs.readFileSync('src/overlay/lifecycle.js', 'utf8');
 const shellSource = fs.readFileSync('src/overlay/shell.js', 'utf8');
 const searchPanelSource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
+const suggestionsViewSource = fs.readFileSync(
+  'src/overlay/suggestions-view.css',
+  'utf8'
+);
 
 function createStyleSink() {
   const values = new Map();
@@ -116,6 +120,21 @@ assert.match(
   searchPanelSource,
   /translateX\(-50%\) translateY\(0\) scale\(var\(--x-ov-visible-scale,\s*1\)\)/,
   'overlay reveal state should preserve the transform scale token'
+);
+assert.match(
+  shellSource,
+  /--x-ov-panel-radius:\s*32px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
+  'overlay shell should preserve the original 32px outer corner radius'
+);
+assert.doesNotMatch(
+  searchPanelSource,
+  /var\(--x-ov-panel-radius,\s*16px\)/,
+  'overlay input and collapsed-state fallbacks should not shrink the panel radius'
+);
+assert.match(
+  suggestionsViewSource,
+  /border-radius:\s*0 0 var\(--x-ov-panel-radius,\s*32px\) var\(--x-ov-panel-radius,\s*32px\);/,
+  'overlay results should share the shell radius at the lower corners'
 );
 assert.match(
   searchPanelSource,

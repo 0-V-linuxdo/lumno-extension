@@ -344,7 +344,9 @@ function testOverlayRendererLetsLocalFaviconsReachRuntime() {
     /const useFallback = shouldBlockOverlayFaviconForHost\(hostForTab\);/,
     'overlay open-tab rendering should let local favicons reach the data-only runtime path'
   );
-  const faviconBranch = overlayJs.indexOf('if (suggestion.favicon) {\n              iconNode = createAttachedSuggestionFavicon(suggestion, index, createLinkIcon);');
+  const faviconBranch = overlayJs.search(
+    /if \(suggestion\.favicon \|\|[\s\S]{0,160}?faviconContinuityOptions\.reuseFavicon[\s\S]{0,220}?createAttachedSuggestionFavicon\([\s\S]{0,120}?faviconContinuityOptions/
+  );
   const localFallbackBranch = overlayJs.indexOf('} else if (suggestionHost && shouldBlockOverlayFaviconForHost(suggestionHost)) {\n              iconNode = createLinkIcon();');
   assert.notStrictEqual(faviconBranch, -1, 'overlay suggestion rendering should keep the favicon runtime branch');
   assert.notStrictEqual(localFallbackBranch, -1, 'overlay suggestion rendering should keep a no-favicon local fallback');
@@ -547,7 +549,7 @@ function testOverlayRendererDefinesChromeMonogramHelper() {
   );
   assert.match(
     overlayJs,
-    /function createAttachedSuggestionFavicon\(suggestion, index, fallbackIconFactory\)[\s\S]*?!isChromeMonogramFaviconUrl\(iconUrl\)/,
+    /function createAttachedSuggestionFavicon\(suggestion, index, fallbackIconFactory, options\)[\s\S]*?!isChromeMonogramFaviconUrl\(iconUrl\)/,
     'direct URL suggestion favicons should use the local chrome monogram helper instead of an undefined global'
   );
 }

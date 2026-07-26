@@ -540,8 +540,8 @@ assert.ok(
 assert.ok(
   newtabHtml.indexOf('bookmark-cascade-position.js') >= 0 &&
     newtabHtml.indexOf('bookmark-cascade-menu.js') > newtabHtml.indexOf('bookmark-cascade-position.js') &&
-    newtabHtml.indexOf('bookmark-cascade-menu.js') < newtabHtml.indexOf('newtab.js'),
-  'newtab should load the cascade menu runtime after positioning helpers and before newtab.js'
+    newtabHtml.indexOf('bookmark-cascade-menu.js') < newtabHtml.indexOf('react-page-bootstrap.js'),
+  'newtab should load the cascade menu runtime after positioning helpers and before the page bootstrap'
 );
 assertContains(
   newtabHtml,

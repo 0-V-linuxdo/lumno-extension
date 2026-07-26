@@ -5,9 +5,11 @@ const repoRoot = path.resolve(__dirname, '..');
 const {
   createPreview,
   createSession,
+  getFolderSwitchTarget,
   getFloatingPreviewPosition,
   getGridInsertionTarget,
   isPointInsideElement,
+  shouldKeepCascadeOpenAfterDrop,
   updateVisualPosition
 } = require(path.join(repoRoot, 'src', 'newtab', 'bookmark-drag.js'));
 
@@ -72,6 +74,9 @@ assert.strictEqual(session.originalIndex, 3);
 assert.strictEqual(session.originalPageIndex, -1);
 assert.strictEqual(session.startX, 120);
 assert.strictEqual(session.pendingPointerY, 180);
+assert.strictEqual(session.folderSwitchTimerId, 0);
+assert.strictEqual(session.folderSwitchTargetId, '');
+assert.strictEqual(session.folderSwitchPendingId, '');
 assert.notStrictEqual(session.originalAllItems, sourceItems);
 assert.notStrictEqual(session.originalPageCardIds, sourcePageIds);
 sourceItems.push({ id: 'later' });
@@ -167,6 +172,54 @@ assert.strictEqual(
   'drag previews should not clone copy controls from their source card'
 );
 
+const topbarPreviewClasses = new Set(['x-nt-bookmark-card']);
+const topbarPreviewNode = {
+  classList: {
+    add(...names) {
+      names.forEach((name) => topbarPreviewClasses.add(name));
+    },
+    remove(...names) {
+      names.forEach((name) => topbarPreviewClasses.delete(name));
+    }
+  },
+  querySelector() {
+    return null;
+  },
+  querySelectorAll() {
+    return [];
+  },
+  removeAttribute() {},
+  setAttribute() {},
+  style: {}
+};
+const topbarPreview = createPreview({
+  card: {
+    cloneNode() {
+      return topbarPreviewNode;
+    },
+    getAttribute(name) {
+      return name === 'data-bookmark-view-mode' ? 'top' : null;
+    },
+    getBoundingClientRect() {
+      return createRect(40, 18, 154, 28);
+    }
+  },
+  isFolder: true,
+  sourceKind: 'card'
+}, {
+  documentObj: { body: documentBody }
+});
+assert.strictEqual(topbarPreview, topbarPreviewNode);
+assert.strictEqual(
+  topbarPreviewClasses.has(
+    'x-nt-bookmark-card-drag-preview--topbar'
+  ),
+  true,
+  'topbar cards should retain their compact layout in the body-level drag preview'
+);
+assert.strictEqual(topbarPreview.style.width, '154px');
+assert.strictEqual(topbarPreview.style.height, '28px');
+
 assert.deepStrictEqual(
   getFloatingPreviewPosition({
     pointerX: 100,
@@ -226,6 +279,61 @@ const hitElement = {
 assert.strictEqual(isPointInsideElement(hitElement, 20, 30), true);
 assert.strictEqual(isPointInsideElement(hitElement, 101, 50), false);
 assert.strictEqual(isPointInsideElement(hitElement, NaN, 50), false);
+
+const rootHeading = {};
+assert.deepStrictEqual(
+  getFolderSwitchTarget('nested', {
+    kind: 'breadcrumb',
+    folderId: '1',
+    element: rootHeading
+  }),
+  {
+    folderId: '1',
+    element: rootHeading
+  },
+  'hovering the Bookmarks heading from a nested folder should target root navigation'
+);
+assert.strictEqual(
+  getFolderSwitchTarget('1', {
+    kind: 'breadcrumb',
+    folderId: '1',
+    element: rootHeading
+  }),
+  null,
+  'the current folder should not schedule another drag navigation'
+);
+assert.strictEqual(
+  getFolderSwitchTarget('nested', {
+    kind: 'card',
+    folderId: '1',
+    element: rootHeading
+  }),
+  null,
+  'folder cards should stay direct drop targets instead of navigation targets'
+);
+assert.strictEqual(
+  shouldKeepCascadeOpenAfterDrop('cascade', {
+    kind: 'insertion',
+    surface: 'cascade'
+  }),
+  true,
+  'a drop within the cascade should preserve its open menu'
+);
+assert.strictEqual(
+  shouldKeepCascadeOpenAfterDrop('cascade', {
+    kind: 'insertion',
+    surface: 'grid'
+  }),
+  false,
+  'a cascade item moved to the outer grid should close the source menu'
+);
+assert.strictEqual(
+  shouldKeepCascadeOpenAfterDrop('cascade', {
+    kind: 'breadcrumb'
+  }),
+  false,
+  'a cascade item moved through the root heading should close the source menu'
+);
 
 const gridRect = createRect(100, 100, 800, 80);
 const gridElement = {

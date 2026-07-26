@@ -43,6 +43,23 @@ assert(
   'store package should not include README-only images'
 );
 assert(
+  entries.includes('src/react/newtab-islands.js') &&
+    entries.includes('src/react/options-islands.js') &&
+    entries.includes('src/react/onboarding-islands.js') &&
+    entries.includes('src/react/react-shared.js') &&
+    entries.includes('src/react/react-runtime.js') &&
+    entries.includes('src/shared/react-page-bootstrap.js'),
+  'store package should include both page entries, shared React chunks, and bootstrap'
+);
+assert(
+  entries.includes('src/newtab/shortcuts-view.js'),
+  'store package should include the shortcuts grid fallback'
+);
+assert(
+  entries.every((entry) => !entry.startsWith('react-src/')),
+  'store package should not include React source or test files'
+);
+assert(
   !Object.prototype.hasOwnProperty.call(packagedManifest, 'key'),
   'store package should not include the dedicated development key'
 );

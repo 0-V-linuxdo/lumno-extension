@@ -1,0 +1,1016 @@
+import {
+  forwardRef,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
+} from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot, type Root } from 'react-dom/client';
+import {
+  DEFAULT_CLOSE_DELAY_MS,
+  DEFAULT_ID_PREFIX,
+  MODE_ADD,
+  MODE_EDIT,
+  clampEnterOffset,
+  getEnterOffset,
+  normalizeMode,
+  type ShortcutDialogMode,
+  type ShortcutRecord
+} from './shortcut-dialog-helpers';
+
+type Translate = (key: string, fallback: string) => string;
+type IconAction = 'keep' | 'replace' | 'remove';
+
+export interface ShortcutDialogPayload {
+  title: string;
+  url: string;
+  mode: ShortcutDialogMode;
+  shortcutId: string;
+  iconAction: IconAction;
+  iconDataUrl: string;
+}
+
+export interface ShortcutDialogOpenOptions {
+  mode?: string;
+  shortcut?: ShortcutRecord | null;
+  sourceElement?: HTMLElement | null;
+}
+
+export interface ShortcutDialogCloseOptions {
+  force?: boolean;
+  restoreFocus?: boolean;
+}
+
+export interface ShortcutDialogState {
+  mode: ShortcutDialogMode;
+  editingId: string;
+  open: boolean;
+  busy: boolean;
+}
+
+interface PreparedIcon {
+  dataUrl?: string;
+}
+
+export interface ShortcutDialogOptions {
+  documentObj?: Document;
+  windowObj?: Window;
+  t?: Translate;
+  onSubmit?: (payload: Readonly<ShortcutDialogPayload>) => boolean | Promise<boolean>;
+  prepareIconFile?: (file: File) => PreparedIcon | Promise<PreparedIcon>;
+  getRiSvg?: (id: string, sizeClass?: string) => string;
+  bindTooltip?: (
+    target: HTMLElement,
+    getText: () => string,
+    options: { placement: string; maxWidth: number }
+  ) => unknown;
+  hideTooltip?: () => void;
+  closeDelayMs?: number;
+  idPrefix?: string;
+}
+
+export interface ShortcutDialogController {
+  readonly element: HTMLDivElement;
+  open(options?: ShortcutDialogOpenOptions): boolean;
+  close(options?: ShortcutDialogCloseOptions): boolean;
+  mount(parentNode: Node, beforeNode?: Node | null): HTMLDivElement;
+  submit(): Promise<boolean>;
+  setError(message: unknown): void;
+  setIconError(message: unknown): void;
+  updateLanguage(): void;
+  getState(): Readonly<ShortcutDialogState>;
+  destroy(): void;
+}
+
+interface FormState {
+  mode: ShortcutDialogMode;
+  editingId: string;
+  name: string;
+  url: string;
+  busy: boolean;
+  iconBusy: boolean;
+  iconAction: IconAction;
+  iconDataUrl: string;
+  error: string;
+  iconError: string;
+}
+
+interface NormalizedOptions {
+  documentObj: Document;
+  windowObj: Window;
+  t: Translate;
+  onSubmit: (payload: Readonly<ShortcutDialogPayload>) => boolean | Promise<boolean>;
+  prepareIconFile: (file: File) => PreparedIcon | Promise<PreparedIcon>;
+  getRiSvg: (id: string, sizeClass?: string) => string;
+  bindTooltip: NonNullable<ShortcutDialogOptions['bindTooltip']>;
+  hideTooltip: () => void;
+  closeDelayMs: number;
+  idPrefix: string;
+}
+
+interface ShortcutDialogViewHandle {
+  reset(options?: ShortcutDialogOpenOptions): void;
+  submit(): Promise<boolean>;
+  setError(message: unknown): void;
+  setIconError(message: unknown): void;
+  updateLanguage(): void;
+  cancelPendingIcon(): void;
+  focusName(): void;
+  getDialogElement(): HTMLDivElement | null;
+  getFocusableElements(): HTMLElement[];
+  getSnapshot(): Pick<FormState, 'mode' | 'editingId' | 'busy'>;
+}
+
+interface ShortcutDialogViewProps {
+  options: NormalizedOptions;
+  onRequestClose: () => void;
+}
+
+const INITIAL_FORM_STATE: FormState = {
+  mode: MODE_ADD,
+  editingId: '',
+  name: '',
+  url: '',
+  busy: false,
+  iconBusy: false,
+  iconAction: 'keep',
+  iconDataUrl: '',
+  error: '',
+  iconError: ''
+};
+
+function focusElement(element: Element | null | undefined): void {
+  if (!(element instanceof HTMLElement)) {
+    return;
+  }
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
+function normalizeError(message: unknown): string {
+  return String(message || '').trim();
+}
+
+function getIconErrorMessage(errorValue: unknown, t: Translate): string {
+  const code = String(
+    errorValue && typeof errorValue === 'object' && 'code' in errorValue
+      ? (errorValue as { code?: unknown }).code || ''
+      : ''
+  );
+  if (code === 'unsupported-type' || code === 'empty-file') {
+    return t(
+      'newtab_shortcuts_icon_unsupported',
+      'Choose a PNG, JPG, or WebP image.'
+    );
+  }
+  if (code === 'dimensions-too-large') {
+    return t(
+      'newtab_shortcuts_icon_dimensions_too_large',
+      'The image must be no larger than 4096 × 4096 px.'
+    );
+  }
+  return t(
+    'newtab_shortcuts_icon_invalid',
+    'This image could not be used. Choose another image.'
+  );
+}
+
+const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogViewProps>(
+  function ShortcutDialogView({ options, onRequestClose }, forwardedRef) {
+    const [formState, setFormState] = useState<FormState>(INITIAL_FORM_STATE);
+    const [, setLanguageRevision] = useState(0);
+    const stateRef = useRef<FormState>(INITIAL_FORM_STATE);
+    const iconRequestIdRef = useRef(0);
+    const destroyedRef = useRef(false);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const nameInputRef = useRef<HTMLInputElement>(null);
+    const urlInputRef = useRef<HTMLInputElement>(null);
+    const iconInfoButtonRef = useRef<HTMLButtonElement>(null);
+    const iconUploadTileRef = useRef<HTMLDivElement>(null);
+    const iconRemoveButtonRef = useRef<HTMLButtonElement>(null);
+    const iconInputRef = useRef<HTMLInputElement>(null);
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+    const doneButtonRef = useRef<HTMLButtonElement>(null);
+    const iconInfoDescriptionRef = useRef<HTMLSpanElement>(null);
+
+    function commitState(
+      update: FormState | ((current: FormState) => FormState)
+    ): void {
+      const nextState = typeof update === 'function'
+        ? update(stateRef.current)
+        : update;
+      stateRef.current = nextState;
+      setFormState(nextState);
+    }
+
+    function setBusy(nextBusy: boolean): void {
+      commitState((current) => ({
+        ...current,
+        busy: nextBusy
+      }));
+    }
+
+    function setIconBusy(nextBusy: boolean): void {
+      commitState((current) => ({
+        ...current,
+        iconBusy: nextBusy
+      }));
+    }
+
+    function cancelPendingIcon(): void {
+      iconRequestIdRef.current += 1;
+      if (stateRef.current.iconBusy) {
+        setIconBusy(false);
+      }
+    }
+
+    async function submit(): Promise<boolean> {
+      const current = stateRef.current;
+      if (current.busy || current.iconBusy || destroyedRef.current) {
+        return false;
+      }
+      commitState({
+        ...current,
+        busy: true,
+        error: ''
+      });
+      const payload = Object.freeze<ShortcutDialogPayload>({
+        title: current.name,
+        url: current.url,
+        mode: current.mode,
+        shortcutId: current.editingId,
+        iconAction: current.iconAction,
+        iconDataUrl: current.iconAction === 'replace' ? current.iconDataUrl : ''
+      });
+      try {
+        const saved = Boolean(await options.onSubmit(payload));
+        if (saved) {
+          onRequestClose();
+        }
+        return saved;
+      } catch {
+        return false;
+      } finally {
+        if (!destroyedRef.current) {
+          setBusy(false);
+        }
+      }
+    }
+
+    useImperativeHandle(forwardedRef, () => ({
+      reset(openOptions) {
+        const shortcut = openOptions?.shortcut || null;
+        const mode = normalizeMode(openOptions?.mode, shortcut);
+        iconRequestIdRef.current += 1;
+        commitState({
+          ...INITIAL_FORM_STATE,
+          mode,
+          editingId: mode === MODE_EDIT ? String(shortcut?.id || '') : '',
+          name: mode === MODE_EDIT ? String(shortcut?.title || '') : '',
+          url: mode === MODE_EDIT ? String(shortcut?.url || '') : '',
+          iconDataUrl: mode === MODE_EDIT ? String(shortcut?.iconDataUrl || '') : ''
+        });
+      },
+      submit,
+      setError(message) {
+        const error = normalizeError(message);
+        commitState((current) => ({
+          ...current,
+          error
+        }));
+      },
+      setIconError(message) {
+        const iconError = normalizeError(message);
+        commitState((current) => ({
+          ...current,
+          iconError
+        }));
+      },
+      updateLanguage() {
+        setLanguageRevision((revision) => revision + 1);
+      },
+      cancelPendingIcon,
+      focusName() {
+        focusElement(nameInputRef.current);
+      },
+      getDialogElement() {
+        return dialogRef.current;
+      },
+      getFocusableElements() {
+        const elements: Array<HTMLElement | null> = [
+          nameInputRef.current,
+          urlInputRef.current,
+          iconInfoButtonRef.current,
+          iconUploadTileRef.current,
+          iconRemoveButtonRef.current,
+          cancelButtonRef.current,
+          doneButtonRef.current
+        ];
+        return elements.filter(
+          (element): element is HTMLElement => element instanceof HTMLElement
+        );
+      },
+      getSnapshot() {
+        const current = stateRef.current;
+        return {
+          mode: current.mode,
+          editingId: current.editingId,
+          busy: current.busy
+        };
+      }
+    }));
+
+    useLayoutEffect(() => {
+      const iconInfoButton = iconInfoButtonRef.current;
+      const iconUploadTile = iconUploadTileRef.current;
+      if (iconInfoButton) {
+        options.bindTooltip(
+          iconInfoButton,
+          () => iconInfoDescriptionRef.current?.textContent || '',
+          {
+            placement: 'top',
+            maxWidth: 320
+          }
+        );
+      }
+      if (iconUploadTile) {
+        options.bindTooltip(
+          iconUploadTile,
+          () => iconUploadTile.getAttribute('data-tooltip') || '',
+          {
+            placement: 'top',
+            maxWidth: 260
+          }
+        );
+      }
+      return () => {
+        destroyedRef.current = true;
+        iconRequestIdRef.current += 1;
+      };
+    }, [options]);
+
+    function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+      event.preventDefault();
+      void submit();
+    }
+
+    function handleIconChoose(): void {
+      const current = stateRef.current;
+      if (current.busy || current.iconBusy) {
+        return;
+      }
+      commitState({
+        ...current,
+        iconError: ''
+      });
+      iconInputRef.current?.click();
+    }
+
+    function handleIconChooseKeydown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      event.preventDefault();
+      handleIconChoose();
+    }
+
+    function handleIconRemove(event: ReactMouseEvent<HTMLButtonElement>): void {
+      event.preventDefault();
+      event.stopPropagation();
+      commitState((current) => ({
+        ...current,
+        iconAction: 'remove',
+        iconDataUrl: '',
+        iconError: ''
+      }));
+      focusElement(iconUploadTileRef.current);
+    }
+
+    async function handleIconChange(): Promise<void> {
+      const input = iconInputRef.current;
+      const file = input?.files?.[0];
+      if (input) {
+        input.value = '';
+      }
+      if (!file) {
+        return;
+      }
+      commitState((current) => ({
+        ...current,
+        iconBusy: true,
+        iconError: ''
+      }));
+      const requestId = iconRequestIdRef.current + 1;
+      iconRequestIdRef.current = requestId;
+      try {
+        const result = await options.prepareIconFile(file);
+        if (destroyedRef.current || requestId !== iconRequestIdRef.current) {
+          return;
+        }
+        const dataUrl = String(result?.dataUrl || '');
+        if (!dataUrl) {
+          throw new Error('Shortcut icon result is empty.');
+        }
+        commitState((current) => ({
+          ...current,
+          iconAction: 'replace',
+          iconDataUrl: dataUrl
+        }));
+      } catch (errorValue) {
+        if (!destroyedRef.current && requestId === iconRequestIdRef.current) {
+          commitState((current) => ({
+            ...current,
+            iconError: getIconErrorMessage(errorValue, options.t)
+          }));
+        }
+      } finally {
+        if (!destroyedRef.current && requestId === iconRequestIdRef.current) {
+          setIconBusy(false);
+        }
+      }
+    }
+
+    const isEditMode = formState.mode === MODE_EDIT;
+    const hasIcon = Boolean(formState.iconDataUrl);
+    const disabled = formState.busy || formState.iconBusy;
+    const chooseText = hasIcon
+      ? options.t('newtab_shortcuts_icon_replace', 'Replace image')
+      : options.t('newtab_shortcuts_icon_choose', 'Choose image');
+    const titleId = `${options.idPrefix}_title`;
+    const iconInfoId = `${options.idPrefix}_icon_info`;
+    const iconErrorId = `${options.idPrefix}_icon_error`;
+    const errorId = `${options.idPrefix}_error`;
+
+    return (
+      <div
+        ref={dialogRef}
+        className="x-nt-shortcut-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <form
+          className="x-nt-shortcut-form"
+          aria-busy={disabled ? 'true' : 'false'}
+          onSubmit={handleSubmit}
+        >
+          <h2 id={titleId} className="x-nt-shortcut-dialog-title">
+            {isEditMode
+              ? options.t('newtab_shortcuts_edit_dialog_title', 'Edit shortcut')
+              : options.t('newtab_shortcuts_dialog_title', 'Add shortcut')}
+          </h2>
+
+          <label className="x-nt-shortcut-field">
+            <span>{options.t('newtab_shortcuts_name_label', 'Name')}</span>
+            <div
+              className="_x_extension_shortcut_input_affix_2026_unique_"
+              data-has-prefix="false"
+            >
+              <input
+                ref={nameInputRef}
+                type="text"
+                autoComplete="off"
+                maxLength={64}
+                className="_x_extension_shortcut_input_2024_unique_"
+                placeholder={options.t('newtab_shortcuts_name_placeholder', 'Lumno')}
+                value={formState.name}
+                disabled={formState.busy}
+                onChange={(event) => {
+                  const name = event.currentTarget.value;
+                  commitState((current) => ({ ...current, name }));
+                }}
+              />
+            </div>
+          </label>
+
+          <label className="x-nt-shortcut-field">
+            <span>{options.t('newtab_shortcuts_url_label', 'URL')}</span>
+            <div
+              className="_x_extension_shortcut_input_affix_2026_unique_"
+              data-has-prefix="false"
+            >
+              <input
+                ref={urlInputRef}
+                type="text"
+                inputMode="url"
+                autoComplete="url"
+                required
+                className="_x_extension_shortcut_input_2024_unique_"
+                placeholder={options.t(
+                  'newtab_shortcuts_url_placeholder',
+                  'https://example.com'
+                )}
+                value={formState.url}
+                disabled={formState.busy}
+                aria-describedby={errorId}
+                aria-invalid={formState.error ? 'true' : 'false'}
+                onChange={(event) => {
+                  const url = event.currentTarget.value;
+                  commitState((current) => ({ ...current, url }));
+                }}
+              />
+            </div>
+          </label>
+
+          <div className="x-nt-shortcut-field x-nt-shortcut-icon-field">
+            <div className="x-nt-shortcut-icon-label-row">
+              <span>
+                {options.t('newtab_shortcuts_icon_label', 'Icon (optional)')}
+              </span>
+              <button
+                ref={iconInfoButtonRef}
+                type="button"
+                className="x-nt-appearance-info-button x-nt-shortcut-icon-info"
+                disabled={formState.busy}
+                aria-label={options.t(
+                  'newtab_shortcuts_icon_info_label',
+                  'About local shortcut icons'
+                )}
+                aria-describedby={iconInfoId}
+                dangerouslySetInnerHTML={{
+                  __html: options.getRiSvg('ri-information-line', 'ri-size-14')
+                }}
+              />
+            </div>
+
+            <div className="x-nt-shortcut-icon-control">
+              <div
+                ref={iconUploadTileRef}
+                className={[
+                  'x-nt-wallpaper-tile',
+                  'x-nt-wallpaper-upload-tile',
+                  'x-nt-wallpaper-custom-tile',
+                  'x-nt-shortcut-icon-upload-tile'
+                ].join(' ')}
+                role="button"
+                tabIndex={0}
+                data-upload="true"
+                data-loading={disabled ? 'true' : 'false'}
+                data-has-icon={hasIcon ? 'true' : 'false'}
+                aria-disabled={disabled ? 'true' : 'false'}
+                aria-label={chooseText}
+                aria-describedby={`${iconInfoId} ${iconErrorId}`}
+                data-tooltip={chooseText}
+                onClick={handleIconChoose}
+                onKeyDown={handleIconChooseKeydown}
+              >
+                <span className="x-nt-wallpaper-thumb x-nt-wallpaper-upload-thumb x-nt-shortcut-icon-preview">
+                  <img
+                    className="x-nt-shortcut-icon-preview-image"
+                    src={hasIcon ? formState.iconDataUrl : undefined}
+                    alt=""
+                    draggable={false}
+                    hidden={!hasIcon}
+                  />
+                  <span
+                    className="x-nt-wallpaper-upload-placeholder x-nt-shortcut-icon-placeholder"
+                    hidden={hasIcon}
+                    dangerouslySetInnerHTML={{
+                      __html: options.getRiSvg('ri-add-large-line', 'ri-size-18')
+                    }}
+                  />
+                </span>
+                <button
+                  ref={iconRemoveButtonRef}
+                  type="button"
+                  className="x-nt-wallpaper-delete-button x-nt-shortcut-icon-remove"
+                  hidden={!hasIcon}
+                  disabled={disabled}
+                  aria-label={options.t('newtab_shortcuts_icon_remove', 'Remove')}
+                  onClick={handleIconRemove}
+                  dangerouslySetInnerHTML={{
+                    __html: options.getRiSvg('ri-subtract-line', 'ri-size-14')
+                  }}
+                />
+              </div>
+              <input
+                ref={iconInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="x-nt-shortcut-icon-input"
+                tabIndex={-1}
+                aria-describedby={`${iconInfoId} ${iconErrorId}`}
+                aria-invalid={formState.iconError ? 'true' : 'false'}
+                onChange={() => {
+                  void handleIconChange();
+                }}
+              />
+            </div>
+
+            <span
+              ref={iconInfoDescriptionRef}
+              id={iconInfoId}
+              className="x-nt-shortcut-visually-hidden"
+            >
+              {options.t(
+                'newtab_shortcuts_icon_info',
+                'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.'
+              )}
+            </span>
+            <div
+              id={iconErrorId}
+              className="x-nt-shortcut-icon-error"
+              data-visible={formState.iconError ? 'true' : 'false'}
+              role="alert"
+              aria-live="polite"
+            >
+              {formState.iconError}
+            </div>
+          </div>
+
+          <div
+            id={errorId}
+            className="x-nt-shortcut-error"
+            data-visible={formState.error ? 'true' : 'false'}
+            role="alert"
+            aria-live="polite"
+          >
+            {formState.error}
+          </div>
+
+          <div className="x-nt-shortcut-dialog-actions">
+            <button
+              ref={cancelButtonRef}
+              type="button"
+              className="x-lumno-action-button x-lumno-action-button--secondary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--secondary"
+              disabled={formState.busy}
+              onClick={onRequestClose}
+            >
+              {options.t('newtab_shortcuts_cancel', 'Cancel')}
+            </button>
+            <button
+              ref={doneButtonRef}
+              type="submit"
+              className="x-lumno-action-button x-lumno-action-button--primary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--primary"
+              disabled={disabled}
+            >
+              {isEditMode
+                ? options.t('newtab_shortcuts_save', 'Save')
+                : options.t('newtab_shortcuts_done', 'Done')}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+);
+
+function normalizeOptions(options: ShortcutDialogOptions, root: typeof globalThis): NormalizedOptions | null {
+  const documentObj = options.documentObj || root.document;
+  const windowObj = options.windowObj || root.window;
+  if (!documentObj || !windowObj || typeof documentObj.createElement !== 'function') {
+    return null;
+  }
+  return {
+    documentObj,
+    windowObj,
+    t: typeof options.t === 'function'
+      ? options.t
+      : (_key, fallback) => fallback || '',
+    onSubmit: typeof options.onSubmit === 'function'
+      ? options.onSubmit
+      : () => Promise.resolve(false),
+    prepareIconFile: typeof options.prepareIconFile === 'function'
+      ? options.prepareIconFile
+      : () => Promise.reject(new Error('Shortcut icon processing is unavailable.')),
+    getRiSvg: typeof options.getRiSvg === 'function'
+      ? options.getRiSvg
+      : (id, sizeClass = 'ri-size-16') =>
+          `<i class="ri-icon ${sizeClass} ${id}" aria-hidden="true"></i>`,
+    bindTooltip: typeof options.bindTooltip === 'function'
+      ? options.bindTooltip
+      : () => null,
+    hideTooltip: typeof options.hideTooltip === 'function'
+      ? options.hideTooltip
+      : () => {},
+    closeDelayMs: Number.isFinite(Number(options.closeDelayMs))
+      ? Math.max(0, Number(options.closeDelayMs))
+      : DEFAULT_CLOSE_DELAY_MS,
+    idPrefix: String(options.idPrefix || DEFAULT_ID_PREFIX)
+  };
+}
+
+function setEnterDirection(
+  sourceElement: HTMLElement | null | undefined,
+  dialog: HTMLDivElement | null,
+  options: NormalizedOptions
+): void {
+  let enterX = 0;
+  let enterY = 12;
+  let originX = 'center';
+  let originY = 'bottom';
+  if (sourceElement && dialog) {
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const dialogRect = dialog.getBoundingClientRect();
+    const viewportWidth = Math.max(
+      0,
+      options.windowObj.innerWidth ||
+        options.documentObj.documentElement?.clientWidth ||
+        0
+    );
+    const viewportHeight = Math.max(
+      0,
+      options.windowObj.innerHeight ||
+        options.documentObj.documentElement?.clientHeight ||
+        0
+    );
+    const targetX = dialogRect.width
+      ? dialogRect.left + dialogRect.width / 2
+      : viewportWidth / 2;
+    const targetY = dialogRect.height
+      ? dialogRect.top + dialogRect.height / 2
+      : viewportHeight / 2;
+    const sourceX = sourceRect.left + sourceRect.width / 2;
+    const sourceY = sourceRect.top + sourceRect.height / 2;
+    enterX = getEnterOffset(sourceX, targetX);
+    enterY = getEnterOffset(sourceY, targetY);
+    if (Math.abs(enterX) < 2) {
+      enterX = 0;
+    }
+    if (Math.abs(enterY) < 2) {
+      enterY = 0;
+    }
+    originX = enterX < -2 ? 'left' : enterX > 2 ? 'right' : 'center';
+    originY = enterY < -2 ? 'top' : enterY > 2 ? 'bottom' : 'center';
+  }
+  if (dialog) {
+    dialog.style.setProperty(
+      '--x-nt-shortcut-dialog-enter-x',
+      `${Math.round(enterX)}px`
+    );
+    dialog.style.setProperty(
+      '--x-nt-shortcut-dialog-enter-y',
+      `${Math.round(enterY)}px`
+    );
+    dialog.style.transformOrigin = `${originX} ${originY}`;
+  }
+}
+
+export function createShortcutDialog(
+  rawOptions: ShortcutDialogOptions = {}
+): ShortcutDialogController | null {
+  const normalizedOptions = normalizeOptions(rawOptions, globalThis);
+  if (!normalizedOptions) {
+    return null;
+  }
+  const options: NormalizedOptions = normalizedOptions;
+
+  const host = options.documentObj.createElement('div');
+  host.className = 'x-nt-shortcut-dialog-backdrop';
+  host.hidden = true;
+  host.setAttribute('data-open', 'false');
+  host.setAttribute('data-react-island', 'shortcut-dialog');
+
+  const viewRef: MutableRefObject<ShortcutDialogViewHandle | null> = {
+    current: null
+  };
+  const reactRoot: Root = createRoot(host);
+  let previousFocus: HTMLElement | null = null;
+  let openFrame = 0;
+  let closeTimer = 0;
+  let destroyed = false;
+
+  const requestFrame = typeof options.windowObj.requestAnimationFrame === 'function'
+    ? options.windowObj.requestAnimationFrame.bind(options.windowObj)
+    : (callback: FrameRequestCallback) =>
+        options.windowObj.setTimeout(() => callback(Date.now()), 0);
+  const cancelFrame = typeof options.windowObj.cancelAnimationFrame === 'function'
+    ? options.windowObj.cancelAnimationFrame.bind(options.windowObj)
+    : options.windowObj.clearTimeout.bind(options.windowObj);
+  const setTimer = options.windowObj.setTimeout.bind(options.windowObj);
+  const clearTimer = options.windowObj.clearTimeout.bind(options.windowObj);
+
+  function getView(): ShortcutDialogViewHandle | null {
+    return viewRef.current;
+  }
+
+  function getState(): Readonly<ShortcutDialogState> {
+    const snapshot = getView()?.getSnapshot() || {
+      mode: MODE_ADD,
+      editingId: '',
+      busy: false
+    };
+    return Object.freeze({
+      ...snapshot,
+      open: !host.hidden && host.getAttribute('data-open') === 'true'
+    });
+  }
+
+  function close(closeOptions: ShortcutDialogCloseOptions = {}): boolean {
+    if (destroyed) {
+      return false;
+    }
+    if (getState().busy && closeOptions.force !== true) {
+      return false;
+    }
+    if (openFrame) {
+      cancelFrame(openFrame);
+      openFrame = 0;
+    }
+    host.removeAttribute('data-preparing');
+    if (closeTimer) {
+      clearTimer(closeTimer);
+      closeTimer = 0;
+    }
+    host.setAttribute('data-open', 'false');
+    options.hideTooltip();
+    flushSync(() => {
+      getView()?.cancelPendingIcon();
+      getView()?.setError('');
+      getView()?.setIconError('');
+    });
+    if (host.hidden || options.closeDelayMs === 0) {
+      host.hidden = true;
+    } else {
+      closeTimer = setTimer(() => {
+        closeTimer = 0;
+        if (host.getAttribute('data-open') !== 'true') {
+          host.hidden = true;
+        }
+      }, options.closeDelayMs);
+    }
+    if (closeOptions.restoreFocus) {
+      focusElement(previousFocus);
+    }
+    previousFocus = null;
+    return true;
+  }
+
+  flushSync(() => {
+    reactRoot.render(
+      <ShortcutDialogView
+        ref={viewRef}
+        options={options}
+        onRequestClose={() => {
+          close({ restoreFocus: true, force: true });
+        }}
+      />
+    );
+  });
+
+  function open(openOptions: ShortcutDialogOpenOptions = {}): boolean {
+    if (destroyed || getState().busy) {
+      return false;
+    }
+    previousFocus = openOptions.sourceElement || (
+      options.documentObj.activeElement instanceof HTMLElement
+        ? options.documentObj.activeElement
+        : null
+    );
+    if (closeTimer) {
+      clearTimer(closeTimer);
+      closeTimer = 0;
+    }
+    if (openFrame) {
+      cancelFrame(openFrame);
+      openFrame = 0;
+    }
+    flushSync(() => {
+      getView()?.reset(openOptions);
+    });
+    host.setAttribute('data-open', 'false');
+    host.hidden = false;
+    host.setAttribute('data-preparing', 'true');
+    const dialog = getView()?.getDialogElement() || null;
+    setEnterDirection(openOptions.sourceElement, dialog, options);
+    if (dialog) {
+      void dialog.offsetWidth;
+    }
+    openFrame = requestFrame(() => {
+      openFrame = 0;
+      if (destroyed || host.hidden) {
+        return;
+      }
+      host.removeAttribute('data-preparing');
+      const currentDialog = getView()?.getDialogElement();
+      if (currentDialog) {
+        void currentDialog.offsetWidth;
+      }
+      host.setAttribute('data-open', 'true');
+      getView()?.focusName();
+    });
+    return true;
+  }
+
+  function mount(parentNode: Node, beforeNode?: Node | null): HTMLDivElement {
+    if (!parentNode || typeof parentNode.appendChild !== 'function') {
+      return host;
+    }
+    if (beforeNode && typeof parentNode.insertBefore === 'function') {
+      parentNode.insertBefore(host, beforeNode);
+    } else {
+      parentNode.appendChild(host);
+    }
+    return host;
+  }
+
+  function submit(): Promise<boolean> {
+    return getView()?.submit() || Promise.resolve(false);
+  }
+
+  function setError(message: unknown): void {
+    flushSync(() => {
+      getView()?.setError(message);
+    });
+  }
+
+  function setIconError(message: unknown): void {
+    flushSync(() => {
+      getView()?.setIconError(message);
+    });
+  }
+
+  function updateLanguage(): void {
+    flushSync(() => {
+      getView()?.updateLanguage();
+    });
+  }
+
+  function handleBackdropPointerDown(event: PointerEvent): void {
+    if (event.target === host) {
+      close({ restoreFocus: true });
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close({ restoreFocus: true });
+      return;
+    }
+    if (event.key !== 'Tab') {
+      return;
+    }
+    const activeFocusables = (getView()?.getFocusableElements() || []).filter(
+      (element) => !(
+        (element instanceof HTMLButtonElement || element instanceof HTMLInputElement) &&
+        element.disabled
+      ) && !element.hidden
+    );
+    if (activeFocusables.length === 0) {
+      return;
+    }
+    const first = activeFocusables[0];
+    const last = activeFocusables[activeFocusables.length - 1];
+    if (event.shiftKey && options.documentObj.activeElement === first) {
+      event.preventDefault();
+      focusElement(last);
+    } else if (!event.shiftKey && options.documentObj.activeElement === last) {
+      event.preventDefault();
+      focusElement(first);
+    } else if (!activeFocusables.includes(options.documentObj.activeElement as HTMLElement)) {
+      event.preventDefault();
+      focusElement(first);
+    }
+  }
+
+  function destroy(): void {
+    if (destroyed) {
+      return;
+    }
+    close({ force: true });
+    destroyed = true;
+    host.removeEventListener('pointerdown', handleBackdropPointerDown);
+    host.removeEventListener('keydown', handleKeydown);
+    flushSync(() => {
+      reactRoot.unmount();
+    });
+    host.remove();
+  }
+
+  host.addEventListener('pointerdown', handleBackdropPointerDown);
+  host.addEventListener('keydown', handleKeydown);
+
+  return Object.freeze({
+    element: host,
+    open,
+    close,
+    mount,
+    submit,
+    setError,
+    setIconError,
+    updateLanguage,
+    getState,
+    destroy
+  });
+}
+
+export function createShortcutDialogApi() {
+  return Object.freeze({
+    implementation: 'react',
+    MODE_ADD,
+    MODE_EDIT,
+    clampEnterOffset,
+    getEnterOffset,
+    normalizeMode,
+    createShortcutDialog
+  });
+}

@@ -35,8 +35,8 @@ assert.match(
 
 assert.match(
   optionsHtml,
-  /<script src="\.\.\/shared\/shortcut-reference\.js"><\/script>[\s\S]*<script src="options\.js"><\/script>/,
-  'options page should load shared shortcut definitions before options.js'
+  /<script src="\.\.\/shared\/shortcut-reference\.js"><\/script>[\s\S]*src="\.\.\/shared\/react-page-bootstrap\.js"[\s\S]*data-page-entry="\.\.\/options\/options\.js"/,
+  'options page should load shared shortcut definitions before the page bootstrap'
 );
 assert.match(
   generalContent,

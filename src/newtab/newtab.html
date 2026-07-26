@@ -1202,6 +1202,30 @@
         opacity: 0.94;
         transition: none !important;
       }
+      .x-nt-bookmark-card-drag-preview--topbar {
+        padding: 4px 8px;
+        gap: 7px;
+        border-radius: 7px;
+        contain: none;
+      }
+      .x-nt-bookmark-card-drag-preview--topbar .x-nt-bookmark-icon {
+        width: 17px;
+        height: 17px;
+        border-radius: 4px;
+      }
+      .x-nt-bookmark-card-drag-preview--topbar
+        .x-nt-bookmark-icon--figma {
+        width: 19px;
+        height: 19px;
+        border-radius: 0;
+        transform: translateY(1px);
+      }
+      .x-nt-bookmark-card-drag-preview--topbar .x-nt-bookmark-title {
+        flex: 1 1 auto;
+        max-width: none;
+        font-size: 12px;
+        line-height: 18px;
+      }
       #_x_extension_newtab_bookmarks_grid_2024_unique_[data-bookmark-dragging="true"] .x-nt-bookmark-card {
         cursor: grabbing;
         transition: transform 170ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1675,6 +1699,12 @@
         background: var(--x-nt-bookmarks-topbar-folder-hover);
         box-shadow: none;
       }
+      .x-nt-bookmarks-topbar
+        .x-nt-bookmark-card--folder[data-bookmark-drop-target="true"] {
+        border-color: rgba(37, 99, 235, 0.58);
+        background: var(--x-nt-bookmarks-topbar-folder-hover);
+        box-shadow: none;
+      }
       .x-nt-bookmarks-topbar .x-nt-bookmark-icon {
         width: 17px;
         height: 17px;
@@ -1768,6 +1798,12 @@
       }
       body[data-theme="dark"] .x-nt-bookmarks-topbar .x-nt-bookmark-card--folder.x-nt-bookmark-card--hover {
         border-color: transparent;
+        background: var(--x-nt-bookmarks-topbar-folder-hover);
+        box-shadow: none;
+      }
+      body[data-theme="dark"] .x-nt-bookmarks-topbar
+        .x-nt-bookmark-card--folder[data-bookmark-drop-target="true"] {
+        border-color: rgba(96, 165, 250, 0.68);
         background: var(--x-nt-bookmarks-topbar-folder-hover);
         box-shadow: none;
       }
@@ -6102,12 +6138,19 @@
     <script src="shortcuts-store.js"></script>
     <script src="shortcut-icon-store.js"></script>
     <script src="shortcut-dialog.js"></script>
+    <script src="shortcuts-view.js"></script>
     <script src="wallpaper-local-store.js"></script>
     <script src="wallpaper-adaptive-tone.js"></script>
     <script src="wallpaper-effects.js"></script>
     <script src="wallpaper.js"></script>
     <script src="../overlay/tab-switcher.js"></script>
     <script src="../overlay/tab-switcher-page-bridge.js"></script>
-    <script src="newtab.js"></script>
+    <script
+      src="../shared/react-page-bootstrap.js"
+      data-react-entry="../react/newtab-islands.js"
+      data-page-entry="../newtab/newtab.js"
+      data-react-state="LumnoNewtabReactBootstrap"
+      data-page-runtime="newtab"
+    ></script>
   </body>
 </html>
