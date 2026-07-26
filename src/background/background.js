@@ -3647,6 +3647,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/overlay/lifecycle.js',
     'src/overlay/site-fixes.js',
     'src/overlay/page-theme.js',
+    'src/react/overlay-islands.js',
     'src/overlay/search-panel.js'
   ];
   logHotkeyDebug('inject-start', { tabId: activeTab.id, file: overlayInjectionFiles.join(','), source: source || '' });

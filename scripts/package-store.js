@@ -32,6 +32,7 @@ const injectedScriptFiles = [
   'src/shared/site-search-store.js',
   'src/shared/suggestion-navigation.js',
   'src/shared/search-input-ui.js',
+  'src/react/overlay-islands.js',
   'src/shared/search-input-mode.js',
   'src/shared/search-input.css',
   'src/shared/url-guards.js',

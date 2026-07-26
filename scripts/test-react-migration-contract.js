@@ -82,11 +82,13 @@ const onboardingBundlePath = path.join(
   repoRoot,
   'src/react/onboarding-islands.js'
 );
+const overlayBundlePath = path.join(repoRoot, 'src/react/overlay-islands.js');
 const sharedBundlePath = path.join(repoRoot, 'src/react/react-shared.js');
 const runtimeBundlePath = path.join(repoRoot, 'src/react/react-runtime.js');
 const newtabBundle = fs.readFileSync(newtabBundlePath, 'utf8');
 const optionsBundle = fs.readFileSync(optionsBundlePath, 'utf8');
 const onboardingBundle = fs.readFileSync(onboardingBundlePath, 'utf8');
+const overlayBundle = fs.readFileSync(overlayBundlePath, 'utf8');
 const sharedBundle = fs.readFileSync(sharedBundlePath, 'utf8');
 const runtimeBundle = fs.readFileSync(runtimeBundlePath, 'utf8');
 const bundles = [
@@ -94,7 +96,8 @@ const bundles = [
   sharedBundle,
   newtabBundle,
   optionsBundle,
-  onboardingBundle
+  onboardingBundle,
+  overlayBundle
 ];
 const bundle = bundles.join('\n');
 const bundlePaths = [
@@ -102,7 +105,8 @@ const bundlePaths = [
   sharedBundlePath,
   newtabBundlePath,
   optionsBundlePath,
-  onboardingBundlePath
+  onboardingBundlePath,
+  overlayBundlePath
 ];
 
 const legacyScript = '<script src="shortcut-dialog.js"></script>';
@@ -170,7 +174,7 @@ assert(
 );
 assert.strictEqual(
   packageJson.scripts['build:react'],
-  'vite build --config vite.react.config.mjs',
+  'vite build --config vite.react.config.mjs && vite build --config vite.overlay-react.config.mjs',
   'the React output should have a reproducible local build command'
 );
 assert(
@@ -211,14 +215,22 @@ assert(
   'the Options React route should stay within its 70 KiB gzip budget'
 );
 assert(
+  fs.statSync(overlayBundlePath).size <= 205 * 1024,
+  'the injected Overlay React route should stay within its 205 KiB uncompressed budget'
+);
+assert(
+  zlib.gzipSync(overlayBundle).length <= 65 * 1024,
+  'the injected Overlay React route should stay within its 65 KiB gzip budget'
+);
+assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    376 * 1024,
-  'all shared React artifacts and three page entries should stay within their 376 KiB package budget'
+    580 * 1024,
+  'all shared React artifacts and four page entries should stay within their 580 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    110 * 1024,
-  'all shared React artifacts and three page entries should stay within their 110 KiB gzip budget'
+    175 * 1024,
+  'all shared React artifacts and four page entries should stay within their 175 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
@@ -227,6 +239,14 @@ assert(
     onboardingBundle.includes('from"./react-runtime.js"') &&
     sharedBundle.includes('from"./react-runtime.js"'),
   'New Tab, Options, and Onboarding should reuse the shared React runtime'
+);
+assert(
+  overlayBundle.includes('LumnoOverlayReactBootstrap') &&
+    overlayBundle.includes('LumnoOverlayShellReact') &&
+    overlayBundle.includes('LumnoSearchInputUIReact') &&
+    overlayBundle.includes('overlay-shell') &&
+    overlayBundle.includes('shared-search-input'),
+  'the injected Overlay IIFE should install React shell and search-input APIs'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&

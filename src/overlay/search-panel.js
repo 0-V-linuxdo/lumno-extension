@@ -1109,6 +1109,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayWheelIsolationHandler = null;
       }
       const mountHost = getOverlayMountHost(overlayElement);
+      const shellRuntime = window.LumnoOverlayShell || {};
+      if (typeof shellRuntime.destroyOverlayMount === 'function') {
+        shellRuntime.destroyOverlayMount(mountHost);
+      }
       mountHost.remove();
     } else if (overlayWheelIsolationHandler) {
       overlayWheelIsolationHandler = null;
