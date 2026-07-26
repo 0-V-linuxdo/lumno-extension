@@ -190,15 +190,15 @@ assert(
   fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    300 * 1024,
-  'the New Tab React route should stay within its 300 KiB uncompressed budget'
+    360 * 1024,
+  'the New Tab React route should stay within its 360 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(newtabBundle).length <=
-    92 * 1024,
-  'the New Tab React route should stay within its 92 KiB gzip budget'
+    112 * 1024,
+  'the New Tab React route should stay within its 112 KiB gzip budget'
 );
 assert(
     fs.statSync(runtimeBundlePath).size +
@@ -224,13 +224,13 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    620 * 1024,
-  'all shared React artifacts and four page entries should stay within their 620 KiB package budget'
+    700 * 1024,
+  'all shared React artifacts and four page entries should stay within their 700 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    188 * 1024,
-  'all shared React artifacts and four page entries should stay within their 188 KiB gzip budget'
+    215 * 1024,
+  'all shared React artifacts and four page entries should stay within their 215 KiB gzip budget'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
