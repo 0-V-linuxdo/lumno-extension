@@ -120,6 +120,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/background/dev-extension-startup.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load development startup helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('assets/vendor/pinyin-pro.js'));
 } catch (error) {
   console.warn('Lumno: failed to load pinyin support.', error);
@@ -150,6 +156,7 @@ const openNewtabFallback = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallback;
 const openNewtabFallbackForUrl = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallbackForUrl;
 const BACKGROUND_SHORTCUT_RULES = globalThis.LumnoShortcutRules || {};
 const RECENT_TAB_SWITCHER = globalThis.LumnoRecentTabSwitcher || {};
+const DEV_EXTENSION_STARTUP = globalThis.LumnoDevExtensionStartup || {};
 const shortcutRules = BACKGROUND_SHORTCUT_RULES && typeof BACKGROUND_SHORTCUT_RULES.create === 'function'
   ? BACKGROUND_SHORTCUT_RULES.create({
     chromeApi: chrome,
@@ -4411,10 +4418,15 @@ chrome.runtime.onInstalled.addListener((details) => {
     return;
   }
   if (reason === 'update') {
-    if (typeof shouldOpenOnboardingForUpdate === 'function' && shouldOpenOnboardingForUpdate(details)) {
-      openOnboardingPage({ reason: 'update' });
+    const isSameVersionReload = DEV_EXTENSION_STARTUP &&
+      typeof DEV_EXTENSION_STARTUP.isSameVersionReload === 'function' &&
+      DEV_EXTENSION_STARTUP.isSameVersionReload(details, chrome.runtime.getManifest().version);
+    if (!isSameVersionReload) {
+      if (typeof shouldOpenOnboardingForUpdate === 'function' && shouldOpenOnboardingForUpdate(details)) {
+        openOnboardingPage({ reason: 'update' });
+      }
+      publishExtensionUpdateNotice(details);
     }
-    publishExtensionUpdateNotice(details);
   }
   if (reason === 'update' || reason === 'chrome_update') {
     restorePinnedTabsFromSnapshotOnStartup().catch(() => {}).finally(() => {
@@ -4425,12 +4437,31 @@ chrome.runtime.onInstalled.addListener((details) => {
   schedulePersistPinnedTabSnapshot({ skipEmptyWhenNoNormalWindows: true });
 });
 
-if (chrome && chrome.runtime && chrome.runtime.onStartup) {
-  chrome.runtime.onStartup.addListener(() => {
-    restorePinnedTabsFromSnapshotOnStartup().catch(() => {}).finally(() => {
-      schedulePersistPinnedTabSnapshot({ skipEmptyWhenNoNormalWindows: true });
-    });
+function restoreBackgroundStateOnStartup() {
+  return restorePinnedTabsFromSnapshotOnStartup().catch(() => {}).finally(() => {
+    schedulePersistPinnedTabSnapshot({ skipEmptyWhenNoNormalWindows: true });
   });
+}
+
+function handleBackgroundProfileStartup() {
+  const reloadDevelopmentExtension = DEV_EXTENSION_STARTUP &&
+    typeof DEV_EXTENSION_STARTUP.reloadDevelopmentExtensionOnStartup === 'function'
+    ? DEV_EXTENSION_STARTUP.reloadDevelopmentExtensionOnStartup
+    : null;
+  if (!reloadDevelopmentExtension) {
+    restoreBackgroundStateOnStartup();
+    return;
+  }
+  reloadDevelopmentExtension(chrome).then((result) => {
+    if (result && result.reloaded === true) {
+      return;
+    }
+    restoreBackgroundStateOnStartup();
+  });
+}
+
+if (chrome && chrome.runtime && chrome.runtime.onStartup) {
+  chrome.runtime.onStartup.addListener(handleBackgroundProfileStartup);
 }
 ensureTabSwitchStatsLoaded().catch(() => {});
 ensureTabSwitcherStateLoaded().catch(() => {});

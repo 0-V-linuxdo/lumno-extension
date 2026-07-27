@@ -74,9 +74,19 @@ To use the command bar on local HTML, PDF, or `file://` pages, enable "Allow acc
 
 ## Development
 
-The project currently has no frontend build step. Browser extension source files are loaded directly, and Node scripts handle syntax checks, resource checks, audits, packaging, and regression tests.
+The React pages must be built before Chrome can load their generated assets. Before loading the development extension for the first time, and after editing `react-src/`, run:
 
 ```bash
+npm ci
+npm run build:react
+```
+
+Then keep Developer mode enabled in `chrome://extensions/` and load the repository root as an unpacked extension. Development installs refresh once when the Chrome profile starts, so assets built while Chrome was closed no longer require a manual Reload after startup. Changes to background scripts or `manifest.json` made while Chrome is open still require an immediate manual Reload.
+
+Before committing, run:
+
+```bash
+npm test
 npm run check
 npm run audit:i18n
 npm run audit:style

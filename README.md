@@ -85,9 +85,19 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 
 ## 开发
 
-这个项目目前没有前端构建步骤，扩展源码会被浏览器直接加载。开发时主要依赖 Node 脚本做语法、资源和功能回归检查。
+项目中的 React 页面需要先生成浏览器加载的产物。首次加载开发版，以及修改 `react-src/` 后，请运行：
 
 ```bash
+npm ci
+npm run build:react
+```
+
+然后在 `chrome://extensions/` 中保持「开发者模式」开启，并将仓库根目录作为已解压扩展加载。开发版会在 Chrome 用户配置启动时自动刷新一次，因此 Chrome 关闭期间生成的新产物不再需要启动后手动点击「重新加载」；Chrome 已打开时修改后台脚本或 `manifest.json`，仍需立即手动重新加载一次。
+
+提交前建议运行：
+
+```bash
+npm test
 npm run check
 npm run audit:i18n
 npm run audit:style
