@@ -97,13 +97,17 @@
 
       button:not(:disabled),
       a[href],
-      [role="button"]:not([aria-disabled="true"]) {
+      [role="button"]:not([aria-disabled="true"]),
+      [role="menuitem"]:not([aria-disabled="true"]),
+      [role="option"]:not([aria-disabled="true"]) {
         cursor: pointer;
       }
 
       button *,
       a[href] *,
-      [role="button"] .ri-icon {
+      [role="button"] *,
+      [role="menuitem"] *,
+      [role="option"] * {
         cursor: inherit;
       }
       button .ri-icon,
@@ -113,7 +117,9 @@
       }
 
       button:disabled,
-      [role="button"][aria-disabled="true"] {
+      [role="button"][aria-disabled="true"],
+      [role="menuitem"][aria-disabled="true"],
+      [role="option"][aria-disabled="true"] {
         cursor: not-allowed;
       }
 

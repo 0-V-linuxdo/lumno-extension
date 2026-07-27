@@ -5805,11 +5805,15 @@
       }
       body[data-lumno-page="newtab"] button:not(:disabled),
       body[data-lumno-page="newtab"] a[href],
-      body[data-lumno-page="newtab"] [role="button"]:not([aria-disabled="true"]) {
+      body[data-lumno-page="newtab"] [role="button"]:not([aria-disabled="true"]),
+      body[data-lumno-page="newtab"] [role="menuitem"]:not([aria-disabled="true"]),
+      body[data-lumno-page="newtab"] [role="option"]:not([aria-disabled="true"]) {
         cursor: pointer;
       }
       body[data-lumno-page="newtab"] button:disabled,
-      body[data-lumno-page="newtab"] [role="button"][aria-disabled="true"] {
+      body[data-lumno-page="newtab"] [role="button"][aria-disabled="true"],
+      body[data-lumno-page="newtab"] [role="menuitem"][aria-disabled="true"],
+      body[data-lumno-page="newtab"] [role="option"][aria-disabled="true"] {
         cursor: not-allowed;
       }
       body[data-lumno-page="newtab"] [aria-busy="true"] :disabled,
@@ -5825,7 +5829,9 @@
       }
       body[data-lumno-page="newtab"] button *,
       body[data-lumno-page="newtab"] a[href] *,
-      body[data-lumno-page="newtab"] [role="button"] .ri-icon {
+      body[data-lumno-page="newtab"] [role="button"] *,
+      body[data-lumno-page="newtab"] [role="menuitem"] *,
+      body[data-lumno-page="newtab"] [role="option"] * {
         cursor: inherit;
       }
       body[data-lumno-page="newtab"] button .ri-icon,

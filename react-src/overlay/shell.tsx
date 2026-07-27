@@ -145,13 +145,17 @@ function appendOverlayStyleNodes(
     }
     #_x_extension_overlay_2024_unique_ button:not(:disabled),
     #_x_extension_overlay_2024_unique_ a[href],
-    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"]) {
+    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"]),
+    #_x_extension_overlay_2024_unique_ [role="menuitem"]:not([aria-disabled="true"]),
+    #_x_extension_overlay_2024_unique_ [role="option"]:not([aria-disabled="true"]) {
       cursor: pointer;
     }
     #_x_extension_overlay_2024_unique_ button *,
     #_x_extension_overlay_2024_unique_ a[href] *,
-    #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,
-    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon {
+    #_x_extension_overlay_2024_unique_ [role="button"] *,
+    #_x_extension_overlay_2024_unique_ [role="menuitem"] *,
+    #_x_extension_overlay_2024_unique_ [role="option"] *,
+    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item * {
       cursor: inherit;
     }
     #_x_extension_overlay_2024_unique_ button .ri-icon,
@@ -161,7 +165,9 @@ function appendOverlayStyleNodes(
       pointer-events: none;
     }
     #_x_extension_overlay_2024_unique_ button:disabled,
-    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"] {
+    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"],
+    #_x_extension_overlay_2024_unique_ [role="menuitem"][aria-disabled="true"],
+    #_x_extension_overlay_2024_unique_ [role="option"][aria-disabled="true"] {
       cursor: not-allowed;
     }
     #_x_extension_overlay_2024_unique_ button[aria-busy="true"]:disabled,

@@ -249,19 +249,19 @@ assert.match(
 
 assertCursorInheritanceWithoutHitSuppression(
   newtabHtml,
-  'body[data-lumno-page="newtab"] button *,\n      body[data-lumno-page="newtab"] a[href] *,\n      body[data-lumno-page="newtab"] [role="button"] .ri-icon'
+  'body[data-lumno-page="newtab"] button *,\n      body[data-lumno-page="newtab"] a[href] *,\n      body[data-lumno-page="newtab"] [role="button"] *,\n      body[data-lumno-page="newtab"] [role="menuitem"] *,\n      body[data-lumno-page="newtab"] [role="option"] *'
 );
 assertCursorInheritanceWithoutHitSuppression(
   optionsHtml,
-  'button *,\n      a[href] *,\n      [role="button"] .ri-icon'
+  'button *,\n      a[href] *,\n      [role="button"] *,\n      [role="menuitem"] *,\n      [role="option"] *'
 );
 assertCursorInheritanceWithoutHitSuppression(
   onboardingHtml,
-  'button *,\n      a[href] *,\n      [role="button"] .ri-icon'
+  'button *,\n      a[href] *,\n      [role="button"] *,\n      [role="menuitem"] *,\n      [role="option"] *'
 );
 assertCursorInheritanceWithoutHitSuppression(
   overlayShell,
-  '#_x_extension_overlay_2024_unique_ button *,\n    #_x_extension_overlay_2024_unique_ a[href] *,\n    #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,\n    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon'
+  '#_x_extension_overlay_2024_unique_ button *,\n    #_x_extension_overlay_2024_unique_ a[href] *,\n    #_x_extension_overlay_2024_unique_ [role="button"] *,\n    #_x_extension_overlay_2024_unique_ [role="menuitem"] *,\n    #_x_extension_overlay_2024_unique_ [role="option"] *,\n    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item *'
 );
 assert.match(
   getRule(
@@ -344,8 +344,11 @@ assert.match(
   'overlay action icons should inherit their owning button cursor'
 );
 assert.match(
-  newtabHtml,
-  /body\[data-lumno-page="newtab"\] button:not\(:disabled\),[\s\S]*?\[role="button"\]:not\(\[aria-disabled="true"\]\)\s*\{[\s\S]*?cursor:\s*pointer;/,
+  getRule(
+    newtabHtml,
+    'body[data-lumno-page="newtab"] button:not(:disabled),\n      body[data-lumno-page="newtab"] a[href],\n      body[data-lumno-page="newtab"] [role="button"]:not([aria-disabled="true"]),\n      body[data-lumno-page="newtab"] [role="menuitem"]:not([aria-disabled="true"]),\n      body[data-lumno-page="newtab"] [role="option"]:not([aria-disabled="true"])'
+  ),
+  /cursor:\s*pointer;/,
   'the new-tab page pointer baseline should cover body-level React islands and exclude disabled controls'
 );
 assert.match(
@@ -356,7 +359,7 @@ assert.match(
 assert.match(
   getRule(
     optionsHtml,
-    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"])'
+    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"]),\n      [role="menuitem"]:not([aria-disabled="true"]),\n      [role="option"]:not([aria-disabled="true"])'
   ),
   /cursor:\s*pointer;/,
   'options should apply the shared pointer baseline'
@@ -364,7 +367,7 @@ assert.match(
 assert.match(
   getRule(
     onboardingHtml,
-    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"])'
+    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"]),\n      [role="menuitem"]:not([aria-disabled="true"]),\n      [role="option"]:not([aria-disabled="true"])'
   ),
   /cursor:\s*pointer;/,
   'onboarding should apply the shared pointer baseline'
@@ -372,7 +375,7 @@ assert.match(
 assert.match(
   getRule(
     overlayShell,
-    '#_x_extension_overlay_2024_unique_ button:not(:disabled),\n    #_x_extension_overlay_2024_unique_ a[href],\n    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"])'
+    '#_x_extension_overlay_2024_unique_ button:not(:disabled),\n    #_x_extension_overlay_2024_unique_ a[href],\n    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"]),\n    #_x_extension_overlay_2024_unique_ [role="menuitem"]:not([aria-disabled="true"]),\n    #_x_extension_overlay_2024_unique_ [role="option"]:not([aria-disabled="true"])'
   ),
   /cursor:\s*pointer;/,
   'overlay should apply the shared pointer baseline'
@@ -380,7 +383,7 @@ assert.match(
 assert.match(
   getRule(
     overlayShell,
-    '#_x_extension_overlay_2024_unique_ button:disabled,\n    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"]'
+    '#_x_extension_overlay_2024_unique_ button:disabled,\n    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"],\n    #_x_extension_overlay_2024_unique_ [role="menuitem"][aria-disabled="true"],\n    #_x_extension_overlay_2024_unique_ [role="option"][aria-disabled="true"]'
   ),
   /cursor:\s*not-allowed;/,
   'overlay disabled controls should use not-allowed'
