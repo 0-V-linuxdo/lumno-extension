@@ -7338,7 +7338,7 @@
     }
     applyNewtabShortcutsVisibility();
     updateShortcutLanguageStrings();
-    scheduleWallpaperAdaptiveToneUpdate();
+    updateBookmarkSectionPosition();
   }
 
   function loadShortcuts() {

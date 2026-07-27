@@ -1059,6 +1059,12 @@ assertContains(
   'the add tile should hide at capacity instead of replacing an existing shortcut'
 );
 
+assert.match(
+  getFunctionSource(newtabJs, 'renderShortcuts'),
+  /shortcutsView\.render\(items\);[\s\S]*?updateBookmarkSectionPosition\(\);/,
+  'shortcut rendering should refresh the dock layout after the React DOM changes height'
+);
+
 assertNotContains(
   getFunctionSource(newtabJs, 'saveNewShortcutFromDialog'),
   '.slice(-MAX_NEWTAB_SHORTCUTS)',
