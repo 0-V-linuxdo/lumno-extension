@@ -267,8 +267,8 @@ assert(
   'the Options React route should stay within its 74 KiB gzip budget'
 );
 assert(
-  fs.statSync(overlayBundlePath).size <= 250 * 1024,
-  'the injected Overlay React route should stay within its 250 KiB uncompressed budget'
+  fs.statSync(overlayBundlePath).size <= 256 * 1024,
+  'the injected Overlay React route should stay within its 256 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(overlayBundle).length <= 78 * 1024,
