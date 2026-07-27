@@ -537,6 +537,59 @@
         padding-top: 6px;
         padding-bottom: 4px;
       }
+      ._x_extension_feedback_support_section_2026_unique_ {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 6px 14px 4px;
+      }
+      ._x_extension_feedback_support_header_2026_unique_ {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+      }
+      ._x_extension_feedback_support_links_2026_unique_ {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      ._x_extension_feedback_support_link_2026_unique_ {
+        min-width: 0;
+        min-height: 44px;
+        padding: 0 11px;
+        border: 1px solid var(--tab-border);
+        border-radius: 12px;
+        background: var(--control-bg);
+        color: var(--panel-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-sizing: border-box;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.2;
+        text-decoration: none;
+        transition: background-color 160ms ease, border-color 160ms ease;
+      }
+      ._x_extension_feedback_support_link_2026_unique_ > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      ._x_extension_feedback_support_link_2026_unique_ > .ri-external-link-line {
+        margin-left: auto;
+        color: var(--panel-subtext);
+        opacity: 0.72;
+      }
+      ._x_extension_feedback_support_link_2026_unique_:hover {
+        border-color: var(--input-focus-color);
+        background: var(--control-hover-bg);
+      }
+      ._x_extension_feedback_support_link_2026_unique_:focus-visible {
+        outline: 2px solid var(--input-focus-color);
+        outline-offset: 2px;
+      }
       ._x_extension_onboarding_guide_button_2026_unique_ {
         margin-left: auto;
         --settings-button-min-height: 30px;
@@ -2172,6 +2225,11 @@
           margin-left: 12px;
         }
       }
+      @media (max-width: 520px) {
+        ._x_extension_feedback_support_links_2026_unique_ {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
       .ri-icon {
         width: var(--ri-size, 16px);
         height: var(--ri-size, 16px);
@@ -2284,6 +2342,10 @@
       </div>
       <div id="_x_extension_settings_panel_2024_unique_" data-theme="light">
         <div class="_x_extension_settings_content_2024_unique_" data-content="general" data-active="false">
+          <div id="_x_extension_feedback_support_2026_unique_"></div>
+          <div class="_x_extension_setting_divider_wrap_2024_unique_" role="presentation">
+            <div class="_x_extension_setting_divider_2024_unique_"></div>
+          </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_general_header_row_2026_unique_">
             <p class="_x_extension_section_title_2024_unique_" data-i18n="settings_global_section_title">全局设置</p>
             <button id="_x_extension_open_onboarding_page_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_onboarding_guide_button_2026_unique_" type="button">

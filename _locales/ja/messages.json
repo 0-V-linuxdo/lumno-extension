@@ -68,6 +68,9 @@
   "settings_global_section_title": {
     "message": "全体設定"
   },
+  "settings_feedback_support_section_title": {
+    "message": "フィードバックとサポート"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使い方"
   },

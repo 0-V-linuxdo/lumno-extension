@@ -68,6 +68,9 @@
   "settings_global_section_title": {
     "message": "Global Settings"
   },
+  "settings_feedback_support_section_title": {
+    "message": "Feedback & Support"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "Tutorial"
   },

@@ -223,15 +223,15 @@ assert(
     fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    236 * 1024,
-  'the Options React route should stay within its 236 KiB uncompressed budget'
+    238 * 1024,
+  'the Options React route should stay within its 238 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
       zlib.gzipSync(optionsBundle).length <=
-    70 * 1024,
-  'the Options React route should stay within its 70 KiB gzip budget'
+    71 * 1024,
+  'the Options React route should stay within its 71 KiB gzip budget'
 );
 assert(
   fs.statSync(overlayBundlePath).size <= 250 * 1024,

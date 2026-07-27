@@ -11,6 +11,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsBlacklistListReact?: {
     implementation?: string;
   };
+  LumnoOptionsFeedbackSupport?: {
+    implementation?: string;
+  };
+  LumnoOptionsFeedbackSupportReact?: {
+    implementation?: string;
+  };
   LumnoOptionsPopconfirm?: {
     implementation?: string;
   };
@@ -86,6 +92,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsReactIslands;
   delete runtime.LumnoOptionsBlacklistList;
   delete runtime.LumnoOptionsBlacklistListReact;
+  delete runtime.LumnoOptionsFeedbackSupport;
+  delete runtime.LumnoOptionsFeedbackSupportReact;
   delete runtime.LumnoOptionsPopconfirm;
   delete runtime.LumnoOptionsPopconfirmReact;
   delete runtime.LumnoOptionsSegmentedControl;
@@ -127,6 +135,10 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsBlacklistList?.implementation).toBe('react');
     expect(runtime.LumnoOptionsBlacklistListReact).toBe(
       runtime.LumnoOptionsBlacklistList
+    );
+    expect(runtime.LumnoOptionsFeedbackSupport?.implementation).toBe('react');
+    expect(runtime.LumnoOptionsFeedbackSupportReact).toBe(
+      runtime.LumnoOptionsFeedbackSupport
     );
     expect(runtime.LumnoOptionsPopconfirm?.implementation).toBe('react');
     expect(runtime.LumnoOptionsPopconfirmReact).toBe(
@@ -172,6 +184,7 @@ describe('Options React islands entry', () => {
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
     expect(runtime.LumnoOptionsReactIslands).toEqual({
       blacklistList: runtime.LumnoOptionsBlacklistList,
+      feedbackSupport: runtime.LumnoOptionsFeedbackSupport,
       popconfirm: runtime.LumnoOptionsPopconfirm,
       segmentedControl: runtime.LumnoOptionsSegmentedControl,
       selectControl: runtime.LumnoOptionsSelectControl,

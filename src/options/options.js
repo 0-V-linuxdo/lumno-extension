@@ -94,6 +94,7 @@
   const shortcutsStatus = document.getElementById('_x_extension_shortcuts_status_2024_unique_');
   const shortcutReferenceList = document.getElementById('_x_extension_shortcut_reference_list_2026_unique_');
   const openOnboardingPageButton = document.getElementById('_x_extension_open_onboarding_page_2026_unique_');
+  const feedbackSupportHost = document.getElementById('_x_extension_feedback_support_2026_unique_');
   const openShortcutsPageButton = document.getElementById('_x_extension_open_shortcuts_page_2026_unique_');
   const siteSearchCustomList = document.getElementById('_x_extension_site_search_custom_list_2024_unique_');
   const siteSearchBuiltinList = document.getElementById('_x_extension_site_search_builtin_list_2024_unique_');
@@ -134,6 +135,7 @@
   const confirmCancel = document.getElementById('_x_extension_confirm_cancel_2024_unique_');
   const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
   const optionsBlacklistListApi = globalThis.LumnoOptionsBlacklistList || {};
+  const optionsFeedbackSupportApi = globalThis.LumnoOptionsFeedbackSupport || {};
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
   const optionsPopconfirmApi = globalThis.LumnoOptionsPopconfirm || {};
   const optionsSegmentedControlApi = globalThis.LumnoOptionsSegmentedControl || {};
@@ -152,6 +154,10 @@
         errorBackground: 'rgba(153, 27, 27, 0.92)'
       })
     : null;
+  const feedbackSupportController =
+    typeof optionsFeedbackSupportApi.createFeedbackSupportController === 'function'
+      ? optionsFeedbackSupportApi.createFeedbackSupportController(feedbackSupportHost)
+      : null;
   const shortcutReferenceController =
     typeof optionsShortcutReferenceApi.createShortcutReferenceController === 'function'
       ? optionsShortcutReferenceApi.createShortcutReferenceController(shortcutReferenceList)
@@ -403,6 +409,22 @@
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
+  const LUMNO_WEB_ORIGIN = 'https://lumno.kubai.design';
+  const LUMNO_COMMUNITY_LINKS_URL = `${LUMNO_WEB_ORIGIN}/community-links.json`;
+  const LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS = 2500;
+  const LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK = Object.freeze({
+    x: 'https://x.com/kubai087',
+    githubIssue: 'https://github.com/kubai087/lumno-extension/issues/new',
+    chromeReview: 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb',
+    discord: 'https://discord.gg/2u9sg7ZNkJ',
+    wechatQr: `${LUMNO_WEB_ORIGIN}/qrcode.JPG`,
+    communityByLocale: Object.freeze({
+      'zh-CN': 'wechat',
+      'zh-TW': 'discord',
+      ja: 'discord',
+      en: 'discord'
+    })
+  });
   const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
@@ -546,6 +568,8 @@
 
   let currentMessages = null;
   let currentLanguageMode = 'system';
+  let feedbackSupportLinks = LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK;
+  let feedbackSupportLinksLoadingPromise = null;
   let currentThemeMode = 'system';
   let currentRecentMode = 'most';
   let currentNewtabWidthMode = 'wide';
@@ -718,6 +742,175 @@
     }
     return fallback || '';
   }
+
+  function normalizeFeedbackSupportHttpsUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return '';
+    }
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' ? url.toString() : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function normalizeFeedbackSupportChannel(value, fallback) {
+    return value === 'wechat' || value === 'discord' ? value : fallback;
+  }
+
+  function normalizeFeedbackSupportCommunityMap(value) {
+    const fallbackMap = LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.communityByLocale;
+    const source = value && typeof value === 'object' ? value : {};
+    return {
+      'zh-CN': normalizeFeedbackSupportChannel(
+        source['zh-CN'] || source.zh_CN,
+        fallbackMap['zh-CN']
+      ),
+      'zh-TW': normalizeFeedbackSupportChannel(
+        source['zh-TW'] || source.zh_TW,
+        fallbackMap['zh-TW']
+      ),
+      ja: normalizeFeedbackSupportChannel(source.ja, fallbackMap.ja),
+      en: normalizeFeedbackSupportChannel(source.en, fallbackMap.en)
+    };
+  }
+
+  function normalizeFeedbackSupportLinksPayload(payload) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const links = source.links && typeof source.links === 'object' ? source.links : source;
+    return {
+      x: normalizeFeedbackSupportHttpsUrl(links.x) ||
+        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.x,
+      githubIssue: normalizeFeedbackSupportHttpsUrl(
+        links.githubIssue || links.github_issue || links.issue
+      ) || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.githubIssue,
+      chromeReview: normalizeFeedbackSupportHttpsUrl(
+        links.chromeReview ||
+        links.chrome_review ||
+        links.chromeWebStoreReview ||
+        links.chrome_web_store_review ||
+        links.chromeRating ||
+        links.chrome_rating
+      ) || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.chromeReview,
+      discord: normalizeFeedbackSupportHttpsUrl(links.discord) ||
+        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.discord,
+      wechatQr: normalizeFeedbackSupportHttpsUrl(links.wechatQr) ||
+        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.wechatQr,
+      communityByLocale: normalizeFeedbackSupportCommunityMap(source.communityByLocale)
+    };
+  }
+
+  function getFeedbackSupportWebLocale() {
+    const locale = currentLanguageMode === 'system'
+      ? getSystemLocale()
+      : normalizeLocale(currentLanguageMode);
+    if (locale === 'zh_CN') {
+      return 'zh-CN';
+    }
+    if (locale === 'zh_TW') {
+      return 'zh-TW';
+    }
+    if (locale === 'ja') {
+      return 'ja';
+    }
+    return 'en';
+  }
+
+  function getFeedbackSupportCommunityChannel() {
+    const source = feedbackSupportLinks.communityByLocale ||
+      LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.communityByLocale;
+    return source[getFeedbackSupportWebLocale()] === 'wechat' ? 'wechat' : 'discord';
+  }
+
+  function renderFeedbackSupport() {
+    if (!feedbackSupportController) {
+      return;
+    }
+    const links = feedbackSupportLinks || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK;
+    const channel = getFeedbackSupportCommunityChannel();
+    const communityIsWechat = channel === 'wechat';
+    feedbackSupportController.render({
+      heading: getMessage('settings_feedback_support_section_title', '反馈与支持'),
+      headingKey: 'settings_feedback_support_section_title',
+      items: [
+        {
+          href: links.x,
+          iconClass: 'ri-twitter-x-line',
+          key: 'x',
+          label: getMessage('newtab_feedback_x_label', 'X'),
+          labelKey: 'newtab_feedback_x_label'
+        },
+        {
+          href: links.githubIssue,
+          iconClass: 'ri-github-line',
+          key: 'github-issue',
+          label: getMessage('newtab_feedback_github_issue_label', 'GitHub Issue'),
+          labelKey: 'newtab_feedback_github_issue_label'
+        },
+        {
+          href: links.chromeReview,
+          iconClass: 'ri-star-line',
+          key: 'chrome-review',
+          label: getMessage('newtab_feedback_chrome_review_label', 'Chrome rating'),
+          labelKey: 'newtab_feedback_chrome_review_label'
+        },
+        {
+          href: communityIsWechat ? links.wechatQr : links.discord,
+          iconClass: communityIsWechat ? 'ri-wechat-fill' : 'ri-discord-fill',
+          key: channel,
+          label: communityIsWechat
+            ? getMessage('newtab_feedback_wechat_label', 'WeChat')
+            : getMessage('newtab_feedback_discord_label', 'Discord'),
+          labelKey: communityIsWechat
+            ? 'newtab_feedback_wechat_label'
+            : 'newtab_feedback_discord_label'
+        }
+      ]
+    });
+  }
+
+  function loadFeedbackSupportLinks() {
+    if (feedbackSupportLinksLoadingPromise) {
+      return feedbackSupportLinksLoadingPromise;
+    }
+    const controller = typeof AbortController === 'function'
+      ? new AbortController()
+      : null;
+    const timeoutId = controller
+      ? window.setTimeout(
+          () => controller.abort(),
+          LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS
+        )
+      : 0;
+    feedbackSupportLinksLoadingPromise = fetch(LUMNO_COMMUNITY_LINKS_URL, {
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined
+    })
+      .then((response) => {
+        if (!response || !response.ok) {
+          throw new Error('feedback links unavailable');
+        }
+        return response.json();
+      })
+      .then((payload) => {
+        feedbackSupportLinks = normalizeFeedbackSupportLinksPayload(payload);
+        renderFeedbackSupport();
+        return feedbackSupportLinks;
+      })
+      .catch(() => feedbackSupportLinks)
+      .finally(() => {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        feedbackSupportLinksLoadingPromise = null;
+      });
+    return feedbackSupportLinksLoadingPromise;
+  }
+
+  renderFeedbackSupport();
+  loadFeedbackSupportLinks();
 
   function formatTemplate(text, params) {
     return String(text || '').replace(/\{(\w+)\}/g, (match, key) => {
@@ -2534,6 +2727,7 @@
         }
       }
       applyI18n();
+      renderFeedbackSupport();
       refreshCustomSelects();
       scheduleTabsIndicatorsRefresh(2);
       setEditingState(editingSiteSearchKey);

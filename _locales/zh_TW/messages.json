@@ -68,6 +68,9 @@
   "settings_global_section_title": {
     "message": "全域設定"
   },
+  "settings_feedback_support_section_title": {
+    "message": "意見回饋與支援"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使用教學"
   },

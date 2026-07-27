@@ -68,6 +68,9 @@
   "settings_global_section_title": {
     "message": "全局设置"
   },
+  "settings_feedback_support_section_title": {
+    "message": "反馈与支持"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使用教程"
   },
