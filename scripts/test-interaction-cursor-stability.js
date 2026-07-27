@@ -249,7 +249,7 @@ assert.match(
 
 assertCursorInheritanceWithoutHitSuppression(
   newtabHtml,
-  '#_x_extension_newtab_root_2024_unique_ button *,\n      #_x_extension_newtab_root_2024_unique_ a[href] *,\n      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon'
+  'body[data-lumno-page="newtab"] button *,\n      body[data-lumno-page="newtab"] a[href] *,\n      body[data-lumno-page="newtab"] [role="button"] .ri-icon'
 );
 assertCursorInheritanceWithoutHitSuppression(
   optionsHtml,
@@ -266,7 +266,7 @@ assertCursorInheritanceWithoutHitSuppression(
 assert.match(
   getRule(
     newtabHtml,
-    '#_x_extension_newtab_root_2024_unique_ button .ri-icon,\n      #_x_extension_newtab_root_2024_unique_ a[href] .ri-icon,\n      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon'
+    'body[data-lumno-page="newtab"] button .ri-icon,\n      body[data-lumno-page="newtab"] a[href] .ri-icon,\n      body[data-lumno-page="newtab"] [role="button"] .ri-icon'
   ),
   /pointer-events:\s*none;/,
   'new-tab decorative icons should stay outside hit testing'
@@ -345,8 +345,13 @@ assert.match(
 );
 assert.match(
   newtabHtml,
-  /#_x_extension_newtab_root_2024_unique_ button:not\(:disabled\),[\s\S]*?\[role="button"\]:not\(\[aria-disabled="true"\]\)\s*\{[\s\S]*?cursor:\s*pointer;/,
-  'the new-tab pointer baseline should exclude disabled controls'
+  /body\[data-lumno-page="newtab"\] button:not\(:disabled\),[\s\S]*?\[role="button"\]:not\(\[aria-disabled="true"\]\)\s*\{[\s\S]*?cursor:\s*pointer;/,
+  'the new-tab page pointer baseline should cover body-level React islands and exclude disabled controls'
+);
+assert.match(
+  newtabHtml,
+  /<body[^>]*data-lumno-page="newtab"/,
+  'the new-tab page should expose a stable cursor-semantics scope outside the legacy React root'
 );
 assert.match(
   getRule(

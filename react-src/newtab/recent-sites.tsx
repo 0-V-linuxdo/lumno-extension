@@ -1028,16 +1028,20 @@ function RecentSitesList({
   items: RecentSiteItem[];
   options: NormalizedRecentSitesOptions;
 }) {
-  return items.map((item, index) => (
-    <RecentSiteCard
-      key={`${index}::${String(item?.url || '')}::${String(
-        item?.lastVisitTime || ''
-      )}`}
-      item={item}
-      index={index}
-      options={options}
-    />
-  ));
+  const occurrences = new Map<string, number>();
+  return items.map((item, index) => {
+    const identity = String(item?.url || item?.host || item?.title || 'recent');
+    const occurrence = occurrences.get(identity) || 0;
+    occurrences.set(identity, occurrence + 1);
+    return (
+      <RecentSiteCard
+        key={`${identity}::${occurrence}`}
+        item={item}
+        index={index}
+        options={options}
+      />
+    );
+  });
 }
 
 function createNoopController(

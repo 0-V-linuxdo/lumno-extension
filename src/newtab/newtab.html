@@ -5803,34 +5803,34 @@
       #_x_extension_newtab_root_2024_unique_ {
         color: var(--x-nt-text, #111827);
       }
-      #_x_extension_newtab_root_2024_unique_ button:not(:disabled),
-      #_x_extension_newtab_root_2024_unique_ a[href],
-      #_x_extension_newtab_root_2024_unique_ [role="button"]:not([aria-disabled="true"]) {
+      body[data-lumno-page="newtab"] button:not(:disabled),
+      body[data-lumno-page="newtab"] a[href],
+      body[data-lumno-page="newtab"] [role="button"]:not([aria-disabled="true"]) {
         cursor: pointer;
       }
-      #_x_extension_newtab_root_2024_unique_ button:disabled,
-      #_x_extension_newtab_root_2024_unique_ [role="button"][aria-disabled="true"] {
+      body[data-lumno-page="newtab"] button:disabled,
+      body[data-lumno-page="newtab"] [role="button"][aria-disabled="true"] {
         cursor: not-allowed;
       }
-      #_x_extension_newtab_root_2024_unique_ [aria-busy="true"] :disabled,
-      #_x_extension_newtab_root_2024_unique_ button[aria-busy="true"],
-      #_x_extension_newtab_root_2024_unique_ [role="button"][data-loading="true"] {
+      body[data-lumno-page="newtab"] [aria-busy="true"] :disabled,
+      body[data-lumno-page="newtab"] button[aria-busy="true"],
+      body[data-lumno-page="newtab"] [role="button"][data-loading="true"] {
         cursor: progress;
       }
-      #_x_extension_newtab_root_2024_unique_ .x-nt-bookmarks-crumb[aria-current="page"] {
+      body[data-lumno-page="newtab"] .x-nt-bookmarks-crumb[aria-current="page"] {
         cursor: default;
       }
-      #_x_extension_newtab_root_2024_unique_ .x-nt-appearance-info-button:not(:disabled) {
+      body[data-lumno-page="newtab"] .x-nt-appearance-info-button:not(:disabled) {
         cursor: help;
       }
-      #_x_extension_newtab_root_2024_unique_ button *,
-      #_x_extension_newtab_root_2024_unique_ a[href] *,
-      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon {
+      body[data-lumno-page="newtab"] button *,
+      body[data-lumno-page="newtab"] a[href] *,
+      body[data-lumno-page="newtab"] [role="button"] .ri-icon {
         cursor: inherit;
       }
-      #_x_extension_newtab_root_2024_unique_ button .ri-icon,
-      #_x_extension_newtab_root_2024_unique_ a[href] .ri-icon,
-      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon {
+      body[data-lumno-page="newtab"] button .ri-icon,
+      body[data-lumno-page="newtab"] a[href] .ri-icon,
+      body[data-lumno-page="newtab"] [role="button"] .ri-icon {
         pointer-events: none;
       }
       #_x_extension_newtab_search_input_2024_unique_::placeholder {
@@ -6162,7 +6162,7 @@
       }
     </style>
   </head>
-  <body class="notranslate" translate="no" notranslate data-no-translate="true">
+  <body class="notranslate" translate="no" notranslate data-no-translate="true" data-lumno-page="newtab">
     <div id="_x_extension_newtab_root_2024_unique_"></div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_" data-show="false"></div>
     <script src="../shared/ime-key-guard.js"></script>

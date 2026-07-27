@@ -167,6 +167,42 @@ describe('Recent Sites React island', () => {
     expect(attachFavicon).toHaveBeenCalledOnce();
   });
 
+  it('preserves card nodes when history metadata changes or order moves', () => {
+    const { view } = createView();
+    const first = {
+      title: 'First',
+      url: 'https://first.example/',
+      lastVisitTime: 10,
+      visitCount: 1
+    };
+    const second = {
+      title: 'Second',
+      url: 'https://second.example/',
+      lastVisitTime: 20,
+      visitCount: 2
+    };
+    const initial = renderItems(view, [first, second]);
+    const firstCard = view.getCards()[0];
+    const secondCard = view.getCards()[1];
+
+    renderItems(view, [
+      {
+        ...second,
+        lastVisitTime: 30,
+        visitCount: 3
+      },
+      {
+        ...first,
+        lastVisitTime: 40,
+        visitCount: 4
+      }
+    ], initial.signature);
+
+    expect(view.getCards()).toEqual([secondCard, firstCard]);
+    expect(view.getCards()[0]._xTitleText).toBe('Second');
+    expect(view.getCards()[1]._xTitleText).toBe('First');
+  });
+
   it('shows a stable fallback before a browser-page favicon attaches', () => {
     const attachFavicon = vi.fn();
     const browserPageUrl = 'chrome://extensions/';
