@@ -152,4 +152,26 @@ describe('New Tab feedback React island', () => {
       host.querySelector<HTMLImageElement>('.x-nt-feedback-qr-image')?.src
     ).toBe(refreshedUrl);
   });
+
+  it('lets an external prompt open the locale-appropriate community directly', () => {
+    const discord = createController();
+    act(() => discord.controller.openCommunity('backgroundTab'));
+    expect(discord.options.onOpenExternal).toHaveBeenCalledWith(
+      baseModel.discordUrl,
+      'backgroundTab'
+    );
+
+    const wechat = createController({
+      ...baseModel,
+      channel: 'wechat',
+      communityLabel: 'WeChat',
+      communityTooltip: 'Join WeChat'
+    });
+    act(() => wechat.controller.openCommunity());
+    expect(wechat.controller.isOpen()).toBe(true);
+    expect(wechat.host.dataset.detailOpen).toBe('true');
+    expect(
+      wechat.host.querySelector<HTMLElement>('.x-nt-feedback-detail')?.hidden
+    ).toBe(false);
+  });
 });

@@ -170,6 +170,7 @@
   const SEARCH_INPUT_MODE = globalThis.LumnoSearchInputMode || {};
   const FEATURE_HINTS = globalThis.LumnoFeatureHints || {};
   const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
+  const ENGAGEMENT_NOTICE = globalThis.LumnoEngagementNotice || {};
   const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
   const NEWTAB_FAVICON_CACHE = globalThis.LumnoFaviconCache || globalThis.LumnoNewtabFaviconCache || {};
   const NEWTAB_FAVICON_THEME = globalThis.LumnoNewtabFaviconTheme || {};
@@ -399,6 +400,7 @@
   let feedbackLinksLoaded = false;
   let feedbackLinksLoadingPromise = null;
   let updateNoticeController = null;
+  let engagementNoticeController = null;
   let pageNoticeController = null;
   let newtabWordmarkVisible = true;
   let zenModeEnabled = false;
@@ -852,7 +854,9 @@
             BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
             BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY
           ].forEach((key) => {
-            if (syncResult && Object.prototype.hasOwnProperty.call(syncResult, key)) {
+            if (syncResult &&
+                Object.prototype.hasOwnProperty.call(syncResult, key) &&
+                !Object.prototype.hasOwnProperty.call(resolvedLocalResult, key)) {
               resolvedLocalResult[key] = syncResult[key];
               localUpdates[key] = syncResult[key];
             }
@@ -3373,6 +3377,10 @@
     if (updateNoticeController &&
         typeof updateNoticeController.updateLanguage === 'function') {
       updateNoticeController.updateLanguage();
+    }
+    if (engagementNoticeController &&
+        typeof engagementNoticeController.updateLanguage === 'function') {
+      engagementNoticeController.updateLanguage();
     }
     if (inputParts && inputParts.input) {
       defaultPlaceholderText = t('search_placeholder', defaultPlaceholderText);
@@ -7216,7 +7224,10 @@
     if (currentIndex === boundedIndex) {
       return false;
     }
-    shortcutGrid.insertBefore(tile, remainingTiles[boundedIndex] || null);
+    shortcutGrid.insertBefore(
+      tile,
+      remainingTiles[boundedIndex] || addShortcutButton || null
+    );
     refreshShortcutTileCacheFromDom();
     return true;
   }
@@ -8763,12 +8774,21 @@
     const computedStyle = typeof window.getComputedStyle === 'function'
       ? window.getComputedStyle(bookmarkGrid)
       : null;
+    const pageStartIndex = getBookmarkPageStartIndex();
+    const pageEndIndex = pageStartIndex + getBookmarkLimit();
+    const originalIndex = Number(state.originalIndex);
+    const isCrossPageDrag = !isBookmarkTopbarMode() &&
+      state.sourceKind === 'card' &&
+      String(state.parentId || '') === String(bookmarkCurrentFolderId || '') &&
+      Number.isFinite(originalIndex) &&
+      (originalIndex < pageStartIndex || originalIndex >= pageEndIndex);
     return NEWTAB_BOOKMARK_DRAG.getGridInsertionTarget({
       columnGap: computedStyle ? computedStyle.columnGap : '',
       folderId: bookmarkCurrentFolderId,
       gridElement: bookmarkGrid,
+      isCrossPageDrag,
       layoutItems: state && state.layoutItems,
-      pageStartIndex: getBookmarkPageStartIndex(),
+      pageStartIndex,
       pointerX,
       pointerY
     });
@@ -9448,12 +9468,12 @@
     const rawTargetIndex = target.kind === 'insertion' && Number.isFinite(Number(target.index))
       ? Number(target.index)
       : targetItems.length;
-    const shouldPreserveTargetPageStart = target.kind === 'insertion' &&
+    const shouldPreserveTargetPageSlot = target.kind === 'insertion' &&
       target.surface === 'grid' &&
-      target.isPageStartBoundary === true &&
+      target.preservePageSlot === true &&
       String(state.parentId || '') === targetFolderId &&
       Number(state.originalIndex) < rawTargetIndex;
-    const destinationIndex = shouldPreserveTargetPageStart
+    const destinationIndex = shouldPreserveTargetPageSlot
       ? NEWTAB_BOOKMARK_MOVE_HISTORY.getMoveApiDestinationIndex({
         sourceParentId: state.parentId,
         sourceIndex: state.originalIndex,
@@ -13937,6 +13957,53 @@
       }
     })
     : null;
+  engagementNoticeController =
+    typeof ENGAGEMENT_NOTICE.createEngagementNotice === 'function'
+      ? ENGAGEMENT_NOTICE.createEngagementNotice({
+        documentObj: document,
+        featureHints: FEATURE_HINTS,
+        chromeApi: chrome,
+        surface: 'newtab',
+        t,
+        getRiSvg,
+        canShow() {
+          const updateNoticeVisible = Boolean(
+            updateNoticeController &&
+            updateNoticeController.element &&
+            updateNoticeController.element.getAttribute('data-visible') === 'true'
+          );
+          return !updateNoticeVisible &&
+            document.visibilityState === 'visible' &&
+            !String(inputParts.input.value || '').trim() &&
+            document.body.getAttribute('data-nt-suggestions-open') !== 'true' &&
+            !isFeedbackPopoverOpen();
+        },
+        onReview(event) {
+          const links = feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK;
+          openFeedbackExternalUrl(
+            links.chromeReview || LUMNO_FEEDBACK_LINKS_FALLBACK.chromeReview,
+            getOpenDisposition(event, 'newTab')
+          );
+        },
+        onCommunity(event) {
+          if (!feedbackReactController ||
+              typeof feedbackReactController.openCommunity !== 'function') {
+            return;
+          }
+          feedbackReactController.openCommunity(
+            getOpenDisposition(event, 'newTab')
+          );
+        }
+      })
+      : null;
+  inputParts.input.addEventListener('input', function() {
+    if (!String(inputParts.input.value || '').trim() ||
+        !engagementNoticeController ||
+        typeof engagementNoticeController.recordMeaningfulUse !== 'function') {
+      return;
+    }
+    engagementNoticeController.recordMeaningfulUse();
+  });
 
   if (rightIcon) {
     rightIcon.addEventListener('click', function(event) {
@@ -14308,6 +14375,9 @@
   }
   if (updateNoticeController && updateNoticeController.element) {
     document.body.insertBefore(updateNoticeController.element, newtabUpdateNoticeAnchor);
+  }
+  if (engagementNoticeController && engagementNoticeController.element) {
+    document.body.insertBefore(engagementNoticeController.element, newtabUpdateNoticeAnchor);
   }
   document.body.insertBefore(suggestionsSurface, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsOutline, newtabUpdateNoticeAnchor);

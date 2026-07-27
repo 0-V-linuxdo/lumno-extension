@@ -590,6 +590,27 @@
   "update_notice_close": {
     "message": "关闭更新提示"
   },
+  "engagement_notice_badge": {
+    "message": "Lumno"
+  },
+  "engagement_notice_text": {
+    "message": "如果本插件能给你带来一些乐趣，欢迎"
+  },
+  "engagement_notice_connector": {
+    "message": "，或者"
+  },
+  "engagement_notice_trailing": {
+    "message": "和我们聊聊。"
+  },
+  "engagement_notice_review": {
+    "message": "留个评分"
+  },
+  "engagement_notice_community": {
+    "message": "进群"
+  },
+  "engagement_notice_close": {
+    "message": "关闭评分和加群提示"
+  },
   "newtab_bookmark_cascade_debug_enable": {
     "message": "显示书签菜单安全三角"
   },

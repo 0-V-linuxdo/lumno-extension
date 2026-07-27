@@ -154,6 +154,9 @@ describe('Recent Sites React island', () => {
     expect(card?._xActionText?.textContent).toBe('前往');
     expect(card?._xPinButton).toBeInstanceOf(HTMLButtonElement);
     expect(card?._xDismissButton).toBeInstanceOf(HTMLButtonElement);
+    expect(
+      card?.querySelector('.x-nt-recent-card-visual')
+    ).toBeInstanceOf(HTMLDivElement);
     expect(card?.dataset.themed).toBe('true');
     expect(attachFavicon).toHaveBeenCalledOnce();
     expect(applyTheme).toHaveBeenCalledOnce();
@@ -317,5 +320,40 @@ describe('Recent Sites React island', () => {
       false,
       true
     );
+  });
+
+  it('coalesces rapid pin actions while persistence is pending', async () => {
+    let resolvePin: (
+      result: { pinned: boolean; limitReached: boolean }
+    ) => void = () => {};
+    const togglePinned = vi.fn(() => new Promise<{
+      pinned: boolean;
+      limitReached: boolean;
+    }>((resolve) => {
+      resolvePin = resolve;
+    }));
+    const { view } = createView({ togglePinned });
+    renderItems(view, [{
+      title: 'Example',
+      url: 'https://example.com/'
+    }]);
+    const pinButton = view.getCards()[0]._xPinButton;
+
+    act(() => {
+      pinButton?.click();
+      pinButton?.click();
+    });
+
+    expect(togglePinned).toHaveBeenCalledTimes(1);
+    expect(pinButton?.disabled).toBe(true);
+    expect(pinButton?.getAttribute('aria-busy')).toBe('true');
+
+    await act(async () => {
+      resolvePin({ pinned: true, limitReached: false });
+      await Promise.resolve();
+    });
+
+    expect(pinButton?.disabled).toBe(false);
+    expect(pinButton?.getAttribute('aria-busy')).toBe('false');
   });
 });

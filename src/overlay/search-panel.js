@@ -27,6 +27,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayWheelIsolationHandler = null;
   let overlayRevealGate = null;
   let overlayUpdateNoticeController = null;
+  let overlayEngagementNoticeController = null;
   let inputHistoryController = null;
   let isApplyingSearchInputHistory = false;
   let overlayUpdateNoticeFrameListener = null;
@@ -61,6 +62,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const SEARCH_INPUT_MODE = window.LumnoSearchInputMode || {};
   const FEATURE_HINTS = window.LumnoFeatureHints || {};
   const UPDATE_NOTICE = window.LumnoUpdateNotice || {};
+  const ENGAGEMENT_NOTICE = window.LumnoEngagementNotice || {};
   const FAVICON_UTILS = window.LumnoFaviconUtils || {};
   const overlayRuntime = window.LumnoOverlayRuntime;
   const overlayLifecycle = window.LumnoOverlayLifecycle;
@@ -747,7 +749,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const noticeElement = overlayUpdateNoticeController && overlayUpdateNoticeController.element
       ? overlayUpdateNoticeController.element
       : null;
-    if (!noticeElement || !overlayElement) {
+    const engagementNoticeElement =
+      overlayEngagementNoticeController && overlayEngagementNoticeController.element
+        ? overlayEngagementNoticeController.element
+        : null;
+    const noticeElements = [noticeElement, engagementNoticeElement].filter(Boolean);
+    if (noticeElements.length === 0 || !overlayElement) {
       return;
     }
     const sizePreset = getOverlaySizePreset(overlaySizeMode);
@@ -756,15 +763,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const left = overlayElement.style.getPropertyValue('left') || '50%';
     const top = overlayElement.style.getPropertyValue('top') || '20vh';
     const visibleScale = overlayElement.style.getPropertyValue('--x-ov-visible-scale') || '1';
-    noticeElement.style.setProperty('width', width, 'important');
-    noticeElement.style.setProperty('max-width', maxWidth, 'important');
-    noticeElement.style.setProperty('left', left, 'important');
-    noticeElement.style.setProperty('top', top, 'important');
-    noticeElement.style.setProperty('--x-ov-visible-scale', visibleScale, 'important');
-    if (typeof noticeElement.style.removeProperty === 'function') {
-      noticeElement.style.removeProperty('zoom');
-    }
-    noticeElement.setAttribute('data-theme', overlayElement.getAttribute('data-theme') || '');
+    noticeElements.forEach((element) => {
+      element.style.setProperty('width', width, 'important');
+      element.style.setProperty('max-width', maxWidth, 'important');
+      element.style.setProperty('left', left, 'important');
+      element.style.setProperty('top', top, 'important');
+      element.style.setProperty('--x-ov-visible-scale', visibleScale, 'important');
+      if (typeof element.style.removeProperty === 'function') {
+        element.style.removeProperty('zoom');
+      }
+      element.setAttribute('data-theme', overlayElement.getAttribute('data-theme') || '');
+    });
   }
 
   function stopOverlayUpdateNoticeFrameSync() {
@@ -1160,6 +1169,35 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       overlayUpdateNoticeController.destroy();
       overlayUpdateNoticeController = null;
     }
+    const storedEngagementNoticeController =
+      overlayElement && overlayElement._lumnoEngagementNoticeController;
+    if (storedEngagementNoticeController &&
+        typeof storedEngagementNoticeController.destroy === 'function') {
+      if (storedEngagementNoticeController.element &&
+          storedEngagementNoticeController.element.parentNode) {
+        storedEngagementNoticeController.element.parentNode.removeChild(
+          storedEngagementNoticeController.element
+        );
+      }
+      storedEngagementNoticeController.destroy();
+      if (storedEngagementNoticeController === overlayEngagementNoticeController) {
+        overlayEngagementNoticeController = null;
+      }
+      if (overlayElement) {
+        overlayElement._lumnoEngagementNoticeController = null;
+      }
+    }
+    if (overlayEngagementNoticeController &&
+        typeof overlayEngagementNoticeController.destroy === 'function') {
+      if (overlayEngagementNoticeController.element &&
+          overlayEngagementNoticeController.element.parentNode) {
+        overlayEngagementNoticeController.element.parentNode.removeChild(
+          overlayEngagementNoticeController.element
+        );
+      }
+      overlayEngagementNoticeController.destroy();
+      overlayEngagementNoticeController = null;
+    }
   }
 
   const overlayShell = window.LumnoOverlayShell;
@@ -1388,6 +1426,51 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (overlayUpdateNoticeController) {
       overlay._lumnoUpdateNoticeController = overlayUpdateNoticeController;
     }
+    overlayEngagementNoticeController =
+      typeof ENGAGEMENT_NOTICE.createEngagementNotice === 'function'
+        ? ENGAGEMENT_NOTICE.createEngagementNotice({
+          documentObj: document,
+          featureHints: FEATURE_HINTS,
+          chromeApi: chrome,
+          surface: 'overlay',
+          t,
+          getRiSvg,
+          canShow() {
+            const updateNoticeVisible = Boolean(
+              overlayUpdateNoticeController &&
+              overlayUpdateNoticeController.element &&
+              overlayUpdateNoticeController.element.getAttribute('data-visible') === 'true'
+            );
+            return !updateNoticeVisible &&
+              document.visibilityState === 'visible' &&
+              overlay &&
+              overlay.isConnected &&
+              !String(searchInput.value || '').trim();
+          },
+          onReview(event) {
+            chrome.runtime.sendMessage({
+              action: 'createTab',
+              url: ENGAGEMENT_NOTICE.REVIEW_URL,
+              disposition: getOpenDisposition(event, 'newTab')
+            });
+          },
+          onCommunity(event) {
+            const targetLocale = overlayLanguageMode === 'system'
+              ? getSystemLocale()
+              : normalizeLocale(overlayLanguageMode);
+            chrome.runtime.sendMessage({
+              action: 'createTab',
+              url: typeof ENGAGEMENT_NOTICE.getCommunityUrl === 'function'
+                ? ENGAGEMENT_NOTICE.getCommunityUrl(targetLocale)
+                : ENGAGEMENT_NOTICE.DISCORD_URL,
+              disposition: getOpenDisposition(event, 'newTab')
+            });
+          }
+        })
+        : null;
+    if (overlayEngagementNoticeController) {
+      overlay._lumnoEngagementNoticeController = overlayEngagementNoticeController;
+    }
     function shouldAnimateOverlayUpdateNoticeMount(noticeElement) {
       if (!noticeElement || noticeElement.getAttribute('data-visible') !== 'true') {
         return false;
@@ -1427,6 +1510,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         });
       } else {
         finishOverlayUpdateNoticeMountAnimation(noticeElement);
+      }
+      const engagementNoticeElement =
+        overlayEngagementNoticeController && overlayEngagementNoticeController.element
+          ? overlayEngagementNoticeController.element
+          : null;
+      if (engagementNoticeElement && !engagementNoticeElement.parentNode) {
+        applyNoTranslateDeep(engagementNoticeElement);
+        if (overlayStyleRoot && typeof overlayStyleRoot.insertBefore === 'function') {
+          overlayStyleRoot.insertBefore(engagementNoticeElement, overlay);
+        } else if (document.body) {
+          document.body.appendChild(engagementNoticeElement);
+        }
+        syncOverlayUpdateNoticeFrame(overlay);
       }
     }
     const setInputScopedStyle = (element, property, value) => {
@@ -1659,6 +1755,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
 
     function applyLanguageStrings() {
+      if (overlayUpdateNoticeController &&
+          typeof overlayUpdateNoticeController.updateLanguage === 'function') {
+        overlayUpdateNoticeController.updateLanguage();
+      }
+      if (overlayEngagementNoticeController &&
+          typeof overlayEngagementNoticeController.updateLanguage === 'function') {
+        overlayEngagementNoticeController.updateLanguage();
+      }
       const settingsTooltipText = formatMessage('command_settings', '打开 Lumno 设置', { name: 'Lumno' });
       const closeOtherTooltipText = t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）');
       if (searchInput) {
@@ -4895,6 +4999,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         const liveInput = syncLiveSearchInputFromEvent(event);
         const rawValue = liveInput ? liveInput.value : '';
         const query = rawValue.trim();
+        if (query &&
+            overlayEngagementNoticeController &&
+            typeof overlayEngagementNoticeController.recordMeaningfulUse === 'function') {
+          overlayEngagementNoticeController.recordMeaningfulUse();
+        }
         updateModeBadge(rawValue);
         const inputType = event && event.inputType;
         const isPaste = inputType === 'insertFromPaste';

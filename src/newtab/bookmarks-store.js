@@ -113,7 +113,8 @@
     const normalizeHost = getNormalizeHost(options);
     const items = Array.isArray(children) ? children : [];
     const results = [];
-    const seenUrls = new Set();
+    // Bookmark cards are identity-based: separate browser nodes may intentionally
+    // share a URL and must remain visible after cross-folder moves.
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
       if (!item) {
@@ -123,16 +124,12 @@
       const url = item.url ? String(item.url) : '';
       const itemChildren = Array.isArray(item.children) ? item.children : [];
       if (url) {
-        if (seenUrls.has(url)) {
-          continue;
-        }
         let host = '';
         try {
           host = normalizeHost(new URL(url).hostname);
         } catch (error) {
           host = '';
         }
-        seenUrls.add(url);
         results.push({
           id: String(item.id || ''),
           type: 'bookmark',

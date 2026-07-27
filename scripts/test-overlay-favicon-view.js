@@ -82,6 +82,50 @@ function createFakeImage() {
   };
 }
 
+function attachFakeFallbackParent(img) {
+  const children = [img];
+  const parent = {
+    children,
+    querySelectorAll(selector) {
+      if (selector === 'img') {
+        return children.filter((node) => node === img && node.isConnected);
+      }
+      if (selector === '._x_extension_overlay_favicon_fallback_2026_unique_') {
+        return children.filter((node) =>
+          node !== img &&
+          node.isConnected &&
+          String(node.className || '').split(/\s+/).includes(
+            '_x_extension_overlay_favicon_fallback_2026_unique_'
+          )
+        );
+      }
+      return [];
+    },
+    insertBefore(node, referenceNode) {
+      const referenceIndex = children.indexOf(referenceNode);
+      const insertIndex = referenceIndex === -1 ? children.length : referenceIndex;
+      children.splice(insertIndex, 0, node);
+      node.parentElement = parent;
+      node.parentNode = parent;
+      node.isConnected = true;
+      return node;
+    },
+    removeChild(node) {
+      const index = children.indexOf(node);
+      if (index !== -1) {
+        children.splice(index, 1);
+      }
+      node.parentElement = null;
+      node.parentNode = null;
+      node.isConnected = false;
+      return node;
+    }
+  };
+  img.parentElement = parent;
+  img.parentNode = parent;
+  return parent;
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -195,7 +239,23 @@ function createRuntime(options) {
     runtime: sandbox.LumnoOverlayFaviconView.createOverlayFaviconViewRuntime({
       document: {
         createElement() {
-          return {};
+          const attributes = new Map();
+          return {
+            className: '',
+            innerHTML: '',
+            isConnected: false,
+            parentElement: null,
+            parentNode: null,
+            setAttribute(name, value) {
+              attributes.set(name, String(value));
+            },
+            getAttribute(name) {
+              return attributes.has(name) ? attributes.get(name) : null;
+            },
+            removeAttribute(name) {
+              attributes.delete(name);
+            }
+          };
         }
       },
       windowObj: {
@@ -546,7 +606,9 @@ async function testOverlayResolvesLocalFaviconThroughDataUrl() {
 async function testOverlayFallsBackWhenLocalFaviconDataUnavailable() {
   const { runtime, localPageUrl, extensionUrl } = createRuntime();
   const img = createFakeImage();
+  const parent = attachFakeFallbackParent(img);
   let failed = false;
+  let fallbackCountWhenReactTakesOwnership = -1;
 
   runtime.attachResolvedFaviconWithFallbacks(
     img,
@@ -555,12 +617,20 @@ async function testOverlayFallsBackWhenLocalFaviconDataUnavailable() {
     extensionUrl,
     () => {
       failed = true;
+      fallbackCountWhenReactTakesOwnership = parent.querySelectorAll(
+        '._x_extension_overlay_favicon_fallback_2026_unique_'
+      ).length;
     }
   );
 
   await wait(0);
 
   assert.strictEqual(failed, true, 'local overlay favicon should fall back immediately');
+  assert.strictEqual(
+    fallbackCountWhenReactTakesOwnership,
+    0,
+    'runtime fallback should be removed before React renders the final fallback icon'
+  );
   assert.strictEqual(img.src, '', 'local overlay favicon should not assign a page-visible image src');
 }
 

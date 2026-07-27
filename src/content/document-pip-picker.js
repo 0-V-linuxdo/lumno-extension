@@ -1005,20 +1005,30 @@
           font-weight: 600;
           line-height: 1.2;
           cursor: pointer;
-          transition: transform 150ms ease, background-color 150ms ease, opacity 150ms ease;
-          transform: translateY(0) scale(1);
+          transition: background-color 150ms ease, opacity 150ms ease;
+          transform: none;
           opacity: 0.96;
           white-space: nowrap;
         }
         .lumno-pip-dock-btn:hover,
         .lumno-pip-dock-btn:focus-visible {
-          transform: translateY(-2px) scale(1.03);
+          transform: none;
           opacity: 1;
           outline: none;
+        }
+        .lumno-pip-dock-btn > * {
+          cursor: inherit;
+          pointer-events: none;
         }
         .lumno-pip-dock-btn .ri-icon {
           font-size: 15px;
           line-height: 1;
+          transform: none;
+          transition: transform 150ms ease;
+        }
+        .lumno-pip-dock-btn:hover .ri-icon,
+        .lumno-pip-dock-btn:focus-visible .ri-icon {
+          transform: scale(1.03);
         }
         .lumno-pip-dock-btn .lumno-pip-dock-label {
           display: inline-block;

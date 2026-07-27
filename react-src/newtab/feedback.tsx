@@ -47,6 +47,9 @@ export interface FeedbackControlController {
   close(options?: { restoreFocus?: boolean }): void;
   destroy(): void;
   isOpen(): boolean;
+  openCommunity(
+    disposition?: 'newTab' | 'backgroundTab'
+  ): void;
   render(model: FeedbackControlModel): void;
   setOpen(open: boolean): void;
 }
@@ -74,6 +77,9 @@ function FeedbackControl({
   registerControls(controls: {
     close(options?: { restoreFocus?: boolean }): void;
     isOpen(): boolean;
+    openCommunity(
+      disposition?: 'newTab' | 'backgroundTab'
+    ): void;
     setOpen(open: boolean): void;
   }): void;
 }) {
@@ -129,6 +135,15 @@ function FeedbackControl({
       },
       isOpen() {
         return openRef.current;
+      },
+      openCommunity(disposition = 'newTab') {
+        if (model.channel === 'wechat') {
+          setOpen(true);
+          setDetailOpen(true);
+          return;
+        }
+        setOpen(false);
+        onOpenExternal(model.discordUrl, disposition);
       },
       setOpen(nextOpen) {
         setOpen(nextOpen);
@@ -391,6 +406,7 @@ export function createFeedbackControlController(
       close() {},
       destroy() {},
       isOpen: () => false,
+      openCommunity() {},
       render() {},
       setOpen() {}
     });
@@ -403,10 +419,14 @@ export function createFeedbackControlController(
   let controls: {
     close(options?: { restoreFocus?: boolean }): void;
     isOpen(): boolean;
+    openCommunity(
+      disposition?: 'newTab' | 'backgroundTab'
+    ): void;
     setOpen(open: boolean): void;
   } = {
     close() {},
     isOpen: () => false,
+    openCommunity() {},
     setOpen(_open) {}
   };
   let destroyed = false;
@@ -433,6 +453,11 @@ export function createFeedbackControlController(
     },
     isOpen() {
       return controls.isOpen();
+    },
+    openCommunity(
+      disposition: 'newTab' | 'backgroundTab' = 'newTab'
+    ) {
+      controls.openCommunity(disposition);
     },
     render(model: FeedbackControlModel) {
       if (destroyed) {

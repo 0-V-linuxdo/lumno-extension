@@ -37,6 +37,14 @@
       : NaN;
   }
 
+  function getLayoutItemIndex(layoutItem) {
+    const card = layoutItem && layoutItem.card;
+    const bookmarkItem = card && card._xBookmarkItem;
+    const attributeIndex = Number(getAttribute(card, 'data-bookmark-index'));
+    const fallbackIndex = Number(bookmarkItem && bookmarkItem.index);
+    return Number.isFinite(attributeIndex) ? attributeIndex : fallbackIndex;
+  }
+
   function createSession(options) {
     const config = options && typeof options === 'object' ? options : {};
     const event = config.event && typeof config.event === 'object' ? config.event : {};
@@ -354,6 +362,11 @@
       return null;
     }
     const layoutItems = Array.isArray(config.layoutItems) ? config.layoutItems : [];
+    const isCrossPageDrag = config.isCrossPageDrag === true;
+    const pageLastItemIndex = layoutItems.reduce((lastIndex, item) => {
+      const itemIndex = getLayoutItemIndex(item);
+      return Number.isFinite(itemIndex) ? Math.max(lastIndex, itemIndex) : lastIndex;
+    }, -1);
     const gridRect = gridElement.getBoundingClientRect();
     const computedColumnGap = Number.parseFloat(config.columnGap);
     const columnGap = Number.isFinite(computedColumnGap)
@@ -452,16 +465,18 @@
     if (!anchorCard) {
       return null;
     }
-    const bookmarkItem = anchorCard._xBookmarkItem || null;
-    const anchorIndex = Number(getAttribute(anchorCard, 'data-bookmark-index'));
-    const fallbackIndex = Number(bookmarkItem && bookmarkItem.index);
-    const itemIndex = Number.isFinite(anchorIndex) ? anchorIndex : fallbackIndex;
+    const itemIndex = getLayoutItemIndex(anchorItem);
     if (!Number.isFinite(itemIndex)) {
       return null;
     }
     const markerPosition = nearestBoundary.markerPosition;
     const isPageStartBoundary = markerPosition === 'before' &&
       itemIndex === Number(config.pageStartIndex);
+    const isPageEndBoundary = markerPosition === 'after' &&
+      itemIndex === pageLastItemIndex;
+    if (isCrossPageDrag && isPageEndBoundary) {
+      return null;
+    }
     return {
       kind: 'insertion',
       folderId: String(config.folderId || ''),
@@ -473,6 +488,7 @@
       markerTopPx: anchorItem.rect.top - gridRect.top + 8,
       markerHeightPx: Math.max(2, anchorItem.rect.height - 16),
       isPageStartBoundary,
+      preservePageSlot: isCrossPageDrag,
       surface: 'grid'
     };
   }

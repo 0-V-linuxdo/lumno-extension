@@ -17,16 +17,33 @@ describe('Feature hint React view', () => {
   it('owns the hint structure, labels, and actions', () => {
     const onDismiss = vi.fn();
     const onLinkClick = vi.fn();
+    const onActionClick = vi.fn();
     let controller: FeatureHintViewController | null = null;
     act(() => {
       controller = createFeatureHintView({
         labels: {
+          actions: {
+            community: 'Join community',
+            review: 'Rate Lumno'
+          },
           badge: 'New',
           close: 'Dismiss',
           link: 'Details',
           text: 'A new feature'
         },
         model: {
+          actions: [
+            {
+              iconHtml:
+                '<i class="ri-icon ri-star-line" aria-hidden="true"></i>',
+              id: 'review',
+              variant: 'primary'
+            },
+            {
+              id: 'community',
+              variant: 'secondary'
+            }
+          ],
           alignMode: 'auto',
           arrowAlign: 'center',
           arrowSide: 'top',
@@ -42,7 +59,8 @@ describe('Feature hint React view', () => {
           widthMode: 'content'
         },
         onDismiss,
-        onLinkClick
+        onLinkClick,
+        onActionClick
       });
     });
     expect(controller).not.toBeNull();
@@ -55,14 +73,26 @@ describe('Feature hint React view', () => {
     expect(view.arrowTip?.getAttribute('aria-hidden')).toBe('true');
     expect(view.text.textContent).toBe('A new feature');
     expect(view.linkButton?.textContent).toContain('Details');
+    expect(view.actionButtons).toHaveLength(2);
+    expect(view.actionButtons[0].textContent).toContain('Rate Lumno');
+    expect(view.actionButtons[0].dataset.variant).toBe('primary');
 
     act(() => view.linkButton?.click());
     expect(onLinkClick).toHaveBeenCalledTimes(1);
+    act(() => view.actionButtons[1].click());
+    expect(onActionClick).toHaveBeenCalledWith(
+      'community',
+      expect.any(MouseEvent)
+    );
     act(() => view.closeButton.click());
     expect(onDismiss).toHaveBeenCalledTimes(1);
 
     act(() => {
       view.updateLabels({
+        actions: {
+          community: 'Community',
+          review: 'Review'
+        },
         badge: 'Updated',
         close: 'Close',
         link: 'Read',
@@ -72,5 +102,64 @@ describe('Feature hint React view', () => {
     expect(view.text.textContent).toBe('Updated copy');
     expect(view.badge.getAttribute('aria-label')).toBe('Updated');
     expect(view.closeButton.getAttribute('aria-label')).toBe('Close');
+    expect(view.actionButtons[0].textContent).toContain('Review');
+  });
+
+  it('renders the Lumno brand and actions as one sentence', () => {
+    let controller: FeatureHintViewController | null = null;
+    act(() => {
+      controller = createFeatureHintView({
+        labels: {
+          actions: {
+            community: '进群',
+            review: '留个评分'
+          },
+          badge: 'Lumno',
+          close: '关闭',
+          connector: '，或者',
+          text: '如果本插件能给你带来一些乐趣，欢迎',
+          trailing: '和我们聊聊。'
+        },
+        model: {
+          actions: [
+            { id: 'review', variant: 'primary' },
+            { id: 'community', variant: 'secondary' }
+          ],
+          alignMode: 'auto',
+          arrowAlign: 'center',
+          arrowSide: 'top',
+          badgeIconImageSrc: '/lumno.png',
+          badgeWordmarkDarkImageSrc: '/lumno-wordmark-dark.svg',
+          badgeWordmarkImageSrc: '/lumno-wordmark.svg',
+          className: 'x-lumno-feature-hint--engagement-notice',
+          dismissStorage: 'none',
+          elementId: 'engagement-hint',
+          hasLink: false,
+          hintId: 'engagement',
+          inlineActions: true,
+          roundedArrowTip: false,
+          textId: 'engagement-copy',
+          widthMode: 'container'
+        }
+      });
+    });
+    expect(controller).not.toBeNull();
+    const view = controller as unknown as FeatureHintViewController;
+    controllers.push(view);
+    document.body.appendChild(view.element);
+
+    expect(view.badge.dataset.brand).toBe('lumno');
+    expect(
+      view.badge.querySelector<HTMLImageElement>(
+        '.x-lumno-feature-hint__brand-icon img'
+      )?.getAttribute('src')
+    ).toBe('/lumno.png');
+    expect(
+      view.element.querySelector('.x-lumno-feature-hint__sentence')?.textContent
+    ).toBe(
+      '如果本插件能给你带来一些乐趣，欢迎留个评分，或者进群和我们聊聊。'
+    );
+    expect(view.element.querySelector('.x-lumno-feature-hint__actions')).toBeNull();
+    expect(view.actionButtons).toHaveLength(2);
   });
 });

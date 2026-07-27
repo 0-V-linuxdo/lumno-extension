@@ -312,6 +312,31 @@
     const roundedArrowTip = typeof config.roundedArrowTip === 'boolean'
       ? config.roundedArrowTip
       : Boolean(definition.roundedArrowTip);
+    const configuredActions = Array.isArray(config.actions)
+      ? config.actions
+      : (Array.isArray(definition.actions) ? definition.actions : []);
+    const actions = configuredActions.reduce((items, action, index) => {
+      const id = String(action && (action.id || action.actionId) || '').trim();
+      if (!id || items.some((item) => item.id === id)) {
+        return items;
+      }
+      items.push({
+        id,
+        iconHtml: action && action.icon
+          ? getRiSvg(String(action.icon), 'ri-size-12')
+          : '',
+        labelKey: String(action && action.labelKey || '').trim(),
+        labelFallback: String(action && action.labelFallback || '').trim(),
+        onClick: action && typeof action.onClick === 'function'
+          ? action.onClick
+          : null,
+        variant: action && action.variant === 'primary'
+          ? 'primary'
+          : 'secondary',
+        order: index
+      });
+      return items;
+    }, []);
     const hasLink = Boolean(
       config.onLinkClick ||
       config.linkUrl ||
@@ -349,18 +374,35 @@
     const viewController = featureHintView.createFeatureHintView({
       documentObj,
       model: {
+        actions: actions.map((action) => ({
+          iconHtml: action.iconHtml,
+          id: action.id,
+          variant: action.variant
+        })),
         alignMode,
         arrowAlign,
         arrowSide,
         badgeIconHtml: definition.badgeIcon
           ? getRiSvg(definition.badgeIcon, 'ri-size-10')
           : '',
+        badgeIconImageSrc: String(
+          config.badgeIconImageSrc || definition.badgeIconImageSrc || ''
+        ),
         badgeIconText,
+        badgeWordmarkDarkImageSrc: String(
+          config.badgeWordmarkDarkImageSrc ||
+          definition.badgeWordmarkDarkImageSrc ||
+          ''
+        ),
+        badgeWordmarkImageSrc: String(
+          config.badgeWordmarkImageSrc || definition.badgeWordmarkImageSrc || ''
+        ),
         className: definition.className || '',
         dismissStorage,
         elementId: config.elementId || `_x_lumno_feature_hint_${idPart}_2026_unique_`,
         hasLink,
         hintId: definition.id,
+        inlineActions: Boolean(config.inlineActions || definition.inlineActions),
         placement: definition.placement || '',
         roundedArrowTip,
         surface: definition.surface || '',
@@ -369,14 +411,26 @@
         widthMode
       },
       labels: {
+        actions: {},
         badge: '',
         close: '',
+        connector: '',
         link: '',
-        text: ''
+        text: '',
+        trailing: ''
       },
       onDismiss() {
         if (controller) {
           controller.dismiss();
+        }
+      },
+      onActionClick(actionId, event) {
+        const action = actions.find((item) => item.id === actionId);
+        if (action && action.onClick) {
+          action.onClick(event, definition, action);
+        }
+        if (typeof config.onActionClick === 'function') {
+          config.onActionClick(actionId, event, definition);
         }
       },
       onLinkClick: activateLink
@@ -389,6 +443,9 @@
     const text = viewController.text;
     const badge = viewController.badge;
     const linkButton = viewController.linkButton;
+    const actionButtons = Array.isArray(viewController.actionButtons)
+      ? viewController.actionButtons
+      : [];
     const closeButton = viewController.closeButton;
     element.setAttribute('data-dismissed', dismissed ? 'true' : 'false');
 
@@ -417,10 +474,23 @@
         getCssNumber(elementStyle, 'border-bottom-width');
       const textRect = text.getBoundingClientRect();
       const badgeRect = badge.getBoundingClientRect();
-      const linkRect = hasLink ? linkButton.getBoundingClientRect() : { height: 0 };
+      const linkRect = hasLink && linkButton
+        ? linkButton.getBoundingClientRect()
+        : { height: 0 };
+      const actionHeight = actionButtons.reduce((height, actionButton) => {
+        const actionRect = actionButton && typeof actionButton.getBoundingClientRect === 'function'
+          ? actionButton.getBoundingClientRect()
+          : { height: 0 };
+        return Math.max(height, actionRect.height || 0);
+      }, 0);
       const lineHeight = getCssNumber(textStyle, 'line-height') ||
         ((getCssNumber(textStyle, 'font-size') || 12) * 1.45);
-      const maxChildHeight = Math.max(textRect.height, badgeRect.height, linkRect.height);
+      const maxChildHeight = Math.max(
+        textRect.height,
+        badgeRect.height,
+        linkRect.height,
+        actionHeight
+      );
       const textWrapped = textRect.height > lineHeight * 1.35;
       const rowWrapped = contentHeight > maxChildHeight + 6;
       element.setAttribute('data-multiline', (textWrapped || rowWrapped) ? 'true' : 'false');
@@ -448,6 +518,9 @@
       if (hasLink) {
         alignResizeObserver.observe(linkButton);
       }
+      actionButtons.forEach((actionButton) => {
+        alignResizeObserver.observe(actionButton);
+      });
     }
 
     function setElementInert(inert) {
@@ -540,15 +613,38 @@
           null;
         const textLabel = formatShortcutText(rawTextLabel, 'Alt+Q', navigatorLike);
         const closeLabel = getMessage(t, definition.closeLabelKey, definition.closeLabelFallback);
+        const connectorKey = config.connectorKey || definition.connectorKey || '';
+        const connectorFallback =
+          config.connectorFallback || definition.connectorFallback || '';
+        const connectorLabel = connectorKey || connectorFallback
+          ? getMessage(t, connectorKey, connectorFallback)
+          : '';
+        const trailingKey = config.trailingKey || definition.trailingKey || '';
+        const trailingFallback =
+          config.trailingFallback || definition.trailingFallback || '';
+        const trailingLabel = trailingKey || trailingFallback
+          ? getMessage(t, trailingKey, trailingFallback)
+          : '';
         let linkLabel = '';
+        const actionLabels = {};
         if (hasLink) {
           linkLabel = getMessage(t, config.linkKey || definition.linkKey, config.linkFallback || definition.linkFallback);
         }
+        actions.forEach((action) => {
+          actionLabels[action.id] = getMessage(
+            t,
+            action.labelKey,
+            action.labelFallback
+          );
+        });
         viewController.updateLabels({
+          actions: actionLabels,
           badge: badgeLabel,
           close: closeLabel,
+          connector: connectorLabel,
           link: linkLabel,
-          text: textLabel
+          text: textLabel,
+          trailing: trailingLabel
         });
         scheduleContentAlignmentUpdate();
       }

@@ -473,7 +473,7 @@
     function attachBlockedOverlayFaviconData(img, state) {
       const candidates = buildBlockedOverlayFaviconDataSourcePlan(state);
       if (candidates.length === 0) {
-        state.handleFailed();
+        finalizeOverlayOwnedFaviconFailure(img, state);
         return;
       }
       showPendingFallbackIcon(img);
@@ -485,7 +485,7 @@
         const sourceUrl = candidates[index];
         index += 1;
         if (!sourceUrl) {
-          state.handleFailed();
+          finalizeOverlayOwnedFaviconFailure(img, state);
           return;
         }
         requestFaviconDataBypassingOverlayBlock(sourceUrl, state.pageUrl).then((dataUrl) => {
@@ -664,13 +664,18 @@
       return true;
     }
 
-    function finalizeOverlayDefaultProxyFaviconFailure(img, state) {
+    function finalizeOverlayOwnedFaviconFailure(img, state) {
       clearOverlayCandidateLoadTimer(img);
       if (state.hasFailedHandler) {
+        removeFallbackIconNode(img);
         state.handleFailed();
         return;
       }
       applyFallbackIcon(img);
+    }
+
+    function finalizeOverlayDefaultProxyFaviconFailure(img, state) {
+      finalizeOverlayOwnedFaviconFailure(img, state);
     }
 
     function finalizeOverlayThemeAwareFaviconFailure(img, state) {

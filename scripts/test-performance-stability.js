@@ -21,6 +21,14 @@ assert.strictEqual(
   1,
   'options should use one coordinated resize listener'
 );
+const activePopconfirmOutsideListeners = optionsJs.match(
+  /document\.addEventListener\('click', \(event\) => \{\s*if \(!activePopconfirm\)/g
+) || [];
+assert.strictEqual(
+  activePopconfirmOutsideListeners.length,
+  1,
+  'options should use one outside-click listener for the active popconfirm'
+);
 assertMatches(
   optionsJs,
   /function scheduleOptionsViewportLayoutRefresh\(\) \{[\s\S]*?if \(optionsResizeFrame\)[\s\S]*?requestAnimationFrame/,

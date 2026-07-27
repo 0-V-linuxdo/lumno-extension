@@ -167,6 +167,7 @@ assert(
   const localData = { [lightKey]: '#f1f2f3' };
   const syncData = {
     [legacyKey]: '#445566',
+    [lightKey]: '#aabbcc',
     [darkKey]: '#112233'
   };
   const localWrites = [];

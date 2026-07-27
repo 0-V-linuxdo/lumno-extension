@@ -400,4 +400,64 @@ assert.strictEqual(emptyTarget.index, 0);
 assert.strictEqual(emptyTarget.element, gridElement);
 assert.strictEqual(emptyTarget.markerHeightPx, 64);
 
+const pagedGridRect = createRect(100, 100, 800, 180);
+const pagedGridElement = {
+  getBoundingClientRect() {
+    return pagedGridRect;
+  }
+};
+const pagedLayoutItems = [
+  { card: createCard({ index: 8, item: { index: 8 } }), rect: createRect(112, 100, 188, 80) },
+  { card: createCard({ index: 9, item: { index: 9 } }), rect: createRect(312, 100, 188, 80) },
+  { card: createCard({ index: 10, item: { index: 10 } }), rect: createRect(112, 200, 188, 80) },
+  { card: createCard({ index: 11, item: { index: 11 } }), rect: createRect(312, 200, 188, 80) }
+];
+function getCrossPageTarget(pointerX, pointerY) {
+  return getGridInsertionTarget({
+    columnGap: '12px',
+    folderId: '1',
+    gridElement: pagedGridElement,
+    isCrossPageDrag: true,
+    layoutItems: pagedLayoutItems,
+    pageStartIndex: 8,
+    pointerX,
+    pointerY
+  });
+}
+
+const crossPageFirstLeft = getCrossPageTarget(106, 140);
+assert.strictEqual(crossPageFirstLeft.index, 8);
+assert.strictEqual(crossPageFirstLeft.markerPosition, 'before');
+assert.strictEqual(crossPageFirstLeft.preservePageSlot, true);
+
+const crossPageFirstRight = getCrossPageTarget(306, 140);
+assert.strictEqual(crossPageFirstRight.index, 9);
+assert.strictEqual(crossPageFirstRight.markerPosition, 'before');
+assert.strictEqual(crossPageFirstRight.preservePageSlot, true);
+
+const crossPageLastLeft = getCrossPageTarget(306, 240);
+assert.strictEqual(crossPageLastLeft.index, 11);
+assert.strictEqual(crossPageLastLeft.markerPosition, 'before');
+assert.strictEqual(crossPageLastLeft.preservePageSlot, true);
+
+assert.strictEqual(
+  getCrossPageTarget(506, 240),
+  null,
+  'a cross-page drag should not expose an insertion line after the page last item'
+);
+
+const samePageLastRight = getGridInsertionTarget({
+  columnGap: '12px',
+  folderId: '1',
+  gridElement: pagedGridElement,
+  isCrossPageDrag: false,
+  layoutItems: pagedLayoutItems,
+  pageStartIndex: 8,
+  pointerX: 506,
+  pointerY: 240
+});
+assert.strictEqual(samePageLastRight.index, 12);
+assert.strictEqual(samePageLastRight.markerPosition, 'after');
+assert.strictEqual(samePageLastRight.preservePageSlot, false);
+
 console.log('New tab bookmark drag runtime tests passed.');

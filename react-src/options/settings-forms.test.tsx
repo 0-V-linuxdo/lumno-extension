@@ -130,6 +130,27 @@ describe('Options settings form React islands', () => {
       .toBe('请填写触发词');
   });
 
+  it('recovers when an unexpected site-search save error rejects', async () => {
+    const host = document.createElement('div');
+    const controller = createSiteSearchFormController(host, {
+      onSave: vi.fn().mockRejectedValue(new Error('Storage unavailable'))
+    });
+    controllers.push(controller);
+    act(() => controller.render(siteModel));
+    const buttons = host.querySelectorAll<HTMLButtonElement>('button');
+    act(() => buttons[0]?.click());
+
+    await act(async () => {
+      buttons[3]?.click();
+      await Promise.resolve();
+    });
+
+    expect(host.dataset.expanded).toBe('true');
+    expect(buttons[3]?.disabled).toBe(false);
+    expect(host.querySelector('._x_extension_shortcut_error_2024_unique_')?.textContent)
+      .toBe('Storage unavailable');
+  });
+
   it('switches blacklist presentation and submits the selected mode', async () => {
     const host = document.createElement('div');
     const onSave = vi.fn().mockResolvedValue({ ok: true });

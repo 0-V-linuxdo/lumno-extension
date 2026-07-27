@@ -256,6 +256,35 @@ async function run() {
   assert.strictEqual(await staleLoad, false);
   assert.strictEqual(staleRuntime.getSnapshot().ready, false);
 
+  const sharedTreeCallbacks = [];
+  let sharedTreeReads = 0;
+  const sharedRuntime = createBookmarksRuntime({
+    store: bookmarkStore,
+    chromeApi: {
+      runtime: { lastError: null },
+      bookmarks: {
+        getTree(callback) {
+          sharedTreeReads += 1;
+          sharedTreeCallbacks.push(callback);
+        }
+      }
+    }
+  });
+  const cardSurfaceReload = sharedRuntime.readFolder('10');
+  const cascadeSurfaceReload = sharedRuntime.ensureReady(false);
+  assert.strictEqual(
+    sharedTreeReads,
+    1,
+    'card and cascade surfaces should share one in-flight tree reload'
+  );
+  sharedTreeCallbacks.shift()(createTree());
+  assert.strictEqual(await cascadeSurfaceReload, true);
+  assert.deepStrictEqual(
+    (await cardSurfaceReload).items.map((item) => item.id),
+    ['11', '13'],
+    'a concurrent cascade refresh must not turn the card surface into an empty result'
+  );
+
   console.log('New tab bookmarks runtime tests passed.');
 }
 

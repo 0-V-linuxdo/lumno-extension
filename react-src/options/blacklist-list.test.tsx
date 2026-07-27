@@ -125,7 +125,7 @@ describe('Options blacklist list React island', () => {
     expect(host.querySelector('[data-expanded="true"]')).not.toBeNull();
   });
 
-  it('confirms removal and supports a read-only favicon rule list', () => {
+  it('confirms removal and supports a read-only favicon rule list', async () => {
     const { controller, host, onRemove } = createFixture(false);
     act(() => controller.render({ ...model, editable: false }));
     expect(host.querySelector('._x_extension_shortcut_edit_2024_unique_')).toBeNull();
@@ -138,7 +138,66 @@ describe('Options blacklist list React island', () => {
     const confirmButtons = host.querySelectorAll<HTMLButtonElement>(
       '._x_extension_popconfirm_actions_2024_unique_ button'
     );
-    act(() => confirmButtons[1]?.click());
+    await act(async () => {
+      confirmButtons[1]?.click();
+      await Promise.resolve();
+    });
     expect(onRemove).toHaveBeenCalledWith('example.com::suffix');
+  });
+
+  it('closes inline confirmation with Escape and restores trigger focus', () => {
+    const { controller, host } = createFixture(false);
+    act(() => controller.render({ ...model, editable: false }));
+    const trigger = host.querySelector<HTMLButtonElement>(
+      '._x_extension_shortcut_remove_2024_unique_'
+    );
+    act(() => trigger?.click());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        key: 'Escape'
+      }));
+    });
+
+    expect(host.querySelector('._x_extension_popconfirm_2024_unique_')
+      ?.getAttribute('data-open')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('runs a pending inline confirmation only once', async () => {
+    let resolveRemove: () => void = () => {};
+    const onRemove = vi.fn(() => new Promise<void>((resolve) => {
+      resolveRemove = resolve;
+    }));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const controller = createBlacklistListController(host, {
+      kind: 'favicon',
+      onRemove
+    });
+    controllers.push(controller);
+    act(() => controller.render({ ...model, editable: false }));
+    act(() => {
+      host.querySelector<HTMLButtonElement>(
+        '._x_extension_shortcut_remove_2024_unique_'
+      )?.click();
+    });
+    const confirmButton = host.querySelectorAll<HTMLButtonElement>(
+      '._x_extension_popconfirm_actions_2024_unique_ button'
+    )[1];
+
+    act(() => {
+      confirmButton?.click();
+      confirmButton?.click();
+    });
+
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(confirmButton?.disabled).toBe(true);
+    await act(async () => {
+      resolveRemove();
+      await Promise.resolve();
+    });
+    expect(host.querySelector('._x_extension_popconfirm_2024_unique_')
+      ?.getAttribute('data-open')).toBe('false');
   });
 });

@@ -110,6 +110,28 @@ describe('Shared search input React island', () => {
     expect(parts.rightIcon.dataset.hoverActive).toBe('false');
   });
 
+  it('keeps the right-icon hit box still while exposing visual hover state', () => {
+    const parts = create();
+
+    act(() => {
+      parts.rightIcon.dispatchEvent(
+        new MouseEvent('mouseenter', { bubbles: true })
+      );
+    });
+
+    expect(parts.rightIcon.style.transform).toBe('none');
+    expect(parts.rightIcon.dataset.hoverActive).toBe('true');
+
+    act(() => {
+      parts.rightIcon.dispatchEvent(
+        new MouseEvent('mouseleave', { bubbles: true })
+      );
+    });
+
+    expect(parts.rightIcon.style.transform).toBe('none');
+    expect(parts.rightIcon.dataset.hoverActive).toBe('false');
+  });
+
   it('renders a React-owned secondary action and mode badge', () => {
     const parts = create({
       modeBadge: {

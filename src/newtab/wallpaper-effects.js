@@ -123,6 +123,8 @@
     });
     const onRender = getFunction(options, 'onRender');
     const EFFECT_CROSSFADE_MS = 150;
+    const RESIZE_RENDER_SETTLE_MS = 140;
+    const RESIZE_CROSSFADE_MS = 180;
     const ASCII_CHARS = '  .,:;-=+xX08S#&@';
 
     let canvas = null;
@@ -138,6 +140,10 @@
     let observer = null;
     let asciiGlyphMetricsCache = null;
     let effectBaseCacheKey = '';
+    let resizeTransitionCanvas = null;
+    let resizeTransitionFrame = 0;
+    let resizeTransitionTimer = 0;
+    let shouldCrossfadeResize = false;
 
     function requestFrame(callback) {
       if (windowObj && typeof windowObj.requestAnimationFrame === 'function') {
@@ -229,6 +235,88 @@
       effectBaseCacheKey = '';
     }
 
+    function cleanupResizeCrossfade() {
+      if (resizeTransitionFrame) {
+        cancelFrame(resizeTransitionFrame);
+        resizeTransitionFrame = 0;
+      }
+      if (resizeTransitionTimer) {
+        clearTimeout(resizeTransitionTimer);
+        resizeTransitionTimer = 0;
+      }
+      if (resizeTransitionCanvas && resizeTransitionCanvas.parentNode) {
+        resizeTransitionCanvas.parentNode.removeChild(resizeTransitionCanvas);
+      }
+      resizeTransitionCanvas = null;
+      if (canvas) {
+        canvas.removeAttribute('data-resize-enter');
+        canvas.removeAttribute('data-resize-jump');
+      }
+    }
+
+    function prepareResizeCrossfade() {
+      if (!canvas ||
+          !context ||
+          shouldReduceMotion() ||
+          getCanvasOpacity() <= 0.01) {
+        return false;
+      }
+      cleanupResizeCrossfade();
+      const snapshot = documentObj.createElement('canvas');
+      const snapshotContext = snapshot.getContext('2d', { alpha: true });
+      if (!snapshotContext) {
+        return false;
+      }
+      snapshot.width = canvas.width;
+      snapshot.height = canvas.height;
+      snapshot.className = `${canvas.className} x-nt-wallpaper-effect-resize-snapshot`;
+      snapshot.setAttribute('aria-hidden', 'true');
+      const effectType = canvas.getAttribute('data-effect');
+      if (effectType) {
+        snapshot.setAttribute('data-effect', effectType);
+      }
+      snapshot.style.width = '100vw';
+      snapshot.style.height = '100vh';
+      snapshot.style.opacity = String(getCanvasOpacity());
+      snapshot.style.mixBlendMode = canvas.style.mixBlendMode || 'normal';
+      try {
+        snapshotContext.drawImage(canvas, 0, 0);
+      } catch (error) {
+        return false;
+      }
+      if (!canvas.parentNode) {
+        return false;
+      }
+      canvas.parentNode.insertBefore(snapshot, canvas);
+      resizeTransitionCanvas = snapshot;
+      canvas.setAttribute('data-resize-enter', 'true');
+      canvas.setAttribute('data-resize-jump', 'true');
+      void canvas.offsetWidth;
+      canvas.removeAttribute('data-resize-jump');
+      return true;
+    }
+
+    function finishResizeCrossfade() {
+      if (!canvas || !resizeTransitionCanvas) {
+        return;
+      }
+      const snapshot = resizeTransitionCanvas;
+      resizeTransitionFrame = requestFrame(() => {
+        resizeTransitionFrame = 0;
+        if (!canvas || resizeTransitionCanvas !== snapshot) {
+          return;
+        }
+        canvas.removeAttribute('data-resize-enter');
+        snapshot.setAttribute('data-resize-exit', 'true');
+        resizeTransitionTimer = setTimeout(() => {
+          resizeTransitionTimer = 0;
+          if (resizeTransitionCanvas === snapshot) {
+            cleanupResizeCrossfade();
+          }
+        }, RESIZE_CROSSFADE_MS + 80);
+      });
+    }
+
     function resizeCanvas() {
       if (!canvas || !context) {
         return null;
@@ -250,6 +338,8 @@
 
     function clearCanvas() {
       renderToken += 1;
+      shouldCrossfadeResize = false;
+      cleanupResizeCrossfade();
       if (renderFrame) {
         cancelFrame(renderFrame);
         renderFrame = 0;
@@ -508,6 +598,7 @@
       canvas.style.opacity = String(clampNumber(opacity, 0, 1));
       canvas.style.mixBlendMode = blendMode || 'normal';
       onRender();
+      finishResizeCrossfade();
     }
 
     function getCanvasOpacity() {
@@ -772,6 +863,12 @@
       if (!ensureCanvas()) {
         return;
       }
+      const crossfadeResize = shouldCrossfadeResize &&
+        (normalized.type === 'halftone' || normalized.type === 'ascii');
+      shouldCrossfadeResize = false;
+      if (crossfadeResize) {
+        prepareResizeCrossfade();
+      }
       const viewport = resizeCanvas();
       if (!viewport) {
         return;
@@ -876,7 +973,15 @@
 
     if (windowObj && typeof windowObj.addEventListener === 'function') {
       windowObj.addEventListener('resize', () => {
-        scheduleRender(140);
+        const normalized = normalizePrefs(prefs);
+        shouldCrossfadeResize = Boolean(
+          canvas &&
+          context &&
+          !shouldReduceMotion() &&
+          (normalized.type === 'halftone' || normalized.type === 'ascii') &&
+          getCanvasOpacity() > 0.01
+        );
+        scheduleRender(RESIZE_RENDER_SETTLE_MS);
       }, { passive: true });
     }
 

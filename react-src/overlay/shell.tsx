@@ -143,11 +143,33 @@ function appendOverlayStyleNodes(
       font-variant: normal;
       text-transform: none;
     }
-    #_x_extension_overlay_2024_unique_ button .ri-icon,
+    #_x_extension_overlay_2024_unique_ button:not(:disabled),
+    #_x_extension_overlay_2024_unique_ a[href],
+    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"]) {
+      cursor: pointer;
+    }
+    #_x_extension_overlay_2024_unique_ button *,
+    #_x_extension_overlay_2024_unique_ a[href] *,
     #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,
-    #_x_extension_overlay_2024_unique_ a .ri-icon {
+    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon {
       cursor: inherit;
+    }
+    #_x_extension_overlay_2024_unique_ button .ri-icon,
+    #_x_extension_overlay_2024_unique_ a[href] .ri-icon,
+    #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,
+    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon {
       pointer-events: none;
+    }
+    #_x_extension_overlay_2024_unique_ button:disabled,
+    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"] {
+      cursor: not-allowed;
+    }
+    #_x_extension_overlay_2024_unique_ button[aria-busy="true"]:disabled,
+    #_x_extension_overlay_2024_unique_ [role="button"][aria-busy="true"] {
+      cursor: progress;
+    }
+    #_x_extension_overlay_2024_unique_ [role="img"][data-tooltip] {
+      cursor: help;
     }
     #_x_extension_overlay_2024_unique_ .ri-icon::before {
       font-style: normal;

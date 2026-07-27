@@ -590,6 +590,27 @@
   "update_notice_close": {
     "message": "Dismiss update notice"
   },
+  "engagement_notice_badge": {
+    "message": "Lumno"
+  },
+  "engagement_notice_text": {
+    "message": "If this extension brings you a little joy, feel free to"
+  },
+  "engagement_notice_connector": {
+    "message": "or"
+  },
+  "engagement_notice_trailing": {
+    "message": "and chat with us."
+  },
+  "engagement_notice_review": {
+    "message": "Leave a review"
+  },
+  "engagement_notice_community": {
+    "message": "Join the group"
+  },
+  "engagement_notice_close": {
+    "message": "Dismiss rating and community prompt"
+  },
   "newtab_bookmark_cascade_debug_enable": {
     "message": "Show bookmark menu safe triangle"
   },

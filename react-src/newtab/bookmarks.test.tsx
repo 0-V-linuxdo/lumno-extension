@@ -284,6 +284,43 @@ describe('Bookmarks React island', () => {
     expect(view.getCards()[0].dataset.bookmarkViewMode).toBe('top');
   });
 
+  it.each(['folder', 'list', 'top'] as const)(
+    'keeps distinct same-URL bookmark cards in %s mode',
+    (viewMode) => {
+      const { view } = createView();
+      renderItems(view, [
+        {
+          id: 'existing',
+          parentId: '1',
+          index: 0,
+          type: 'bookmark',
+          title: 'Existing',
+          url: 'https://same.example/'
+        },
+        {
+          id: 'moved',
+          parentId: '1',
+          index: 1,
+          type: 'bookmark',
+          title: 'Moved',
+          url: 'https://same.example/'
+        }
+      ], {
+        viewMode,
+        menuMode: viewMode !== 'folder'
+      });
+
+      expect(
+        view.getCards().map((card) => card.dataset.bookmarkId)
+      ).toEqual(['existing', 'moved']);
+      expect(
+        view.getCards().every(
+          (card) => card.dataset.bookmarkDraggable === 'true'
+        )
+      ).toBe(true);
+    }
+  );
+
   it('preserves background opening, drag click suppression, and copy action', async () => {
     const opened: OpenedBookmark[] = [];
     const copied: string[] = [];

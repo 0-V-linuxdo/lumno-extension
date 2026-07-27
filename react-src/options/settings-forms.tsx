@@ -8,6 +8,10 @@ import type {
   SiteSearchProviderDraft,
   SiteSearchSaveResult
 } from './site-search-list';
+import {
+  getAsyncErrorMessage,
+  useExclusiveAsyncAction
+} from '../shared/use-exclusive-async-action';
 
 export interface SiteSearchFormCopyModel {
   addLabel: string;
@@ -86,7 +90,6 @@ function SiteSearchForm({
   onSave(draft: SiteSearchProviderDraft): SiteSearchSaveResult | Promise<SiteSearchSaveResult>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<SiteSearchProviderDraft>({
     aliases: '',
@@ -96,6 +99,8 @@ function SiteSearchForm({
   });
   const keyInputRef = useRef<HTMLInputElement>(null);
   const templateInputRef = useRef<HTMLInputElement>(null);
+  const saveAction = useExclusiveAsyncAction(onSave);
+  const saving = saveAction.pending;
 
   useEffect(() => {
     if (host) {
@@ -233,6 +238,7 @@ function SiteSearchForm({
         <div className="_x_extension_shortcut_actions_row_2024_unique_">
           <button
             className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
+            disabled={saving}
             id="_x_extension_site_search_cancel_2024_unique_"
             onClick={reset}
             style={{ display: expanded ? 'inline-flex' : 'none' }}
@@ -250,9 +256,15 @@ function SiteSearchForm({
                 setExpanded(true);
                 return;
               }
-              setSaving(true);
-              const result = await onSave(draft);
-              setSaving(false);
+              const outcome = await saveAction.run(draft);
+              if (outcome.status === 'skipped') {
+                return;
+              }
+              if (outcome.status === 'rejected') {
+                setError(getAsyncErrorMessage(outcome.error));
+                return;
+              }
+              const result = outcome.value;
               if (result.ok) {
                 reset();
               } else {
@@ -294,8 +306,9 @@ function BlacklistForm({
   const [mode, setMode] = useState<BlacklistMatchMode>('suffix');
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const saveAction = useExclusiveAsyncAction(onSave);
+  const saving = saveAction.pending;
   const activeMode = useMemo(
     () => model.copy.modes.find((item) => item.mode === mode) || model.copy.modes[0],
     [mode, model.copy.modes]
@@ -407,6 +420,7 @@ function BlacklistForm({
         <div className="_x_extension_shortcut_actions_row_2024_unique_">
           <button
             className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
+            disabled={saving}
             onClick={reset}
             style={{ display: expanded ? 'inline-flex' : 'none' }}
             type="button"
@@ -423,9 +437,15 @@ function BlacklistForm({
                 setExpanded(true);
                 return;
               }
-              setSaving(true);
-              const result = await onSave(value, [mode]);
-              setSaving(false);
+              const outcome = await saveAction.run(value, [mode]);
+              if (outcome.status === 'skipped') {
+                return;
+              }
+              if (outcome.status === 'rejected') {
+                setError(getAsyncErrorMessage(outcome.error));
+                return;
+              }
+              const result = outcome.value;
               if (result.ok) {
                 reset();
               } else {

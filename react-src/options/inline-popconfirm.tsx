@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useExclusiveAsyncAction } from '../shared/use-exclusive-async-action';
+import {
+  PopconfirmContent,
+  type PopconfirmCopy
+} from './popconfirm-content';
 
-export interface InlinePopconfirmCopy {
-  cancelLabel: string;
-  confirmLabel: string;
-  message: string;
-  messageKey: string;
-}
+export interface InlinePopconfirmCopy extends PopconfirmCopy {}
 
 export function InlinePopconfirm({
   copy,
@@ -22,6 +22,9 @@ export function InlinePopconfirm({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popconfirmId = useId();
+  const confirmAction = useExclusiveAsyncAction(onConfirm);
 
   useEffect(() => {
     if (!open) {
@@ -32,8 +35,19 @@ export function InlinePopconfirm({
         setOpen(false);
       }
     };
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
     document.addEventListener('pointerdown', onDocumentPointerDown);
-    return () => document.removeEventListener('pointerdown', onDocumentPointerDown);
+    document.addEventListener('keydown', onDocumentKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onDocumentPointerDown);
+      document.removeEventListener('keydown', onDocumentKeyDown);
+    };
   }, [open]);
 
   return (
@@ -43,12 +57,16 @@ export function InlinePopconfirm({
       ref={wrapRef}
     >
       <button
+        aria-controls={popconfirmId}
+        aria-expanded={open}
         aria-label={triggerAriaLabel}
         className={triggerClassName}
+        disabled={confirmAction.pending}
         onClick={(event) => {
           event.stopPropagation();
           setOpen((value) => !value);
         }}
+        ref={triggerRef}
         type="button"
       >
         <i aria-hidden="true" className={triggerIconClass} />
@@ -56,38 +74,23 @@ export function InlinePopconfirm({
       <div
         className="_x_extension_popconfirm_2024_unique_"
         data-open={open ? 'true' : 'false'}
+        id={popconfirmId}
       >
-        <div
-          className="_x_extension_popconfirm_text_2024_unique_"
-          data-i18n={copy.messageKey}
-        >
-          {copy.message}
-        </div>
-        <div className="_x_extension_popconfirm_actions_2024_unique_">
-          <button
-            className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
-            data-i18n="confirm_cancel"
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen(false);
-            }}
-            type="button"
-          >
-            {copy.cancelLabel}
-          </button>
-          <button
-            className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_"
-            data-i18n="confirm_ok"
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen(false);
-              void onConfirm();
-            }}
-            type="button"
-          >
-            {copy.confirmLabel}
-          </button>
-        </div>
+        <PopconfirmContent
+          busy={confirmAction.pending}
+          copy={copy}
+          onCancel={() => {
+            setOpen(false);
+            triggerRef.current?.focus();
+          }}
+          onConfirm={() => {
+            void confirmAction.run().then((outcome) => {
+              if (outcome.status !== 'skipped') {
+                setOpen(false);
+              }
+            });
+          }}
+        />
       </div>
     </div>
   );

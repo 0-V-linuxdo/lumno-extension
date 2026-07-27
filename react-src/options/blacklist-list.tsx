@@ -3,6 +3,10 @@ import {
   createReactRootController,
   type ReactRootController
 } from './root-controller';
+import {
+  getAsyncErrorMessage,
+  useExclusiveAsyncAction
+} from '../shared/use-exclusive-async-action';
 import { InlinePopconfirm } from './inline-popconfirm';
 
 export type BlacklistMatchMode = 'exact' | 'prefix' | 'suffix';
@@ -104,7 +108,8 @@ function BlacklistEditor({
     item.matchModes
   );
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const saveAction = useExclusiveAsyncAction(onSave);
+  const saving = saveAction.pending;
   const presentation = getInputPresentation(matchModes, copy);
 
   const toggleMode = (mode: BlacklistMatchMode) => {
@@ -177,6 +182,7 @@ function BlacklistEditor({
       <div className="_x_extension_shortcut_editor_actions_2024_unique_">
         <button
           className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
+          disabled={saving}
           onClick={onCancel}
           type="button"
         >
@@ -187,9 +193,19 @@ function BlacklistEditor({
           className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_"
           disabled={saving}
           onClick={async () => {
-            setSaving(true);
-            const result = await onSave(item.key, inputValue, matchModes);
-            setSaving(false);
+            const outcome = await saveAction.run(
+              item.key,
+              inputValue,
+              matchModes
+            );
+            if (outcome.status === 'skipped') {
+              return;
+            }
+            if (outcome.status === 'rejected') {
+              setError(getAsyncErrorMessage(outcome.error));
+              return;
+            }
+            const result = outcome.value;
             if (result.ok) {
               onCancel();
               return;

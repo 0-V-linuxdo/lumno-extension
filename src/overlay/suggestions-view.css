@@ -53,13 +53,13 @@
   font-size: 0;
   color: var(--x-ext-input-icon, #9CA3AF);
   cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease, transform 160ms ease;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs[data-hover-active="true"] {
   background: var(--x-ext-input-icon-hover-bg, rgba(148, 163, 184, 0.16));
   color: var(--x-ext-input-icon-hover, #4B5563);
-  transform: scale(1.06);
+  transform: none;
 }
 
 @supports (corner-shape: superellipse(1.25)) {
@@ -84,8 +84,13 @@
   justify-content: center;
   line-height: 1;
   transform: none;
+  transition: transform 160ms ease;
   pointer-events: none;
   cursor: inherit;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs[data-hover-active="true"] .ri-icon {
+  transform: scale(1.06);
 }
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-inline-label,
@@ -726,7 +731,7 @@
 }
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-history-delete-button[data-hover-active="true"] {
-  transform: scale(1.06);
+  transform: none;
 }
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-history-delete-button .ri-icon {
@@ -735,6 +740,11 @@
   justify-content: center;
   line-height: 1;
   transform: none;
+  transition: transform 160ms ease;
   pointer-events: none;
   cursor: inherit;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-history-delete-button[data-hover-active="true"] .ri-icon {
+  transform: scale(1.06);
 }

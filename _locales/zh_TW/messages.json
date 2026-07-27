@@ -590,6 +590,27 @@
   "update_notice_close": {
     "message": "關閉更新提示"
   },
+  "engagement_notice_badge": {
+    "message": "Lumno"
+  },
+  "engagement_notice_text": {
+    "message": "如果本擴充功能能為你帶來一些樂趣，歡迎"
+  },
+  "engagement_notice_connector": {
+    "message": "，或者"
+  },
+  "engagement_notice_trailing": {
+    "message": "和我們聊聊。"
+  },
+  "engagement_notice_review": {
+    "message": "留下評分"
+  },
+  "engagement_notice_community": {
+    "message": "進群"
+  },
+  "engagement_notice_close": {
+    "message": "關閉評分與社群提示"
+  },
   "newtab_bookmark_cascade_debug_enable": {
     "message": "顯示書籤選單安全三角"
   },

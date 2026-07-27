@@ -590,6 +590,27 @@
   "update_notice_close": {
     "message": "更新通知を閉じる"
   },
+  "engagement_notice_badge": {
+    "message": "Lumno"
+  },
+  "engagement_notice_text": {
+    "message": "この拡張機能が少しでも楽しい時間を届けられたら、ぜひ"
+  },
+  "engagement_notice_connector": {
+    "message": "または"
+  },
+  "engagement_notice_trailing": {
+    "message": "でお話ししましょう。"
+  },
+  "engagement_notice_review": {
+    "message": "評価を残す"
+  },
+  "engagement_notice_community": {
+    "message": "グループに参加"
+  },
+  "engagement_notice_close": {
+    "message": "評価とコミュニティの案内を閉じる"
+  },
   "newtab_bookmark_cascade_debug_enable": {
     "message": "ブックマークの安全範囲を表示"
   },

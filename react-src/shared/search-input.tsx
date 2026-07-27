@@ -175,8 +175,7 @@ const BASE_STYLES: Record<keyof typeof CLASSES, StyleOverrides> = {
     'text-decoration': 'none',
     top: 'var(--x-ext-input-right-icon-inset, 13px)',
     transform: 'none',
-    transition:
-      'background-color 140ms ease, color 140ms ease, transform 160ms ease',
+    transition: 'background-color 140ms ease, color 140ms ease',
     width: '30px',
     'z-index': '2'
   }
@@ -534,8 +533,8 @@ export function createSearchInput(
     input.addEventListener('keydown', config.onKeyDown);
   }
   const setRightIconVisualState = (active: boolean) => {
+    rightIcon.dataset.hoverActive = active ? 'true' : 'false';
     if (isolated && config.styleRoot) {
-      rightIcon.dataset.hoverActive = active ? 'true' : 'false';
       return;
     }
     applyStyles(
@@ -547,7 +546,7 @@ export function createSearchInput(
         color: active
           ? 'var(--x-ext-input-icon-hover, #4B5563)'
           : 'var(--x-ext-input-icon, #9CA3AF)',
-        transform: active ? 'scale(1.06)' : 'none'
+        transform: 'none'
       },
       important
     );

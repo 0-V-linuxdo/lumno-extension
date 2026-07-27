@@ -1,11 +1,11 @@
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import {
+  PopconfirmContent,
+  type PopconfirmCopy
+} from './popconfirm-content';
 
-export interface PopconfirmRenderModel {
-  cancelLabel: string;
-  confirmLabel: string;
-  message: string;
-  messageKey: string;
+export interface PopconfirmRenderModel extends PopconfirmCopy {
   open: boolean;
 }
 
@@ -17,51 +17,6 @@ export interface PopconfirmControllerOptions {
 export interface PopconfirmController {
   render(model: PopconfirmRenderModel): void;
   destroy(): void;
-}
-
-function PopconfirmContent({
-  model,
-  onCancel,
-  onConfirm
-}: {
-  model: PopconfirmRenderModel;
-  onCancel(): void;
-  onConfirm(): void;
-}) {
-  return (
-    <>
-      <div
-        className="_x_extension_popconfirm_text_2024_unique_"
-        data-i18n={model.messageKey}
-      >
-        {model.message}
-      </div>
-      <div className="_x_extension_popconfirm_actions_2024_unique_">
-        <button
-          className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
-          data-i18n="confirm_cancel"
-          onClick={(event) => {
-            event.stopPropagation();
-            onCancel();
-          }}
-          type="button"
-        >
-          {model.cancelLabel}
-        </button>
-        <button
-          className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_"
-          data-i18n="confirm_ok"
-          onClick={(event) => {
-            event.stopPropagation();
-            onConfirm();
-          }}
-          type="button"
-        >
-          {model.confirmLabel}
-        </button>
-      </div>
-    </>
-  );
 }
 
 export function createPopconfirmController(
@@ -90,7 +45,7 @@ export function createPopconfirmController(
     flushSync(() => {
       reactRoot.render(
         <PopconfirmContent
-          model={model}
+          copy={model}
           onCancel={options.onCancel}
           onConfirm={options.onConfirm}
         />

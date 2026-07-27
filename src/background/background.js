@@ -3631,6 +3631,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/shortcut-display.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
+    'src/shared/engagement-notice.js',
     'src/shared/tooltip.js',
     'src/shared/cursor-tooltip.js',
     'src/overlay/runtime.js',

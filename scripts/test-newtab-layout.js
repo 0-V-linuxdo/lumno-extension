@@ -804,6 +804,11 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
   );
   assert.match(
     newtabHtml,
+    /@media \(hover:\s*none\)[\s\S]*?\.x-nt-recent-card:hover \.x-nt-recent-card-visual\s*\{[\s\S]*?transform:\s*none;[\s\S]*?box-shadow:\s*var\(--x-nt-recent-card-shadow\);/,
+    'touch input should keep the recent-card visual layer stationary'
+  );
+  assert.match(
+    newtabHtml,
     /@media \(hover:\s*none\)[\s\S]*?\.x-nt-recent-card:hover \.x-nt-recent-inner\s*\{[\s\S]*?height:\s*var\(--x-nt-dock-recent-inner-height,\s*104px\);[\s\S]*?transform:\s*none;[\s\S]*?margin-bottom:\s*0;/,
     'touch input should not retain hover-only recent-card expansion'
   );

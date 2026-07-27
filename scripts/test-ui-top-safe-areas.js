@@ -29,10 +29,19 @@ assert.match(
   /body:not\(\[data-nt-ready="1"\]\) #_x_extension_newtab_bottom_dock_2024_unique_\s*\{[\s\S]*?visibility:\s*hidden;/,
   'newtab should not flash the bottom dock before the stored layout mode is restored'
 );
+const bookmarkTopbarRule = newtabHtml.match(
+  /\.x-nt-bookmarks-topbar\s*\{([\s\S]*?)\}/
+);
+assert.ok(bookmarkTopbarRule, 'newtab should define the top bookmark bar');
 assert.match(
-  newtabHtml,
-  /\.x-nt-bookmarks-topbar\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?top:\s*var\(--x-nt-top-safe-inset,\s*0px\);/,
-  'the top bookmark bar should itself clear the viewport safe area'
+  bookmarkTopbarRule[1],
+  /position:\s*absolute;[\s\S]*?top:\s*env\(safe-area-inset-top\);/,
+  'the top bookmark bar should stay in page coordinates while clearing the device safe area'
+);
+assert.doesNotMatch(
+  bookmarkTopbarRule[1],
+  /position:\s*fixed|--x-nt-visual-viewport-top-inset|--x-nt-top-safe-inset|(?:transform:\s*scale|zoom\s*:)/,
+  'the top bookmark bar should not independently follow or scale with the visual viewport'
 );
 assert.match(
   newtabHtml,

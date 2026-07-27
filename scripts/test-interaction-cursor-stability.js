@@ -8,6 +8,9 @@ const read = (relativePath) =>
 
 const newtabHtml = read('src/newtab/newtab.html');
 const optionsHtml = read('src/options/options.html');
+const onboardingHtml = read('src/onboarding/onboarding.html');
+const overlayShell = read('react-src/overlay/shell.tsx');
+const documentPipPicker = read('src/content/document-pip-picker.js');
 const tooltipCss = read('src/shared/tooltip.css');
 const cursorTooltipCss = read('src/shared/cursor-tooltip.css');
 const featureHintsCss = read('src/shared/feature-hints.css');
@@ -33,6 +36,20 @@ function assertStableHoverTarget(source, selector) {
     declarations,
     /transform:\s*(?:var\([^;]*(?:translate|rotate)|[^;]*(?:translate|rotate))/,
     `${selector} should not move or rotate its own hit box while hovered`
+  );
+}
+
+function assertCursorInheritanceWithoutHitSuppression(source, selector) {
+  const declarations = getRule(source, selector);
+  assert.match(
+    declarations,
+    /cursor:\s*inherit;/,
+    `${selector} should inherit the owning control cursor`
+  );
+  assert.doesNotMatch(
+    declarations,
+    /pointer-events:\s*none;/,
+    `${selector} should not disable every descendant hit target`
   );
 }
 
@@ -84,10 +101,14 @@ assert.match(
   /cursor:\s*grabbing;/,
   'bookmark cards should use a grabbing cursor during drag sessions'
 );
+assertStableHoverTarget(newtabHtml, '.x-nt-recent-card:hover');
 assert.match(
-  getRule(newtabHtml, '.x-nt-recent-card:hover'),
+  getRule(
+    newtabHtml,
+    '.x-nt-recent-card:hover .x-nt-recent-card-visual'
+  ),
   /transform:\s*var\(--x-nt-dock-recent-card-hover-transform,\s*rotate\(-3deg\)\s+scale\(1\.01,\s*1\.005\)\);/,
-  'recent cards should restore the density-aware hover rotation and scale'
+  'recent cards should rotate their visual layer without moving the pointer hit box'
 );
 assert.match(
   getRule(newtabHtml, '.x-nt-recent-card'),
@@ -120,7 +141,56 @@ assertStableHoverTarget(
   newtabHtml,
   '.x-nt-suggestion-action-button[data-visible="true"]:hover'
 );
+assertStableHoverTarget(
+  documentPipPicker,
+  '.lumno-pip-dock-btn:hover,\n        .lumno-pip-dock-btn:focus-visible'
+);
+assert.match(
+  getRule(documentPipPicker, '.lumno-pip-dock-btn > *'),
+  /cursor:\s*inherit;[\s\S]*pointer-events:\s*none;|pointer-events:\s*none;[\s\S]*cursor:\s*inherit;/,
+  'document PiP dock contents should not create nested cursor hit targets'
+);
+assert.match(
+  getRule(
+    documentPipPicker,
+    '.lumno-pip-dock-btn:hover .ri-icon,\n        .lumno-pip-dock-btn:focus-visible .ri-icon'
+  ),
+  /transform:\s*scale\(1\.03\);/,
+  'document PiP hover motion should stay on the decorative icon'
+);
 assertStableHoverTarget(featureHintsCss, '.x-lumno-feature-hint__link:hover');
+assertStableHoverTarget(
+  searchInputCss,
+  '.x-lumno-search-input__right-icon[data-hover-active="true"]'
+);
+assert.match(
+  getRule(
+    searchInputCss,
+    '.x-lumno-search-input__right-icon[data-hover-active="true"] .ri-icon'
+  ),
+  /transform:\s*scale\(1\.06\);/,
+  'search-input hover motion should stay on the decorative icon'
+);
+assertStableHoverTarget(
+  overlaySuggestionsCss,
+  ':is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs[data-hover-active="true"]'
+);
+assert.match(
+  getRule(
+    overlaySuggestionsCss,
+    ':is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs[data-hover-active="true"] .ri-icon'
+  ),
+  /transform:\s*scale\(1\.06\);/,
+  'overlay close-tabs hover motion should stay on the decorative icon'
+);
+assertStableHoverTarget(
+  overlaySuggestionsCss,
+  ':is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-history-delete-button[data-hover-active="true"]'
+);
+assertStableHoverTarget(
+  newtabHtml,
+  '.x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-button[data-hover="true"]'
+);
 
 assert.doesNotMatch(
   tooltipCss,
@@ -177,15 +247,88 @@ assert.match(
   'disabled dialog actions should use the not-allowed cursor by default'
 );
 
-assert.match(
+assertCursorInheritanceWithoutHitSuppression(
   newtabHtml,
-  /#_x_extension_newtab_root_2024_unique_ button \.ri-icon,[\s\S]*?cursor:\s*inherit;[\s\S]*?pointer-events:\s*none;/,
-  'new-tab decorative icons should not create nested cursor hit targets'
+  '#_x_extension_newtab_root_2024_unique_ button *,\n      #_x_extension_newtab_root_2024_unique_ a[href] *,\n      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon'
+);
+assertCursorInheritanceWithoutHitSuppression(
+  optionsHtml,
+  'button *,\n      a[href] *,\n      [role="button"] .ri-icon'
+);
+assertCursorInheritanceWithoutHitSuppression(
+  onboardingHtml,
+  'button *,\n      a[href] *,\n      [role="button"] .ri-icon'
+);
+assertCursorInheritanceWithoutHitSuppression(
+  overlayShell,
+  '#_x_extension_overlay_2024_unique_ button *,\n    #_x_extension_overlay_2024_unique_ a[href] *,\n    #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,\n    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon'
 );
 assert.match(
-  optionsHtml,
-  /button \.ri-icon,[\s\S]*?cursor:\s*inherit;[\s\S]*?pointer-events:\s*none;/,
-  'options decorative icons should not create nested cursor hit targets'
+  getRule(
+    newtabHtml,
+    '#_x_extension_newtab_root_2024_unique_ button .ri-icon,\n      #_x_extension_newtab_root_2024_unique_ a[href] .ri-icon,\n      #_x_extension_newtab_root_2024_unique_ [role="button"] .ri-icon'
+  ),
+  /pointer-events:\s*none;/,
+  'new-tab decorative icons should stay outside hit testing'
+);
+assert.match(
+  getRule(
+    optionsHtml,
+    'button .ri-icon,\n      a[href] .ri-icon,\n      [role="button"] .ri-icon'
+  ),
+  /pointer-events:\s*none;/,
+  'options decorative icons should stay outside hit testing'
+);
+assert.match(
+  getRule(
+    onboardingHtml,
+    'button .ri-icon,\n      a[href] .ri-icon,\n      [role="button"] .ri-icon'
+  ),
+  /pointer-events:\s*none;/,
+  'onboarding decorative icons should stay outside hit testing'
+);
+assert.match(
+  getRule(
+    overlayShell,
+    '#_x_extension_overlay_2024_unique_ button .ri-icon,\n    #_x_extension_overlay_2024_unique_ a[href] .ri-icon,\n    #_x_extension_overlay_2024_unique_ [role="button"] .ri-icon,\n    #_x_extension_overlay_2024_unique_ .x-ov-suggestion-item .ri-icon'
+  ),
+  /pointer-events:\s*none;/,
+  'overlay decorative icons should stay outside hit testing'
+);
+assert.match(
+  getRule(newtabHtml, '.x-nt-shortcut-icon'),
+  /cursor:\s*inherit;[\s\S]*pointer-events:\s*none;|pointer-events:\s*none;[\s\S]*cursor:\s*inherit;/,
+  'animated shortcut visuals should not extend the pointer hit target'
+);
+assert.match(
+  getRule(newtabHtml, '.x-nt-bookmark-card > :not(button)'),
+  /cursor:\s*inherit;[\s\S]*pointer-events:\s*none;|pointer-events:\s*none;[\s\S]*cursor:\s*inherit;/,
+  'bookmark-card visuals should not compete with the semantic card cursor'
+);
+assert.match(
+  getRule(newtabHtml, '.x-nt-recent-card-visual'),
+  /cursor:\s*inherit;[\s\S]*pointer-events:\s*none;|pointer-events:\s*none;[\s\S]*cursor:\s*inherit;/,
+  'rotating recent-card visuals should not extend the pointer hit target'
+);
+assert.match(
+  getRule(newtabHtml, '.x-nt-wallpaper-tile > :not(button)'),
+  /cursor:\s*inherit;[\s\S]*pointer-events:\s*none;|pointer-events:\s*none;[\s\S]*cursor:\s*inherit;/,
+  'wallpaper-tile visuals should not compete with the semantic tile cursor'
+);
+assert.doesNotMatch(
+  newtabHtml,
+  /\.x-nt-bookmarks-pager-btn:disabled\s*\{[^}]*pointer-events:\s*none;/,
+  'disabled pager buttons must remain hit-testable so not-allowed can render'
+);
+assert.match(
+  getRule(optionsHtml, '._x_extension_tabs_indicator_2024_unique_'),
+  /pointer-events:\s*none;/,
+  'options navigation indicator should not cover tab cursors'
+);
+assert.match(
+  getRule(optionsHtml, '._x_extension_theme_indicator_2024_unique_'),
+  /pointer-events:\s*none;/,
+  'options segmented-control indicators should not cover button cursors'
 );
 assert.match(
   getRule(searchInputCss, '.x-lumno-search-input__right-icon *'),
@@ -204,6 +347,46 @@ assert.match(
   newtabHtml,
   /#_x_extension_newtab_root_2024_unique_ button:not\(:disabled\),[\s\S]*?\[role="button"\]:not\(\[aria-disabled="true"\]\)\s*\{[\s\S]*?cursor:\s*pointer;/,
   'the new-tab pointer baseline should exclude disabled controls'
+);
+assert.match(
+  getRule(
+    optionsHtml,
+    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"])'
+  ),
+  /cursor:\s*pointer;/,
+  'options should apply the shared pointer baseline'
+);
+assert.match(
+  getRule(
+    onboardingHtml,
+    'button:not(:disabled),\n      a[href],\n      [role="button"]:not([aria-disabled="true"])'
+  ),
+  /cursor:\s*pointer;/,
+  'onboarding should apply the shared pointer baseline'
+);
+assert.match(
+  getRule(
+    overlayShell,
+    '#_x_extension_overlay_2024_unique_ button:not(:disabled),\n    #_x_extension_overlay_2024_unique_ a[href],\n    #_x_extension_overlay_2024_unique_ [role="button"]:not([aria-disabled="true"])'
+  ),
+  /cursor:\s*pointer;/,
+  'overlay should apply the shared pointer baseline'
+);
+assert.match(
+  getRule(
+    overlayShell,
+    '#_x_extension_overlay_2024_unique_ button:disabled,\n    #_x_extension_overlay_2024_unique_ [role="button"][aria-disabled="true"]'
+  ),
+  /cursor:\s*not-allowed;/,
+  'overlay disabled controls should use not-allowed'
+);
+assert.match(
+  getRule(
+    overlayShell,
+    '#_x_extension_overlay_2024_unique_ button[aria-busy="true"]:disabled,\n    #_x_extension_overlay_2024_unique_ [role="button"][aria-busy="true"]'
+  ),
+  /cursor:\s*progress;/,
+  'overlay busy controls should use progress'
 );
 
 process.stdout.write('Interaction cursor stability tests passed.\n');

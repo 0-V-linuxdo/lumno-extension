@@ -1679,7 +1679,9 @@
         folderId: String((entry && entry.folderId) || ''),
         folderTitle: String((entry && entry.folderTitle) || '')
       }));
-      return Promise.resolve(ensureReady(true)).then((ready) => {
+      // The caller invalidates the shared runtime before refreshing. Reuse the
+      // in-flight reload so the cascade and card surface cannot cancel each other.
+      return Promise.resolve(ensureReady(false)).then((ready) => {
         const anchorAtRefresh = bookmarkCascadeAnchor;
         if (!ready ||
             bookmarkCascadeMenu !== menuAtRefreshStart ||

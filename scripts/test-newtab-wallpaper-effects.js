@@ -109,6 +109,16 @@ assert.doesNotMatch(
   /body\[data-wallpaper-active="true"\]\[data-wallpaper-effect="(?:halftone|ascii)"\]\s*\{[^}]*--x-nt-wallpaper-image:\s*none;/,
   'layered effects should keep the CSS wallpaper visible instead of repainting it into the canvas'
 );
+assert.match(
+  newtabHtml,
+  /\.x-nt-wallpaper-effect-canvas\[data-resize-enter="true"\],\s*\.x-nt-wallpaper-effect-canvas\[data-resize-exit="true"\]\s*\{\s*opacity:\s*0 !important;/,
+  'resized wallpaper effects should expose enter and exit states for an opacity crossfade'
+);
+assert.match(
+  newtabHtml,
+  /\.x-nt-wallpaper-effect-canvas\[data-resize-jump="true"\]\s*\{\s*transition:\s*none !important;/,
+  'the resized destination canvas should be hidden without animating before its crossfade'
+);
 
 const effectsSource = fs.readFileSync('src/newtab/wallpaper-effects.js', 'utf8');
 const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
@@ -155,6 +165,21 @@ assert.match(
   effectsSource,
   /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(context,[\s\S]*?effectBaseCacheKey = cacheKey;/,
   'layered wallpaper filters should cache their high-resolution static canvas'
+);
+assert.match(
+  effectsSource,
+  /function prepareResizeCrossfade\(\)[\s\S]*?snapshotContext\.drawImage\(canvas,\s*0,\s*0\)[\s\S]*?data-resize-enter/,
+  'resize rendering should preserve the existing halftone or ASCII frame before replacing it'
+);
+assert.match(
+  effectsSource,
+  /function finishResizeCrossfade\(\)[\s\S]*?requestFrame\([\s\S]*?data-resize-enter[\s\S]*?data-resize-exit/,
+  'the old and new effect canvases should crossfade on separate animation frames'
+);
+assert.match(
+  effectsSource,
+  /windowObj\.addEventListener\('resize',[\s\S]*?shouldCrossfadeResize\s*=\s*Boolean\([\s\S]*?normalized\.type === 'halftone'[\s\S]*?normalized\.type === 'ascii'[\s\S]*?scheduleRender\(RESIZE_RENDER_SETTLE_MS\)/,
+  'viewport resize settling should opt halftone and ASCII renders into the crossfade'
 );
 assert.doesNotMatch(
   newtabHtml,

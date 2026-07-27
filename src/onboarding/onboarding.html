@@ -95,11 +95,31 @@
         text-transform: none;
       }
 
-      button .ri-icon,
-      a .ri-icon,
+      button:not(:disabled),
+      a[href],
+      [role="button"]:not([aria-disabled="true"]) {
+        cursor: pointer;
+      }
+
+      button *,
+      a[href] *,
       [role="button"] .ri-icon {
         cursor: inherit;
+      }
+      button .ri-icon,
+      a[href] .ri-icon,
+      [role="button"] .ri-icon {
         pointer-events: none;
+      }
+
+      button:disabled,
+      [role="button"][aria-disabled="true"] {
+        cursor: not-allowed;
+      }
+
+      button[aria-busy="true"]:disabled,
+      [role="button"][aria-busy="true"] {
+        cursor: progress;
       }
 
       .ri-icon::before {

@@ -5184,18 +5184,6 @@
   if (siteSearchAiBuiltinList) {
     siteSearchAiBuiltinList.addEventListener('click', handleSiteSearchListClick);
   }
-  document.addEventListener('click', (event) => {
-    if (!activePopconfirm) {
-      return;
-    }
-    if (event.target && event.target.closest && event.target.closest('._x_extension_popconfirm_2024_unique_')) {
-      return;
-    }
-    if (event.target && event.target.closest && event.target.closest('._x_extension_shortcut_remove_2024_unique_')) {
-      return;
-    }
-    closeActivePopconfirm();
-  });
 
   if (siteSearchCancelButton) {
     siteSearchCancelButton.addEventListener('click', function() {

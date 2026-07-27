@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import { useExclusiveAsyncAction } from '../shared/use-exclusive-async-action';
 
 type Translate = (key: string, fallback: string) => string;
 type ThemeValue = unknown;
@@ -487,6 +488,12 @@ function RecentSiteCard({
     url: faviconPageUrl,
     title: itemTitle
   });
+  const pinAction = useExclusiveAsyncAction(
+    () => options.togglePinned(item)
+  );
+  const dismissAction = useExclusiveAsyncAction(
+    () => options.hideTemporarily(item)
+  );
 
   function clearRollbackTimer(): void {
     if (!rollbackTimerRef.current) {
@@ -659,7 +666,18 @@ function RecentSiteCard({
       options.updatePinButton(button, false, true);
       return;
     }
-    const result = await options.togglePinned(item);
+    const outcome = await pinAction.run();
+    if (outcome.status === 'skipped') {
+      return;
+    }
+    if (outcome.status === 'rejected') {
+      options.showToast(
+        options.t('toast_error', '操作失败，请重试'),
+        true
+      );
+      return;
+    }
+    const result = outcome.value;
     if (!result || !card.isConnected) {
       return;
     }
@@ -681,7 +699,18 @@ function RecentSiteCard({
       return;
     }
     options.hideTopActionTooltip();
-    const result = await options.hideTemporarily(item);
+    const outcome = await dismissAction.run();
+    if (outcome.status === 'skipped') {
+      return;
+    }
+    if (outcome.status === 'rejected') {
+      options.showToast(
+        options.t('toast_error', '操作失败，请重试'),
+        true
+      );
+      return;
+    }
+    const result = outcome.value;
     if (!result?.hidden) {
       return;
     }
@@ -865,122 +894,128 @@ function RecentSiteCard({
       onAuxClick={handleAuxClick}
       onKeyDown={handleKeyDown}
     >
-      <div className="x-nt-recent-inner">
-        <div className="x-nt-recent-header">
-          <img
-            ref={faviconRef}
-            className="x-nt-recent-favicon"
-            alt={siteName || options.t('site_icon_alt', '站点')}
-            width={25}
-            height={25}
-            decoding="async"
-            loading={shouldEager ? 'eager' : 'lazy'}
-            fetchPriority={shouldEager ? 'high' : undefined}
-            data-favicon-placeholder={
-              browserPageFaviconUrl ? 'true' : undefined
-            }
-            data-fallback-icon-name={
-              browserPageFaviconUrl ? 'ri-link' : undefined
-            }
-          />
-          {browserPageFaviconUrl ? (
+      <div className="x-nt-recent-card-visual">
+        <div className="x-nt-recent-inner">
+          <div className="x-nt-recent-header">
+            <img
+              ref={faviconRef}
+              className="x-nt-recent-favicon"
+              alt={siteName || options.t('site_icon_alt', '站点')}
+              width={25}
+              height={25}
+              decoding="async"
+              loading={shouldEager ? 'eager' : 'lazy'}
+              fetchPriority={shouldEager ? 'high' : undefined}
+              data-favicon-placeholder={
+                browserPageFaviconUrl ? 'true' : undefined
+              }
+              data-fallback-icon-name={
+                browserPageFaviconUrl ? 'ri-link' : undefined
+              }
+            />
+            {browserPageFaviconUrl ? (
+              <span
+                aria-hidden="true"
+                className="x-nt-favicon-fallback _x_extension_favicon_fallback_2024_unique_"
+                data-visible="true"
+                dangerouslySetInnerHTML={{
+                  __html: options.getRiSvg('ri-link', 'ri-size-16')
+                }}
+              />
+            ) : null}
+            <div className="x-nt-recent-name" title={siteName}>
+              {siteName}
+            </div>
+            <button
+              ref={dismissButtonRef}
+              aria-busy={dismissAction.pending}
+              disabled={dismissAction.pending}
+              type="button"
+              className="x-nt-recent-dismiss"
+              onPointerDown={stopCardActivation}
+              onClick={(event) => {
+                stopCardActivation(event);
+                void handleDismiss();
+              }}
+              onKeyDown={(event) => {
+                if (
+                  options.canDismiss() &&
+                  (event.key === 'Enter' || event.key === ' ')
+                ) {
+                  stopCardActivation(event);
+                  event.currentTarget.click();
+                }
+              }}
+              onMouseEnter={showDismissTooltip}
+              onPointerLeave={options.hideTopActionTooltip}
+              onPointerCancel={options.hideTopActionTooltip}
+              onMouseLeave={options.hideTopActionTooltip}
+              onFocus={showDismissTooltip}
+              onBlur={options.hideTopActionTooltip}
+            >
+              <i
+                aria-hidden="true"
+                className="ri-icon ri-size-16 ri-subtract-line"
+                data-recent-dismiss-icon=""
+              />
+            </button>
+          </div>
+          <div ref={titleRef} className="x-nt-recent-title">
+            {safeTitleText}
+          </div>
+        </div>
+        <div className="x-nt-recent-url" title={itemUrl}>
+          <div className="x-nt-recent-action">
+            <span ref={actionTextRef}>
+              {options.t('action_go_current_tab', '前往')}
+            </span>
             <span
-              aria-hidden="true"
-              className="x-nt-favicon-fallback _x_extension_favicon_fallback_2024_unique_"
-              data-visible="true"
               dangerouslySetInnerHTML={{
-                __html: options.getRiSvg('ri-link', 'ri-size-16')
+                __html: options.getRiSvg(
+                  'ri-arrow-right-line',
+                  'ri-size-12'
+                )
               }}
             />
-          ) : null}
-          <div className="x-nt-recent-name" title={siteName}>
-            {siteName}
           </div>
+          <span className="x-nt-recent-url-text">
+            {ownExtensionDisplay
+              ? ownExtensionDisplay.urlText
+              : options.getUrlDisplay(itemUrl)}
+          </span>
           <button
-            ref={dismissButtonRef}
+            ref={pinButtonRef}
+            aria-busy={pinAction.pending}
+            disabled={pinAction.pending}
             type="button"
-            className="x-nt-recent-dismiss"
+            className="x-nt-recent-pin"
             onPointerDown={stopCardActivation}
             onClick={(event) => {
               stopCardActivation(event);
-              void handleDismiss();
+              void handlePin();
             }}
             onKeyDown={(event) => {
-              if (
-                options.canDismiss() &&
-                (event.key === 'Enter' || event.key === ' ')
-              ) {
+              if (event.key === 'Enter' || event.key === ' ') {
                 stopCardActivation(event);
                 event.currentTarget.click();
               }
             }}
-            onMouseEnter={showDismissTooltip}
+            onMouseEnter={showPinTooltip}
             onPointerLeave={options.hideTopActionTooltip}
             onPointerCancel={options.hideTopActionTooltip}
             onMouseLeave={options.hideTopActionTooltip}
-            onFocus={showDismissTooltip}
+            onFocus={showPinTooltip}
             onBlur={options.hideTopActionTooltip}
           >
             <i
               aria-hidden="true"
-              className="ri-icon ri-size-16 ri-subtract-line"
-              data-recent-dismiss-icon=""
+              className={`ri-icon ri-size-16 ${
+                initiallyPinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'
+              }`}
+              data-recent-pin-icon=""
             />
           </button>
         </div>
-        <div ref={titleRef} className="x-nt-recent-title">
-          {safeTitleText}
-        </div>
-      </div>
-      <div className="x-nt-recent-url" title={itemUrl}>
-        <div className="x-nt-recent-action">
-          <span ref={actionTextRef}>
-            {options.t('action_go_current_tab', '前往')}
-          </span>
-          <span
-            dangerouslySetInnerHTML={{
-              __html: options.getRiSvg(
-                'ri-arrow-right-line',
-                'ri-size-12'
-              )
-            }}
-          />
-        </div>
-        <span className="x-nt-recent-url-text">
-          {ownExtensionDisplay
-            ? ownExtensionDisplay.urlText
-            : options.getUrlDisplay(itemUrl)}
-        </span>
-        <button
-          ref={pinButtonRef}
-          type="button"
-          className="x-nt-recent-pin"
-          onPointerDown={stopCardActivation}
-          onClick={(event) => {
-            stopCardActivation(event);
-            void handlePin();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              stopCardActivation(event);
-              event.currentTarget.click();
-            }
-          }}
-          onMouseEnter={showPinTooltip}
-          onPointerLeave={options.hideTopActionTooltip}
-          onPointerCancel={options.hideTopActionTooltip}
-          onMouseLeave={options.hideTopActionTooltip}
-          onFocus={showPinTooltip}
-          onBlur={options.hideTopActionTooltip}
-        >
-          <i
-            aria-hidden="true"
-            className={`ri-icon ri-size-16 ${
-              initiallyPinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'
-            }`}
-            data-recent-pin-icon=""
-          />
-        </button>
       </div>
     </div>
   );

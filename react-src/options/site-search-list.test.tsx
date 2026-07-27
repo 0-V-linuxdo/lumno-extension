@@ -135,7 +135,7 @@ describe('Options site-search list React island', () => {
     expect(host.querySelector('[data-expanded="true"]')).not.toBeNull();
   });
 
-  it('routes duplicate location and confirmed removal actions', () => {
+  it('routes duplicate location and confirmed removal actions', async () => {
     const { controller, host, options } = createFixture();
     act(() => controller.render(model));
     act(() => {
@@ -147,7 +147,10 @@ describe('Options site-search list React island', () => {
     const confirmButtons = host.querySelectorAll<HTMLButtonElement>(
       '._x_extension_popconfirm_actions_2024_unique_ button'
     );
-    act(() => confirmButtons[1]?.click());
+    await act(async () => {
+      confirmButtons[1]?.click();
+      await Promise.resolve();
+    });
 
     expect(options.onLocateDuplicate).toHaveBeenCalledWith(
       'https://example.com/?q={query}'

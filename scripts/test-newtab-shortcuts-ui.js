@@ -1228,6 +1228,12 @@ assertContains(
 );
 
 assertContains(
+  getFunctionSource(newtabJs, 'moveShortcutTileElement'),
+  'remainingTiles[boundedIndex] || addShortcutButton || null',
+  'shortcut drag reordering should keep the add tile after every URL when moving to the final slot'
+);
+
+assertContains(
   newtabJs,
   'function setShortcutDragTileTransform(state, pointerX, pointerY) {',
   'dragged shortcut tiles should follow the pointer while reordering'

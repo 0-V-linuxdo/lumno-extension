@@ -146,7 +146,11 @@ function testBookmarkStore() {
   assert.strictEqual(cache.rootFolderId, '10');
   assert.ok(cache.nodeMap instanceof Map);
   assert.ok(cache.folderItemsCache instanceof Map);
-  assert.strictEqual(cache.folderItemsCache.get('10').length, 2);
+  assert.deepStrictEqual(
+    cache.folderItemsCache.get('10').map((item) => item.id),
+    ['11', '12', '13'],
+    'distinct bookmark ids should keep distinct cards even when their URLs match'
+  );
 
   const folderItem = cache.folderItemsCache.get('10').find((item) => item.type === 'folder');
   const firstBookmarkItem = cache.folderItemsCache.get('10').find((item) => item.type === 'bookmark');
@@ -171,6 +175,45 @@ function testBookmarkStore() {
     bookmarkStore.getBookmarkPageItems([1, 2, 3, 4, 5], 1, 2),
     [3, 4]
   );
+
+  const crossLevelTree = [{
+    id: '0',
+    title: '',
+    children: [{
+      id: '20',
+      title: 'Bookmarks bar',
+      children: [
+        {
+          id: '21',
+          title: 'Existing destination card',
+          url: 'https://same.example/'
+        },
+        {
+          id: '22',
+          title: 'Source folder',
+          children: [{
+            id: '23',
+            title: 'Moved card',
+            url: 'https://same.example/'
+          }]
+        }
+      ]
+    }]
+  }];
+  const crossLevelRoot = crossLevelTree[0].children[0];
+  const sourceFolder = crossLevelRoot.children[1];
+  const movedBookmark = sourceFolder.children.splice(0, 1)[0];
+  movedBookmark.parentId = crossLevelRoot.id;
+  movedBookmark.index = crossLevelRoot.children.length;
+  crossLevelRoot.children.push(movedBookmark);
+  const crossLevelCache = bookmarkStore.buildBookmarkFolderCache(crossLevelTree);
+  ['folder', 'list', 'top'].forEach((viewMode) => {
+    assert.deepStrictEqual(
+      crossLevelCache.folderItemsCache.get('20').map((item) => item.id),
+      ['21', '22', '23'],
+      `${viewMode} mode should retain a moved bookmark card when its URL already exists`
+    );
+  });
 }
 
 function testBookmarkCacheHydrationGuard() {

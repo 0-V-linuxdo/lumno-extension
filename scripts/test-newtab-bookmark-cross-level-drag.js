@@ -112,6 +112,51 @@ assert.strictEqual(
   9,
   'moving forward to the next page start should keep the bookmark at that page start after removal'
 );
+assert.strictEqual(
+  getMoveApiDestinationIndex({
+    sourceParentId: 'design',
+    sourceIndex: 1,
+    targetParentId: 'design',
+    targetIndex: 9
+  }),
+  10,
+  'moving forward to the first item right edge should keep the bookmark in the second page slot'
+);
+assert.strictEqual(
+  getMoveApiDestinationIndex({
+    sourceParentId: 'design',
+    sourceIndex: 1,
+    targetParentId: 'design',
+    targetIndex: 15
+  }),
+  16,
+  'moving forward to the last item left edge should keep the bookmark in the last page slot'
+);
+function moveWithinParent(items, sourceIndex, targetIndex) {
+  const nextItems = items.slice();
+  const movedItem = nextItems.splice(sourceIndex, 1)[0];
+  const destinationIndex = sourceIndex < targetIndex
+    ? targetIndex - 1
+    : targetIndex;
+  nextItems.splice(destinationIndex, 0, movedItem);
+  return nextItems;
+}
+const crossPageItems = Array.from({ length: 24 }, (_value, index) => String(index));
+assert.deepStrictEqual(
+  moveWithinParent(crossPageItems, 20, 8).slice(8, 12),
+  ['20', '8', '9', '10'],
+  'dropping at the first item left edge should occupy the first page slot and push the old last item forward'
+);
+assert.deepStrictEqual(
+  moveWithinParent(crossPageItems, 20, 9).slice(8, 12),
+  ['8', '20', '9', '10'],
+  'dropping at the first item right edge should occupy the second page slot and push the old last item forward'
+);
+assert.deepStrictEqual(
+  moveWithinParent(crossPageItems, 20, 11).slice(8, 12),
+  ['8', '9', '10', '20'],
+  'dropping at the last item left edge should occupy the last page slot and push the old last item forward'
+);
 assert.deepStrictEqual(
   (() => {
     const items = ['1', '2', '3', '4'];
@@ -275,17 +320,22 @@ assert.ok(
 );
 assert.ok(
   newtabJs.includes('const rawTargetIndex =') &&
-    newtabJs.includes('target.isPageStartBoundary === true') &&
+    newtabJs.includes('target.preservePageSlot === true') &&
     newtabJs.includes('Number(state.originalIndex) < rawTargetIndex') &&
     newtabJs.includes('getMoveApiDestinationIndex({') &&
     newtabJs.includes('index: destinationIndex'),
-  'a forward cross-page drop at the visible page start should compensate for source removal exactly once'
+  'every allowed forward cross-page slot should compensate for source removal exactly once'
 );
 assert.ok(
   newtabJs.includes('NEWTAB_BOOKMARK_DRAG.shouldKeepCascadeOpenAfterDrop(') &&
     newtabJs.includes('bookmarkCascadeRuntime.refresh') &&
     newtabJs.includes('markBookmarkTreeDirty({ preserveCascadeOpen: keepCascadeOpen })'),
   'only moves that remain inside the cascade should keep and refresh its menu'
+);
+assert.ok(
+  cascadeJs.includes('ensureReady(false)') &&
+    !cascadeJs.includes('ensureReady(true)'),
+  'cascade and card refreshes should share one reload instead of invalidating each other'
 );
 assert.ok(
   bookmarksRuntimeJs.includes("'onMoved'") &&
@@ -307,12 +357,15 @@ assert.ok(
 assert.ok(
   bookmarkDragJs.includes("kind: 'insertion'") &&
     newtabJs.includes('getBookmarkGridInsertionDropTarget') &&
+    newtabJs.includes('originalIndex < pageStartIndex || originalIndex >= pageEndIndex') &&
     bookmarkDragJs.includes('markerOffsetPx: nearestBoundary.x - gridRect.left') &&
     bookmarkDragJs.includes('firstItem.rect.left - (columnGap / 2)') &&
     bookmarkDragJs.includes('lastItem.rect.right + (columnGap / 2)') &&
     bookmarkDragJs.includes('itemIndex === Number(config.pageStartIndex)') &&
+    bookmarkDragJs.includes('isCrossPageDrag && isPageEndBoundary') &&
+    bookmarkDragJs.includes('preservePageSlot: isCrossPageDrag') &&
     newtabHtml.includes('--x-nt-bookmark-insert-line-left'),
-  'the main bookmark grid should center insertion lines in card gaps, including the outer page edges'
+  'the main bookmark grid should map cross-page gap lines to final page slots and suppress the page-end line'
 );
 assert.ok(
   newtabHtml.includes('--x-nt-bookmark-insert-indicator: #7a8491') &&
