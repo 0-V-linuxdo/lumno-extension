@@ -178,6 +178,22 @@ describe('Suggestions React island', () => {
     ).toBe('Exa');
   });
 
+  it('uses the themed Overlay mark class for matched query text', () => {
+    const { view, items } = createView({
+      surface: 'overlay'
+    });
+
+    render(view, [{
+      type: 'history',
+      title: 'Example result',
+      url: 'https://example.com/page'
+    }]);
+
+    expect(
+      items[0].querySelector('mark')?.className
+    ).toBe('x-ov-suggestion-mark');
+  });
+
   it('keeps existing row nodes during an incremental append', () => {
     const { view, items } = createView();
     const suggestions: Suggestion[] = [

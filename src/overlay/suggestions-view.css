@@ -340,6 +340,15 @@
   vertical-align: baseline;
 }
 
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-mark {
+  background: var(--x-ext-mark-bg, #CFE8FF);
+  color: var(--x-ext-mark-text, #1E3A8A);
+  padding: 0 1px;
+  border-radius: 2px;
+  line-height: inherit;
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-item[data-command-row="true"] {
   height: var(--x-ov-suggestion-row-height, 52px);
   min-height: var(--x-ov-suggestion-row-height, 52px);

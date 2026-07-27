@@ -30,6 +30,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayUpdateNoticeFrameListener = null;
   let overlayUpdateNoticeFrameVisualViewport = null;
   let overlayUpdateNoticeMountTimer = null;
+  let overlaySuggestionsView = null;
   let overlaySuggestionRequestSeq = 0;
   let overlayRemoteSuggestionDebounceTimer = null;
   let openInCurrentTabModifierActive = false;
@@ -1004,9 +1005,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayWheelIsolationHandler = null;
       }
       const mountHost = getOverlayMountHost(overlayElement);
-      if (overlaySuggestionsView &&
-          typeof overlaySuggestionsView.destroy === 'function') {
-        overlaySuggestionsView.destroy();
+      const mountedSuggestionsView = overlayElement._lumnoSuggestionsView ||
+        overlaySuggestionsView;
+      if (mountedSuggestionsView &&
+          typeof mountedSuggestionsView.destroy === 'function') {
+        mountedSuggestionsView.destroy();
+      }
+      overlayElement._lumnoSuggestionsView = null;
+      if (overlaySuggestionsView === mountedSuggestionsView) {
         overlaySuggestionsView = null;
       }
       const shellRuntime = window.LumnoOverlayShell || {};
@@ -1521,7 +1527,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     applyNoTranslate(suggestionsContainer);
     suggestionsContainer.id = '_x_extension_suggestions_container_2024_unique_';
     suggestionsContainer.className = 'x-ov-suggestions-container';
-    let overlaySuggestionsView = null;
     let suggestionsHeightAnimationFrame = 0;
     let suggestionsHeightAnimationTimer = 0;
     let suggestionsHeightTransitionEndHandler = null;
@@ -5863,6 +5868,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         enterAction: 'openNewTab',
         autoHighlightFirstTab: true
       });
+      overlay._lumnoSuggestionsView = overlaySuggestionsView;
       return overlaySuggestionsView;
     }
 

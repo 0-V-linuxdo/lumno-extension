@@ -27,6 +27,14 @@ const onboardingSource = fs.readFileSync(
   path.join(repoRoot, 'src/onboarding/onboarding.js'),
   'utf8'
 );
+const overlaySuggestionsCss = fs.readFileSync(
+  path.join(repoRoot, 'src/overlay/suggestions-view.css'),
+  'utf8'
+);
+const overlaySource = fs.readFileSync(
+  path.join(repoRoot, 'src/overlay/search-panel.js'),
+  'utf8'
+);
 const reactSource = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/shortcut-dialog.tsx'),
   'utf8'
@@ -262,6 +270,22 @@ assert(
     overlayBundle.includes('suggestions') &&
     overlayBundle.includes('shared-search-input'),
   'the injected Overlay IIFE should install React shell, suggestions, and search-input APIs'
+);
+assert(
+  /\.x-ov-suggestion-mark\s*\{[^}]*background:\s*var\(--x-ext-mark-bg,\s*#CFE8FF\)[^}]*color:\s*var\(--x-ext-mark-text,\s*#1E3A8A\)/s.test(
+    overlaySuggestionsCss
+  ),
+  'the Overlay query mark should retain its themed background and text colors'
+);
+assert(
+  overlaySource.includes(
+    'overlay._lumnoSuggestionsView = overlaySuggestionsView'
+  ) &&
+    overlaySource.includes(
+      'const mountedSuggestionsView = overlayElement._lumnoSuggestionsView ||'
+    ) &&
+    overlaySource.includes('mountedSuggestionsView.destroy()'),
+  'the Overlay panel should retain and destroy the React suggestions owner across toggle invocations'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&
