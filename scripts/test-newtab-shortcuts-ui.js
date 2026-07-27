@@ -1630,6 +1630,14 @@ assertContains(
   'shortcut draggable tiles should expose a drag affordance'
 );
 
+assertContains(
+  newtabHtml,
+  `.x-nt-shortcuts-grid[data-shortcut-dragging="true"],
+      .x-nt-shortcuts-grid[data-shortcut-dragging="true"] .x-nt-shortcut-tile {
+        cursor: grabbing;`,
+  'shortcut drag cursor should remain grabbing over grid gaps exposed by reordering'
+);
+
 const shortcutContextMenuRule = getCssRuleBlock(newtabHtml, '.x-nt-shortcut-context-menu');
 assertContains(
   shortcutContextMenuRule,
