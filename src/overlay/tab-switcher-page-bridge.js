@@ -53,8 +53,10 @@
     const context = request && request.context && typeof request.context === 'object'
       ? request.context
       : {};
-    toggle(context);
-    return { ok: true };
+    const result = toggle(context);
+    return result && typeof result === 'object'
+      ? result
+      : { ok: true };
   }
 
   function setTabSwitcherCaptureVisibility(hidden) {

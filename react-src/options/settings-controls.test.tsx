@@ -92,4 +92,39 @@ describe('Options settings controls React islands', () => {
 
     expect(host.querySelector<HTMLInputElement>('input')?.checked).toBe(false);
   });
+
+  it('keeps adapter-provided localized labels after an interaction rerender', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const controller = createRequiredCheckboxGroupController(host, {
+      kind: 'search-result-sources',
+      onChange: vi.fn()
+    });
+    controllers.push(controller);
+
+    act(() => controller.render({
+      items: [
+        {
+          checked: true,
+          id: 'bookmark',
+          label: 'Bookmarks',
+          labelKey: 'search_tag_bookmark',
+          value: 'bookmark'
+        },
+        {
+          checked: false,
+          id: 'history',
+          label: 'History',
+          labelKey: 'search_tag_history',
+          value: 'history'
+        }
+      ]
+    }));
+    const inputs = host.querySelectorAll<HTMLInputElement>('input');
+
+    act(() => inputs[1]?.click());
+
+    expect(Array.from(host.querySelectorAll('span')).map((node) => node.textContent))
+      .toEqual(['Bookmarks', 'History']);
+  });
 });

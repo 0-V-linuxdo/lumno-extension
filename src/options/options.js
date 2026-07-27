@@ -55,20 +55,7 @@
   const faviconBlacklistEditor = document.getElementById('_x_extension_favicon_blacklist_editor_2026_unique_');
   const faviconBlacklistList = document.getElementById('_x_extension_favicon_blacklist_list_2026_unique_');
   const faviconBlacklistForm = document.getElementById('_x_extension_favicon_blacklist_form_2026_unique_');
-  const faviconBlacklistFormTrigger = document.getElementById('_x_extension_favicon_blacklist_expand_2026_unique_');
   const faviconBlacklistClearButton = document.getElementById('_x_extension_favicon_blacklist_clear_2026_unique_');
-  const faviconBlacklistUrlLabel = document.getElementById('_x_extension_favicon_blacklist_url_label_2026_unique_');
-  const faviconBlacklistUrlPrefix = document.getElementById('_x_extension_favicon_blacklist_url_prefix_2026_unique_');
-  const faviconBlacklistUrlInput = document.getElementById('_x_extension_favicon_blacklist_url_2026_unique_');
-  const faviconBlacklistMatchExactInput = document.getElementById('_x_extension_favicon_blacklist_match_exact_2026_unique_');
-  const faviconBlacklistMatchPrefixInput = document.getElementById('_x_extension_favicon_blacklist_match_prefix_2026_unique_');
-  const faviconBlacklistMatchSuffixInput = document.getElementById('_x_extension_favicon_blacklist_match_suffix_2026_unique_');
-  const faviconBlacklistMatchExactWrap = document.getElementById('_x_extension_favicon_blacklist_match_exact_wrap_2026_unique_');
-  const faviconBlacklistMatchPrefixWrap = document.getElementById('_x_extension_favicon_blacklist_match_prefix_wrap_2026_unique_');
-  const faviconBlacklistMatchSuffixWrap = document.getElementById('_x_extension_favicon_blacklist_match_suffix_wrap_2026_unique_');
-  const faviconBlacklistAddButton = document.getElementById('_x_extension_favicon_blacklist_add_2026_unique_');
-  const faviconBlacklistCancelButton = document.getElementById('_x_extension_favicon_blacklist_cancel_2026_unique_');
-  const faviconBlacklistError = document.getElementById('_x_extension_favicon_blacklist_error_2026_unique_');
   const syncStatus = document.getElementById('_x_extension_sync_status_2024_unique_');
   const syncStatusText = document.getElementById('_x_extension_sync_status_text_2024_unique_');
   const syncNowButton = document.getElementById('_x_extension_sync_now_2024_unique_');
@@ -114,20 +101,7 @@
   const customClearButton = document.getElementById('_x_extension_custom_clear_2024_unique_');
   const blacklistList = document.getElementById('_x_extension_blacklist_list_2026_unique_');
   const blacklistForm = document.getElementById('_x_extension_blacklist_form_2026_unique_');
-  const blacklistFormTrigger = document.getElementById('_x_extension_blacklist_expand_2026_unique_');
   const blacklistClearButton = document.getElementById('_x_extension_blacklist_clear_2026_unique_');
-  const blacklistUrlLabel = document.getElementById('_x_extension_blacklist_url_label_2026_unique_');
-  const blacklistUrlPrefix = document.getElementById('_x_extension_blacklist_url_prefix_2026_unique_');
-  const blacklistUrlInput = document.getElementById('_x_extension_blacklist_url_2026_unique_');
-  const blacklistMatchExactInput = document.getElementById('_x_extension_blacklist_match_exact_2026_unique_');
-  const blacklistMatchPrefixInput = document.getElementById('_x_extension_blacklist_match_prefix_2026_unique_');
-  const blacklistMatchSuffixInput = document.getElementById('_x_extension_blacklist_match_suffix_2026_unique_');
-  const blacklistMatchExactWrap = document.getElementById('_x_extension_blacklist_match_exact_wrap_2026_unique_');
-  const blacklistMatchPrefixWrap = document.getElementById('_x_extension_blacklist_match_prefix_wrap_2026_unique_');
-  const blacklistMatchSuffixWrap = document.getElementById('_x_extension_blacklist_match_suffix_wrap_2026_unique_');
-  const blacklistAddButton = document.getElementById('_x_extension_blacklist_add_2026_unique_');
-  const blacklistCancelButton = document.getElementById('_x_extension_blacklist_cancel_2026_unique_');
-  const blacklistError = document.getElementById('_x_extension_blacklist_error_2026_unique_');
   const toastElement = document.getElementById('_x_extension_toast_2024_unique_');
   const confirmMask = document.getElementById('_x_extension_confirm_mask_2024_unique_');
   const confirmMessage = document.getElementById('_x_extension_confirm_message_2024_unique_');
@@ -278,7 +252,7 @@
     return {
       checked: Boolean(input.checked),
       id: input.id,
-      label: text ? text.textContent : '',
+      labelFallback: text ? text.textContent : '',
       labelKey: text ? text.getAttribute('data-i18n') : '',
       value: input.getAttribute('data-search-result-source-type') || ''
     };
@@ -313,7 +287,8 @@
     const selected = new Set(normalizeSearchResultSourceTypes(value));
     searchResultSourceTypeController.render({
       items: searchResultSourceTypeItems.map((item) => Object.assign({}, item, {
-        checked: selected.has(item.value)
+        checked: selected.has(item.value),
+        label: getMessage(item.labelKey, item.labelFallback)
       }))
     });
   }
@@ -469,6 +444,8 @@
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
   const SETTINGS = globalThis.LumnoSettings || {};
+  let currentMessages = null;
+  let currentLanguageMode = 'system';
   if (searchResultSourceTypeController) {
     renderSearchResultSourceTypeControl(
       searchResultSourceTypeItems.filter((item) => item.checked).map((item) => item.value)
@@ -549,9 +526,7 @@
   let fallbackShortcutBaseWidth = 0;
   let isFallbackWidthReady = false;
   let searchBlacklistItems = [];
-  let blacklistFormExpanded = false;
   let faviconRequestBlacklistItems = [];
-  let faviconBlacklistFormExpanded = false;
   const tooltipController = globalThis.LumnoTooltip &&
       typeof globalThis.LumnoTooltip.createController === 'function'
     ? globalThis.LumnoTooltip.createController({
@@ -566,8 +541,6 @@
     ? SEARCH_UTILS.getDefaultSiteSearchProviders()
     : [];
 
-  let currentMessages = null;
-  let currentLanguageMode = 'system';
   let feedbackSupportLinks = LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK;
   let feedbackSupportLinksLoadingPromise = null;
   let currentThemeMode = 'system';
@@ -1135,15 +1108,6 @@
     return 4;
   }
 
-  function setBlacklistError(message) {
-    if (!blacklistError) {
-      return;
-    }
-    const text = String(message || '').trim();
-    blacklistError.textContent = text;
-    blacklistError.style.display = text ? 'block' : 'none';
-  }
-
   function getBlacklistPatternInputValue(item) {
     if (BLACKLIST_UTILS.getPatternInputValue) {
       return BLACKLIST_UTILS.getPatternInputValue(item);
@@ -1151,115 +1115,12 @@
     return '';
   }
 
-  function setBlacklistFormExpanded(expanded) {
-    blacklistFormExpanded = Boolean(expanded);
-    if (blacklistForm) {
-      blacklistForm.setAttribute('data-expanded', blacklistFormExpanded ? 'true' : 'false');
-    }
-    if (blacklistFormTrigger) {
-      blacklistFormTrigger.setAttribute('aria-expanded', blacklistFormExpanded ? 'true' : 'false');
-    }
-    if (blacklistCancelButton) {
-      blacklistCancelButton.style.display = blacklistFormExpanded ? 'inline-flex' : 'none';
-      if (blacklistCancelButton.textContent) {
-        blacklistCancelButton.textContent = getMessage('shortcuts_cancel', blacklistCancelButton.textContent);
-      }
-    }
-    if (blacklistFormExpanded && blacklistUrlInput) {
-      updateBlacklistInputPresentation();
-      blacklistUrlInput.focus();
-    }
-  }
-
   function resetBlacklistForm() {
-    if (blacklistUrlInput) {
-      blacklistUrlInput.value = '';
-    }
-    if (blacklistAddButton) {
-      blacklistAddButton.textContent = getMessage('blacklist_add', '添加');
-      blacklistAddButton.classList.add('_x_extension_shortcut_save_2024_unique_');
-    }
-    setBlacklistError('');
-    if (blacklistMatchExactInput) {
-      blacklistMatchExactInput.checked = false;
-    }
-    if (blacklistMatchPrefixInput) {
-      blacklistMatchPrefixInput.checked = false;
-    }
-    if (blacklistMatchSuffixInput) {
-      blacklistMatchSuffixInput.checked = true;
-    }
-    syncBlacklistMatchModeAvailability();
-    updateBlacklistInputPresentation();
-    setBlacklistFormExpanded(false);
-  }
-
-  function setFaviconBlacklistError(message) {
-    setInlineError(faviconBlacklistError, message);
-  }
-
-  function getFaviconBlacklistMatchModesFromForm() {
-    return normalizeBlacklistMatchModes([
-      faviconBlacklistMatchExactInput && faviconBlacklistMatchExactInput.checked ? 'exact' : '',
-      faviconBlacklistMatchPrefixInput && faviconBlacklistMatchPrefixInput.checked ? 'prefix' : '',
-      faviconBlacklistMatchSuffixInput && faviconBlacklistMatchSuffixInput.checked ? 'suffix' : ''
-    ], null);
-  }
-
-  function updateFaviconBlacklistInputPresentation() {
-    applyBlacklistInputPresentationToElements(
-      faviconBlacklistUrlLabel,
-      faviconBlacklistUrlPrefix,
-      faviconBlacklistUrlInput,
-      getFaviconBlacklistMatchModesFromForm()
-    );
-  }
-
-  function syncFaviconBlacklistMatchModeAvailability(changedMode) {
-    syncBlacklistModeSelection(
-      {
-        exact: faviconBlacklistMatchExactInput,
-        prefix: faviconBlacklistMatchPrefixInput,
-        suffix: faviconBlacklistMatchSuffixInput
-      },
-      changedMode,
-      {
-        exact: faviconBlacklistMatchExactWrap,
-        prefix: faviconBlacklistMatchPrefixWrap,
-        suffix: faviconBlacklistMatchSuffixWrap
-      },
-      updateFaviconBlacklistInputPresentation
-    );
-  }
-
-  function setFaviconBlacklistFormExpanded(expanded) {
-    faviconBlacklistFormExpanded = Boolean(expanded);
-    if (faviconBlacklistForm) {
-      faviconBlacklistForm.setAttribute('data-expanded', faviconBlacklistFormExpanded ? 'true' : 'false');
-    }
-    if (faviconBlacklistFormTrigger) {
-      faviconBlacklistFormTrigger.setAttribute('aria-expanded', faviconBlacklistFormExpanded ? 'true' : 'false');
-    }
-    if (faviconBlacklistCancelButton) {
-      faviconBlacklistCancelButton.style.display = faviconBlacklistFormExpanded ? 'inline-flex' : 'none';
-    }
-    if (faviconBlacklistFormExpanded && faviconBlacklistUrlInput) {
-      updateFaviconBlacklistInputPresentation();
-      faviconBlacklistUrlInput.focus();
-    }
+    searchBlacklistFormController?.reset();
   }
 
   function resetFaviconBlacklistForm() {
-    if (faviconBlacklistUrlInput) {
-      faviconBlacklistUrlInput.value = '';
-    }
-    if (faviconBlacklistMatchExactInput) faviconBlacklistMatchExactInput.checked = false;
-    if (faviconBlacklistMatchPrefixInput) faviconBlacklistMatchPrefixInput.checked = false;
-    if (faviconBlacklistMatchSuffixInput) faviconBlacklistMatchSuffixInput.checked = true;
-    setFaviconBlacklistError('');
-    syncFaviconBlacklistMatchModeAvailability();
-    updateFaviconBlacklistInputPresentation();
-    setFaviconBlacklistFormExpanded(false);
+    faviconBlacklistFormController?.reset();
   }
 
   function setFaviconBlacklistEditorEnabled(enabled) {
@@ -1273,38 +1134,8 @@
       faviconBlacklistEditor.removeAttribute('inert');
     } else {
       faviconBlacklistEditor.setAttribute('inert', '');
-      setFaviconBlacklistFormExpanded(false);
+      resetFaviconBlacklistForm();
     }
-  }
-
-  function getBlacklistMatchModesFromForm() {
-    return normalizeBlacklistMatchModes([
-      blacklistMatchExactInput && blacklistMatchExactInput.checked ? 'exact' : '',
-      blacklistMatchPrefixInput && blacklistMatchPrefixInput.checked ? 'prefix' : '',
-      blacklistMatchSuffixInput && blacklistMatchSuffixInput.checked ? 'suffix' : ''
-    ], null);
-  }
-
-  function syncBlacklistMatchModeAvailability(changedMode) {
-    syncBlacklistModeSelection(
-      {
-        exact: blacklistMatchExactInput,
-        prefix: blacklistMatchPrefixInput,
-        suffix: blacklistMatchSuffixInput
-      },
-      changedMode,
-      {
-        exact: blacklistMatchExactWrap,
-        prefix: blacklistMatchPrefixWrap,
-        suffix: blacklistMatchSuffixWrap
-      },
-      (modes) => applyBlacklistInputPresentationToElements(
-        blacklistUrlLabel,
-        blacklistUrlPrefix,
-        blacklistUrlInput,
-        modes
-      )
-    );
   }
 
   function getBlacklistMatchModesSummary(modes) {
@@ -1381,97 +1212,6 @@
       placeholderFallback: 'baidu.com or baidu.com/search',
       prefixText: 'http(s)://'
     };
-  }
-
-  function updateBlacklistInputPresentation() {
-    const modes = getBlacklistMatchModesFromForm();
-    applyBlacklistInputPresentationToElements(
-      blacklistUrlLabel,
-      blacklistUrlPrefix,
-      blacklistUrlInput,
-      modes
-    );
-    const config = getBlacklistInputConfig(modes);
-    if (blacklistUrlLabel) {
-      blacklistUrlLabel.setAttribute('data-i18n', config.labelKey);
-    }
-    if (blacklistUrlInput) {
-      blacklistUrlInput.setAttribute('data-i18n-placeholder', config.placeholderKey);
-    }
-  }
-
-  function applyBlacklistInputPresentationToElements(labelNode, prefixNode, inputNode, modes) {
-    const config = getBlacklistInputConfig(modes);
-    if (labelNode) {
-      labelNode.textContent = getMessage(config.labelKey, config.labelFallback);
-    }
-    if (prefixNode) {
-      prefixNode.textContent = config.prefixText;
-      prefixNode.style.display = config.prefixText ? 'block' : 'none';
-    }
-    const affixNode = inputNode && inputNode.closest
-      ? inputNode.closest('._x_extension_shortcut_input_affix_2026_unique_')
-      : null;
-    if (affixNode) {
-      affixNode.setAttribute('data-has-prefix', config.prefixText ? 'true' : 'false');
-    }
-    if (inputNode) {
-      inputNode.placeholder = getMessage(config.placeholderKey, config.placeholderFallback);
-    }
-  }
-
-  function setInlineError(node, message) {
-    if (!node) {
-      return;
-    }
-    const text = String(message || '').trim();
-    node.textContent = text;
-    node.style.display = text ? 'block' : 'none';
-  }
-
-  function syncBlacklistModeSelection(modeInputs, changedMode, wrapMap, onAfterSync) {
-    const changedInput = changedMode ? modeInputs[changedMode] : null;
-    if (changedInput && changedInput.checked) {
-      if (changedMode === 'exact') {
-        if (modeInputs.prefix) modeInputs.prefix.checked = false;
-        if (modeInputs.suffix) modeInputs.suffix.checked = false;
-      }
-      if (changedMode === 'prefix') {
-        if (modeInputs.exact) modeInputs.exact.checked = false;
-        if (modeInputs.suffix) modeInputs.suffix.checked = false;
-      }
-      if (changedMode === 'suffix') {
-        if (modeInputs.exact) modeInputs.exact.checked = false;
-        if (modeInputs.prefix) modeInputs.prefix.checked = false;
-      }
-    }
-    const modes = normalizeBlacklistMatchModes([
-      modeInputs.exact && modeInputs.exact.checked ? 'exact' : '',
-      modeInputs.prefix && modeInputs.prefix.checked ? 'prefix' : '',
-      modeInputs.suffix && modeInputs.suffix.checked ? 'suffix' : ''
-    ], null);
-    if (modeInputs.exact) {
-      modeInputs.exact.checked = modes.includes('exact');
-      modeInputs.exact.disabled = false;
-    }
-    if (modeInputs.prefix) {
-      modeInputs.prefix.checked = modes.includes('prefix');
-      modeInputs.prefix.disabled = false;
-    }
-    if (modeInputs.suffix) {
-      modeInputs.suffix.checked = modes.includes('suffix');
-      modeInputs.suffix.disabled = false;
-    }
-    Object.keys(wrapMap || {}).forEach((key) => {
-      const wrap = wrapMap[key];
-      if (wrap) {
-        wrap.setAttribute('data-disabled', 'false');
-      }
-    });
-    if (typeof onAfterSync === 'function') {
-      onAfterSync(modes);
-    }
-    return modes;
   }
 
   function buildBlacklistRuleDraft(inputValue, matchModes) {
@@ -2748,8 +2488,6 @@
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
       renderSiteSearchList();
       renderSearchBlacklistList();
-      updateBlacklistInputPresentation();
-      setBlacklistFormExpanded(blacklistFormExpanded);
       if (shouldPersist) {
         if (!storageArea) {
           return;
@@ -4031,113 +3769,6 @@
       });
     });
   }
-  if (blacklistAddButton) {
-    blacklistAddButton.addEventListener('click', () => {
-      if (!blacklistFormExpanded) {
-        setBlacklistFormExpanded(true);
-        return;
-      }
-      const matchModes = getBlacklistMatchModesFromForm();
-      const draft = buildBlacklistRuleDraft(blacklistUrlInput && blacklistUrlInput.value, matchModes);
-      if (!draft.item) {
-        setBlacklistError(draft.error || '');
-        return;
-      }
-      setBlacklistError('');
-      persistBlacklistItems(
-        upsertBlacklistItems(draft.item, ''),
-        getMessage('toast_saved', '已保存')
-      ).then(() => {
-        resetBlacklistForm();
-      }).catch(() => {
-        showToast(getMessage('toast_error', '操作失败，请重试'), true);
-      });
-    });
-  }
-  if (blacklistFormTrigger) {
-    blacklistFormTrigger.addEventListener('click', () => {
-      setBlacklistFormExpanded(true);
-    });
-  }
-  [
-    [blacklistMatchExactInput, 'exact'],
-    [blacklistMatchPrefixInput, 'prefix'],
-    [blacklistMatchSuffixInput, 'suffix']
-  ].forEach(([input, mode]) => {
-    if (!input) {
-      return;
-    }
-    input.addEventListener('change', () => {
-      syncBlacklistMatchModeAvailability(mode);
-    });
-  });
-  if (blacklistCancelButton) {
-    blacklistCancelButton.addEventListener('click', () => {
-      resetBlacklistForm();
-    });
-  }
-  if (blacklistUrlInput) {
-    blacklistUrlInput.addEventListener('input', () => {
-      setBlacklistError('');
-      updateBlacklistInputPresentation();
-    });
-    blacklistUrlInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (blacklistAddButton) {
-          blacklistAddButton.click();
-        }
-      }
-    });
-  }
-  if (faviconBlacklistAddButton) {
-    faviconBlacklistAddButton.addEventListener('click', () => {
-      if (!faviconBlacklistFormExpanded) {
-        setFaviconBlacklistFormExpanded(true);
-        return;
-      }
-      const matchModes = getFaviconBlacklistMatchModesFromForm();
-      const draft = buildBlacklistRuleDraft(faviconBlacklistUrlInput && faviconBlacklistUrlInput.value, matchModes);
-      if (!draft.item) {
-        setFaviconBlacklistError(draft.error || '');
-        return;
-      }
-      const nextKey = buildBlacklistItemKey(draft.item);
-      const nextItems = [draft.item].concat(
-        faviconRequestBlacklistItems.filter((item) => buildBlacklistItemKey(item) !== nextKey)
-      );
-      saveFaviconRequestBlacklistItems(nextItems).then((savedItems) => {
-        faviconRequestBlacklistItems = savedItems;
-        renderFaviconRequestBlacklistList();
-        resetFaviconBlacklistForm();
-        showToast(getMessage('toast_saved', '已保存'), false);
-      }).catch(() => showToast(getMessage('toast_error', '操作失败，请重试'), true));
-    });
-  }
-  if (faviconBlacklistFormTrigger) {
-    faviconBlacklistFormTrigger.addEventListener('click', () => setFaviconBlacklistFormExpanded(true));
-  }
-  [
-    [faviconBlacklistMatchExactInput, 'exact'],
-    [faviconBlacklistMatchPrefixInput, 'prefix'],
-    [faviconBlacklistMatchSuffixInput, 'suffix']
-  ].forEach(([input, mode]) => {
-    if (input) {
-      input.addEventListener('change', () => syncFaviconBlacklistMatchModeAvailability(mode));
-    }
-  });
-  if (faviconBlacklistCancelButton) {
-    faviconBlacklistCancelButton.addEventListener('click', resetFaviconBlacklistForm);
-  }
-  if (faviconBlacklistUrlInput) {
-    faviconBlacklistUrlInput.addEventListener('input', () => setFaviconBlacklistError(''));
-    faviconBlacklistUrlInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        faviconBlacklistAddButton.click();
-      }
-    });
-  }
   if (bookmarkCountSelect) {
     bookmarkCountSelect.addEventListener('change', () => {
       const nextCount = normalizeBookmarkCount(bookmarkCountSelect.value);
@@ -4834,7 +4465,6 @@
   }
 
   setSiteSearchFormExpanded(false);
-  setBlacklistFormExpanded(false);
 
   function getLocalizedBuiltinProviderName(item) {
     if (!item || item._xIsCustom) {
@@ -5374,9 +5004,6 @@
       renderSearchBlacklistList();
       notifyNewtabSectionsRefresh('recent');
       showToast(getMessage('blacklist_removed_toast', '已从黑名单移除'), false);
-      if (blacklistUrlInput) {
-        blacklistUrlInput.focus();
-      }
     }).catch(() => {
       showToast(getMessage('toast_error', '操作失败，请重试'), true);
     });
@@ -5482,14 +5109,12 @@
   if (blacklistList) {
     loadSearchBlacklistItems().then((items) => {
       searchBlacklistItems = items;
-      syncBlacklistMatchModeAvailability();
       renderSearchBlacklistList();
     });
   }
   if (faviconBlacklistList) {
     loadFaviconRequestBlacklistItems().then((items) => {
       faviconRequestBlacklistItems = items;
-      syncFaviconBlacklistMatchModeAvailability();
       renderFaviconRequestBlacklistList();
     });
   }

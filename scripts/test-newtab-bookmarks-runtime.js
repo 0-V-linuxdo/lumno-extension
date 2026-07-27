@@ -57,6 +57,7 @@ async function run() {
   const calls = {
     getTree: 0,
     move: [],
+    update: [],
     remove: [],
     removeTree: [],
     create: []
@@ -76,6 +77,11 @@ async function run() {
         calls.move.push({ id, destination });
         events.onMoved.emit(id, { parentId: destination.parentId });
         callback({ id, ...destination });
+      },
+      update(id, changes, callback) {
+        calls.update.push({ id, changes });
+        events.onChanged.emit(id, changes);
+        callback({ id, ...changes });
       },
       remove(id, callback) {
         calls.remove.push(id);
@@ -137,6 +143,30 @@ async function run() {
   assert.strictEqual(runtime.getSnapshot().dirty, true);
   await runtime.ensureReady(false);
   assert.strictEqual(calls.getTree, 2);
+
+  const controlledUpdateChangesBefore = changes.length;
+  const updatedNode = await runtime.runControlledMutation(() => {
+    return runtime.update('11', {
+      title: 'OpenAI Docs',
+      url: 'https://openai.com/docs'
+    });
+  });
+  assert.deepStrictEqual(updatedNode, {
+    id: '11',
+    title: 'OpenAI Docs',
+    url: 'https://openai.com/docs'
+  });
+  assert.deepStrictEqual(calls.update[0], {
+    id: '11',
+    changes: {
+      title: 'OpenAI Docs',
+      url: 'https://openai.com/docs'
+    }
+  });
+  assert.strictEqual(changes.length, controlledUpdateChangesBefore + 1);
+  assert.strictEqual(changes.at(-1).eventName, 'onChanged');
+  assert.strictEqual(changes.at(-1).isControlled, true);
+  assert.strictEqual(changes.at(-1).shouldRefreshCascade, true);
 
   const controlledChangesBefore = changes.length;
   const movedNode = await runtime.runControlledMutation(async () => {

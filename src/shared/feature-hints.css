@@ -575,7 +575,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   background: rgba(75, 84, 95, 0.075);
   color: var(--x-lumno-feature-hint-strong);
   opacity: 1;
-  transform: translateX(1px);
+  transform: none;
 }
 
 .x-lumno-feature-hint__link:focus-visible {

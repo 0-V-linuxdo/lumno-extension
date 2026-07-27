@@ -10,6 +10,10 @@ const nativeLanguageLabels = {
   language_ja: '日本語',
   language_en: 'English'
 };
+const optionsSource = fs.readFileSync(
+  path.join(repoRoot, 'src', 'options', 'options.js'),
+  'utf8'
+);
 
 localeNames.forEach((locale) => {
   const messagesPath = path.join(repoRoot, '_locales', locale, 'messages.json');
@@ -23,5 +27,18 @@ localeNames.forEach((locale) => {
     );
   });
 });
+
+assert.match(
+  optionsSource,
+  /labelFallback:\s*text\s*\?\s*text\.textContent\s*:\s*''[\s\S]*label:\s*getMessage\(item\.labelKey,\s*item\.labelFallback\)/,
+  'React-owned search-result source labels should be derived from the active locale on every adapter render'
+);
+assert.ok(
+  optionsSource.indexOf('let currentMessages = null;') <
+    optionsSource.indexOf(
+      'if (searchResultSourceTypeController) {\n    renderSearchResultSourceTypeControl('
+    ),
+  'locale state should be initialized before the search-result source controller first renders'
+);
 
 console.log('options language label tests passed');

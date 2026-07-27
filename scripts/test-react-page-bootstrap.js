@@ -20,18 +20,21 @@ assert.notStrictEqual(
 
 const NEWTAB_CONFIG = Object.freeze({
   reactEntry: '../react/newtab-islands.js',
+  reactReadyScript: '../overlay/tab-switcher-page-bridge.js',
   pageEntry: '../newtab/newtab.js',
   reactState: 'LumnoNewtabReactBootstrap',
   pageRuntime: 'newtab'
 });
 const OPTIONS_CONFIG = Object.freeze({
   reactEntry: '../react/options-islands.js',
+  reactReadyScript: '../overlay/tab-switcher-page-bridge.js',
   pageEntry: '../options/options.js',
   reactState: 'LumnoOptionsReactBootstrap',
   pageRuntime: 'options'
 });
 const ONBOARDING_CONFIG = Object.freeze({
   reactEntry: '../react/onboarding-islands.js',
+  reactReadyScript: '../overlay/tab-switcher-page-bridge.js',
   pageEntry: '../onboarding/onboarding.js',
   reactState: 'LumnoOnboardingReactBootstrap',
   pageRuntime: 'onboarding'
@@ -66,6 +69,9 @@ async function runBootstrap({ config, importResult }) {
       body: {
         appendChild(node) {
           appendedScripts.push(node);
+          if (node.src.endsWith('/overlay/tab-switcher-page-bridge.js')) {
+            node.onload?.();
+          }
         }
       }
     },
@@ -108,13 +114,17 @@ function assertInjectedPage(result, config) {
     result.context.document.documentElement.dataset.lumnoReactRuntime,
     'react'
   );
-  assert.strictEqual(result.appendedScripts.length, 1);
+  assert.strictEqual(result.appendedScripts.length, 2);
   assert.strictEqual(
     result.appendedScripts[0].src,
+    'chrome-extension://lumno/src/overlay/tab-switcher-page-bridge.js'
+  );
+  assert.strictEqual(
+    result.appendedScripts[1].src,
     `chrome-extension://lumno/src/${config.pageRuntime}/${config.pageRuntime}.js`
   );
   assert.strictEqual(
-    result.appendedScripts[0].dataset.lumnoPageRuntime,
+    result.appendedScripts[1].dataset.lumnoPageRuntime,
     config.pageRuntime
   );
 }

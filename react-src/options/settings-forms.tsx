@@ -71,8 +71,10 @@ export interface BlacklistFormControllerOptions {
   ): BlacklistFormSaveResult | Promise<BlacklistFormSaveResult>;
 }
 
-export type BlacklistFormController =
-  ReactRootController<BlacklistFormRenderModel>;
+export interface BlacklistFormController
+  extends ReactRootController<BlacklistFormRenderModel> {
+  reset(): void;
+}
 
 function SiteSearchForm({
   host,
@@ -276,7 +278,8 @@ function SiteSearchForm({
 function BlacklistForm({
   host,
   model,
-  onSave
+  onSave,
+  resetVersion
 }: {
   host: HTMLElement | null;
   model: BlacklistFormRenderModel;
@@ -284,6 +287,7 @@ function BlacklistForm({
     value: string,
     modes: BlacklistMatchMode[]
   ): BlacklistFormSaveResult | Promise<BlacklistFormSaveResult>;
+  resetVersion: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<BlacklistMatchMode>('suffix');
@@ -304,6 +308,13 @@ function BlacklistForm({
       inputRef.current?.focus();
     }
   }, [expanded, host]);
+
+  useEffect(() => {
+    setExpanded(false);
+    setMode('suffix');
+    setValue('');
+    setError('');
+  }, [resetVersion]);
 
   const reset = () => {
     setExpanded(false);
@@ -458,12 +469,36 @@ export function createBlacklistFormController(
     host.dataset.reactIsland = 'options-blacklist-form';
     host.dataset.blacklistKind = options.kind;
   }
-  return createReactRootController(
+  let resetVersion = 0;
+  let currentModel: BlacklistFormRenderModel | null = null;
+  const rootController = createReactRootController(
     host,
     (model: BlacklistFormRenderModel) => (
-      <BlacklistForm host={host} model={model} onSave={options.onSave} />
+      <BlacklistForm
+        host={host}
+        model={model}
+        onSave={options.onSave}
+        resetVersion={resetVersion}
+      />
     )
   );
+  return Object.freeze({
+    render(model: BlacklistFormRenderModel) {
+      currentModel = model;
+      rootController.render(model);
+    },
+    reset() {
+      if (!currentModel) {
+        return;
+      }
+      resetVersion += 1;
+      rootController.render(currentModel);
+    },
+    destroy() {
+      currentModel = null;
+      rootController.destroy();
+    }
+  });
 }
 
 export function createSettingsFormsApi() {

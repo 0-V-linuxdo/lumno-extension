@@ -3632,6 +3632,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/suggestion-action-model.js',
     'src/shared/suggestion-navigation.js',
     'src/shared/ime-key-guard.js',
+    'src/shared/search-input-history.js',
     'src/shared/search-input-mode.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
@@ -3831,8 +3832,10 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
             console.warn('Lumno: tab switcher helper not available.');
             return { ok: false, reason: 'tab_switcher_missing' };
           }
-          toggle(switcherContext);
-          return { ok: true };
+          const result = toggle(switcherContext);
+          return result && typeof result === 'object'
+            ? result
+            : { ok: true };
         },
         args: [switcherContext]
       }, (results) => {

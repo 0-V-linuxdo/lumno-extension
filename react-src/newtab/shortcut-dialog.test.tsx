@@ -99,6 +99,7 @@ describe('shortcut dialog React island', () => {
     expect(controller.element.dataset.reactIsland).toBe('shortcut-dialog');
     expect(controller.getState()).toEqual({
       mode: 'add',
+      itemType: 'shortcut',
       editingId: '',
       open: false,
       busy: false
@@ -135,6 +136,7 @@ describe('shortcut dialog React island', () => {
     expect(controller.element.dataset.open).toBe('true');
     expect(controller.getState()).toEqual({
       mode: 'edit',
+      itemType: 'shortcut',
       editingId: 'shortcut-one',
       open: true,
       busy: false
@@ -162,6 +164,8 @@ describe('shortcut dialog React island', () => {
         title: 'Edited',
         url: 'https://edited.example/',
         mode: 'edit',
+        itemType: 'shortcut',
+        itemId: 'shortcut-one',
         shortcutId: 'shortcut-one',
         iconAction: 'keep',
         iconDataUrl: ''
@@ -169,6 +173,104 @@ describe('shortcut dialog React island', () => {
     ]);
     expect(controller.element.hidden).toBe(true);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('uses the shared form for bookmark and folder editing', async () => {
+    const submissions: Readonly<ShortcutDialogPayload>[] = [];
+    const controller = createController((payload) => {
+      submissions.push(payload);
+      return true;
+    });
+
+    act(() => {
+      controller.open({
+        mode: 'edit',
+        itemType: 'bookmark',
+        shortcut: {
+          id: 'bookmark-one',
+          title: 'Docs',
+          url: 'https://docs.example/'
+        }
+      });
+      flushAnimationFrames();
+    });
+
+    let inputs = controller.element.querySelectorAll<HTMLInputElement>(
+      'input[type="text"]'
+    );
+    expect(controller.getState().itemType).toBe('bookmark');
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].value).toBe('Docs');
+    expect(inputs[1].value).toBe('https://docs.example/');
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-dialog-title')?.textContent
+    ).toBe('Edit bookmark');
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-icon-field')
+    ).toBeNull();
+
+    act(() => {
+      setInputValue(inputs[0], 'Reference');
+      setInputValue(inputs[1], 'https://reference.example/');
+    });
+    await act(async () => {
+      await controller.submit();
+    });
+
+    act(() => {
+      controller.open({
+        mode: 'edit',
+        itemType: 'folder',
+        shortcut: {
+          id: 'folder-one',
+          title: 'Research'
+        }
+      });
+      flushAnimationFrames();
+    });
+
+    inputs = controller.element.querySelectorAll<HTMLInputElement>(
+      'input[type="text"]'
+    );
+    expect(controller.getState().itemType).toBe('folder');
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0].value).toBe('Research');
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-dialog-title')?.textContent
+    ).toBe('Edit folder');
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-icon-field')
+    ).toBeNull();
+
+    act(() => {
+      setInputValue(inputs[0], 'Reading');
+    });
+    await act(async () => {
+      await controller.submit();
+    });
+
+    expect(submissions).toEqual([
+      {
+        title: 'Reference',
+        url: 'https://reference.example/',
+        mode: 'edit',
+        itemType: 'bookmark',
+        itemId: 'bookmark-one',
+        shortcutId: 'bookmark-one',
+        iconAction: 'keep',
+        iconDataUrl: ''
+      },
+      {
+        title: 'Reading',
+        url: '',
+        mode: 'edit',
+        itemType: 'folder',
+        itemId: 'folder-one',
+        shortcutId: 'folder-one',
+        iconAction: 'keep',
+        iconDataUrl: ''
+      }
+    ]);
   });
 
   it('blocks close and replacement state while persistence is pending', async () => {

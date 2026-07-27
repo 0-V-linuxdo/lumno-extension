@@ -17,6 +17,7 @@ import { createBookmarkBreadcrumbApi } from './bookmark-breadcrumb';
 import { createSearchInputApi } from '../shared/search-input';
 import { createFeatureHintViewApi } from '../shared/feature-hint-view';
 import { createTooltipViewApi } from '../shared/tooltip-view';
+import { createTabSwitcherViewApi } from '../overlay/tab-switcher';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoNewtabReactBootstrap?: {
@@ -40,6 +41,7 @@ const runtime = globalThis as typeof globalThis & {
     bookmarkCascadeView: ReturnType<typeof createBookmarkCascadeViewApi>;
     wallpaperView: ReturnType<typeof createWallpaperViewApi>;
     bookmarkBreadcrumb: ReturnType<typeof createBookmarkBreadcrumbApi>;
+    tabSwitcher: ReturnType<typeof createTabSwitcherViewApi>;
   };
   LumnoNewtabBookmarksView?: ReturnType<typeof createBookmarksViewApi>;
   LumnoNewtabBookmarksViewReact?: ReturnType<typeof createBookmarksViewApi>;
@@ -83,6 +85,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoFeatureHintViewReact?: ReturnType<typeof createFeatureHintViewApi>;
   LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
   LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
+  LumnoOverlayTabSwitcherView?: ReturnType<typeof createTabSwitcherViewApi>;
+  LumnoOverlayTabSwitcherViewReact?: ReturnType<typeof createTabSwitcherViewApi>;
   _x_extension_createSearchInput_2024_unique_?: ReturnType<
     typeof createSearchInputApi
   >['createSearchInput'];
@@ -110,6 +114,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   const searchInputApi = createSearchInputApi();
   const featureHintViewApi = createFeatureHintViewApi();
   const tooltipViewApi = createTooltipViewApi();
+  const tabSwitcherApi =
+    runtime.LumnoOverlayTabSwitcherView || createTabSwitcherViewApi();
 
   runtime.LumnoNewtabBookmarksViewReact = bookmarksApi;
   runtime.LumnoNewtabBookmarksView = bookmarksApi;
@@ -149,6 +155,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoFeatureHintView = featureHintViewApi;
   runtime.LumnoTooltipViewReact = tooltipViewApi;
   runtime.LumnoTooltipView = tooltipViewApi;
+  runtime.LumnoOverlayTabSwitcherViewReact = tabSwitcherApi;
+  runtime.LumnoOverlayTabSwitcherView = tabSwitcherApi;
   runtime._x_extension_createSearchInput_2024_unique_ =
     searchInputApi.createSearchInput;
   runtime.LumnoNewtabReactIslands = Object.freeze({
@@ -168,7 +176,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
     pageNotice: pageNoticeApi,
     bookmarkCascadeView: bookmarkCascadeViewApi,
     wallpaperView: wallpaperViewApi,
-    bookmarkBreadcrumb: bookmarkBreadcrumbApi
+    bookmarkBreadcrumb: bookmarkBreadcrumbApi,
+    tabSwitcher: tabSwitcherApi
   });
 
   if (bootstrapState) {

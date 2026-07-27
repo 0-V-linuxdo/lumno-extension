@@ -1730,8 +1730,6 @@
     initialChromeApi.runtime.onMessage.addListener(handleOnboardingCommandMessage);
   }
 
-  if (!copyActionsController) {
-  }
   scheduleTitleFitUpdate();
   scheduleVisualCanvasScaleUpdate();
   window.addEventListener('resize', () => {

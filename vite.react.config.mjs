@@ -45,6 +45,9 @@ export default defineConfig({
           if (id.includes('/react-src/shared/')) {
             return 'react-shared';
           }
+          if (id.includes('/react-src/overlay/tab-switcher.tsx')) {
+            return 'tab-switcher-shared';
+          }
           return undefined;
         }
       }

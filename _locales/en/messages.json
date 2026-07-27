@@ -83,6 +83,9 @@
   "settings_version_label": {
     "message": "Version"
   },
+  "settings_version_tooltip": {
+    "message": "View changelog"
+  },
   "language_zh_cn": {
     "message": "简体中文"
   },
@@ -1088,6 +1091,30 @@
   "bookmarks_copy_url_failed": {
     "message": "Could not copy link"
   },
+  "bookmarks_edit": {
+    "message": "Edit"
+  },
+  "bookmarks_edit_dialog_title": {
+    "message": "Edit bookmark"
+  },
+  "bookmarks_edit_folder_dialog_title": {
+    "message": "Edit folder"
+  },
+  "bookmarks_name_placeholder": {
+    "message": "Name"
+  },
+  "bookmarks_invalid_url": {
+    "message": "Enter a valid URL"
+  },
+  "bookmarks_updated": {
+    "message": "Bookmark updated"
+  },
+  "bookmarks_folder_updated": {
+    "message": "Folder updated"
+  },
+  "bookmarks_update_failed": {
+    "message": "Could not update bookmark"
+  },
   "bookmarks_delete": {
     "message": "Delete"
   },
@@ -1504,6 +1531,12 @@
   },
   "shortcut_reference_tab_switcher_desc": {
     "message": "Open the recent tab switcher"
+  },
+  "shortcut_reference_search_input_history_title": {
+    "message": "Previous or next input"
+  },
+  "shortcut_reference_search_input_history_desc": {
+    "message": "Move backward or forward through submitted input history"
   },
   "shortcut_reference_search_navigate_title": {
     "message": "Move through suggestions"

@@ -83,6 +83,9 @@
   "settings_version_label": {
     "message": "バージョン"
   },
+  "settings_version_tooltip": {
+    "message": "更新履歴を見る"
+  },
   "language_zh_cn": {
     "message": "简体中文"
   },
@@ -1088,6 +1091,30 @@
   "bookmarks_copy_url_failed": {
     "message": "リンクをコピーできませんでした"
   },
+  "bookmarks_edit": {
+    "message": "編集"
+  },
+  "bookmarks_edit_dialog_title": {
+    "message": "ブックマークを編集"
+  },
+  "bookmarks_edit_folder_dialog_title": {
+    "message": "フォルダーを編集"
+  },
+  "bookmarks_name_placeholder": {
+    "message": "名前"
+  },
+  "bookmarks_invalid_url": {
+    "message": "有効なURLを入力してください"
+  },
+  "bookmarks_updated": {
+    "message": "ブックマークを更新しました"
+  },
+  "bookmarks_folder_updated": {
+    "message": "フォルダーを更新しました"
+  },
+  "bookmarks_update_failed": {
+    "message": "ブックマークを更新できませんでした"
+  },
   "bookmarks_delete": {
     "message": "削除"
   },
@@ -1504,6 +1531,12 @@
   },
   "shortcut_reference_tab_switcher_desc": {
     "message": "最近のタブ切り替えを開きます"
+  },
+  "shortcut_reference_search_input_history_title": {
+    "message": "前または次の入力に切り替え"
+  },
+  "shortcut_reference_search_input_history_desc": {
+    "message": "送信済みの入力履歴を前後に移動します"
   },
   "shortcut_reference_search_navigate_title": {
     "message": "候補を上下に移動"

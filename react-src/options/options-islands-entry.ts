@@ -12,6 +12,7 @@ import { createShortcutHotkeyApi } from './shortcut-hotkey';
 import { createSiteSearchListApi } from './site-search-list';
 import { createThemePickerApi } from './theme-picker';
 import { createTooltipViewApi } from '../shared/tooltip-view';
+import { createTabSwitcherViewApi } from '../overlay/tab-switcher';
 
 const runtime = globalThis as typeof globalThis & {
   LumnoOptionsReactBootstrap?: {
@@ -31,6 +32,7 @@ const runtime = globalThis as typeof globalThis & {
     siteSearchList: ReturnType<typeof createSiteSearchListApi>;
     themePicker: ReturnType<typeof createThemePickerApi>;
     toast: ReturnType<typeof createToastApi>;
+    tabSwitcher: ReturnType<typeof createTabSwitcherViewApi>;
   };
   LumnoOptionsBlacklistList?: ReturnType<typeof createBlacklistListApi>;
   LumnoOptionsBlacklistListReact?: ReturnType<typeof createBlacklistListApi>;
@@ -60,6 +62,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsToastReact?: ReturnType<typeof createToastApi>;
   LumnoTooltipView?: ReturnType<typeof createTooltipViewApi>;
   LumnoTooltipViewReact?: ReturnType<typeof createTooltipViewApi>;
+  LumnoOverlayTabSwitcherView?: ReturnType<typeof createTabSwitcherViewApi>;
+  LumnoOverlayTabSwitcherViewReact?: ReturnType<typeof createTabSwitcherViewApi>;
 };
 
 const bootstrapState = runtime.LumnoOptionsReactBootstrap;
@@ -79,6 +83,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   const themePickerApi = createThemePickerApi();
   const toastApi = createToastApi();
   const tooltipViewApi = createTooltipViewApi();
+  const tabSwitcherApi =
+    runtime.LumnoOverlayTabSwitcherView || createTabSwitcherViewApi();
 
   runtime.LumnoOptionsBlacklistListReact = blacklistListApi;
   runtime.LumnoOptionsBlacklistList = blacklistListApi;
@@ -108,6 +114,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoOptionsToast = toastApi;
   runtime.LumnoTooltipViewReact = tooltipViewApi;
   runtime.LumnoTooltipView = tooltipViewApi;
+  runtime.LumnoOverlayTabSwitcherViewReact = tabSwitcherApi;
+  runtime.LumnoOverlayTabSwitcherView = tabSwitcherApi;
   runtime.LumnoOptionsReactIslands = Object.freeze({
     blacklistList: blacklistListApi,
     feedbackSupport: feedbackSupportApi,
@@ -121,7 +129,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
     shortcutHotkey: shortcutHotkeyApi,
     siteSearchList: siteSearchListApi,
     themePicker: themePickerApi,
-    toast: toastApi
+    toast: toastApi,
+    tabSwitcher: tabSwitcherApi
   });
 
   if (bootstrapState) {

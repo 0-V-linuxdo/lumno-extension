@@ -16,6 +16,7 @@
   const CONTROLLED_MUTATION_EVENT_NAMES = new Set([
     'onCreated',
     'onRemoved',
+    'onChanged',
     'onMoved',
     'onChildrenReordered'
   ]);
@@ -27,6 +28,7 @@
     'onImportEnded'
   ]);
   const CASCADE_REFRESH_EVENT_NAMES = new Set([
+    'onChanged',
     'onMoved',
     'onChildrenReordered'
   ]);
@@ -235,6 +237,32 @@
       });
     }
 
+    function update(bookmarkId, changes) {
+      return new Promise((resolve, reject) => {
+        const id = String(bookmarkId || '');
+        const rawChanges = changes && typeof changes === 'object' ? changes : {};
+        const updateChanges = {};
+        if (Object.prototype.hasOwnProperty.call(rawChanges, 'title')) {
+          updateChanges.title = String(rawChanges.title || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(rawChanges, 'url')) {
+          updateChanges.url = String(rawChanges.url || '');
+        }
+        if (!bookmarksApi || typeof bookmarksApi.update !== 'function' || !id ||
+            Object.keys(updateChanges).length === 0) {
+          reject(new Error('Chrome bookmarks.update is unavailable.'));
+          return;
+        }
+        bookmarksApi.update(id, updateChanges, (node) => {
+          if (getLastError()) {
+            reject(new Error(getErrorMessage('Failed to update bookmark.')));
+            return;
+          }
+          resolve(node);
+        });
+      });
+    }
+
     function remove(bookmarkId, options) {
       return new Promise((resolve, reject) => {
         const id = String(bookmarkId || '');
@@ -407,6 +435,7 @@
       getFolderPath,
       invalidate,
       move,
+      update,
       remove,
       create,
       restore,

@@ -10,10 +10,6 @@
   content: none;
 }
 
-._x_extension_cursor_tooltip_host_2026_unique_[data-cursor-tooltip] {
-  cursor: pointer;
-}
-
 ._x_extension_tooltip_2026_unique_._x_extension_cursor_tooltip_tag_2026_unique_[data-tooltip-kind="cursor-tag"] {
   display: inline-flex;
   align-items: center;

@@ -83,6 +83,12 @@ type OptionsRuntime = typeof globalThis & {
   LumnoOptionsToastReact?: {
     implementation?: string;
   };
+  LumnoOverlayTabSwitcherView?: {
+    implementation?: string;
+  };
+  LumnoOverlayTabSwitcherViewReact?: {
+    implementation?: string;
+  };
 };
 
 const runtime = globalThis as OptionsRuntime;
@@ -116,6 +122,8 @@ function clearRuntime(): void {
   delete runtime.LumnoOptionsThemePickerReact;
   delete runtime.LumnoOptionsToast;
   delete runtime.LumnoOptionsToastReact;
+  delete runtime.LumnoOverlayTabSwitcherView;
+  delete runtime.LumnoOverlayTabSwitcherViewReact;
 }
 
 afterEach(() => {
@@ -182,6 +190,10 @@ describe('Options React islands entry', () => {
     );
     expect(runtime.LumnoOptionsToast?.implementation).toBe('react');
     expect(runtime.LumnoOptionsToastReact).toBe(runtime.LumnoOptionsToast);
+    expect(runtime.LumnoOverlayTabSwitcherView?.implementation).toBe('react');
+    expect(runtime.LumnoOverlayTabSwitcherViewReact).toBe(
+      runtime.LumnoOverlayTabSwitcherView
+    );
     expect(runtime.LumnoOptionsReactIslands).toEqual({
       blacklistList: runtime.LumnoOptionsBlacklistList,
       feedbackSupport: runtime.LumnoOptionsFeedbackSupport,
@@ -195,7 +207,8 @@ describe('Options React islands entry', () => {
       shortcutHotkey: runtime.LumnoOptionsShortcutHotkey,
       siteSearchList: runtime.LumnoOptionsSiteSearchList,
       themePicker: runtime.LumnoOptionsThemePicker,
-      toast: runtime.LumnoOptionsToast
+      toast: runtime.LumnoOptionsToast,
+      tabSwitcher: runtime.LumnoOverlayTabSwitcherView
     });
   });
 

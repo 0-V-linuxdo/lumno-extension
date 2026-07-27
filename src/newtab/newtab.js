@@ -162,6 +162,7 @@
   const SITE_SEARCH_STORE = globalThis.LumnoSiteSearchStore || {};
   const SUGGESTION_ACTION_MODEL = globalThis.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = globalThis.LumnoSuggestionNavigation || {};
+  const SEARCH_INPUT_HISTORY = globalThis.LumnoSearchInputHistory || {};
   const SEARCH_INPUT_MODE = globalThis.LumnoSearchInputMode || {};
   const FEATURE_HINTS = globalThis.LumnoFeatureHints || {};
   const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
@@ -443,6 +444,8 @@
   let shortcutDragState = null;
   const shortcutTiles = [];
   const SHORTCUT_DIALOG_MODE_EDIT = NEWTAB_SHORTCUT_DIALOG.MODE_EDIT || 'edit';
+  const SHORTCUT_DIALOG_ITEM_BOOKMARK = 'bookmark';
+  const SHORTCUT_DIALOG_ITEM_FOLDER = 'folder';
   const SHORTCUT_CONTEXT_MENU_EDIT_VALUE = 'edit';
   const SHORTCUT_CONTEXT_MENU_REMOVE_VALUE = 'remove';
   const shortcutIconStore = NEWTAB_SHORTCUT_ICON_STORE.createShortcutIconStore({
@@ -489,6 +492,7 @@
   const SHORTCUT_CONTEXT_MENU_MAX_WIDTH_PX = 180;
   const SHORTCUT_CONTEXT_MENU_PORTAL_Z_INDEX = 10040;
   const SHORTCUT_CONTEXT_MENU_PORTAL_OFFSET_PX = -6;
+  const BOOKMARK_CONTEXT_MENU_EDIT_VALUE = 'edit';
   const BOOKMARK_CONTEXT_MENU_REMOVE_VALUE = 'remove';
   const BOOKMARK_CONTEXT_MENU_MIN_WIDTH_PX = 124;
   const BOOKMARK_CONTEXT_MENU_MAX_WIDTH_PX = 180;
@@ -4320,6 +4324,15 @@
   let autocompleteState = null;
   let inlineSearchState = null;
   const imeKeyGuard = LumnoImeKeyGuard.createImeKeyGuard();
+  const searchInputHistoryController =
+    typeof SEARCH_INPUT_HISTORY.createSearchInputHistoryController === 'function'
+      ? SEARCH_INPUT_HISTORY.createSearchInputHistoryController({
+          storageArea: localStorageArea,
+          storageChanges: chrome && chrome.storage ? chrome.storage.onChanged : null,
+          storageAreaName: 'local'
+        })
+      : null;
+  let isApplyingSearchInputHistory = false;
   function isImeCompositionEvent(event) {
     return imeKeyGuard.shouldIgnoreKeydown(event);
   }
@@ -6214,7 +6227,7 @@
       bookmarkContextMenuSelectController.setOptions(
         bookmarkContextMenu.control,
         getBookmarkContextMenuOptions(),
-        BOOKMARK_CONTEXT_MENU_REMOVE_VALUE
+        BOOKMARK_CONTEXT_MENU_EDIT_VALUE
       );
     }
   }
@@ -6684,6 +6697,10 @@
   function getBookmarkContextMenuOptions() {
     return [
       {
+        value: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
+        label: t('bookmarks_edit', 'Edit')
+      },
+      {
         value: BOOKMARK_CONTEXT_MENU_REMOVE_VALUE,
         label: t('bookmarks_delete', 'Delete')
       }
@@ -6754,10 +6771,16 @@
     const action = String(actionValue || '');
     const target = bookmarkContextMenuTarget;
     closeBookmarkContextMenu();
-    if (!target || action !== BOOKMARK_CONTEXT_MENU_REMOVE_VALUE) {
+    if (!target || !action) {
       return;
     }
-    deleteBookmarkFromContextTarget(target);
+    if (action === BOOKMARK_CONTEXT_MENU_EDIT_VALUE) {
+      openBookmarkEditor(target);
+      return;
+    }
+    if (action === BOOKMARK_CONTEXT_MENU_REMOVE_VALUE) {
+      deleteBookmarkFromContextTarget(target);
+    }
   }
 
   function handleBookmarkContextMenuActionClick(event) {
@@ -6799,7 +6822,7 @@
       menuPortal: true,
       menuPortalZIndex: BOOKMARK_CONTEXT_MENU_PORTAL_Z_INDEX,
       menuPortalOffset: BOOKMARK_CONTEXT_MENU_PORTAL_OFFSET_PX,
-      value: BOOKMARK_CONTEXT_MENU_REMOVE_VALUE,
+      value: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
       ariaLabel: t('bookmarks_context_menu_label', 'Bookmark actions'),
       options: getBookmarkContextMenuOptions()
     });
@@ -6849,10 +6872,10 @@
       bookmarkContextMenuSelectController.setOptions(
         bookmarkContextMenu.control,
         getBookmarkContextMenuOptions(),
-        BOOKMARK_CONTEXT_MENU_REMOVE_VALUE
+        BOOKMARK_CONTEXT_MENU_EDIT_VALUE
       );
     }
-    bookmarkContextMenu.select.value = BOOKMARK_CONTEXT_MENU_REMOVE_VALUE;
+    bookmarkContextMenu.select.value = BOOKMARK_CONTEXT_MENU_EDIT_VALUE;
     bookmarkContextMenuSelectController.sync(bookmarkContextMenu.control);
     bookmarkContextMenuSelectController.setOpen(bookmarkContextMenu.control, true);
   }
@@ -6870,6 +6893,7 @@
     openBookmarkContextMenu({
       bookmarkId: String(item.id),
       title: String(item.title || ''),
+      url: item.type === 'folder' ? '' : String(item.url || ''),
       parentId: String(item.parentId || payload.parentFolderId || ''),
       index: Number.isFinite(Number(item.index)) ? Number(item.index) : 0,
       isFolder: item.type === 'folder',
@@ -6895,6 +6919,24 @@
         iconDataUrl: getShortcutIconDataUrl(shortcut.id)
       },
       sourceElement
+    });
+  }
+
+  function openBookmarkEditor(target) {
+    if (!target || !target.bookmarkId) {
+      return;
+    }
+    const node = bookmarksRuntime.getNode(target.bookmarkId);
+    const isFolder = Boolean(target.isFolder);
+    openShortcutDialog({
+      mode: SHORTCUT_DIALOG_MODE_EDIT,
+      itemType: isFolder ? SHORTCUT_DIALOG_ITEM_FOLDER : SHORTCUT_DIALOG_ITEM_BOOKMARK,
+      shortcut: {
+        id: String(target.bookmarkId),
+        title: String((node && node.title) || target.title || ''),
+        url: isFolder ? '' : String((node && node.url) || target.url || '')
+      },
+      sourceElement: target.element
     });
   }
 
@@ -7513,6 +7555,48 @@
     return saveNewShortcutFromDialog(title, url, iconState);
   }
 
+  function saveBookmarkFromDialog(title, url, dialogState) {
+    const itemId = String(
+      (dialogState && (dialogState.itemId || dialogState.shortcutId)) || ''
+    );
+    const itemType = String((dialogState && dialogState.itemType) || '');
+    const isFolder = itemType === SHORTCUT_DIALOG_ITEM_FOLDER;
+    const nextUrl = String(url || '').trim();
+    if (!itemId || (!isFolder && !nextUrl)) {
+      setShortcutError(t('bookmarks_invalid_url', 'Enter a valid URL.'));
+      return Promise.resolve(false);
+    }
+    const changes = {
+      title: String(title || '').trim()
+    };
+    if (!isFolder) {
+      changes.url = nextUrl;
+    }
+    const keepCascadeOpen = Boolean(
+      bookmarkCascadeRuntime &&
+      typeof bookmarkCascadeRuntime.isOpen === 'function' &&
+      bookmarkCascadeRuntime.isOpen()
+    );
+    return bookmarksRuntime.runControlledMutation(() => {
+      return bookmarksRuntime.update(itemId, changes);
+    }).then(() => {
+      markBookmarkTreeDirty({ preserveCascadeOpen: keepCascadeOpen });
+      loadBookmarks({ force: true });
+      if (keepCascadeOpen) {
+        refreshOpenBookmarkCascadeMenu();
+      }
+      showToast(t(
+        isFolder ? 'bookmarks_folder_updated' : 'bookmarks_updated',
+        isFolder ? 'Folder updated' : 'Bookmark updated'
+      ));
+      return true;
+    }).catch((error) => {
+      console.warn('[Lumno] Failed to update bookmark', error);
+      setShortcutError(t('bookmarks_update_failed', 'Could not update bookmark.'));
+      return false;
+    });
+  }
+
   function removeShortcutById(shortcutId) {
     const id = String(shortcutId || '');
     if (!id) {
@@ -7579,6 +7663,14 @@
       hideTooltip: hideShortcutDialogTooltip,
       prepareIconFile: shortcutIconStore.prepareFile,
       onSubmit(payload) {
+        if (payload.itemType === SHORTCUT_DIALOG_ITEM_BOOKMARK ||
+            payload.itemType === SHORTCUT_DIALOG_ITEM_FOLDER) {
+          return saveBookmarkFromDialog(payload.title, payload.url, {
+            itemType: payload.itemType,
+            itemId: payload.itemId,
+            shortcutId: payload.shortcutId
+          });
+        }
         return saveShortcutFromDialog(payload.title, payload.url, {
           mode: payload.mode,
           shortcutId: payload.shortcutId,
@@ -13037,6 +13129,9 @@
       cursor: 'pointer'
     },
     onInput: function(event) {
+      if (searchInputHistoryController && !isApplyingSearchInputHistory) {
+        searchInputHistoryController.resetNavigation();
+      }
       const rawValue = event.target.value;
       const query = rawValue.trim();
       updateModeBadge(rawValue);
@@ -13130,6 +13225,31 @@
       if (isImeCompositionEvent(event)) {
         return;
       }
+      const inputHistoryDirection =
+        typeof SEARCH_INPUT_HISTORY.getShortcutDirection === 'function'
+          ? SEARCH_INPUT_HISTORY.getShortcutDirection(event)
+          : '';
+      if (inputHistoryDirection) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (searchInputHistoryController) {
+          const result = searchInputHistoryController.move(
+            inputHistoryDirection,
+            inputParts.input.value
+          );
+          if (result.handled) {
+            isApplyingSearchInputHistory = true;
+            try {
+              inputParts.input.value = result.value;
+              inputParts.input.setSelectionRange(result.value.length, result.value.length);
+              inputParts.input.dispatchEvent(new Event('input', { bubbles: true }));
+            } finally {
+              isApplyingSearchInputHistory = false;
+            }
+          }
+        }
+        return;
+      }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         if (suggestionItems.length === 0) {
           return;
@@ -13181,6 +13301,9 @@
       const query = event.target.value.trim();
       if (!query) {
         return;
+      }
+      if (searchInputHistoryController) {
+        searchInputHistoryController.record(query);
       }
       const commandMatch = localSearchScopeState ? null : getCommandMatch(query);
       if (commandMatch && selectedIndex === -1) {

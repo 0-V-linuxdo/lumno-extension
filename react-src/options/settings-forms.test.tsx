@@ -181,4 +181,34 @@ describe('Options settings form React islands', () => {
     expect(host.querySelector('._x_extension_shortcut_error_2024_unique_')?.textContent)
       .toBe('请输入网站域名');
   });
+
+  it('lets the adapter reset React-owned blacklist form state', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const controller = createBlacklistFormController(host, {
+      kind: 'search',
+      onSave: vi.fn().mockResolvedValue({ ok: true })
+    });
+    controllers.push(controller);
+    act(() => controller.render(blacklistModel));
+    const openButton = host.querySelector<HTMLButtonElement>('button');
+    const textInput = host.querySelector<HTMLInputElement>('input:not([type="checkbox"])');
+
+    act(() => openButton?.click());
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value'
+      )?.set;
+      setter?.call(textInput, 'example.com');
+      textInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => controller.reset());
+
+    expect(host.dataset.expanded).toBe('false');
+    expect(host.querySelector<HTMLInputElement>('input:not([type="checkbox"])')?.value)
+      .toBe('');
+    expect(host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[2]?.checked)
+      .toBe(true);
+  });
 });

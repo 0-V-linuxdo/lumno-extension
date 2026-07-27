@@ -12,6 +12,7 @@ const buttonClass = '_x_extension_onboarding_guide_button_2026_unique_';
 const labelKey = 'settings_onboarding_tutorial_action';
 const versionButtonId = '_x_extension_settings_version_2024_unique_';
 const versionButtonClass = '_x_extension_settings_version_badge_2024_unique_';
+const versionTooltipKey = 'settings_version_tooltip';
 
 function getRule(selector) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -97,13 +98,23 @@ assert.match(
 
 assert.match(
   optionsHtml,
-  new RegExp(`<button[^>]+id="${versionButtonId}"[^>]+class="[^"]*${versionButtonClass}[^"]*"[^>]+type="button"[^>]*><\\/button>`),
+  new RegExp(`<button[^>]+id="${versionButtonId}"[^>]+class="[^"]*${versionButtonClass}[^"]*"[^>]+type="button"[^>]+data-tooltip="查看更新日志"[^>]+data-i18n-tooltip="${versionTooltipKey}"[^>]*><\\/button>`),
   'options version label should be a clickable button'
 );
 assert.match(
   getRule(`.${versionButtonClass}`),
   /cursor:\s*pointer;/,
   'options version button should advertise clickability'
+);
+assert.match(
+  getRule(`.${versionButtonClass}:hover`),
+  /background:\s*rgba\(255,\s*255,\s*255,\s*0\.56\);/,
+  'options version button should show a visible light-mode background on hover'
+);
+assert.match(
+  getRule(`body[data-theme="dark"] .${versionButtonClass}:hover`),
+  /background:\s*rgba\(255,\s*255,\s*255,\s*0\.12\);/,
+  'options version button should show a visible dark-mode background on hover'
 );
 assert.match(
   optionsJs,
@@ -114,6 +125,10 @@ assert.match(
 ['en', 'ja', 'zh_CN', 'zh_TW'].forEach((locale) => {
   const messages = JSON.parse(fs.readFileSync(path.join(repoRoot, '_locales', locale, 'messages.json'), 'utf8'));
   assert.ok(messages[labelKey] && messages[labelKey].message, `${locale} should localize the onboarding tutorial label`);
+  assert.ok(
+    messages[versionTooltipKey] && messages[versionTooltipKey].message,
+    `${locale} should localize the version changelog tooltip`
+  );
 });
 
 console.log('options onboarding link tests passed');

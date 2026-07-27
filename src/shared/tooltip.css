@@ -75,11 +75,6 @@
   content: none;
 }
 
-._x_extension_tooltip_host_2026_unique_[data-tooltip],
-._x_extension_tooltip_host_2024_unique_[data-tooltip] {
-  cursor: pointer;
-}
-
 body[data-theme="dark"] ._x_extension_tooltip_2026_unique_,
 [data-theme="dark"] ._x_extension_tooltip_2026_unique_ {
   --x-extension-tooltip-bg-top: #111827;

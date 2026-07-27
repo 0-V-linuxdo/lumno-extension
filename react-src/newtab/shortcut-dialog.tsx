@@ -25,11 +25,14 @@ import {
 
 type Translate = (key: string, fallback: string) => string;
 type IconAction = 'keep' | 'replace' | 'remove';
+export type ShortcutDialogItemType = 'shortcut' | 'bookmark' | 'folder';
 
 export interface ShortcutDialogPayload {
   title: string;
   url: string;
   mode: ShortcutDialogMode;
+  itemType: ShortcutDialogItemType;
+  itemId: string;
   shortcutId: string;
   iconAction: IconAction;
   iconDataUrl: string;
@@ -37,6 +40,7 @@ export interface ShortcutDialogPayload {
 
 export interface ShortcutDialogOpenOptions {
   mode?: string;
+  itemType?: string;
   shortcut?: ShortcutRecord | null;
   sourceElement?: HTMLElement | null;
 }
@@ -48,6 +52,7 @@ export interface ShortcutDialogCloseOptions {
 
 export interface ShortcutDialogState {
   mode: ShortcutDialogMode;
+  itemType: ShortcutDialogItemType;
   editingId: string;
   open: boolean;
   busy: boolean;
@@ -89,6 +94,7 @@ export interface ShortcutDialogController {
 
 interface FormState {
   mode: ShortcutDialogMode;
+  itemType: ShortcutDialogItemType;
   editingId: string;
   name: string;
   url: string;
@@ -123,7 +129,7 @@ interface ShortcutDialogViewHandle {
   focusName(): void;
   getDialogElement(): HTMLDivElement | null;
   getFocusableElements(): HTMLElement[];
-  getSnapshot(): Pick<FormState, 'mode' | 'editingId' | 'busy'>;
+  getSnapshot(): Pick<FormState, 'mode' | 'itemType' | 'editingId' | 'busy'>;
 }
 
 interface ShortcutDialogViewProps {
@@ -133,6 +139,7 @@ interface ShortcutDialogViewProps {
 
 const INITIAL_FORM_STATE: FormState = {
   mode: MODE_ADD,
+  itemType: 'shortcut',
   editingId: '',
   name: '',
   url: '',
@@ -143,6 +150,10 @@ const INITIAL_FORM_STATE: FormState = {
   error: '',
   iconError: ''
 };
+
+function normalizeItemType(value: unknown): ShortcutDialogItemType {
+  return value === 'bookmark' || value === 'folder' ? value : 'shortcut';
+}
 
 function focusElement(element: Element | null | undefined): void {
   if (!(element instanceof HTMLElement)) {
@@ -244,11 +255,16 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
       });
       const payload = Object.freeze<ShortcutDialogPayload>({
         title: current.name,
-        url: current.url,
+        url: current.itemType === 'folder' ? '' : current.url,
         mode: current.mode,
+        itemType: current.itemType,
+        itemId: current.editingId,
         shortcutId: current.editingId,
-        iconAction: current.iconAction,
-        iconDataUrl: current.iconAction === 'replace' ? current.iconDataUrl : ''
+        iconAction: current.itemType === 'shortcut' ? current.iconAction : 'keep',
+        iconDataUrl:
+          current.itemType === 'shortcut' && current.iconAction === 'replace'
+            ? current.iconDataUrl
+            : ''
       });
       try {
         const saved = Boolean(await options.onSubmit(payload));
@@ -269,14 +285,22 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
       reset(openOptions) {
         const shortcut = openOptions?.shortcut || null;
         const mode = normalizeMode(openOptions?.mode, shortcut);
+        const itemType = normalizeItemType(openOptions?.itemType);
         iconRequestIdRef.current += 1;
         commitState({
           ...INITIAL_FORM_STATE,
           mode,
+          itemType,
           editingId: mode === MODE_EDIT ? String(shortcut?.id || '') : '',
           name: mode === MODE_EDIT ? String(shortcut?.title || '') : '',
-          url: mode === MODE_EDIT ? String(shortcut?.url || '') : '',
-          iconDataUrl: mode === MODE_EDIT ? String(shortcut?.iconDataUrl || '') : ''
+          url:
+            mode === MODE_EDIT && itemType !== 'folder'
+              ? String(shortcut?.url || '')
+              : '',
+          iconDataUrl:
+            mode === MODE_EDIT && itemType === 'shortcut'
+              ? String(shortcut?.iconDataUrl || '')
+              : ''
         });
       },
       submit,
@@ -322,6 +346,7 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
         const current = stateRef.current;
         return {
           mode: current.mode,
+          itemType: current.itemType,
           editingId: current.editingId,
           busy: current.busy
         };
@@ -439,6 +464,9 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
     }
 
     const isEditMode = formState.mode === MODE_EDIT;
+    const isShortcutItem = formState.itemType === 'shortcut';
+    const isBookmarkItem = formState.itemType === 'bookmark';
+    const isFolderItem = formState.itemType === 'folder';
     const hasIcon = Boolean(formState.iconDataUrl);
     const disabled = formState.busy || formState.iconBusy;
     const chooseText = hasIcon
@@ -459,13 +487,18 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
       >
         <form
           className="x-nt-shortcut-form"
+          data-item-type={formState.itemType}
           aria-busy={disabled ? 'true' : 'false'}
           onSubmit={handleSubmit}
         >
           <h2 id={titleId} className="x-nt-shortcut-dialog-title">
-            {isEditMode
-              ? options.t('newtab_shortcuts_edit_dialog_title', 'Edit shortcut')
-              : options.t('newtab_shortcuts_dialog_title', 'Add shortcut')}
+            {isFolderItem
+              ? options.t('bookmarks_edit_folder_dialog_title', 'Edit folder')
+              : isBookmarkItem
+                ? options.t('bookmarks_edit_dialog_title', 'Edit bookmark')
+                : isEditMode
+                  ? options.t('newtab_shortcuts_edit_dialog_title', 'Edit shortcut')
+                  : options.t('newtab_shortcuts_dialog_title', 'Add shortcut')}
           </h2>
 
           <label className="x-nt-shortcut-field">
@@ -478,9 +511,13 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
                 ref={nameInputRef}
                 type="text"
                 autoComplete="off"
-                maxLength={64}
+                maxLength={isShortcutItem ? 64 : 255}
                 className="_x_extension_shortcut_input_2024_unique_"
-                placeholder={options.t('newtab_shortcuts_name_placeholder', 'Lumno')}
+                placeholder={
+                  isShortcutItem
+                    ? options.t('newtab_shortcuts_name_placeholder', 'Lumno')
+                    : options.t('bookmarks_name_placeholder', 'Name')
+                }
                 value={formState.name}
                 disabled={formState.busy}
                 onChange={(event) => {
@@ -491,140 +528,144 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
             </div>
           </label>
 
-          <label className="x-nt-shortcut-field">
-            <span>{options.t('newtab_shortcuts_url_label', 'URL')}</span>
-            <div
-              className="_x_extension_shortcut_input_affix_2026_unique_"
-              data-has-prefix="false"
-            >
-              <input
-                ref={urlInputRef}
-                type="text"
-                inputMode="url"
-                autoComplete="url"
-                required
-                className="_x_extension_shortcut_input_2024_unique_"
-                placeholder={options.t(
-                  'newtab_shortcuts_url_placeholder',
-                  'https://example.com'
-                )}
-                value={formState.url}
-                disabled={formState.busy}
-                aria-describedby={errorId}
-                aria-invalid={formState.error ? 'true' : 'false'}
-                onChange={(event) => {
-                  const url = event.currentTarget.value;
-                  commitState((current) => ({ ...current, url }));
-                }}
-              />
-            </div>
-          </label>
-
-          <div className="x-nt-shortcut-field x-nt-shortcut-icon-field">
-            <div className="x-nt-shortcut-icon-label-row">
-              <span>
-                {options.t('newtab_shortcuts_icon_label', 'Icon (optional)')}
-              </span>
-              <button
-                ref={iconInfoButtonRef}
-                type="button"
-                className="x-nt-appearance-info-button x-nt-shortcut-icon-info"
-                disabled={formState.busy}
-                aria-label={options.t(
-                  'newtab_shortcuts_icon_info_label',
-                  'About local shortcut icons'
-                )}
-                aria-describedby={iconInfoId}
-                dangerouslySetInnerHTML={{
-                  __html: options.getRiSvg('ri-information-line', 'ri-size-14')
-                }}
-              />
-            </div>
-
-            <div className="x-nt-shortcut-icon-control">
+          {!isFolderItem ? (
+            <label className="x-nt-shortcut-field">
+              <span>{options.t('newtab_shortcuts_url_label', 'URL')}</span>
               <div
-                ref={iconUploadTileRef}
-                className={[
-                  'x-nt-wallpaper-tile',
-                  'x-nt-wallpaper-upload-tile',
-                  'x-nt-wallpaper-custom-tile',
-                  'x-nt-shortcut-icon-upload-tile'
-                ].join(' ')}
-                role="button"
-                tabIndex={0}
-                data-upload="true"
-                data-loading={disabled ? 'true' : 'false'}
-                data-has-icon={hasIcon ? 'true' : 'false'}
-                aria-disabled={disabled ? 'true' : 'false'}
-                aria-label={chooseText}
-                aria-describedby={`${iconInfoId} ${iconErrorId}`}
-                data-tooltip={chooseText}
-                onClick={handleIconChoose}
-                onKeyDown={handleIconChooseKeydown}
+                className="_x_extension_shortcut_input_affix_2026_unique_"
+                data-has-prefix="false"
               >
-                <span className="x-nt-wallpaper-thumb x-nt-wallpaper-upload-thumb x-nt-shortcut-icon-preview">
-                  <img
-                    className="x-nt-shortcut-icon-preview-image"
-                    src={hasIcon ? formState.iconDataUrl : undefined}
-                    alt=""
-                    draggable={false}
-                    hidden={!hasIcon}
-                  />
-                  <span
-                    className="x-nt-wallpaper-upload-placeholder x-nt-shortcut-icon-placeholder"
-                    hidden={hasIcon}
-                    dangerouslySetInnerHTML={{
-                      __html: options.getRiSvg('ri-add-large-line', 'ri-size-18')
-                    }}
-                  />
-                </span>
-                <button
-                  ref={iconRemoveButtonRef}
-                  type="button"
-                  className="x-nt-wallpaper-delete-button x-nt-shortcut-icon-remove"
-                  hidden={!hasIcon}
-                  disabled={disabled}
-                  aria-label={options.t('newtab_shortcuts_icon_remove', 'Remove')}
-                  onClick={handleIconRemove}
-                  dangerouslySetInnerHTML={{
-                    __html: options.getRiSvg('ri-subtract-line', 'ri-size-14')
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  required
+                  className="_x_extension_shortcut_input_2024_unique_"
+                  placeholder={options.t(
+                    'newtab_shortcuts_url_placeholder',
+                    'https://example.com'
+                  )}
+                  value={formState.url}
+                  disabled={formState.busy}
+                  aria-describedby={errorId}
+                  aria-invalid={formState.error ? 'true' : 'false'}
+                  onChange={(event) => {
+                    const url = event.currentTarget.value;
+                    commitState((current) => ({ ...current, url }));
                   }}
                 />
               </div>
-              <input
-                ref={iconInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="x-nt-shortcut-icon-input"
-                tabIndex={-1}
-                aria-describedby={`${iconInfoId} ${iconErrorId}`}
-                aria-invalid={formState.iconError ? 'true' : 'false'}
-                onChange={() => {
-                  void handleIconChange();
-                }}
-              />
-            </div>
+            </label>
+          ) : null}
 
-            <span
-              ref={iconInfoDescriptionRef}
-              id={iconInfoId}
-              className="x-nt-shortcut-visually-hidden"
-            >
-              {options.t(
-                'newtab_shortcuts_icon_info',
-                'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.'
-              )}
-            </span>
-            <div
-              id={iconErrorId}
-              className="x-nt-shortcut-icon-error"
-              data-visible={formState.iconError ? 'true' : 'false'}
-              role="alert"
-              aria-live="polite"
-            >
-              {formState.iconError}
+          {isShortcutItem ? (
+            <div className="x-nt-shortcut-field x-nt-shortcut-icon-field">
+              <div className="x-nt-shortcut-icon-label-row">
+                <span>
+                  {options.t('newtab_shortcuts_icon_label', 'Icon (optional)')}
+                </span>
+                <button
+                  ref={iconInfoButtonRef}
+                  type="button"
+                  className="x-nt-appearance-info-button x-nt-shortcut-icon-info"
+                  disabled={formState.busy}
+                  aria-label={options.t(
+                    'newtab_shortcuts_icon_info_label',
+                    'About local shortcut icons'
+                  )}
+                  aria-describedby={iconInfoId}
+                  dangerouslySetInnerHTML={{
+                    __html: options.getRiSvg('ri-information-line', 'ri-size-14')
+                  }}
+                />
+              </div>
+
+              <div className="x-nt-shortcut-icon-control">
+                <div
+                  ref={iconUploadTileRef}
+                  className={[
+                    'x-nt-wallpaper-tile',
+                    'x-nt-wallpaper-upload-tile',
+                    'x-nt-wallpaper-custom-tile',
+                    'x-nt-shortcut-icon-upload-tile'
+                  ].join(' ')}
+                  role="button"
+                  tabIndex={0}
+                  data-upload="true"
+                  data-loading={disabled ? 'true' : 'false'}
+                  data-has-icon={hasIcon ? 'true' : 'false'}
+                  aria-disabled={disabled ? 'true' : 'false'}
+                  aria-label={chooseText}
+                  aria-describedby={`${iconInfoId} ${iconErrorId}`}
+                  data-tooltip={chooseText}
+                  onClick={handleIconChoose}
+                  onKeyDown={handleIconChooseKeydown}
+                >
+                  <span className="x-nt-wallpaper-thumb x-nt-wallpaper-upload-thumb x-nt-shortcut-icon-preview">
+                    <img
+                      className="x-nt-shortcut-icon-preview-image"
+                      src={hasIcon ? formState.iconDataUrl : undefined}
+                      alt=""
+                      draggable={false}
+                      hidden={!hasIcon}
+                    />
+                    <span
+                      className="x-nt-wallpaper-upload-placeholder x-nt-shortcut-icon-placeholder"
+                      hidden={hasIcon}
+                      dangerouslySetInnerHTML={{
+                        __html: options.getRiSvg('ri-add-large-line', 'ri-size-18')
+                      }}
+                    />
+                  </span>
+                  <button
+                    ref={iconRemoveButtonRef}
+                    type="button"
+                    className="x-nt-wallpaper-delete-button x-nt-shortcut-icon-remove"
+                    hidden={!hasIcon}
+                    disabled={disabled}
+                    aria-label={options.t('newtab_shortcuts_icon_remove', 'Remove')}
+                    onClick={handleIconRemove}
+                    dangerouslySetInnerHTML={{
+                      __html: options.getRiSvg('ri-subtract-line', 'ri-size-14')
+                    }}
+                  />
+                </div>
+                <input
+                  ref={iconInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="x-nt-shortcut-icon-input"
+                  tabIndex={-1}
+                  aria-describedby={`${iconInfoId} ${iconErrorId}`}
+                  aria-invalid={formState.iconError ? 'true' : 'false'}
+                  onChange={() => {
+                    void handleIconChange();
+                  }}
+                />
+              </div>
+
+              <span
+                ref={iconInfoDescriptionRef}
+                id={iconInfoId}
+                className="x-nt-shortcut-visually-hidden"
+              >
+                {options.t(
+                  'newtab_shortcuts_icon_info',
+                  'PNG, JPG, and WebP supported. A transparent square icon at 128 × 128 px or larger is recommended. Saved only on this device.'
+                )}
+              </span>
+              <div
+                id={iconErrorId}
+                className="x-nt-shortcut-icon-error"
+                data-visible={formState.iconError ? 'true' : 'false'}
+                role="alert"
+                aria-live="polite"
+              >
+                {formState.iconError}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div
             id={errorId}
@@ -795,6 +836,7 @@ export function createShortcutDialog(
   function getState(): Readonly<ShortcutDialogState> {
     const snapshot = getView()?.getSnapshot() || {
       mode: MODE_ADD,
+      itemType: 'shortcut',
       editingId: '',
       busy: false
     };

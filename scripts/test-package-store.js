@@ -48,6 +48,7 @@ assert(
     entries.includes('src/react/onboarding-islands.js') &&
     entries.includes('src/react/overlay-islands.js') &&
     entries.includes('src/react/react-shared.js') &&
+    entries.includes('src/react/tab-switcher-shared.js') &&
     entries.includes('src/react/react-runtime.js') &&
     entries.includes('src/shared/react-page-bootstrap.js'),
   'store package should include both page entries, shared React chunks, and bootstrap'

@@ -92,16 +92,25 @@ const onboardingBundlePath = path.join(
 );
 const overlayBundlePath = path.join(repoRoot, 'src/react/overlay-islands.js');
 const sharedBundlePath = path.join(repoRoot, 'src/react/react-shared.js');
+const tabSwitcherSharedBundlePath = path.join(
+  repoRoot,
+  'src/react/tab-switcher-shared.js'
+);
 const runtimeBundlePath = path.join(repoRoot, 'src/react/react-runtime.js');
 const newtabBundle = fs.readFileSync(newtabBundlePath, 'utf8');
 const optionsBundle = fs.readFileSync(optionsBundlePath, 'utf8');
 const onboardingBundle = fs.readFileSync(onboardingBundlePath, 'utf8');
 const overlayBundle = fs.readFileSync(overlayBundlePath, 'utf8');
 const sharedBundle = fs.readFileSync(sharedBundlePath, 'utf8');
+const tabSwitcherSharedBundle = fs.readFileSync(
+  tabSwitcherSharedBundlePath,
+  'utf8'
+);
 const runtimeBundle = fs.readFileSync(runtimeBundlePath, 'utf8');
 const bundles = [
   runtimeBundle,
   sharedBundle,
+  tabSwitcherSharedBundle,
   newtabBundle,
   optionsBundle,
   onboardingBundle,
@@ -111,6 +120,7 @@ const bundle = bundles.join('\n');
 const bundlePaths = [
   runtimeBundlePath,
   sharedBundlePath,
+  tabSwitcherSharedBundlePath,
   newtabBundlePath,
   optionsBundlePath,
   onboardingBundlePath,
@@ -162,15 +172,18 @@ assert(
     newtabHtml.includes('data-react-entry="../react/newtab-islands.js"') &&
     newtabHtml.includes('data-page-entry="../newtab/newtab.js"') &&
     newtabHtml.includes('data-react-state="LumnoNewtabReactBootstrap"') &&
+    newtabHtml.includes('data-react-ready-script="../overlay/tab-switcher-page-bridge.js"') &&
     bootstrap.includes('import(reactEntryUrl)') &&
     bootstrap.includes('if (!bootstrapState.reactReady)') &&
+    bootstrap.includes('loadReactReadyScript()') &&
     bootstrap.includes('startPage();'),
-  'the bootstrap should require React readiness before injecting the browser adapter'
+  'the bootstrap should require React readiness before connecting bridges and injecting the browser adapter'
 );
 assert(
   !optionsHtml.includes('<script src="options.js"></script>') &&
     optionsHtml.includes(bootstrapScript) &&
     optionsHtml.includes('data-react-entry="../react/options-islands.js"') &&
+    optionsHtml.includes('data-react-ready-script="../overlay/tab-switcher-page-bridge.js"') &&
     optionsHtml.includes('data-page-entry="../options/options.js"') &&
     optionsHtml.includes('data-react-state="LumnoOptionsReactBootstrap"'),
   'Options should use the shared React-aware bootstrap and retain classic page semantics'
@@ -179,9 +192,25 @@ assert(
   !onboardingHtml.includes('<script src="onboarding.js"></script>') &&
     onboardingHtml.includes(bootstrapScript) &&
     onboardingHtml.includes('data-react-entry="../react/onboarding-islands.js"') &&
+    onboardingHtml.includes('data-react-ready-script="../overlay/tab-switcher-page-bridge.js"') &&
     onboardingHtml.includes('data-page-entry="../onboarding/onboarding.js"') &&
     onboardingHtml.includes('data-react-state="LumnoOnboardingReactBootstrap"'),
   'Onboarding should use the shared React-aware bootstrap and retain classic page semantics'
+);
+assert(
+  /id="_x_extension_blacklist_form_2026_unique_"[^>]*><\/div>/.test(optionsHtml) &&
+    /id="_x_extension_favicon_blacklist_form_2026_unique_"[^>]*><\/div>/.test(optionsHtml) &&
+    !optionsSource.includes('blacklistFormExpanded') &&
+    !optionsSource.includes('faviconBlacklistFormExpanded') &&
+    !optionsSource.includes('setBlacklistFormExpanded') &&
+    !optionsSource.includes('setFaviconBlacklistFormExpanded') &&
+    optionsSource.includes('searchBlacklistFormController?.reset()') &&
+    optionsSource.includes('faviconBlacklistFormController?.reset()'),
+  'React-owned blacklist forms should not retain legacy DOM state or event-handler fallbacks'
+);
+assert(
+  !onboardingSource.includes('if (!copyActionsController)'),
+  'Onboarding should not retain an empty copy-actions fallback branch'
 );
 assert(
   !bootstrap.includes("startPage('legacy')") &&
@@ -208,6 +237,7 @@ assert(
 assert(
   fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
+      fs.statSync(tabSwitcherSharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
     360 * 1024,
   'the New Tab React route should stay within its 360 KiB uncompressed budget'
@@ -215,6 +245,7 @@ assert(
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
+      zlib.gzipSync(tabSwitcherSharedBundle).length +
       zlib.gzipSync(newtabBundle).length <=
     112 * 1024,
   'the New Tab React route should stay within its 112 KiB gzip budget'
@@ -222,16 +253,18 @@ assert(
 assert(
     fs.statSync(runtimeBundlePath).size +
       fs.statSync(sharedBundlePath).size +
+      fs.statSync(tabSwitcherSharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    238 * 1024,
-  'the Options React route should stay within its 238 KiB uncompressed budget'
+    250 * 1024,
+  'the Options React route should stay within its 250 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
       zlib.gzipSync(sharedBundle).length +
+      zlib.gzipSync(tabSwitcherSharedBundle).length +
       zlib.gzipSync(optionsBundle).length <=
-    71 * 1024,
-  'the Options React route should stay within its 71 KiB gzip budget'
+    74 * 1024,
+  'the Options React route should stay within its 74 KiB gzip budget'
 );
 assert(
   fs.statSync(overlayBundlePath).size <= 250 * 1024,
@@ -254,10 +287,19 @@ assert(
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&
     newtabBundle.includes('from"./react-shared.js"') &&
+    newtabBundle.includes('from"./tab-switcher-shared.js"') &&
     optionsBundle.includes('from"./react-shared.js"') &&
+    optionsBundle.includes('from"./tab-switcher-shared.js"') &&
     onboardingBundle.includes('from"./react-runtime.js"') &&
-    sharedBundle.includes('from"./react-runtime.js"'),
-  'New Tab, Options, and Onboarding should reuse the shared React runtime'
+    sharedBundle.includes('from"./react-runtime.js"') &&
+    tabSwitcherSharedBundle.includes('from"./react-runtime.js"'),
+  'New Tab and Options should reuse the shared tab-switcher implementation and React runtime'
+);
+assert(
+  newtabBundle.includes('LumnoOverlayTabSwitcherViewReact') &&
+    optionsBundle.includes('LumnoOverlayTabSwitcherViewReact') &&
+    tabSwitcherSharedBundle.includes('overlay-tab-switcher'),
+  'extension-page React entries should install the tab-switcher API before their bridge connects'
 );
 assert(
   overlayBundle.includes('LumnoOverlayReactBootstrap') &&

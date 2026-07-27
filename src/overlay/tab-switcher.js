@@ -5,7 +5,6 @@
   const PANEL_ID = '_x_extension_tab_switcher_panel_2026_unique_';
   const TAB_SWITCHER_ADVANCE_EVENT = '_x_extension_tab_switcher_advance_command_2026_unique_';
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
-  const TAB_SWITCHER_REACT_VIEW = window.LumnoOverlayTabSwitcherView || {};
   const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
   const switcherThemeMediaQuery = typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-color-scheme: dark)')
@@ -927,13 +926,18 @@
   window._x_extension_toggleTabSwitcher_2026_unique_ = function(rawContext) {
     const context = rawContext && typeof rawContext === 'object' ? rawContext : {};
     if (handleExistingSwitcher(context)) {
-      return;
+      return { ok: true, reason: 'already-open' };
     }
     const tabs = Array.isArray(context.tabs)
       ? context.tabs.filter((tab) => tab && typeof tab.id === 'number').slice(0, 5)
       : [];
     if (!tabs.length) {
-      return;
+      return { ok: false, reason: 'empty' };
+    }
+    const tabSwitcherReactViewApi = window.LumnoOverlayTabSwitcherView;
+    if (!tabSwitcherReactViewApi ||
+        typeof tabSwitcherReactViewApi.createTabSwitcherView !== 'function') {
+      return { ok: false, reason: 'react-view-unavailable' };
     }
 
     const host = document.createElement('div');
@@ -952,7 +956,7 @@
     shadow.appendChild(style);
 
     let selectedIndex = clampSelectedIndex(context.selectedIndex, tabs.length);
-    let tabSwitcherReactView = TAB_SWITCHER_REACT_VIEW.createTabSwitcherView({
+    let tabSwitcherReactView = tabSwitcherReactViewApi.createTabSwitcherView({
       document,
       root: shadow,
       panelId: PANEL_ID,
@@ -977,7 +981,7 @@
     const panel = tabSwitcherReactView.panel;
     if (!panel) {
       host.remove();
-      return;
+      return { ok: false, reason: 'react-view-unavailable' };
     }
     applySwitcherViewportPlacement(panel, window);
     applySwitcherZoomCompensation(panel, context.tabZoomFactor, getSwitcherVisualViewportScale(window));
@@ -1163,5 +1167,6 @@
     document.addEventListener(TAB_SWITCHER_ADVANCE_EVENT, handleExternalAdvance, true);
 
     renderSelection();
+    return { ok: true };
   };
 })();

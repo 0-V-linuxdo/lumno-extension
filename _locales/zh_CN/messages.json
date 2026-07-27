@@ -83,6 +83,9 @@
   "settings_version_label": {
     "message": "版本"
   },
+  "settings_version_tooltip": {
+    "message": "查看更新日志"
+  },
   "language_zh_cn": {
     "message": "简体中文"
   },
@@ -1088,6 +1091,30 @@
   "bookmarks_copy_url_failed": {
     "message": "复制链接失败，请重试"
   },
+  "bookmarks_edit": {
+    "message": "编辑"
+  },
+  "bookmarks_edit_dialog_title": {
+    "message": "编辑书签"
+  },
+  "bookmarks_edit_folder_dialog_title": {
+    "message": "编辑文件夹"
+  },
+  "bookmarks_name_placeholder": {
+    "message": "名称"
+  },
+  "bookmarks_invalid_url": {
+    "message": "请输入有效网址"
+  },
+  "bookmarks_updated": {
+    "message": "已更新书签"
+  },
+  "bookmarks_folder_updated": {
+    "message": "已更新文件夹"
+  },
+  "bookmarks_update_failed": {
+    "message": "无法更新书签"
+  },
   "bookmarks_delete": {
     "message": "删除"
   },
@@ -1504,6 +1531,12 @@
   },
   "shortcut_reference_tab_switcher_desc": {
     "message": "打开最近标签页切换器"
+  },
+  "shortcut_reference_search_input_history_title": {
+    "message": "切换上一条或下一条输入"
+  },
+  "shortcut_reference_search_input_history_desc": {
+    "message": "在已提交的输入历史中向前或向后切换"
   },
   "shortcut_reference_search_navigate_title": {
     "message": "上下移动候选项"

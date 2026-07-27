@@ -5,6 +5,7 @@
   }
 
   const reactEntryPath = currentScript.dataset.reactEntry;
+  const readyScriptPath = currentScript.dataset.reactReadyScript;
   const pageEntryPath = currentScript.dataset.pageEntry;
   const stateKey = currentScript.dataset.reactState;
   if (!reactEntryPath || !pageEntryPath || !stateKey) {
@@ -14,6 +15,9 @@
   const runtime = globalThis;
   const root = document.documentElement;
   const reactEntryUrl = new URL(reactEntryPath, currentScript.src).href;
+  const readyScriptUrl = readyScriptPath
+    ? new URL(readyScriptPath, currentScript.src).href
+    : '';
   const pageEntryUrl = new URL(pageEntryPath, currentScript.src).href;
   const bootstrapState = {
     reactReady: false
@@ -36,10 +40,27 @@
     document.body.appendChild(pageScript);
   }
 
+  function loadReactReadyScript() {
+    if (!readyScriptUrl) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const readyScript = document.createElement('script');
+      readyScript.src = readyScriptUrl;
+      readyScript.onload = () => resolve();
+      readyScript.onerror = () => reject(
+        new Error(`React-ready script failed to load: ${readyScriptUrl}`)
+      );
+      document.body.appendChild(readyScript);
+    });
+  }
+
   import(reactEntryUrl).then(() => {
     if (!bootstrapState.reactReady) {
       throw new Error('React entry loaded without marking the page ready.');
     }
+    return loadReactReadyScript();
+  }).then(() => {
     startPage();
   }).catch((error) => {
     root.dataset.lumnoReactRuntime = 'error';

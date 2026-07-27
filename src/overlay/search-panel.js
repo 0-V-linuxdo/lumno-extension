@@ -27,6 +27,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayWheelIsolationHandler = null;
   let overlayRevealGate = null;
   let overlayUpdateNoticeController = null;
+  let inputHistoryController = null;
+  let isApplyingSearchInputHistory = false;
   let overlayUpdateNoticeFrameListener = null;
   let overlayUpdateNoticeFrameVisualViewport = null;
   let overlayUpdateNoticeMountTimer = null;
@@ -54,6 +56,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const SITE_SEARCH_STORE = window.LumnoSiteSearchStore || {};
   const SUGGESTION_ACTION_MODEL = window.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = window.LumnoSuggestionNavigation || {};
+  const SEARCH_INPUT_HISTORY = window.LumnoSearchInputHistory || {};
   const OVERLAY_SUGGESTIONS_VIEW = window.LumnoOverlaySuggestionsView || {};
   const SEARCH_INPUT_MODE = window.LumnoSearchInputMode || {};
   const FEATURE_HINTS = window.LumnoFeatureHints || {};
@@ -1125,6 +1128,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inputModeController.destroy();
       inputModeController = null;
     }
+    const storedInputHistoryController =
+      overlayElement && overlayElement._lumnoInputHistoryController;
+    if (storedInputHistoryController &&
+        typeof storedInputHistoryController.destroy === 'function') {
+      storedInputHistoryController.destroy();
+    }
+    if (inputHistoryController === storedInputHistoryController) {
+      inputHistoryController = null;
+    }
+    if (overlayElement) {
+      overlayElement._lumnoInputHistoryController = null;
+    }
     const storedUpdateNoticeController = overlayElement && overlayElement._lumnoUpdateNoticeController;
     if (storedUpdateNoticeController && typeof storedUpdateNoticeController.destroy === 'function') {
       if (storedUpdateNoticeController.element && storedUpdateNoticeController.element.parentNode) {
@@ -1339,6 +1354,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let searchInput = inputParts.input;
     const inputContainer = inputParts.container;
     const rightIcon = inputParts.rightIcon;
+    inputHistoryController =
+      typeof SEARCH_INPUT_HISTORY.createSearchInputHistoryController === 'function'
+        ? SEARCH_INPUT_HISTORY.createSearchInputHistoryController({
+            storageArea: chrome && chrome.storage
+              ? (chrome.storage.local || storageArea)
+              : storageArea,
+            storageChanges: chrome && chrome.storage ? chrome.storage.onChanged : null,
+            storageAreaName: chrome && chrome.storage && chrome.storage.local
+              ? 'local'
+              : storageAreaName
+          })
+        : null;
+    overlay._lumnoInputHistoryController = inputHistoryController;
     const handledSearchInputEvents = new WeakSet();
     overlayUpdateNoticeController = typeof UPDATE_NOTICE.createUpdateNotice === 'function'
       ? UPDATE_NOTICE.createUpdateNotice({
@@ -4861,6 +4889,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function handleSearchInputEvent(event) {
       runSearchInputEventOnce(event, () => {
+        if (inputHistoryController && !isApplyingSearchInputHistory) {
+          inputHistoryController.resetNavigation();
+        }
         const liveInput = syncLiveSearchInputFromEvent(event);
         const rawValue = liveInput ? liveInput.value : '';
         const query = rawValue.trim();
@@ -5082,6 +5113,31 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (isImeCompositionEvent(e)) {
         return;
       }
+      const inputHistoryDirection =
+        typeof SEARCH_INPUT_HISTORY.getShortcutDirection === 'function'
+          ? SEARCH_INPUT_HISTORY.getShortcutDirection(e)
+          : '';
+      if (inputHistoryDirection) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (inputHistoryController) {
+          const result = inputHistoryController.move(
+            inputHistoryDirection,
+            searchInput.value
+          );
+          if (result.handled) {
+            isApplyingSearchInputHistory = true;
+            try {
+              searchInput.value = result.value;
+              searchInput.setSelectionRange(result.value.length, result.value.length);
+              searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            } finally {
+              isApplyingSearchInputHistory = false;
+            }
+          }
+        }
+        return;
+      }
       if (e.key === 'Tab') {
         handleTabKey(e);
         return;
@@ -5193,6 +5249,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const query = searchInput.value.trim();
+        if (query && inputHistoryController) {
+          inputHistoryController.record(query);
+        }
         const commandMatch = localSearchScopeState ? null : getCommandMatch(query);
         if (commandMatch && selectedIndex === -1) {
           if (commandMatch.command.type === 'modeSwitch') {

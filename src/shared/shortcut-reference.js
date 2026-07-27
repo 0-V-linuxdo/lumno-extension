@@ -58,6 +58,14 @@
 
   const FIXED_SHORTCUTS = [
     {
+      id: 'search-input-history',
+      titleKey: 'shortcut_reference_search_input_history_title',
+      titleFallback: 'Previous or next input',
+      descKey: 'shortcut_reference_search_input_history_desc',
+      descFallback: 'Move backward or forward through submitted input history',
+      shortcut: 'Alt+ArrowUp / Alt+ArrowDown'
+    },
+    {
       id: 'search-navigate',
       titleKey: 'shortcut_reference_search_navigate_title',
       titleFallback: 'Move through suggestions',
@@ -146,6 +154,7 @@
       titleFallback: 'Command bar',
       itemIds: [
         'show-search',
+        'search-input-history',
         'search-navigate',
         'search-confirm',
         'search-tab-mode',

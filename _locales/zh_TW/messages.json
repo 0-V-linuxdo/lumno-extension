@@ -83,6 +83,9 @@
   "settings_version_label": {
     "message": "版本"
   },
+  "settings_version_tooltip": {
+    "message": "查看更新日誌"
+  },
   "language_zh_cn": {
     "message": "简体中文"
   },
@@ -1088,6 +1091,30 @@
   "bookmarks_copy_url_failed": {
     "message": "複製連結失敗，請重試"
   },
+  "bookmarks_edit": {
+    "message": "編輯"
+  },
+  "bookmarks_edit_dialog_title": {
+    "message": "編輯書籤"
+  },
+  "bookmarks_edit_folder_dialog_title": {
+    "message": "編輯資料夾"
+  },
+  "bookmarks_name_placeholder": {
+    "message": "名稱"
+  },
+  "bookmarks_invalid_url": {
+    "message": "請輸入有效網址"
+  },
+  "bookmarks_updated": {
+    "message": "已更新書籤"
+  },
+  "bookmarks_folder_updated": {
+    "message": "已更新資料夾"
+  },
+  "bookmarks_update_failed": {
+    "message": "無法更新書籤"
+  },
   "bookmarks_delete": {
     "message": "刪除"
   },
@@ -1504,6 +1531,12 @@
   },
   "shortcut_reference_tab_switcher_desc": {
     "message": "開啟最近分頁切換器"
+  },
+  "shortcut_reference_search_input_history_title": {
+    "message": "切換上一筆或下一筆輸入"
+  },
+  "shortcut_reference_search_input_history_desc": {
+    "message": "在已送出的輸入記錄中向前或向後切換"
   },
   "shortcut_reference_search_navigate_title": {
     "message": "上下移動候選項"

@@ -827,7 +827,6 @@
         --x-nt-dock-recent-card-padding: 7px 7px 12px;
         --x-nt-dock-recent-card-gap: 10px;
         --x-nt-dock-recent-card-radius: 28px;
-        --x-nt-dock-recent-card-hover-transform: rotate(-3deg) scale(1.01, 1.005);
         --x-nt-dock-recent-inner-height: 104px;
         --x-nt-dock-recent-inner-hover-height: 124px;
         --x-nt-dock-recent-inner-hover-offset: 20px;
@@ -870,7 +869,6 @@
         --x-nt-dock-recent-card-padding: 6px 6px 9px;
         --x-nt-dock-recent-card-gap: 7px;
         --x-nt-dock-recent-card-radius: 22px;
-        --x-nt-dock-recent-card-hover-transform: rotate(-1.5deg) scale(1.006);
         --x-nt-dock-recent-inner-height: 86px;
         --x-nt-dock-recent-inner-hover-height: 94px;
         --x-nt-dock-recent-inner-hover-offset: 8px;
@@ -899,7 +897,6 @@
         --x-nt-dock-recent-card-padding: 5px 5px 8px;
         --x-nt-dock-recent-card-gap: 6px;
         --x-nt-dock-recent-card-radius: 20px;
-        --x-nt-dock-recent-card-hover-transform: scale(1.004);
         --x-nt-dock-recent-inner-height: 72px;
         --x-nt-dock-recent-inner-hover-height: 72px;
         --x-nt-dock-recent-inner-hover-offset: 0px;
@@ -1324,7 +1321,7 @@
         --x-nt-bookmark-card-hover-color: var(--x-nt-bookmark-folder-hover-bg, rgba(83, 147, 255, 0.05));
       }
       .x-nt-bookmark-card.x-nt-bookmark-card--hover {
-        transform: translateY(-2.5px);
+        transform: none;
         border-color: var(--x-nt-bookmark-card-border-color, var(--x-nt-bookmark-card-border, rgba(0, 0, 0, 0.08)));
         backdrop-filter: blur(var(--x-nt-bookmark-card-blur-hover, 9px));
         -webkit-backdrop-filter: blur(var(--x-nt-bookmark-card-blur-hover, 9px));
@@ -2329,7 +2326,7 @@
       .x-nt-recent-card:hover {
         box-shadow: var(--x-nt-recent-card-shadow-hover);
         --x-nt-recent-title-lines: var(--x-nt-dock-recent-title-hover-lines, 4);
-        transform: var(--x-nt-dock-recent-card-hover-transform, rotate(-3deg) scale(1.01, 1.005));
+        transform: none;
       }
       .x-nt-recent-card.x-nt-recent-card--rollback,
       .x-nt-recent-card.x-nt-recent-card--rollback:hover {
@@ -3230,7 +3227,7 @@
         outline-offset: 2px;
       }
       .x-nt-feedback-action:hover {
-        transform: translateY(-1px);
+        transform: none;
       }
       .x-nt-feedback-action:hover::before {
         background: linear-gradient(180deg, #ffffff 0%, #e8ebef 100%);
@@ -5551,7 +5548,7 @@
         padding: 0 var(--x-nt-suggestion-action-icon-end, 7px) 0 var(--x-nt-suggestion-action-button-start, 10px);
       }
       .x-nt-suggestion-action-button[data-visible="true"]:hover {
-        transform: translateX(1px);
+        transform: none;
       }
       .x-nt-suggestion-action-button__label,
       .x-nt-suggestion-action-button__icon {
@@ -6097,6 +6094,7 @@
     <div id="_x_extension_newtab_root_2024_unique_"></div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_" data-show="false"></div>
     <script src="../shared/ime-key-guard.js"></script>
+    <script src="../shared/search-input-history.js"></script>
     <script src="../shared/search-input-mode.js"></script>
     <script src="../shared/blacklist-utils.js"></script>
     <script src="../shared/url-guards.js"></script>
@@ -6133,10 +6131,10 @@
     <script src="wallpaper-effects.js"></script>
     <script src="wallpaper.js"></script>
     <script src="../overlay/tab-switcher.js"></script>
-    <script src="../overlay/tab-switcher-page-bridge.js"></script>
     <script
       src="../shared/react-page-bootstrap.js"
       data-react-entry="../react/newtab-islands.js"
+      data-react-ready-script="../overlay/tab-switcher-page-bridge.js"
       data-page-entry="../newtab/newtab.js"
       data-react-state="LumnoNewtabReactBootstrap"
       data-page-runtime="newtab"

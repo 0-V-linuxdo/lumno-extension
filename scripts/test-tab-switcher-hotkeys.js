@@ -147,12 +147,23 @@ assert.match(
 ].forEach(([pageName, html]) => {
   assert.ok(
     html.includes('<script src="../overlay/tab-switcher.js"></script>') &&
-      html.includes('<script src="../overlay/tab-switcher-page-bridge.js"></script>') &&
+      html.includes('data-react-ready-script="../overlay/tab-switcher-page-bridge.js"') &&
+      !html.includes('<script src="../overlay/tab-switcher-page-bridge.js"></script>') &&
       html.indexOf('<script src="../overlay/tab-switcher.js"></script>') <
-        html.indexOf('<script src="../overlay/tab-switcher-page-bridge.js"></script>'),
-    `${pageName} should load the tab switcher runtime and shared command bridge for extension-page hosting`
+        html.indexOf('data-react-ready-script="../overlay/tab-switcher-page-bridge.js"'),
+    `${pageName} should connect its tab switcher bridge only after the React entry is ready`
   );
 });
+assert.match(
+  switcherSource,
+  /const tabSwitcherReactViewApi = window\.LumnoOverlayTabSwitcherView;[\s\S]*typeof tabSwitcherReactViewApi\.createTabSwitcherView !== 'function'[\s\S]*reason: 'react-view-unavailable'/,
+  'the classic switcher runtime should resolve the page React API at invocation time'
+);
+assert.match(
+  switcherBridgeSource,
+  /const result = toggle\(context\);[\s\S]*typeof result === 'object'[\s\S]*result/,
+  'the extension-page bridge should propagate switcher startup failures'
+);
 assert.match(
   backgroundSource,
   /const TAB_SWITCHER_EXTENSION_PAGE_PORT_NAME = 'lumno-tab-switcher-extension-page';[\s\S]*const tabSwitcherExtensionPagePortsByTabId = new Map\(\);/,
