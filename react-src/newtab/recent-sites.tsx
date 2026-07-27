@@ -462,6 +462,8 @@ function RecentSiteCard({
   );
   const faviconPageUrl =
     options.getCanonicalPageUrlForFavicon(itemUrl) || itemUrl;
+  const browserPageFaviconUrl =
+    options.getBrowserPageFaviconUrl(faviconPageUrl);
   const canonicalHost = options.getHostFromUrl(faviconPageUrl);
   const host = ownExtensionDisplay
     ? 'lumno.kubai.design'
@@ -725,7 +727,7 @@ function RecentSiteCard({
 
     options.applyCardTheme(card, immediateTheme, host);
     options.attachFaviconWithFallbacks(favicon, faviconPageUrl, host, {
-      primaryUrl: options.getBrowserPageFaviconUrl(faviconPageUrl)
+      primaryUrl: browserPageFaviconUrl
     });
     options.updateDismissButton(dismissButton, item);
     options.updatePinButton(
@@ -874,7 +876,23 @@ function RecentSiteCard({
             decoding="async"
             loading={shouldEager ? 'eager' : 'lazy'}
             fetchPriority={shouldEager ? 'high' : undefined}
+            data-favicon-placeholder={
+              browserPageFaviconUrl ? 'true' : undefined
+            }
+            data-fallback-icon-name={
+              browserPageFaviconUrl ? 'ri-link' : undefined
+            }
           />
+          {browserPageFaviconUrl ? (
+            <span
+              aria-hidden="true"
+              className="x-nt-favicon-fallback _x_extension_favicon_fallback_2024_unique_"
+              data-visible="true"
+              dangerouslySetInnerHTML={{
+                __html: options.getRiSvg('ri-link', 'ri-size-16')
+              }}
+            />
+          ) : null}
           <div className="x-nt-recent-name" title={siteName}>
             {siteName}
           </div>

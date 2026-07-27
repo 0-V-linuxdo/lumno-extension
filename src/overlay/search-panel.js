@@ -6714,8 +6714,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       clearDefaultOpenTabsSuggestions();
     }
 
-    // Focus the input when created
-    setTimeout(() => searchInput.focus(), 100);
     overlay.appendChild(inputContainer);
     overlay.appendChild(suggestionsContainer);
     if (!shouldShowOpenTabsForEmptyQuery()) {
@@ -6723,7 +6721,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
     applyNoTranslateDeep(overlay);
     applyOverlayThemeVariables(overlay, overlayThemeMode);
-    document.body.appendChild(overlayHost);
+    const overlayMountParent = document.fullscreenElement || document.body;
+    overlayMountParent.appendChild(overlayHost);
     if (typeof overlayHost.showPopover === 'function') {
       try {
         overlayHost.showPopover();
@@ -6732,6 +6731,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayHost.removeAttribute('popover');
       }
     }
+    // Focus only after the host is connected and promoted into the top layer.
+    setTimeout(() => searchInput.focus({ preventScroll: true }), 100);
     startOverlayViewportSizeSync(overlay);
     startOverlayUpdateNoticeFrameSync(overlay);
     startOverlayAntiTranslateObserver(overlay);

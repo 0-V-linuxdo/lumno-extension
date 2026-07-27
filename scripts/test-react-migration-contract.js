@@ -330,11 +330,17 @@ assert(
   'the Overlay panel should retain and destroy the React suggestions owner across toggle invocations'
 );
 assert(
-  overlaySource.includes('document.body.appendChild(overlayHost);') &&
+  overlaySource.includes(
+    'const overlayMountParent = document.fullscreenElement || document.body;'
+  ) &&
+    overlaySource.includes('overlayMountParent.appendChild(overlayHost);') &&
     overlaySource.includes("typeof overlayHost.showPopover === 'function'") &&
     overlaySource.includes('overlayHost.showPopover();') &&
-    overlaySource.includes("overlayHost.removeAttribute('popover');"),
-  'the Overlay panel should enter the browser top layer after mounting so it remains visible over fullscreen content'
+    overlaySource.includes("overlayHost.removeAttribute('popover');") &&
+    overlaySource.includes(
+      'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
+    ),
+  'the Overlay panel should mount inside the fullscreen subtree, enter the browser top layer, and focus without scrolling'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&

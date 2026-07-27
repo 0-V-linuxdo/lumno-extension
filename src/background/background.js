@@ -1238,12 +1238,6 @@ const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_uniqu
 const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
 const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
 const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
-const BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY =
-  '_x_extension_bookmark_topbar_surface_color_2026_unique_';
-const BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY =
-  '_x_extension_bookmark_topbar_surface_color_light_2026_unique_';
-const BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY =
-  '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
 const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
 const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
 const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
@@ -5530,9 +5524,6 @@ migrateStorageIfNeeded([
   BOOKMARK_COUNT_STORAGE_KEY,
   BOOKMARK_COLUMNS_STORAGE_KEY,
   BOOKMARK_VIEW_MODE_STORAGE_KEY,
-  BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY,
-  BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
-  BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
   BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
   PINNED_RECENT_SITES_STORAGE_KEY,
   HIDDEN_RECENT_SITES_STORAGE_KEY,

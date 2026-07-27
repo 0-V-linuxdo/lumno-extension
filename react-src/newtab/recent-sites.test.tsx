@@ -164,6 +164,45 @@ describe('Recent Sites React island', () => {
     expect(attachFavicon).toHaveBeenCalledOnce();
   });
 
+  it('shows a stable fallback before a browser-page favicon attaches', () => {
+    const attachFavicon = vi.fn();
+    const browserPageUrl = 'chrome://extensions/';
+    const browserPageFaviconUrl =
+      'chrome-extension://lumno/_favicon/?pageUrl=chrome%3A%2F%2Fextensions%2F&size=128';
+    const { view, options } = createView({
+      getHostFromUrl: (url) =>
+        url === browserPageUrl ? 'extensions' : 'example.com',
+      getBrowserPageFaviconUrl: (url) =>
+        url === browserPageUrl ? browserPageFaviconUrl : '',
+      attachFaviconWithFallbacks: attachFavicon
+    });
+
+    renderItems(view, [{
+      title: 'Extensions',
+      url: browserPageUrl
+    }]);
+
+    const grid = options.grid as HTMLElement;
+    const image = grid.querySelector<HTMLImageElement>(
+      '.x-nt-recent-favicon'
+    );
+    const fallback = grid.querySelector<HTMLElement>(
+      '._x_extension_favicon_fallback_2024_unique_'
+    );
+
+    expect(image?.hasAttribute('src')).toBe(false);
+    expect(image?.dataset.faviconPlaceholder).toBe('true');
+    expect(image?.dataset.fallbackIconName).toBe('ri-link');
+    expect(fallback?.dataset.visible).toBe('true');
+    expect(fallback?.innerHTML).toContain('ri-link');
+    expect(attachFavicon).toHaveBeenCalledWith(
+      image,
+      browserPageUrl,
+      'extensions',
+      { primaryUrl: browserPageFaviconUrl }
+    );
+  });
+
   it('preserves pointer suppression and background-open behavior', async () => {
     const opened: Array<{
       url: string;

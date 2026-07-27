@@ -243,7 +243,7 @@ function testSearchPanelAppliesInitialSystemThemeBeforeAppend() {
   const searchPanelSource = fs.readFileSync(path.join(__dirname, '../src/overlay/search-panel.js'), 'utf8');
   const initialThemeIndex = searchPanelSource.indexOf('applyOverlayThemeVariables(overlay, overlayThemeMode);');
   const themeTokensIndex = searchPanelSource.indexOf('const overlayThemeTokens = {');
-  const appendIndex = searchPanelSource.indexOf('document.body.appendChild(overlayHost);');
+  const appendIndex = searchPanelSource.indexOf('overlayMountParent.appendChild(overlayHost);');
   assert.ok(initialThemeIndex > 0, 'search-panel should apply a synchronous initial system theme');
   assert.ok(
     initialThemeIndex > themeTokensIndex,
