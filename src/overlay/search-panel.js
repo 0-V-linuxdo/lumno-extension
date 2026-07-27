@@ -6724,6 +6724,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     applyNoTranslateDeep(overlay);
     applyOverlayThemeVariables(overlay, overlayThemeMode);
     document.body.appendChild(overlayHost);
+    if (typeof overlayHost.showPopover === 'function') {
+      try {
+        overlayHost.showPopover();
+      } catch (e) {
+        // Keep the fixed-position fallback visible if top-layer promotion fails.
+        overlayHost.removeAttribute('popover');
+      }
+    }
     startOverlayViewportSizeSync(overlay);
     startOverlayUpdateNoticeFrameSync(overlay);
     startOverlayAntiTranslateObserver(overlay);

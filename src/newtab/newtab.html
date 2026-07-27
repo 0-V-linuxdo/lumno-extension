@@ -53,6 +53,9 @@
         position: relative;
         isolation: isolate;
       }
+      body.x-nt-bottom-layout:not(.x-nt-mobile-flow) {
+        overflow-y: hidden;
+      }
       body[data-wordmark-transition="true"] {
         transition: padding-top 260ms cubic-bezier(0.22, 1, 0.36, 1);
       }
@@ -503,7 +506,7 @@
         z-index: 1;
       }
       .x-nt-shortcut-tile[data-shortcut-draggable="true"] {
-        cursor: grab;
+        cursor: pointer;
         touch-action: none;
       }
       .x-nt-shortcuts-grid[data-shortcut-dragging="true"] .x-nt-shortcut-tile {
@@ -519,6 +522,9 @@
       }
       .x-nt-shortcut-tile--add {
         color: var(--x-nt-text, #111827);
+      }
+      .x-nt-shortcut-tile--add[hidden] {
+        display: none;
       }
       .x-nt-shortcut-icon {
         --x-nt-shortcut-dock-scale: 1;
@@ -827,6 +833,7 @@
         --x-nt-dock-recent-card-padding: 7px 7px 12px;
         --x-nt-dock-recent-card-gap: 10px;
         --x-nt-dock-recent-card-radius: 28px;
+        --x-nt-dock-recent-card-hover-transform: rotate(-3deg) scale(1.01, 1.005);
         --x-nt-dock-recent-inner-height: 104px;
         --x-nt-dock-recent-inner-hover-height: 124px;
         --x-nt-dock-recent-inner-hover-offset: 20px;
@@ -869,6 +876,7 @@
         --x-nt-dock-recent-card-padding: 6px 6px 9px;
         --x-nt-dock-recent-card-gap: 7px;
         --x-nt-dock-recent-card-radius: 22px;
+        --x-nt-dock-recent-card-hover-transform: rotate(-1.5deg) scale(1.006);
         --x-nt-dock-recent-inner-height: 86px;
         --x-nt-dock-recent-inner-hover-height: 94px;
         --x-nt-dock-recent-inner-hover-offset: 8px;
@@ -897,6 +905,7 @@
         --x-nt-dock-recent-card-padding: 5px 5px 8px;
         --x-nt-dock-recent-card-gap: 6px;
         --x-nt-dock-recent-card-radius: 20px;
+        --x-nt-dock-recent-card-hover-transform: scale(1.004);
         --x-nt-dock-recent-inner-height: 72px;
         --x-nt-dock-recent-inner-hover-height: 72px;
         --x-nt-dock-recent-inner-hover-offset: 0px;
@@ -1144,7 +1153,7 @@
       .x-nt-bookmarks-pager-btn:disabled,
       .x-nt-bookmarks-pager-btn[aria-disabled="true"] {
         --x-nt-bookmarks-pager-icon-opacity: 0.34;
-        cursor: default;
+        cursor: not-allowed;
       }
       .x-nt-bookmarks-pager-btn:disabled {
         pointer-events: none;
@@ -1180,7 +1189,7 @@
           -webkit-backdrop-filter 170ms ease;
       }
       .x-nt-bookmark-card[data-bookmark-draggable="true"] {
-        cursor: grab;
+        cursor: pointer;
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
@@ -2089,8 +2098,13 @@
         transition: color 120ms ease;
       }
       .x-nt-bookmark-cascade-item[data-bookmark-draggable="true"] {
+        cursor: pointer;
         -webkit-user-select: none;
         user-select: none;
+      }
+      .x-nt-bookmark-cascade-menu[data-drag-mode="true"] .x-nt-bookmark-cascade-item,
+      .x-nt-bookmark-cascade-item[data-bookmark-dragging="true"] {
+        cursor: grabbing;
       }
       .x-nt-bookmark-cascade-item[data-bookmark-dragging="true"]:not(.x-nt-bookmark-cascade-drag-preview) {
         opacity: 0.38;
@@ -2326,7 +2340,7 @@
       .x-nt-recent-card:hover {
         box-shadow: var(--x-nt-recent-card-shadow-hover);
         --x-nt-recent-title-lines: var(--x-nt-dock-recent-title-hover-lines, 4);
-        transform: none;
+        transform: var(--x-nt-dock-recent-card-hover-transform, rotate(-3deg) scale(1.01, 1.005));
       }
       .x-nt-recent-card.x-nt-recent-card--rollback,
       .x-nt-recent-card.x-nt-recent-card--rollback:hover {
@@ -2514,9 +2528,8 @@
       }
       .x-nt-recent-pin:disabled {
         opacity: 0.42;
-        cursor: default;
+        cursor: not-allowed;
         transform: none;
-        pointer-events: none;
       }
       body[data-theme="dark"] .x-nt-recent-pin:hover,
       body[data-theme="dark"] .x-nt-recent-pin:focus-visible {
@@ -3360,7 +3373,7 @@
         outline-offset: 1px;
       }
       .x-nt-feedback-detail-action:disabled {
-        cursor: wait;
+        cursor: progress;
         opacity: 0.56;
       }
       .x-nt-feedback-detail-refresh[data-loading="true"] .ri-icon {
@@ -3883,7 +3896,7 @@
         box-sizing: border-box;
         color: var(--x-nt-subtext, #6b7280);
         background: transparent;
-        cursor: pointer;
+        cursor: help;
         transition: background-color 140ms ease, color 140ms ease;
       }
       .x-nt-appearance-info-button .ri-icon {
@@ -4401,7 +4414,7 @@
         opacity: 0.46;
       }
       .x-nt-effect-slider:disabled {
-        cursor: default;
+        cursor: not-allowed;
       }
       .x-nt-overlay-slider-wrap {
         --x-nt-overlay-thumb-size: 16px;
@@ -4777,7 +4790,7 @@
         transition: color 160ms ease, opacity 160ms ease;
       }
       .x-nt-wallpaper-tile[data-loading="true"] {
-        pointer-events: none;
+        cursor: progress;
         opacity: 0.72;
       }
       .x-nt-wallpaper-tile:active .x-nt-wallpaper-thumb {
@@ -5667,7 +5680,7 @@
       }
       .x-nt-history-delete-button .ri-icon {
         pointer-events: none;
-        cursor: pointer;
+        cursor: inherit;
         transform: none;
       }
       .x-nt-tab-switch-button {
@@ -5753,10 +5766,25 @@
       #_x_extension_newtab_root_2024_unique_ {
         color: var(--x-nt-text, #111827);
       }
-      #_x_extension_newtab_root_2024_unique_ button,
-      #_x_extension_newtab_root_2024_unique_ a,
-      #_x_extension_newtab_root_2024_unique_ [role="button"] {
+      #_x_extension_newtab_root_2024_unique_ button:not(:disabled),
+      #_x_extension_newtab_root_2024_unique_ a[href],
+      #_x_extension_newtab_root_2024_unique_ [role="button"]:not([aria-disabled="true"]) {
         cursor: pointer;
+      }
+      #_x_extension_newtab_root_2024_unique_ button:disabled,
+      #_x_extension_newtab_root_2024_unique_ [role="button"][aria-disabled="true"] {
+        cursor: not-allowed;
+      }
+      #_x_extension_newtab_root_2024_unique_ [aria-busy="true"] :disabled,
+      #_x_extension_newtab_root_2024_unique_ button[aria-busy="true"],
+      #_x_extension_newtab_root_2024_unique_ [role="button"][data-loading="true"] {
+        cursor: progress;
+      }
+      #_x_extension_newtab_root_2024_unique_ .x-nt-bookmarks-crumb[aria-current="page"] {
+        cursor: default;
+      }
+      #_x_extension_newtab_root_2024_unique_ .x-nt-appearance-info-button:not(:disabled) {
+        cursor: help;
       }
       #_x_extension_newtab_root_2024_unique_ button .ri-icon,
       #_x_extension_newtab_root_2024_unique_ a .ri-icon,

@@ -1676,6 +1676,9 @@
   "newtab_shortcuts_invalid_url": {
     "message": "Enter a valid http or https URL"
   },
+  "newtab_shortcuts_limit_reached": {
+    "message": "You can add up to {count} shortcuts."
+  },
   "newtab_shortcuts_added": {
     "message": "Shortcut added"
   },

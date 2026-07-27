@@ -1676,6 +1676,9 @@
   "newtab_shortcuts_invalid_url": {
     "message": "有効な http または https のURLを入力してください"
   },
+  "newtab_shortcuts_limit_reached": {
+    "message": "ショートカットは最大 {count} 件まで追加できます。"
+  },
   "newtab_shortcuts_added": {
     "message": "ショートカットを追加しました"
   },

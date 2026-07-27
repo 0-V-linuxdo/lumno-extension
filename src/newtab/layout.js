@@ -90,6 +90,7 @@
     let suggestionsResizeAnimationTimer = 0;
     let suggestionsResizeTransitionEndHandler = null;
     let suggestionsResizeTargetHeight = 0;
+    let dockDensityPromotionLock = null;
     const getTopInsetPx = typeof options.getTopInsetPx === 'function'
       ? options.getTopInsetPx
       : function() {
@@ -386,6 +387,36 @@
       return section.style.getPropertyValue('display') !== 'none';
     }
 
+    function getDockDensityRank(density) {
+      if (density === 'tiny') {
+        return 2;
+      }
+      if (density === 'compact') {
+        return 1;
+      }
+      return 0;
+    }
+
+    function getDockDensityLayoutContext(
+      shortcutSection,
+      shortcutVisible,
+      bottomDockTopReserve
+    ) {
+      const viewportWidth = Math.max(0, windowObj.innerWidth || 0);
+      const viewportHeight = Math.max(0, windowObj.innerHeight || 0);
+      const topReserve = Math.round(Math.max(0, Number(bottomDockTopReserve) || 0));
+      if (!shortcutVisible || !shortcutSection) {
+        return `${viewportWidth}:${viewportHeight}:${topReserve}:hidden`;
+      }
+      const shortcutRect = shortcutSection.getBoundingClientRect();
+      const sectionWidth = Math.round(Math.max(0, Number(shortcutRect && shortcutRect.width) || 0));
+      let tileCount = -1;
+      if (typeof shortcutSection.querySelectorAll === 'function') {
+        tileCount = shortcutSection.querySelectorAll('.x-nt-shortcut-tile').length;
+      }
+      return `${viewportWidth}:${viewportHeight}:${topReserve}:${sectionWidth}:${tileCount}`;
+    }
+
     function getCssPixelValue(style, property) {
       if (!style || !property) {
         return 0;
@@ -576,13 +607,47 @@
       const previousDockDensity = typeof bottomDock.getAttribute === 'function'
         ? bottomDock.getAttribute('data-density')
         : '';
-      const dockDensity = mobileFlow
+      const shortcutSection = getShortcutSection();
+      const shortcutVisible = isSectionVisible(shortcutSection);
+      const densityLayoutContext = getDockDensityLayoutContext(
+        shortcutSection,
+        shortcutVisible,
+        bottomDockTopReserve
+      );
+      if (callbacks && callbacks.releaseDockDensityLock) {
+        dockDensityPromotionLock = null;
+      }
+      if (dockDensityPromotionLock &&
+          dockDensityPromotionLock.context !== densityLayoutContext) {
+        dockDensityPromotionLock = null;
+      }
+      let dockDensity = mobileFlow
         ? 'mobile'
         : bottomDockMaxHeight <= 260
           ? 'tiny'
           : bottomDockMaxHeight <= 360
             ? 'compact'
             : 'default';
+      const isDensityPromotion = !mobileFlow &&
+        previousDockDensity &&
+        getDockDensityRank(dockDensity) < getDockDensityRank(previousDockDensity);
+      const shouldKeepCompactedDensity = isDensityPromotion && (
+        Boolean(callbacks && callbacks.stabilizeDockDensity) ||
+        Boolean(
+          dockDensityPromotionLock &&
+          dockDensityPromotionLock.context === densityLayoutContext &&
+          dockDensityPromotionLock.density === previousDockDensity
+        )
+      );
+      if (shouldKeepCompactedDensity) {
+        dockDensity = previousDockDensity;
+        dockDensityPromotionLock = {
+          context: densityLayoutContext,
+          density: previousDockDensity
+        };
+      } else if (dockDensity !== previousDockDensity) {
+        dockDensityPromotionLock = null;
+      }
       body.setAttribute('data-nt-bottom-dock-density', dockDensity);
       bottomDock.setAttribute('data-density', dockDensity);
       sectionSafeCorridor.style.setProperty('display', (bookmarkVisible && recentVisible) ? 'block' : 'none', 'important');
@@ -599,7 +664,8 @@
       if (previousDockDensity !== dockDensity && typeof windowObj.requestAnimationFrame === 'function') {
         windowObj.requestAnimationFrame(() => {
           updateBottomDockLayout({
-            preserveSearchEntryLayout: true
+            preserveSearchEntryLayout: true,
+            stabilizeDockDensity: true
           });
         });
       }

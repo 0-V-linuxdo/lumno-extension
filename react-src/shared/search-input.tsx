@@ -559,7 +559,7 @@ export function createSearchInput(
       if (!isolated || !config.styleRoot) {
         applyStyles(
           node,
-          { cursor: 'pointer', 'pointer-events': 'none' },
+          { cursor: 'inherit', 'pointer-events': 'none' },
           important
         );
       }

@@ -438,7 +438,12 @@ function testNewtabContainsRootOverscroll() {
   assert.match(
     newtabHtml,
     /body\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/,
-    'newtab should prevent horizontal document movement while preserving vertical document scrolling'
+    'newtab should retain document scrolling as the initialization and mobile-flow fallback'
+  );
+  assert.match(
+    newtabHtml,
+    /body\.x-nt-bottom-layout:not\(\.x-nt-mobile-flow\)\s*\{[\s\S]*?overflow-y:\s*hidden;/,
+    'desktop bottom layout should prevent a competing page scrollbar while the dock owns vertical overflow'
   );
   assert.match(
     newtabHtml,
@@ -528,6 +533,152 @@ function testShortDockReservesVisibleShortcutRow() {
     bottomDock.getAttribute('data-density'),
     'compact',
     'reserving shortcut space should still drive dock density from the remaining height'
+  );
+}
+
+function testWrappedShortcutsDoNotOscillateDockDensity() {
+  const {
+    bottomDock,
+    controller,
+    shortcutSection,
+    flushAnimationFrames,
+    windowObj
+  } = createFixture({
+    innerHeight: 620,
+    rootRect: { top: 120, height: 55 },
+    shortcutVisible: true,
+    deferAnimationFrame: true,
+    constants: {
+      bottomDockTopReservePx: 240,
+      compactDockViewportMaxHeightPx: 800,
+      compactDockSearchGapPx: 30,
+      compactDockShortcutGapPx: 8,
+      compactDockMinTopReservePx: 168
+    }
+  });
+  shortcutSection.getBoundingClientRect = () => {
+    const density = bottomDock.getAttribute('data-density') || 'default';
+    const bottom = density === 'compact' ? 240 : 270;
+    return {
+      left: 420,
+      top: 160,
+      width: 240,
+      height: bottom - 160,
+      bottom
+    };
+  };
+
+  controller.updateBottomDockLayout();
+  const densities = [bottomDock.getAttribute('data-density')];
+  flushAnimationFrames();
+  densities.push(bottomDock.getAttribute('data-density'));
+  flushAnimationFrames();
+  densities.push(bottomDock.getAttribute('data-density'));
+
+  assert.deepStrictEqual(
+    densities,
+    ['compact', 'compact', 'compact'],
+    'a wrapped default shortcut row must not alternate compact and default dock density'
+  );
+
+  controller.updateBottomDockLayout();
+  assert.strictEqual(
+    bottomDock.getAttribute('data-density'),
+    'compact',
+    'routine layout refreshes should retain the stabilized density for the same shortcut layout'
+  );
+
+  windowObj.innerHeight = 760;
+  controller.updateBottomDockLayout();
+  flushAnimationFrames();
+  assert.strictEqual(
+    bottomDock.getAttribute('data-density'),
+    'default',
+    'a meaningful viewport change should release the density lock when default sizing fits'
+  );
+}
+
+function testContinuousResizeKeepsDockDensityStableUntilSettle() {
+  const {
+    bottomDock,
+    controller,
+    shortcutSection,
+    flushAnimationFrames,
+    windowObj
+  } = createFixture({
+    innerHeight: 630,
+    rootRect: { top: 120, height: 55 },
+    shortcutVisible: true,
+    deferAnimationFrame: true,
+    constants: {
+      bottomDockTopReservePx: 240,
+      compactDockViewportMaxHeightPx: 800,
+      compactDockSearchGapPx: 30,
+      compactDockShortcutGapPx: 8,
+      compactDockMinTopReservePx: 168
+    }
+  });
+  shortcutSection.getBoundingClientRect = () => {
+    const density = bottomDock.getAttribute('data-density') || 'default';
+    const bottom = density === 'compact' ? 240 : 270;
+    return {
+      left: 420,
+      top: 160,
+      width: 240,
+      height: bottom - 160,
+      bottom
+    };
+  };
+
+  controller.updateBottomDockLayout();
+  flushAnimationFrames();
+  assert.strictEqual(
+    bottomDock.getAttribute('data-density'),
+    'compact',
+    'the wrapped shortcut layout should stabilize at compact density before resizing'
+  );
+
+  const resizeDensities = [];
+  for (let index = 0; index < 8; index += 1) {
+    windowObj.innerWidth -= 1;
+    controller.updateBottomDockLayout({ stabilizeDockDensity: true });
+    resizeDensities.push(bottomDock.getAttribute('data-density'));
+    flushAnimationFrames();
+    resizeDensities.push(bottomDock.getAttribute('data-density'));
+  }
+  assert.deepStrictEqual(
+    resizeDensities,
+    Array(resizeDensities.length).fill('compact'),
+    'continuous resize frames should not alternate compact and default density'
+  );
+
+  windowObj.innerHeight = 760;
+  windowObj.innerWidth -= 1;
+  controller.updateBottomDockLayout({ stabilizeDockDensity: true });
+  flushAnimationFrames();
+  assert.strictEqual(
+    bottomDock.getAttribute('data-density'),
+    'compact',
+    'live resize should keep the last compact density even after the viewport grows'
+  );
+
+  controller.updateBottomDockLayout({ releaseDockDensityLock: true });
+  flushAnimationFrames();
+  assert.strictEqual(
+    bottomDock.getAttribute('data-density'),
+    'default',
+    'resize settle should release the density lock and apply the final fitting density once'
+  );
+
+  assert.match(
+    newtabSource,
+    /function handleNewtabResize\(\)[\s\S]*?updateBookmarkSectionPosition\(\{\s*stabilizeDockDensity:\s*true\s*\}\)/,
+    'live new-tab resize frames should stabilize density promotions'
+  );
+  assert.match(
+    newtabSource,
+    /newtabResizeSettleTimer\s*=\s*window\.setTimeout\([\s\S]*?releaseDockDensityLock:\s*true[\s\S]*?NEWTAB_RESIZE_DENSITY_SETTLE_MS/,
+    'new-tab resize should release density stabilization after resize events settle'
   );
 }
 
@@ -711,6 +862,8 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
 testCompactDockKeepsSearchEntryClearOnShortViewports();
 testTinyDockDensityForVeryShortViewports();
 testShortDockReservesVisibleShortcutRow();
+testWrappedShortcutsDoNotOscillateDockDensity();
+testContinuousResizeKeepsDockDensityStableUntilSettle();
 testMobileViewportReleasesFixedDockLayout();
 testResizeOutOfMobileRestoresFixedDockLayout();
 testBottomDockCssDefinesAdaptiveDensityVariables();

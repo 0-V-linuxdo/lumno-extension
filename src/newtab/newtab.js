@@ -286,7 +286,7 @@
     '_x_extension_newtab_shortcut_icons_2026_unique_';
   const MAX_PINNED_RECENT_SITES = 3;
   const MAX_HIDDEN_RECENT_SITES = 60;
-  const MAX_NEWTAB_SHORTCUTS = 10;
+  const MAX_NEWTAB_SHORTCUTS = 20;
   const SHORTCUT_DRAG_START_THRESHOLD_PX = 10;
   const SHORTCUT_REORDER_ANIMATION_MS = 180;
   const SHORTCUT_DROP_ANIMATION_MS = 210;
@@ -300,6 +300,7 @@
   const BOOKMARK_DRAG_FOLDER_SWITCH_DELAY_MS = 640;
   const NEWTAB_SECTION_CACHE_TTL_MS = 1000 * 60 * 5;
   const NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS = 120;
+  const NEWTAB_RESIZE_DENSITY_SETTLE_MS = 140;
   const pageSearchParams = new URLSearchParams(window.location.search || '');
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let mediaListenerAttached = false;
@@ -7492,7 +7493,15 @@
       return Promise.resolve(false);
     }
     const withoutDuplicate = newtabShortcuts.filter((item) => item && item.url !== nextShortcut.url);
-    const nextShortcuts = withoutDuplicate.concat(nextShortcut).slice(-MAX_NEWTAB_SHORTCUTS);
+    if (withoutDuplicate.length >= MAX_NEWTAB_SHORTCUTS) {
+      setShortcutError(formatMessage(
+        'newtab_shortcuts_limit_reached',
+        'You can add up to {count} shortcuts.',
+        { count: MAX_NEWTAB_SHORTCUTS }
+      ));
+      return Promise.resolve(false);
+    }
+    const nextShortcuts = withoutDuplicate.concat(nextShortcut);
     return persistShortcuts(
       nextShortcuts,
       t('newtab_shortcuts_added', 'Shortcut added'),
@@ -7619,6 +7628,7 @@
     shortcutsView = NEWTAB_SHORTCUTS_VIEW.createShortcutsView({
       grid: shortcutGrid,
       tiles: shortcutTiles,
+      maxShortcuts: MAX_NEWTAB_SHORTCUTS,
       getShortcutTitle,
       getHostFromUrl,
       getShortcutIconDataUrl,
@@ -8300,10 +8310,13 @@
     return true;
   }
 
-  function updateBookmarkSectionPosition() {
+  function updateBookmarkSectionPosition(options) {
+    const layoutOptions = options || {};
     if (layoutController && typeof layoutController.updateBottomDockLayout === 'function') {
       layoutController.updateBottomDockLayout({
         preserveSearchEntryLayout: shouldPreserveSearchEntryLayout(),
+        stabilizeDockDensity: Boolean(layoutOptions.stabilizeDockDensity),
+        releaseDockDensityLock: Boolean(layoutOptions.releaseDockDensityLock),
         onRecentHidden: () => {
           recentMouseInsideSection = false;
           recentMouseLeftAt = 0;
@@ -13947,6 +13960,7 @@
   }
 
   let newtabResizeFrame = 0;
+  let newtabResizeSettleTimer = 0;
   function handleNewtabResize() {
     newtabResizeFrame = 0;
     const previousBookmarkLimit = getBookmarkLimit();
@@ -13959,7 +13973,7 @@
       renderCurrentBookmarkPage();
     }
     updateBookmarkGridHeightLock();
-    updateBookmarkSectionPosition();
+    updateBookmarkSectionPosition({ stabilizeDockDensity: true });
     positionBookmarkCascadeLevels();
     updateSuggestionsFloatingLayout();
     if (recentColumnsChanged) {
@@ -13969,6 +13983,13 @@
   }
 
   window.addEventListener('resize', () => {
+    if (newtabResizeSettleTimer) {
+      window.clearTimeout(newtabResizeSettleTimer);
+    }
+    newtabResizeSettleTimer = window.setTimeout(() => {
+      newtabResizeSettleTimer = 0;
+      updateBookmarkSectionPosition({ releaseDockDensityLock: true });
+    }, NEWTAB_RESIZE_DENSITY_SETTLE_MS);
     if (newtabResizeFrame) {
       return;
     }

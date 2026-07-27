@@ -248,6 +248,7 @@ function createOverlayHost(
     options.hostId || '_x_extension_overlay_host_2026_unique_'
   );
   host.dataset.lumnoOverlayHost = 'true';
+  host.setAttribute('popover', 'manual');
   host.style.cssText = `
     all: initial !important;
     position: fixed !important;

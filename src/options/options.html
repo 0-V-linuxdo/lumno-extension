@@ -1112,7 +1112,7 @@
       }
       ._x_extension_sync_button_2024_unique_[data-disabled="true"] {
         opacity: 0.5;
-        pointer-events: none;
+        cursor: not-allowed;
       }
       ._x_extension_sync_button_2024_unique_ {
         --settings-button-padding: 10px 16px;
@@ -1186,6 +1186,9 @@
       ._x_extension_switch_2024_unique_ input:checked + ._x_extension_switch_slider_2024_unique_ {
         border-color: transparent;
         box-shadow: none;
+      }
+      ._x_extension_switch_2024_unique_ input:disabled + ._x_extension_switch_slider_2024_unique_ {
+        cursor: not-allowed;
       }
       ._x_extension_switch_2024_unique_ input:checked + ._x_extension_switch_slider_2024_unique_:before {
         transform: translate(20px, -50%);
@@ -1785,6 +1788,7 @@
         border-radius: 8px;
         color: var(--panel-subtext);
         background: transparent;
+        cursor: help;
       }
       ._x_extension_shortcut_hint_2024_unique_:hover {
         background: var(--tab-bg);
@@ -2255,6 +2259,18 @@
       [role="button"] .ri-icon {
         cursor: inherit;
         pointer-events: none;
+      }
+      button:disabled,
+      [role="button"][aria-disabled="true"],
+      ._x_extension_sync_button_2024_unique_[data-disabled="true"] {
+        cursor: not-allowed;
+      }
+      button[aria-busy="true"]:disabled,
+      [role="button"][aria-busy="true"] {
+        cursor: progress;
+      }
+      [role="img"][data-tooltip] {
+        cursor: help;
       }
       .ri-size-8 { --ri-size: 8px; }
       .ri-size-12 { --ri-size: 12px; }

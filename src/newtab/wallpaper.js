@@ -2902,7 +2902,10 @@
       if (!customWallpaperUploadTile) {
         return;
       }
-      customWallpaperUploadTile.setAttribute('data-loading', customWallpaperImporting ? 'true' : 'false');
+      const loading = customWallpaperImporting ? 'true' : 'false';
+      customWallpaperUploadTile.setAttribute('data-loading', loading);
+      customWallpaperUploadTile.setAttribute('aria-busy', loading);
+      customWallpaperUploadTile.setAttribute('aria-disabled', loading);
       customWallpaperUploadTile.setAttribute('aria-label', t('newtab_wallpaper_add_local', 'Add local wallpaper'));
       if (customWallpaperImporting) {
         hideCustomWallpaperTooltip();

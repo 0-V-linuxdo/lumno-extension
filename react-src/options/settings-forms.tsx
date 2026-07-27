@@ -241,6 +241,7 @@ function SiteSearchForm({
             {model.copy.cancelLabel}
           </button>
           <button
+            aria-busy={saving}
             className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_"
             disabled={saving}
             id="_x_extension_site_search_add_2024_unique_"
@@ -413,6 +414,7 @@ function BlacklistForm({
             {model.copy.cancelLabel}
           </button>
           <button
+            aria-busy={saving}
             className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_"
             data-form-primary="true"
             disabled={saving}

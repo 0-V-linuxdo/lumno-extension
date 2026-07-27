@@ -35,6 +35,7 @@ export interface ShortcutTileElement extends HTMLButtonElement {
 export interface ShortcutsViewOptions {
   grid?: HTMLElement | null;
   tiles?: ShortcutTileElement[];
+  maxShortcuts?: number;
   getShortcutTitle?: (shortcut: ShortcutItem) => string;
   getHostFromUrl?: (url: string) => string;
   getShortcutIconDataUrl?: (shortcutId: string) => string;
@@ -89,6 +90,7 @@ export interface ShortcutsViewController {
 interface NormalizedOptions {
   grid: HTMLElement;
   tiles: ShortcutTileElement[];
+  maxShortcuts: number;
   getShortcutTitle: (shortcut: ShortcutItem) => string;
   getHostFromUrl: (url: string) => string;
   getShortcutIconDataUrl: (shortcutId: string) => string;
@@ -141,6 +143,9 @@ function normalizeOptions(
   return {
     grid: options.grid,
     tiles: Array.isArray(options.tiles) ? options.tiles : [],
+    maxShortcuts: Number.isFinite(Number(options.maxShortcuts))
+      ? Math.max(0, Math.floor(Number(options.maxShortcuts)))
+      : Number.POSITIVE_INFINITY,
     getShortcutTitle: options.getShortcutTitle || (() => ''),
     getHostFromUrl: options.getHostFromUrl || (() => ''),
     getShortcutIconDataUrl: options.getShortcutIconDataUrl || (() => ''),
@@ -350,6 +355,7 @@ function ShortcutsList({
         ref={addButtonRef}
         type="button"
         className="x-nt-shortcut-tile x-nt-shortcut-tile--add"
+        hidden={items.length >= options.maxShortcuts}
         data-tooltip={addLabel}
         aria-label={addLabel}
         onClick={(event) => {

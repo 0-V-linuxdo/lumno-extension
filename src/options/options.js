@@ -2057,7 +2057,9 @@
     if (!button) {
       return;
     }
-    button.setAttribute('data-disabled', enabled ? 'false' : 'true');
+    const isEnabled = enabled === true;
+    button.disabled = !isEnabled;
+    button.setAttribute('data-disabled', isEnabled ? 'false' : 'true');
   }
 
 

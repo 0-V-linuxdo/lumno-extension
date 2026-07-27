@@ -151,6 +151,35 @@ describe('Shortcuts React island', () => {
     expect(onAdd).toHaveBeenCalledWith(view.getAddButton());
   });
 
+  it('hides the add tile at capacity without removing existing shortcuts', () => {
+    const { view } = createView({
+      maxShortcuts: 2
+    });
+    renderItems(view, [
+      {
+        id: 'one',
+        title: 'One',
+        url: 'https://one.example/'
+      },
+      {
+        id: 'two',
+        title: 'Two',
+        url: 'https://two.example/'
+      }
+    ]);
+
+    expect(view.getTiles()).toHaveLength(2);
+    expect(view.getAddButton()?.hidden).toBe(true);
+
+    renderItems(view, [{
+      id: 'one',
+      title: 'One',
+      url: 'https://one.example/'
+    }]);
+
+    expect(view.getAddButton()?.hidden).toBe(false);
+  });
+
   it('renders uploaded icons without invoking the favicon fallback runtime', () => {
     const attachFavicon = vi.fn();
     const getImmediateTheme = vi.fn(() => ({ accent: 'custom' }));

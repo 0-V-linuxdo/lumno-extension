@@ -310,7 +310,7 @@
       }
       .x-lumno-action-button:disabled {
         opacity: 0.62;
-        cursor: default;
+        cursor: not-allowed;
         transform: none;
         filter: none;
       }

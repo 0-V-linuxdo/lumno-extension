@@ -91,6 +91,24 @@ function testNormalizesAndDeduplicatesShortcuts() {
   );
 }
 
+function testDefaultCapacityKeepsSecondRowShortcuts() {
+  const shortcuts = shortcutsStore.normalizeShortcuts(
+    Array.from({ length: 11 }, (_, index) => ({
+      id: `shortcut-${index + 1}`,
+      title: `Shortcut ${index + 1}`,
+      url: `https://shortcut-${index + 1}.example/`
+    }))
+  );
+
+  assert.strictEqual(shortcutsStore.DEFAULT_MAX_SHORTCUTS, 20);
+  assert.strictEqual(
+    shortcuts.length,
+    11,
+    'the default capacity should retain the eleventh shortcut for wrapped layouts'
+  );
+  assert.strictEqual(shortcuts[0].id, 'shortcut-1');
+}
+
 function testDefaultShortcutsContainLumno() {
   const shortcuts = shortcutsStore.getDefaultShortcuts({
     now: 123
@@ -144,7 +162,7 @@ async function testLoadsDefaultShortcutsOnlyWhenStorageKeyIsMissing() {
   );
 }
 
-async function testSavesShortcutWithMaximumLimit() {
+async function testSaveShortcutDoesNotEvictOldestAtMaximumLimit() {
   const key = '_test_shortcuts';
   const storage = createMemoryStorage({
     [key]: [
@@ -164,8 +182,8 @@ async function testSavesShortcutWithMaximumLimit() {
 
   assert.deepStrictEqual(
     saved.map((shortcut) => shortcut.title),
-    ['Two', 'Three'],
-    'new shortcuts should append and trim the oldest shortcut beyond the max'
+    ['One', 'Two'],
+    'a full shortcut store should preserve existing shortcuts instead of silently evicting the oldest'
   );
   assert.deepStrictEqual(storage.data[key], saved);
 }
@@ -195,9 +213,10 @@ async function run() {
   testFallsBackToHostForEmptyTitle();
   testRejectsUnsafeOrMissingUrls();
   testNormalizesAndDeduplicatesShortcuts();
+  testDefaultCapacityKeepsSecondRowShortcuts();
   testDefaultShortcutsContainLumno();
   await testLoadsDefaultShortcutsOnlyWhenStorageKeyIsMissing();
-  await testSavesShortcutWithMaximumLimit();
+  await testSaveShortcutDoesNotEvictOldestAtMaximumLimit();
   await testSaveShortcutsPreservesExplicitOrder();
 }
 

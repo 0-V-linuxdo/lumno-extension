@@ -1043,6 +1043,30 @@ assertContains(
 
 assertContains(
   newtabJs,
+  'const MAX_NEWTAB_SHORTCUTS = 20;',
+  'newtab should allow two full desktop rows of shortcuts'
+);
+
+assertContains(
+  newtabJs,
+  'maxShortcuts: MAX_NEWTAB_SHORTCUTS,',
+  'the React shortcuts view should receive the same capacity as shortcut persistence'
+);
+
+assertContains(
+  shortcutsReact,
+  'hidden={items.length >= options.maxShortcuts}',
+  'the add tile should hide at capacity instead of replacing an existing shortcut'
+);
+
+assertNotContains(
+  getFunctionSource(newtabJs, 'saveNewShortcutFromDialog'),
+  '.slice(-MAX_NEWTAB_SHORTCUTS)',
+  'adding a shortcut must not silently evict the leftmost shortcut'
+);
+
+assertContains(
+  newtabJs,
   'function setShortcutDockHover(activeTile, pointerX) {',
   'newtab runtime should calculate shortcut dock hover states'
 );

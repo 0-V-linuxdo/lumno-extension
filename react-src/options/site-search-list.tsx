@@ -179,6 +179,7 @@ function ProviderEditor({
           {copy.cancelLabel}
         </button>
         <button
+          aria-busy={saving}
           className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_shortcut_save_2024_unique_"
           disabled={saving}
           onClick={async () => {

@@ -36,6 +36,7 @@ describe('Overlay React shell', () => {
     expect(mount.panel.style.position).toBe('fixed');
     expect(mount.panel.style.width).toBe('800px');
     expect(mount.panel.style.maxHeight).toBe('80vh');
+    expect(mount.host.getAttribute('popover')).toBe('manual');
     expect(mount.root?.querySelectorAll('#overlay-panel')).toHaveLength(1);
     expect(
       api.findOverlayPanel(document, {

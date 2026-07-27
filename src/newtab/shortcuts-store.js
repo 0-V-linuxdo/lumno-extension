@@ -6,7 +6,7 @@
   root.LumnoNewtabShortcutsStore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   const DEFAULT_SHORTCUTS_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
-  const DEFAULT_MAX_SHORTCUTS = 10;
+  const DEFAULT_MAX_SHORTCUTS = 20;
   const DEFAULT_SHORTCUTS = Object.freeze([
     Object.freeze({
       id: 'shortcut-lumno-default',
@@ -203,10 +203,10 @@
       const withoutDuplicate = items.filter((item) => item && item.url !== nextShortcut.url);
       const maxShortcuts = getMaxShortcuts(opts);
       const nextItems = withoutDuplicate.concat(nextShortcut);
-      const trimmed = maxShortcuts > 0
-        ? nextItems.slice(Math.max(0, nextItems.length - maxShortcuts))
-        : [];
-      return storageSet(storage, { [key]: trimmed }).then(() => trimmed);
+      const savedItems = maxShortcuts > 0 && nextItems.length <= maxShortcuts
+        ? nextItems
+        : items;
+      return storageSet(storage, { [key]: savedItems }).then(() => savedItems);
     });
   }
 

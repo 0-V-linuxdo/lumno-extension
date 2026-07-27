@@ -1676,6 +1676,9 @@
   "newtab_shortcuts_invalid_url": {
     "message": "请输入有效的 http 或 https 网址"
   },
+  "newtab_shortcuts_limit_reached": {
+    "message": "最多可添加 {count} 个快捷方式。"
+  },
   "newtab_shortcuts_added": {
     "message": "已添加快捷方式"
   },

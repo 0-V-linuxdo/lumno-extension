@@ -85,7 +85,7 @@
   line-height: 1;
   transform: none;
   pointer-events: none;
-  cursor: pointer;
+  cursor: inherit;
 }
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-inline-label,
@@ -736,5 +736,5 @@
   line-height: 1;
   transform: none;
   pointer-events: none;
-  cursor: pointer;
+  cursor: inherit;
 }

@@ -330,6 +330,13 @@ assert(
   'the Overlay panel should retain and destroy the React suggestions owner across toggle invocations'
 );
 assert(
+  overlaySource.includes('document.body.appendChild(overlayHost);') &&
+    overlaySource.includes("typeof overlayHost.showPopover === 'function'") &&
+    overlaySource.includes('overlayHost.showPopover();') &&
+    overlaySource.includes("overlayHost.removeAttribute('popover');"),
+  'the Overlay panel should enter the browser top layer after mounting so it remains visible over fullscreen content'
+);
+assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&
     newtabBundle.includes('LumnoNewtabRecentSitesViewReact') &&
     newtabBundle.includes('LumnoNewtabBookmarksViewReact') &&
