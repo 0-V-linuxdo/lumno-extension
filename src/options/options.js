@@ -121,6 +121,7 @@
   const optionsShortcutHotkeyApi = globalThis.LumnoOptionsShortcutHotkey || {};
   const optionsSiteSearchListApi = globalThis.LumnoOptionsSiteSearchList || {};
   const optionsThemePickerApi = globalThis.LumnoOptionsThemePicker || {};
+  const shortcutDisplay = globalThis.LumnoShortcutDisplay || {};
   const toastController = typeof optionsToastApi.createToastController === 'function'
     ? optionsToastApi.createToastController(toastElement, {
         windowObj: window,
@@ -499,7 +500,12 @@
     DEFAULT_SEARCH_ENGINE_STORAGE_KEY
   ];
   const DEBUG_DUPLICATE_CUSTOM_KEY = 'dup';
-  const isMacPlatform = String((navigator && navigator.platform) || '').toLowerCase().includes('mac');
+  const shortcutPlatform = typeof shortcutDisplay.getNavigatorPlatform === 'function'
+    ? shortcutDisplay.getNavigatorPlatform(typeof navigator !== 'undefined' ? navigator : null)
+    : String((typeof navigator !== 'undefined' && navigator.platform) || '').toLowerCase().includes('mac')
+      ? 'mac'
+      : 'other';
+  const isMacPlatform = shortcutPlatform === 'mac';
   const FORCE_TEXT_KEYCAPS_ON_MAC = false;
   const FORCE_OVERLAY_TAB_QUICK_SWITCH_ENABLED = true;
   const OPTIONS_TARGET_SITE_SEARCH_AI = 'site-search-ai';
@@ -809,36 +815,45 @@
       headingKey: 'settings_feedback_support_section_title',
       items: [
         {
-          href: links.x,
-          iconClass: 'ri-twitter-x-line',
-          key: 'x',
-          label: getMessage('newtab_feedback_x_label', 'X'),
-          labelKey: 'newtab_feedback_x_label'
-        },
-        {
-          href: links.githubIssue,
-          iconClass: 'ri-github-line',
-          key: 'github-issue',
-          label: getMessage('newtab_feedback_github_issue_label', 'GitHub Issue'),
-          labelKey: 'newtab_feedback_github_issue_label'
+          href: communityIsWechat ? links.wechatQr : links.discord,
+          iconClass: communityIsWechat ? 'ri-wechat-line' : 'ri-discord-fill',
+          key: 'community',
+          label: communityIsWechat
+            ? getMessage('settings_feedback_support_wechat_action', '加入反馈群')
+            : getMessage('settings_feedback_support_discord_action', '加入 Discord'),
+          labelKey: communityIsWechat
+            ? 'settings_feedback_support_wechat_action'
+            : 'settings_feedback_support_discord_action'
         },
         {
           href: links.chromeReview,
           iconClass: 'ri-star-line',
           key: 'chrome-review',
-          label: getMessage('newtab_feedback_chrome_review_label', 'Chrome rating'),
-          labelKey: 'newtab_feedback_chrome_review_label'
+          label: getMessage(
+            'settings_feedback_support_review_action',
+            '为 Lumno 评分'
+          ),
+          labelKey: 'settings_feedback_support_review_action'
         },
         {
-          href: communityIsWechat ? links.wechatQr : links.discord,
-          iconClass: communityIsWechat ? 'ri-wechat-fill' : 'ri-discord-fill',
-          key: channel,
-          label: communityIsWechat
-            ? getMessage('newtab_feedback_wechat_label', 'WeChat')
-            : getMessage('newtab_feedback_discord_label', 'Discord'),
-          labelKey: communityIsWechat
-            ? 'newtab_feedback_wechat_label'
-            : 'newtab_feedback_discord_label'
+          href: links.githubIssue,
+          iconClass: 'ri-github-line',
+          key: 'github-issue',
+          label: getMessage(
+            'settings_feedback_support_github_issue_action',
+            '创建 Issue'
+          ),
+          labelKey: 'settings_feedback_support_github_issue_action'
+        },
+        {
+          href: links.x,
+          iconClass: 'ri-twitter-x-line',
+          key: 'contact-author',
+          label: getMessage(
+            'settings_feedback_support_contact_author_action',
+            '联系作者'
+          ),
+          labelKey: 'settings_feedback_support_contact_author_action'
         }
       ]
     });
@@ -1870,7 +1885,10 @@
       }
       const fallback = node.textContent || '';
       const rawMessage = getMessage(key, fallback);
-      const message = formatTemplate(rawMessage, { name: 'Lumno' });
+      const message = formatTemplate(rawMessage, {
+        name: 'Lumno',
+        shortcut: formatShortcutForDisplay('Alt+Q') || (isMacPlatform ? '⌥Q' : 'Alt+Q')
+      });
       node.textContent = message;
       if (node.tagName === 'OPTION') {
         node.label = message;
@@ -2507,7 +2525,9 @@
 
   function refreshShortcutsStatus() {
     if (!shortcutsStatus) return;
-    shortcutsStatus.textContent = currentShortcutLabel || getMessage('settings_shortcuts_unset', '未设置');
+    shortcutsStatus.textContent = currentShortcutLabel
+      ? (formatShortcutForDisplay(currentShortcutLabel) || currentShortcutLabel)
+      : getMessage('settings_shortcuts_unset', '未设置');
   }
 
   function getDefaultFallbackShortcut() {
@@ -2710,26 +2730,30 @@
   }
 
   function formatShortcutForDisplay(shortcut) {
+    if (typeof shortcutDisplay.formatShortcutChord === 'function') {
+      return shortcutDisplay.formatShortcutChord(shortcut, {
+        platform: isMacPlatform ? 'mac' : 'windows'
+      });
+    }
     const normalized = normalizeFallbackShortcut(shortcut);
     if (!normalized) {
       return '';
-    }
-    if (!isMacPlatform) {
-      return normalized;
     }
     const parts = normalized.split('+').filter(Boolean);
     if (parts.length === 0) {
       return normalized;
     }
     const keyToken = parts.pop();
-    const modifierSymbols = [];
+    const modifierLabels = [];
     parts.forEach((token) => {
-      if (token === 'Ctrl') modifierSymbols.push('⌃');
-      else if (token === 'Alt') modifierSymbols.push('⌥');
-      else if (token === 'Shift') modifierSymbols.push('⇧');
-      else if (token === 'Command') modifierSymbols.push('⌘');
+      if (!isMacPlatform) {
+        modifierLabels.push(token);
+      } else if (token === 'Ctrl') modifierLabels.push('⌃');
+      else if (token === 'Alt') modifierLabels.push('⌥');
+      else if (token === 'Shift') modifierLabels.push('⇧');
+      else if (token === 'Command') modifierLabels.push('⌘');
     });
-    const keyMap = {
+    const keyMap = isMacPlatform ? {
       ArrowUp: '↑',
       ArrowDown: '↓',
       ArrowLeft: '←',
@@ -2749,9 +2773,16 @@
       Backquote: '`',
       BracketLeft: '[',
       BracketRight: ']'
+    } : {
+      ArrowUp: '↑',
+      ArrowDown: '↓',
+      ArrowLeft: '←',
+      ArrowRight: '→'
     };
     const keyLabel = keyMap[keyToken] || keyToken;
-    return `${modifierSymbols.join('')}${keyLabel}`;
+    return isMacPlatform
+      ? `${modifierLabels.join('')}${keyLabel}`
+      : `${modifierLabels.join('+')}+${keyLabel}`;
   }
 
   function getShortcutDisplayTokens(shortcut) {
@@ -2798,10 +2829,10 @@
       BracketRight: ']'
     };
     const keyMapDefault = {
-      ArrowUp: 'Up',
-      ArrowDown: 'Down',
-      ArrowLeft: 'Left',
-      ArrowRight: 'Right',
+      ArrowUp: '↑',
+      ArrowDown: '↓',
+      ArrowLeft: '←',
+      ArrowRight: '→',
       Escape: 'Esc',
       Comma: ',',
       Period: '.',
@@ -2913,12 +2944,12 @@
   function loadCurrentShortcut() {
     const defaultShortcut = getDefaultFallbackShortcut();
     if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
-      setFallbackShortcutLabel(formatShortcutForDisplay(defaultShortcut) || defaultShortcut);
+      setFallbackShortcutLabel(defaultShortcut);
       return;
     }
     chrome.commands.getAll((commands) => {
       if (chrome.runtime && chrome.runtime.lastError) {
-        setFallbackShortcutLabel(formatShortcutForDisplay(defaultShortcut) || defaultShortcut);
+        setFallbackShortcutLabel(defaultShortcut);
         return;
       }
       const items = Array.isArray(commands) ? commands : [];
@@ -2927,7 +2958,7 @@
         ? String(command.shortcut).trim()
         : '';
       const effectiveShortcut = shortcut || defaultShortcut;
-      setFallbackShortcutLabel(formatShortcutForDisplay(effectiveShortcut) || effectiveShortcut);
+      setFallbackShortcutLabel(effectiveShortcut);
     });
   }
 
@@ -2935,6 +2966,11 @@
     const text = String(part || '').trim();
     if (!text) {
       return '';
+    }
+    if (typeof shortcutDisplay.formatShortcutReferencePart === 'function') {
+      return shortcutDisplay.formatShortcutReferencePart(text, {
+        platform: isMacPlatform ? 'mac' : 'windows'
+      });
     }
     const display = formatShortcutForDisplay(text);
     if (display) {
@@ -2947,7 +2983,7 @@
       ArrowRight: '→',
       Escape: 'Esc',
       'Arrow keys': '↑↓←→',
-      'release Alt': 'Alt↑'
+      'release Alt': isMacPlatform ? '⌥↑' : 'Alt↑'
     };
     return keyMap[text] || text;
   }

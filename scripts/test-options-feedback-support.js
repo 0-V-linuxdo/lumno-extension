@@ -35,8 +35,8 @@ assert.ok(
 );
 assert.match(
   optionsHtml,
-  /_x_extension_feedback_support_links_2026_unique_[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/,
-  'feedback support should keep all four link labels readable in a two-column grid'
+  /_x_extension_feedback_support_section_2026_unique_[\s\S]*?flex-direction: column[\s\S]*?_x_extension_feedback_support_links_2026_unique_[\s\S]*?display: flex[\s\S]*?justify-content: flex-start[\s\S]*?flex-wrap: nowrap[\s\S]*?gap: 16px/,
+  'feedback support should place all four compact links on one comfortably spaced row below the heading'
 );
 assert.match(
   feedbackReact,
@@ -45,9 +45,19 @@ assert.match(
 );
 assert.match(
   feedbackReact,
-  /item\.iconClass[\s\S]*?<span data-i18n=\{item\.labelKey\}>\{item\.label\}<\/span>[\s\S]*?ri-external-link-line/,
-  'every feedback entry should show an icon, visible text, and link indicator'
+  /item\.iconClass[\s\S]*?<span data-i18n=\{item\.labelKey\}>\{item\.label\}<\/span>[\s\S]*?ri-size-14 ri-external-link-line/,
+  'every feedback entry should keep its channel icon in the compact tutorial-link pattern'
 );
+[
+  'community',
+  'chrome-review',
+  'github-issue',
+  'contact-author'
+].reduce((previousIndex, key) => {
+  const index = optionsJs.indexOf(`key: '${key}'`);
+  assert.ok(index > previousIndex, `${key} should appear in the requested order`);
+  return index;
+}, -1);
 
 assert.match(
   optionsJs,
@@ -64,6 +74,16 @@ assert.match(
   /href: communityIsWechat \? links\.wechatQr : links\.discord/,
   'the community link should resolve directly to the WeChat QR image or Discord'
 );
+assert.match(
+  optionsJs,
+  /iconClass: communityIsWechat \? 'ri-wechat-line' : 'ri-discord-fill'/,
+  'the simplified-Chinese community entry should use the Remix outline WeChat icon'
+);
+assert.match(
+  optionsJs,
+  /label: communityIsWechat[\s\S]*?settings_feedback_support_wechat_action[\s\S]*?settings_feedback_support_discord_action[\s\S]*?labelKey: communityIsWechat[\s\S]*?settings_feedback_support_wechat_action[\s\S]*?settings_feedback_support_discord_action/,
+  'the community entry should switch both its visible copy and i18n key with the channel'
+);
 
 locales.forEach((locale) => {
   const messages = JSON.parse(fs.readFileSync(
@@ -76,14 +96,58 @@ locales.forEach((locale) => {
     `${locale} should localize the feedback support heading`
   );
   [
-    'newtab_feedback_x_label',
-    'newtab_feedback_github_issue_label',
-    'newtab_feedback_chrome_review_label',
-    'newtab_feedback_wechat_label',
-    'newtab_feedback_discord_label'
+    'settings_feedback_support_wechat_action',
+    'settings_feedback_support_discord_action',
+    'settings_feedback_support_review_action',
+    'settings_feedback_support_github_issue_action',
+    'settings_feedback_support_contact_author_action'
   ].forEach((key) => {
     assert.ok(messages[key] && messages[key].message, `${locale} should provide ${key}`);
   });
 });
+
+const zhCnMessages = JSON.parse(fs.readFileSync(
+  path.join(repoRoot, '_locales/zh_CN/messages.json'),
+  'utf8'
+));
+assert.deepStrictEqual(
+  [
+    'settings_feedback_support_wechat_action',
+    'settings_feedback_support_review_action',
+    'settings_feedback_support_github_issue_action',
+    'settings_feedback_support_contact_author_action'
+  ].map((key) => zhCnMessages[key].message),
+  [
+    '加入反馈群',
+    '为 Lumno 评分',
+    '创建 Issue',
+    '联系作者'
+  ],
+  'Simplified Chinese feedback links should use the requested copy'
+);
+assert.deepStrictEqual(
+  {
+    zh_CN: zhCnMessages.settings_feedback_support_discord_action.message,
+    zh_TW: JSON.parse(fs.readFileSync(
+      path.join(repoRoot, '_locales/zh_TW/messages.json'),
+      'utf8'
+    )).settings_feedback_support_discord_action.message,
+    ja: JSON.parse(fs.readFileSync(
+      path.join(repoRoot, '_locales/ja/messages.json'),
+      'utf8'
+    )).settings_feedback_support_discord_action.message,
+    en: JSON.parse(fs.readFileSync(
+      path.join(repoRoot, '_locales/en/messages.json'),
+      'utf8'
+    )).settings_feedback_support_discord_action.message
+  },
+  {
+    zh_CN: '加入 Discord',
+    zh_TW: '加入 Discord',
+    ja: 'Discord に参加',
+    en: 'Join Discord'
+  },
+  'Discord feedback copy should name the actual channel in every locale'
+);
 
 console.log('options feedback support tests passed');

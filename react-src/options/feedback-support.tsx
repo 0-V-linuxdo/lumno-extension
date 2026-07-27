@@ -51,7 +51,7 @@ function FeedbackSupportView({ heading, headingKey, items }: FeedbackSupportRend
             />
             <span data-i18n={item.labelKey}>{item.label}</span>
             <i
-              className="ri-icon ri-size-16 ri-external-link-line"
+              className="ri-icon ri-size-14 ri-external-link-line"
               aria-hidden="true"
             />
           </a>

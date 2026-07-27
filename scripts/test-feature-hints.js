@@ -120,6 +120,7 @@ global.LumnoFeatureHintView = {
   }
 };
 
+require('../src/shared/shortcut-display.js');
 const featureHints = require('../src/shared/feature-hints.js');
 
 function createStorageArea(store) {
@@ -205,8 +206,47 @@ function flushMicrotasks() {
   );
   assert.match(
     tabSwitcherHint.textFallback,
-    /Alt\+Q[\s\S]*tab switcher/i,
-    'newtab tab switcher feature hint fallback should explain the Alt+Q tab switcher'
+    /\{shortcut\}[\s\S]*tab switcher/i,
+    'newtab tab switcher feature hint fallback should use a platform shortcut placeholder'
+  );
+
+  const macHintController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-tab-switcher',
+    dismissStorage: 'none',
+    navigatorLike: {
+      userAgentData: { platform: 'macOS' }
+    },
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  const windowsHintController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-tab-switcher',
+    dismissStorage: 'none',
+    navigatorLike: {
+      userAgentData: { platform: 'Windows' }
+    },
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  assert(macHintController, 'macOS tab switcher hint should be created');
+  assert(windowsHintController, 'Windows tab switcher hint should be created');
+  const macHintText = macHintController.element.children.find(
+    (child) => child.className === 'x-lumno-feature-hint__text'
+  );
+  const windowsHintText = windowsHintController.element.children.find(
+    (child) => child.className === 'x-lumno-feature-hint__text'
+  );
+  assert.match(
+    macHintText ? macHintText.textContent : '',
+    /⌥Q/,
+    'macOS feature hint should use the Option symbol'
+  );
+  assert.match(
+    windowsHintText ? windowsHintText.textContent : '',
+    /Alt\+Q/,
+    'Windows feature hint should retain Alt+Q'
   );
 
   const firstDocument = createFakeDocument();

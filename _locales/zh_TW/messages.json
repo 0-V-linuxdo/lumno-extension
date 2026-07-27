@@ -71,6 +71,21 @@
   "settings_feedback_support_section_title": {
     "message": "意見回饋與支援"
   },
+  "settings_feedback_support_wechat_action": {
+    "message": "加入回饋群"
+  },
+  "settings_feedback_support_discord_action": {
+    "message": "加入 Discord"
+  },
+  "settings_feedback_support_review_action": {
+    "message": "為 Lumno 評分"
+  },
+  "settings_feedback_support_github_issue_action": {
+    "message": "建立 Issue"
+  },
+  "settings_feedback_support_contact_author_action": {
+    "message": "聯絡作者"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使用教學"
   },
@@ -558,7 +573,7 @@
     "message": "新功能"
   },
   "newtab_tab_switcher_feature_hint_text": {
-    "message": "按 Alt+Q 開啟分頁切換器，直接在最近分頁之間快速跳轉。"
+    "message": "按 {shortcut} 開啟分頁切換器，直接在最近分頁之間快速跳轉。"
   },
   "newtab_tab_switcher_feature_hint_close": {
     "message": "關閉分頁切換器提示"
@@ -1677,10 +1692,10 @@
     "message": "快捷方式操作"
   },
   "settings_tab_switcher_title": {
-    "message": "AltQ 分頁切換器"
+    "message": "分頁切換器"
   },
   "settings_tab_switcher_desc": {
-    "message": "按 Alt/⌥+Q 快速切換最近分頁"
+    "message": "按 {shortcut} 快速切換最近分頁"
   },
   "slash_command_empty": { "message": "沒有相符的指令" },
   "command_tabs_title": { "message": "僅搜尋已開啟的分頁" },

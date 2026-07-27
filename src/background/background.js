@@ -3634,6 +3634,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/ime-key-guard.js',
     'src/shared/search-input-history.js',
     'src/shared/search-input-mode.js',
+    'src/shared/shortcut-display.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
     'src/shared/tooltip.js',

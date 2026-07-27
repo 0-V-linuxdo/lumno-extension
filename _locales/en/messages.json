@@ -71,6 +71,21 @@
   "settings_feedback_support_section_title": {
     "message": "Feedback & Support"
   },
+  "settings_feedback_support_wechat_action": {
+    "message": "Join WeChat group"
+  },
+  "settings_feedback_support_discord_action": {
+    "message": "Join Discord"
+  },
+  "settings_feedback_support_review_action": {
+    "message": "Rate Lumno"
+  },
+  "settings_feedback_support_github_issue_action": {
+    "message": "Create Issue"
+  },
+  "settings_feedback_support_contact_author_action": {
+    "message": "Contact the author"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "Tutorial"
   },
@@ -558,7 +573,7 @@
     "message": "New"
   },
   "newtab_tab_switcher_feature_hint_text": {
-    "message": "Press Alt+Q to open the tab switcher and jump through recent tabs without reaching for the mouse."
+    "message": "Press {shortcut} to open the tab switcher and jump through recent tabs without reaching for the mouse."
   },
   "newtab_tab_switcher_feature_hint_close": {
     "message": "Dismiss tab switcher tip"
@@ -1677,10 +1692,10 @@
     "message": "Shortcut actions"
   },
   "settings_tab_switcher_title": {
-    "message": "AltQ tab switcher"
+    "message": "Tab switcher"
   },
   "settings_tab_switcher_desc": {
-    "message": "Press Alt/⌥+Q to switch recent tabs."
+    "message": "Press {shortcut} to switch recent tabs."
   },
   "slash_command_empty": { "message": "No matching commands" },
   "command_tabs_title": { "message": "Search open tabs only" },

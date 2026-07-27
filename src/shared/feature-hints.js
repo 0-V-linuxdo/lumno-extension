@@ -69,7 +69,7 @@
       badgeKey: 'newtab_tab_switcher_feature_hint_badge',
       badgeFallback: 'New',
       textKey: 'newtab_tab_switcher_feature_hint_text',
-      textFallback: 'Press Alt+Q to open the tab switcher and jump through recent tabs without reaching for the mouse.',
+      textFallback: 'Press {shortcut} to open the tab switcher and jump through recent tabs without reaching for the mouse.',
       closeLabelKey: 'newtab_tab_switcher_feature_hint_close',
       closeLabelFallback: 'Dismiss tab switcher tip'
     })
@@ -119,6 +119,18 @@
 
   function getMessage(t, key, fallback) {
     return typeof t === 'function' ? t(key, fallback) : (fallback || '');
+  }
+
+  function formatShortcutText(text, shortcut, navigatorLike) {
+    const shortcutDisplay = root && root.LumnoShortcutDisplay
+      ? root.LumnoShortcutDisplay
+      : null;
+    if (!shortcutDisplay || typeof shortcutDisplay.formatShortcutTemplate !== 'function') {
+      return String(text || '').replace(/\{shortcut\}/g, shortcut);
+    }
+    return shortcutDisplay.formatShortcutTemplate(text, shortcut, {
+      navigatorLike
+    });
   }
 
   function getDefaultRiSvg(id, sizeClass) {
@@ -521,7 +533,12 @@
       },
       updateLanguage() {
         const badgeLabel = getMessage(t, definition.badgeKey, definition.badgeFallback);
-        const textLabel = getMessage(t, definition.textKey, definition.textFallback);
+        const rawTextLabel = getMessage(t, definition.textKey, definition.textFallback);
+        const navigatorLike = config.navigatorLike ||
+          (windowObj && windowObj.navigator) ||
+          (root && root.navigator) ||
+          null;
+        const textLabel = formatShortcutText(rawTextLabel, 'Alt+Q', navigatorLike);
         const closeLabel = getMessage(t, definition.closeLabelKey, definition.closeLabelFallback);
         let linkLabel = '';
         if (hasLink) {

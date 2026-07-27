@@ -942,8 +942,8 @@ localeNames.forEach((locale) => {
   );
   assert.match(
     localeMessages[locale].settings_tab_switcher_desc.message,
-    /Alt\/⌥\+Q/,
-    `${locale} should mention the Mac Option symbol alongside Alt in the tab switcher shortcut copy`
+    /\{shortcut\}/,
+    `${locale} should leave the tab switcher shortcut for platform-aware rendering`
   );
 });
 assert.notStrictEqual(
@@ -958,8 +958,13 @@ assert.ok(
   'settings Labs should expose a concise localized tab switcher toggle'
 );
 assert.ok(
-  optionsHtmlSource.includes('按 Alt/⌥+Q 快速切换最近标签页'),
-  'settings Labs fallback copy should include the Mac Option symbol alongside Alt'
+  optionsHtmlSource.includes('按 {shortcut} 快速切换最近标签页'),
+  'settings Labs fallback copy should use the platform-aware shortcut placeholder'
+);
+assert.match(
+  optionsSource,
+  /shortcut:\s*formatShortcutForDisplay\('Alt\+Q'\)/,
+  'settings i18n should render the tab switcher shortcut for the current platform'
 );
 assert.match(
   optionsSource,

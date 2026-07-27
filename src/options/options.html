@@ -547,55 +547,61 @@
       ._x_extension_feedback_support_section_2026_unique_ {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        align-items: stretch;
+        gap: 4px;
         padding: 6px 14px 4px;
       }
       ._x_extension_feedback_support_header_2026_unique_ {
         display: flex;
         align-items: center;
         min-height: 40px;
+        flex: 0 0 auto;
       }
       ._x_extension_feedback_support_links_2026_unique_ {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-      }
-      ._x_extension_feedback_support_link_2026_unique_ {
-        min-width: 0;
-        min-height: 44px;
-        padding: 0 11px;
-        border: 1px solid var(--tab-border);
-        border-radius: 12px;
-        background: var(--control-bg);
-        color: var(--panel-text);
         display: flex;
         align-items: center;
-        gap: 8px;
-        box-sizing: border-box;
-        font-size: 13px;
-        font-weight: 500;
-        line-height: 1.2;
-        text-decoration: none;
-        transition: background-color 160ms ease, border-color 160ms ease;
-      }
-      ._x_extension_feedback_support_link_2026_unique_ > span {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        gap: 16px;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        margin-left: -10px;
+      }
+      ._x_extension_feedback_support_link_2026_unique_ {
+        box-sizing: border-box;
+        min-height: 30px;
+        padding: 6px 10px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        background: transparent;
+        color: rgba(107, 114, 128, 0.86);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
         white-space: nowrap;
+        text-decoration: none;
+        transition: background-color 160ms ease, color 160ms ease;
       }
       ._x_extension_feedback_support_link_2026_unique_ > .ri-external-link-line {
-        margin-left: auto;
-        color: var(--panel-subtext);
-        opacity: 0.72;
+        color: inherit;
       }
       ._x_extension_feedback_support_link_2026_unique_:hover {
-        border-color: var(--input-focus-color);
-        background: var(--control-hover-bg);
+        background: rgba(15, 23, 42, 0.045);
+        color: var(--panel-text);
       }
       ._x_extension_feedback_support_link_2026_unique_:focus-visible {
         outline: 2px solid var(--input-focus-color);
         outline-offset: 2px;
+      }
+      body[data-theme="dark"] ._x_extension_feedback_support_link_2026_unique_ {
+        color: var(--panel-subtext);
+      }
+      body[data-theme="dark"] ._x_extension_feedback_support_link_2026_unique_:hover {
+        background: color-mix(in srgb, var(--control-hover-bg) 72%, transparent);
+        color: var(--panel-text);
       }
       ._x_extension_onboarding_guide_button_2026_unique_ {
         margin-left: auto;
@@ -2187,6 +2193,12 @@
         background: transparent;
       }
       @media (max-width: 720px) {
+        ._x_extension_feedback_support_header_2026_unique_ {
+          min-height: 32px;
+        }
+        ._x_extension_feedback_support_links_2026_unique_ {
+          flex-wrap: wrap;
+        }
         ._x_extension_settings_tabs_row_2024_unique_ {
           min-width: 0;
         }
@@ -2226,11 +2238,6 @@
         }
         ._x_extension_shortcut_restricted_subrow_2026_unique_ > div:first-child {
           margin-left: 12px;
-        }
-      }
-      @media (max-width: 520px) {
-        ._x_extension_feedback_support_links_2026_unique_ {
-          grid-template-columns: minmax(0, 1fr);
         }
       }
       .ri-icon {
@@ -2881,7 +2888,7 @@
                   <span data-i18n="settings_tab_switcher_title">标签切换器</span>
                 </span>
               </p>
-              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="settings_tab_switcher_desc">按 Alt/⌥+Q 快速切换最近标签页</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="settings_tab_switcher_desc">按 {shortcut} 快速切换最近标签页</p>
             </div>
             <label class="_x_extension_switch_2024_unique_" for="_x_extension_tab_switcher_toggle_2026_unique_">
               <input id="_x_extension_tab_switcher_toggle_2026_unique_" type="checkbox" checked>
@@ -2945,6 +2952,7 @@
     <script src="../shared/search-utils.js"></script>
     <script src="../shared/tooltip.js"></script>
     <script src="../shared/menu-surface.js"></script>
+    <script src="../shared/shortcut-display.js"></script>
     <script src="../shared/shortcut-reference.js"></script>
     <script src="../overlay/tab-switcher.js"></script>
     <script

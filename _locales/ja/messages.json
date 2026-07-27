@@ -71,6 +71,21 @@
   "settings_feedback_support_section_title": {
     "message": "フィードバックとサポート"
   },
+  "settings_feedback_support_wechat_action": {
+    "message": "WeChat グループに参加"
+  },
+  "settings_feedback_support_discord_action": {
+    "message": "Discord に参加"
+  },
+  "settings_feedback_support_review_action": {
+    "message": "Lumno を評価"
+  },
+  "settings_feedback_support_github_issue_action": {
+    "message": "Issue を作成"
+  },
+  "settings_feedback_support_contact_author_action": {
+    "message": "作者に連絡"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使い方"
   },
@@ -558,7 +573,7 @@
     "message": "新機能"
   },
   "newtab_tab_switcher_feature_hint_text": {
-    "message": "Alt+Q でタブ切り替えを開き、最近使ったタブへすばやく移動できます。"
+    "message": "{shortcut} でタブ切り替えを開き、最近使ったタブへすばやく移動できます。"
   },
   "newtab_tab_switcher_feature_hint_close": {
     "message": "タブ切り替えヒントを閉じる"
@@ -1677,10 +1692,10 @@
     "message": "ショートカット操作"
   },
   "settings_tab_switcher_title": {
-    "message": "AltQ タブ切り替え"
+    "message": "タブ切り替え"
   },
   "settings_tab_switcher_desc": {
-    "message": "Alt/⌥+Q で最近のタブをすばやく切り替えます。"
+    "message": "{shortcut} で最近のタブをすばやく切り替えます。"
   },
   "slash_command_empty": { "message": "一致するコマンドはありません" },
   "command_tabs_title": { "message": "開いているタブのみを検索" },

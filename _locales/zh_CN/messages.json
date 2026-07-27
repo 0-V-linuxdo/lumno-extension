@@ -71,6 +71,21 @@
   "settings_feedback_support_section_title": {
     "message": "反馈与支持"
   },
+  "settings_feedback_support_wechat_action": {
+    "message": "加入反馈群"
+  },
+  "settings_feedback_support_discord_action": {
+    "message": "加入 Discord"
+  },
+  "settings_feedback_support_review_action": {
+    "message": "为 Lumno 评分"
+  },
+  "settings_feedback_support_github_issue_action": {
+    "message": "创建 Issue"
+  },
+  "settings_feedback_support_contact_author_action": {
+    "message": "联系作者"
+  },
   "settings_onboarding_tutorial_action": {
     "message": "使用教程"
   },
@@ -558,7 +573,7 @@
     "message": "新功能"
   },
   "newtab_tab_switcher_feature_hint_text": {
-    "message": "按 Alt+Q 打开标签页切换器，直接在最近标签页之间快速跳转。"
+    "message": "按 {shortcut} 打开标签页切换器，直接在最近标签页之间快速跳转。"
   },
   "newtab_tab_switcher_feature_hint_close": {
     "message": "关闭标签页切换器提示"
@@ -1680,7 +1695,7 @@
     "message": "标签切换器"
   },
   "settings_tab_switcher_desc": {
-    "message": "按 Alt/⌥+Q 快速切换最近标签页"
+    "message": "按 {shortcut} 快速切换最近标签页"
   },
   "slash_command_empty": { "message": "无匹配命令" },
   "command_tabs_title": { "message": "仅搜索已打开的标签页" },
