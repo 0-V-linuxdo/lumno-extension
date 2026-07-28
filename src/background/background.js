@@ -4443,25 +4443,10 @@ function restoreBackgroundStateOnStartup() {
   });
 }
 
-function handleBackgroundProfileStartup() {
-  const reloadDevelopmentExtension = DEV_EXTENSION_STARTUP &&
-    typeof DEV_EXTENSION_STARTUP.reloadDevelopmentExtensionOnStartup === 'function'
-    ? DEV_EXTENSION_STARTUP.reloadDevelopmentExtensionOnStartup
-    : null;
-  if (!reloadDevelopmentExtension) {
-    restoreBackgroundStateOnStartup();
-    return;
-  }
-  reloadDevelopmentExtension(chrome).then((result) => {
-    if (result && result.reloaded === true) {
-      return;
-    }
+if (chrome && chrome.runtime && chrome.runtime.onStartup) {
+  chrome.runtime.onStartup.addListener(() => {
     restoreBackgroundStateOnStartup();
   });
-}
-
-if (chrome && chrome.runtime && chrome.runtime.onStartup) {
-  chrome.runtime.onStartup.addListener(handleBackgroundProfileStartup);
 }
 ensureTabSwitchStatsLoaded().catch(() => {});
 ensureTabSwitcherStateLoaded().catch(() => {});

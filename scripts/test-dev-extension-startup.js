@@ -18,57 +18,11 @@ function loadRuntime() {
 
 async function run() {
   const runtime = loadRuntime();
-  assert.strictEqual(runtime.isDevelopmentInstall({ installType: 'development' }), true);
-  assert.strictEqual(runtime.isDevelopmentInstall({ installType: 'normal' }), false);
   assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.21' }, '0.9.21'), true);
   assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.20' }, '0.9.21'), false);
   assert.strictEqual(runtime.isSameVersionReload({ reason: 'chrome_update', previousVersion: '0.9.21' }, '0.9.21'), false);
-
-  let reloadCount = 0;
-  const developmentResult = await runtime.reloadDevelopmentExtensionOnStartup({
-    management: {
-      getSelf() {
-        return Promise.resolve({ installType: 'development' });
-      }
-    },
-    runtime: {
-      reload() {
-        reloadCount += 1;
-      }
-    }
-  });
-  assert.strictEqual(developmentResult.reloaded, true);
-  assert.strictEqual(reloadCount, 1);
-
-  const storeResult = await runtime.reloadDevelopmentExtensionOnStartup({
-    management: {
-      getSelf() {
-        return Promise.resolve({ installType: 'normal' });
-      }
-    },
-    runtime: {
-      reload() {
-        reloadCount += 1;
-      }
-    }
-  });
-  assert.strictEqual(storeResult.reloaded, false);
-  assert.strictEqual(storeResult.reason, 'not-development');
-  assert.strictEqual(reloadCount, 1);
-
-  const unavailableResult = await runtime.reloadDevelopmentExtensionOnStartup({});
-  assert.strictEqual(unavailableResult.reason, 'api-unavailable');
-
-  const failedResult = await runtime.reloadDevelopmentExtensionOnStartup({
-    management: {
-      getSelf() {
-        return Promise.reject(new Error('unavailable'));
-      }
-    },
-    runtime: { reload() {} }
-  });
-  assert.strictEqual(failedResult.reloaded, false);
-  assert.strictEqual(failedResult.reason, 'get-self-failed');
+  assert.strictEqual(runtime.reloadDevelopmentExtensionOnStartup, undefined);
+  assert.doesNotMatch(source, /runtime\.reload\s*\(/);
 
   const backgroundSource = fs.readFileSync(
     path.join(repoRoot, 'src/background/background.js'),
@@ -76,6 +30,11 @@ async function run() {
   );
   assert.match(backgroundSource, /importScripts\(chrome\.runtime\.getURL\('src\/background\/dev-extension-startup\.js'\)\)/);
   assert.match(backgroundSource, /DEV_EXTENSION_STARTUP\.isSameVersionReload\(details, chrome\.runtime\.getManifest\(\)\.version\)/);
+  assert.match(
+    backgroundSource,
+    /chrome\.runtime\.onStartup\.addListener\(\(\) => \{\s*restoreBackgroundStateOnStartup\(\);\s*\}\)/
+  );
+  assert.doesNotMatch(backgroundSource, /reloadDevelopmentExtensionOnStartup/);
 }
 
 run().then(() => {

@@ -81,7 +81,7 @@ npm ci
 npm run build:react
 ```
 
-Then keep Developer mode enabled in `chrome://extensions/` and load the repository root as an unpacked extension. Development installs refresh once when the Chrome profile starts, so assets built while Chrome was closed no longer require a manual Reload after startup. Changes to background scripts or `manifest.json` made while Chrome is open still require an immediate manual Reload.
+Then keep Developer mode enabled in `chrome://extensions/` and load the repository root as an unpacked extension. After generating new assets or changing background scripts or `manifest.json`, click Reload on the extensions page. Development installs do not force a second refresh when the Chrome profile starts, avoiding interruption of the startup New Tab override.
 
 Before committing, run:
 
