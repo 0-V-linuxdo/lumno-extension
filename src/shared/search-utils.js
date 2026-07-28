@@ -2548,13 +2548,17 @@
   }
 
   function findSiteSearchProvider(trigger, providers) {
-    const key = String(trigger || '').toLowerCase();
+    const key = String(trigger || '').trim().toLowerCase();
     if (!key) {
       return null;
     }
     return (providers || []).find((provider) => {
       const providerKey = String(provider && provider.key || '').toLowerCase();
       if (providerKey === key) {
+        return true;
+      }
+      const providerName = String(provider && provider.name || '').trim().toLowerCase();
+      if (providerName === key) {
         return true;
       }
       const aliases = Array.isArray(provider && provider.aliases) ? provider.aliases : [];
@@ -2767,11 +2771,16 @@
 
   function getSiteSearchTriggerCandidate(input, providers, topSiteMatch, options) {
     const trimmed = String(input || '').trim();
-    if (!trimmed || /\s/.test(trimmed)) {
+    if (!trimmed) {
       return null;
     }
-    let provider = findSiteSearchProvider(trimmed, providers) ||
+    const exactProvider = findSiteSearchProvider(trimmed, providers) ||
       findSiteSearchProviderByKey(trimmed, providers);
+    if (/\s/.test(trimmed) && !exactProvider) {
+      return null;
+    }
+    let provider = exactProvider ||
+      findSiteSearchProviderByInput(trimmed, providers);
     if (!provider && topSiteMatch) {
       provider = (providers || []).find((candidate) => {
         if (!suggestionMatchesSiteSearchProvider(topSiteMatch, candidate)) {

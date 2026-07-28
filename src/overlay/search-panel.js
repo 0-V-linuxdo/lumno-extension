@@ -2891,6 +2891,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         updateSearchSuggestions([], requestQuery);
         return;
       }
+      if (siteSearchState && requestQuery) {
+        updateSearchSuggestions([], requestQuery);
+        return;
+      }
       if (!requestQuery || !chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
         return;
       }
@@ -5793,6 +5797,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       const targetMetrics = readSuggestionsHeightMetrics(container);
+      const isLargeShrink = toHeight < fromHeight - Math.max(104, fromHeight * 0.35);
+      const transitionDurationMs = isLargeShrink ? 100 : 180;
+      const transitionEasing = isLargeShrink
+        ? 'cubic-bezier(0.2, 0, 0, 1)'
+        : 'ease';
       cancelSuggestionsHeightAnimation(container);
       suggestionsHeightAnimationTarget = toHeight;
       suggestionsHeightAnimationTargetIsCapped = targetMetrics.atMaxHeight;
@@ -5802,7 +5811,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       void container.offsetHeight;
       suggestionsHeightAnimationFrame = requestAnimationFrame(() => {
         suggestionsHeightAnimationFrame = 0;
-        container.style.setProperty('transition', 'height 180ms ease', 'important');
+        container.style.setProperty(
+          'transition',
+          `height ${transitionDurationMs}ms ${transitionEasing}`,
+          'important'
+        );
         container.style.setProperty('height', `${toHeight}px`, 'important');
       });
       suggestionsHeightTransitionEndHandler = (event) => {
@@ -5814,7 +5827,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       container.addEventListener('transitionend', suggestionsHeightTransitionEndHandler);
       suggestionsHeightAnimationTimer = setTimeout(() => {
         cancelSuggestionsHeightAnimation(container);
-      }, 240);
+      }, transitionDurationMs + 60);
     }
 
     function closeOverlayAfterCommand() {

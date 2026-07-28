@@ -585,10 +585,41 @@ assert.strictEqual(
   githubProvider,
   'provider aliases should match site-search triggers'
 );
+const namedProvider = {
+  key: 'forge',
+  aliases: [],
+  name: 'Code Forge',
+  template: 'https://code.example.com/search?q={query}'
+};
+assert.strictEqual(
+  search.findSiteSearchProvider('  Code Forge  ', [namedProvider]),
+  namedProvider,
+  'a trimmed exact provider title should match a site-search trigger'
+);
+assert.strictEqual(
+  search.getSiteSearchTriggerCandidate('Code Forge', [namedProvider], null),
+  namedProvider,
+  'an exact multi-word provider title should expose the site-search trigger'
+);
 assert.strictEqual(
   search.findSiteSearchProviderByInput('docs.github.com lumno', [githubProvider]),
   githubProvider,
   'provider input parsing should match subdomains to provider hosts'
+);
+assert.strictEqual(
+  search.getSiteSearchTriggerCandidate('github.com', [githubProvider], null),
+  githubProvider,
+  'an exact provider domain should expose the site-search trigger without requiring a short key'
+);
+assert.strictEqual(
+  search.getSiteSearchTriggerCandidate('git', [githubProvider], null),
+  null,
+  'a partial provider title should not trigger site search without a matching local site result'
+);
+assert.strictEqual(
+  search.getSiteSearchTriggerCandidate('github lumno', [githubProvider], null),
+  null,
+  'a provider followed by query text should remain an inline search candidate instead of a bare trigger'
 );
 assert.deepStrictEqual(
   search.getInlineSiteSearchCandidate('gh lumno extension', [githubProvider]),

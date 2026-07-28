@@ -163,6 +163,16 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
+  /if \(siteSearchState && requestQuery\) \{\s*updateSearchSuggestions\(\[\], requestQuery\);\s*return;\s*\}/,
+  'active site-search queries should render their deterministic single result without waiting for remote suggestion mixing'
+);
+assert.match(
+  searchPanelSource,
+  /const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180/,
+  'large result collapses should use the faster height transition'
+);
+assert.match(
+  searchPanelSource,
   /if \(isPaste \|\| getDirectUrlSuggestion\(query\)\) \{[\s\S]*?updateSearchSuggestions\(\[\], query, \{[\s\S]*?deferCappedShrink: true[\s\S]*?\}\);/,
   'an immediate URL preview should keep the existing capped height until its full local and remote results arrive'
 );
