@@ -316,6 +316,45 @@ describe('Suggestions React island', () => {
     ).toBe('前往');
   });
 
+  it('keeps slash command rows mounted through mouse activation', () => {
+    (['newtab', 'overlay'] as const).forEach((surface) => {
+      const onActivateSuggestion = vi.fn();
+      const { view, items } = createView({
+        onActivateSuggestion,
+        ...(surface === 'overlay' ? { surface } : {})
+      });
+      const suggestion: Suggestion = {
+        type: 'commandSettings',
+        title: 'Open Lumno settings',
+        commandText: '/settings'
+      };
+
+      render(view, [suggestion]);
+      const row = items[0];
+      let mouseDownAccepted = true;
+      act(() => {
+        mouseDownAccepted = row.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          button: 0,
+          cancelable: true
+        }));
+        row.dispatchEvent(new MouseEvent('click', {
+          bubbles: true,
+          button: 0
+        }));
+      });
+
+      expect(mouseDownAccepted, surface).toBe(false);
+      expect(onActivateSuggestion).toHaveBeenCalledWith(
+        suggestion,
+        'exa',
+        expect.any(MouseEvent),
+        0,
+        row
+      );
+    });
+  });
+
   it('renders open tabs and preserves click and middle-click activation', () => {
     const onSwitchToTab = vi.fn();
     const setSuggestionsVisible = vi.fn();

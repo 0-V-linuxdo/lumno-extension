@@ -18,9 +18,9 @@ function loadRuntime() {
 
 async function run() {
   const runtime = loadRuntime();
-  assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.21' }, '0.9.21'), true);
-  assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.20' }, '0.9.21'), false);
-  assert.strictEqual(runtime.isSameVersionReload({ reason: 'chrome_update', previousVersion: '0.9.21' }, '0.9.21'), false);
+  assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.22' }, '0.9.22'), true);
+  assert.strictEqual(runtime.isSameVersionReload({ reason: 'update', previousVersion: '0.9.21' }, '0.9.22'), false);
+  assert.strictEqual(runtime.isSameVersionReload({ reason: 'chrome_update', previousVersion: '0.9.22' }, '0.9.22'), false);
   assert.strictEqual(runtime.reloadDevelopmentExtensionOnStartup, undefined);
   assert.doesNotMatch(source, /runtime\.reload\s*\(/);
 
