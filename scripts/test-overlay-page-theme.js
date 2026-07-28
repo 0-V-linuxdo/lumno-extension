@@ -255,6 +255,30 @@ function testSearchPanelAppliesInitialSystemThemeBeforeAppend() {
   );
 }
 
+function testSearchPanelExcludesPasswordManagersBeforeMountAndFocus() {
+  const searchPanelSource = fs.readFileSync(path.join(__dirname, '../src/overlay/search-panel.js'), 'utf8');
+  const inputCreatedIndex = searchPanelSource.indexOf('let searchInput = inputParts.input;');
+  const onePasswordIgnoreIndex = searchPanelSource.indexOf(
+    "searchInput.setAttribute('data-1p-ignore', 'true');"
+  );
+  const opIgnoreIndex = searchPanelSource.indexOf(
+    "searchInput.setAttribute('data-op-ignore', 'true');"
+  );
+  const inputMountIndex = searchPanelSource.indexOf('overlay.appendChild(inputContainer);');
+  const focusIndex = searchPanelSource.indexOf(
+    'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
+  );
+  assert.ok(inputCreatedIndex > 0, 'search-panel should create the search input');
+  assert.ok(
+    onePasswordIgnoreIndex > inputCreatedIndex && opIgnoreIndex > onePasswordIgnoreIndex,
+    'search-panel should mark its search input as ignored by 1Password-compatible managers'
+  );
+  assert.ok(
+    opIgnoreIndex < inputMountIndex && inputMountIndex < focusIndex,
+    'password-manager exclusion should be applied before the input is mounted or focused'
+  );
+}
+
 testVisualThemeUsesVisibleDarkSurfaces();
 testVisualThemeReturnsNullForAmbiguousSurfaces();
 testVisualThemeUsesLightTextWhenBackgroundIsTransparent();
@@ -264,5 +288,6 @@ testSearchPanelFusesThemeColorAndVisualSignals();
 testSearchPanelDoesNotShortCircuitExplicitThemeHints();
 testSearchPanelAvoidsBusinessClassNameThemeMatches();
 testSearchPanelAppliesInitialSystemThemeBeforeAppend();
+testSearchPanelExcludesPasswordManagersBeforeMountAndFocus();
 
 console.log('overlay page theme tests passed');

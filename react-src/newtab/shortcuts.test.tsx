@@ -39,7 +39,9 @@ function createOptions(
     onNativeDragStart: (event) => event.preventDefault(),
     getAddLabel: () => 'Add shortcut',
     getAddIconSvg: () => '<i class="ri-add-line"></i>',
+    getAddVisible: () => true,
     onAdd: () => {},
+    onAddContextMenu: () => {},
     ...overrides
   };
 }
@@ -115,10 +117,12 @@ describe('Shortcuts React island', () => {
     const openShortcut = vi.fn();
     const onContextMenu = vi.fn();
     const onAdd = vi.fn();
+    const onAddContextMenu = vi.fn();
     const { view } = createView({
       openShortcut,
       onContextMenu,
-      onAdd
+      onAdd,
+      onAddContextMenu
     });
     renderItems(view, [{
       id: 'docs',
@@ -144,11 +148,37 @@ describe('Shortcuts React island', () => {
         bubbles: true
       }));
       view.getAddButton()?.click();
+      view.getAddButton()?.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true
+      }));
     });
 
     expect(openShortcut).toHaveBeenCalledTimes(3);
     expect(onContextMenu).toHaveBeenCalledOnce();
     expect(onAdd).toHaveBeenCalledWith(view.getAddButton());
+    expect(onAddContextMenu).toHaveBeenCalledWith(view.getAddButton());
+  });
+
+  it('hides the add tile when the preference is off and restores it live', () => {
+    let addVisible = false;
+    const { view } = createView({
+      getAddVisible: () => addVisible
+    });
+
+    renderItems(view, [{
+      id: 'docs',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    }]);
+    expect(view.getAddButton()?.hidden).toBe(true);
+
+    addVisible = true;
+    renderItems(view, [{
+      id: 'docs',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    }]);
+    expect(view.getAddButton()?.hidden).toBe(false);
   });
 
   it('hides the add tile at capacity without removing existing shortcuts', () => {

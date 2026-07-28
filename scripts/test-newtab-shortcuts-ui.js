@@ -702,9 +702,45 @@ assertContains(
 );
 
 assertContains(
+  optionsHtml,
+  '_x_extension_newtab_shortcut_add_toggle_2026_unique_',
+  'appearance settings should include a nested add shortcut visibility toggle'
+);
+
+assertContains(
+  optionsHtml,
+  'data-i18n="settings_newtab_shortcut_add_title"',
+  'appearance settings should label the nested add shortcut visibility toggle'
+);
+
+assertContains(
+  optionsHtml,
+  '_x_extension_newtab_shortcut_dock_magnification_toggle_2026_unique_',
+  'appearance settings should include a nested shortcut Dock magnification toggle'
+);
+
+assertContains(
+  optionsHtml,
+  'data-i18n="settings_newtab_shortcut_dock_magnification_title"',
+  'appearance settings should label the nested shortcut Dock magnification toggle'
+);
+
+assertContains(
   newtabJs,
   "const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';",
   'newtab runtime should read a dedicated shortcuts visibility setting'
+);
+
+assertContains(
+  newtabJs,
+  "const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';",
+  'newtab runtime should read a dedicated add shortcut visibility setting'
+);
+
+assertContains(
+  newtabJs,
+  "const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';",
+  'newtab runtime should read a dedicated shortcut Dock magnification setting'
 );
 
 assertContains(
@@ -715,8 +751,8 @@ assertContains(
 
 assertContains(
   newtabJs,
-  "setContentSectionVisible(shortcutSection, Boolean(newtabShortcutsVisible));",
-  'newtab runtime should hide the shortcut rail when the shortcuts setting is off'
+  'Boolean(newtabShortcutsVisible && hasVisibleContent)',
+  'newtab runtime should hide the shortcut rail when its setting is off or it has no visible content'
 );
 
 assertContains(
@@ -937,6 +973,41 @@ assertContains(
   'shortcut dock should move next neighbors away from the hover target'
 );
 
+const shortcutDockDisabledIconRule = getCssRuleBlock(
+  newtabHtml,
+  '.x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile .x-nt-shortcut-icon'
+);
+assertContains(
+  shortcutDockDisabledIconRule,
+  '--x-nt-shortcut-dock-scale: 1;',
+  'disabled shortcut Dock magnification should keep icon scale at its base size'
+);
+assertContains(
+  shortcutDockDisabledIconRule,
+  '--x-nt-shortcut-dock-shift-x: 0px;',
+  'disabled shortcut Dock magnification should remove horizontal neighbor movement'
+);
+assertContains(
+  shortcutDockDisabledIconRule,
+  '--x-nt-shortcut-dock-rise: 0px;',
+  'disabled shortcut Dock magnification should remove vertical icon lift'
+);
+assertContains(
+  newtabHtml,
+  '.x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover',
+  'disabled shortcut Dock magnification should leave a subtle hover surface on only the hovered tile'
+);
+assertContains(
+  newtabHtml,
+  'background: rgba(15, 23, 42, 0.05);',
+  'disabled shortcut Dock magnification should use a subtle light-theme hover background'
+);
+assertContains(
+  newtabHtml,
+  'background: rgba(255, 255, 255, 0.08);',
+  'disabled shortcut Dock magnification should use a subtle dark-theme hover background'
+);
+
 assertContains(
   newtabHtml,
   '@media (prefers-reduced-motion: reduce)',
@@ -1055,8 +1126,26 @@ assertContains(
 
 assertContains(
   shortcutsReact,
-  'hidden={items.length >= options.maxShortcuts}',
-  'the add tile should hide at capacity instead of replacing an existing shortcut'
+  'hidden={!options.getAddVisible() || items.length >= options.maxShortcuts}',
+  'the add tile should respect both the preference and shortcut capacity'
+);
+
+assertContains(
+  shortcutsReact,
+  'onContextMenu={(event) => {',
+  'the add tile should expose a right-click hide action'
+);
+
+assertContains(
+  newtabJs,
+  'onAddContextMenu: hideShortcutAddFromContextMenu',
+  'the newtab adapter should route add tile right-clicks to the hide preference'
+);
+
+assertContains(
+  newtabJs,
+  "'newtab_shortcuts_add_hidden'",
+  'right-click hiding the add tile should explain where it can be restored'
 );
 
 assert.match(
@@ -1075,6 +1164,28 @@ assertContains(
   newtabJs,
   'function setShortcutDockHover(activeTile, pointerX) {',
   'newtab runtime should calculate shortcut dock hover states'
+);
+
+const setShortcutDockHoverSource = getFunctionSource(newtabJs, 'setShortcutDockHover');
+assertContains(
+  setShortcutDockHoverSource,
+  'if (!newtabShortcutDockMagnificationEnabled)',
+  'shortcut hover should skip Dock magnification when the preference is disabled'
+);
+assertContains(
+  setShortcutDockHoverSource,
+  'clearShortcutDockMagnificationState();',
+  'disabled shortcut hover should clear stale Dock attributes and inline transforms directly'
+);
+
+const applyShortcutDockMagnificationSource = getFunctionSource(
+  newtabJs,
+  'applyNewtabShortcutDockMagnification'
+);
+assertContains(
+  applyShortcutDockMagnificationSource,
+  "'data-dock-magnification'",
+  'shortcut Dock preference should be reflected as a grid state attribute'
 );
 
 assertContains(
@@ -2057,6 +2168,7 @@ assertContains(
 
 [
   'newtab_shortcuts_add',
+  'newtab_shortcuts_add_hidden',
   'newtab_shortcuts_dialog_title',
   'newtab_shortcuts_name_label',
   'newtab_shortcuts_url_label',
@@ -2080,6 +2192,8 @@ assertContains(
   'newtab_shortcuts_edit_dialog_title',
   'newtab_shortcuts_context_menu_label',
   'settings_newtab_shortcuts_title',
+  'settings_newtab_shortcut_add_title',
+  'settings_newtab_shortcut_dock_magnification_title',
   'shortcuts_edit',
   'shortcuts_remove'
 ].forEach((key) => {

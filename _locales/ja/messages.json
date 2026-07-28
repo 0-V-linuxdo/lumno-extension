@@ -437,6 +437,12 @@
   "settings_newtab_shortcuts_title": {
     "message": "ショートカット"
   },
+  "settings_newtab_shortcut_add_title": {
+    "message": "「+」を表示"
+  },
+  "settings_newtab_shortcut_dock_magnification_title": {
+    "message": "macOS Dock風の拡大効果"
+  },
   "settings_wallpaper_title": {
     "message": "新しいタブの壁紙"
   },
@@ -1639,6 +1645,9 @@
   },
   "newtab_shortcuts_add": {
     "message": "ショートカットを追加"
+  },
+  "newtab_shortcuts_add_hidden": {
+    "message": "「+」を非表示にしました。設定 → 外観 → ショートカット → 「+」を表示 から再表示できます。"
   },
   "newtab_shortcuts_dialog_title": {
     "message": "ショートカットを追加"

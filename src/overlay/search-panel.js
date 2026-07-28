@@ -1390,6 +1390,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       showUnderlineWhenEmpty: true
     });
     let searchInput = inputParts.input;
+    searchInput.setAttribute('data-1p-ignore', 'true');
+    searchInput.setAttribute('data-op-ignore', 'true');
     const inputContainer = inputParts.container;
     const rightIcon = inputParts.rightIcon;
     inputHistoryController =

@@ -437,6 +437,12 @@
   "settings_newtab_shortcuts_title": {
     "message": "快捷方式"
   },
+  "settings_newtab_shortcut_add_title": {
+    "message": "展示「+」"
+  },
+  "settings_newtab_shortcut_dock_magnification_title": {
+    "message": "仿 macOS Dock 程序坞缩放效果"
+  },
   "settings_wallpaper_title": {
     "message": "新标签页壁纸"
   },
@@ -1639,6 +1645,9 @@
   },
   "newtab_shortcuts_add": {
     "message": "添加快捷方式"
+  },
+  "newtab_shortcuts_add_hidden": {
+    "message": "已隐藏「+」，可在设置 → 外观 → 快捷方式 → 展示「+」中重新开启"
   },
   "newtab_shortcuts_dialog_title": {
     "message": "添加快捷方式"

@@ -437,6 +437,12 @@
   "settings_newtab_shortcuts_title": {
     "message": "Shortcuts"
   },
+  "settings_newtab_shortcut_add_title": {
+    "message": "Show “+”"
+  },
+  "settings_newtab_shortcut_dock_magnification_title": {
+    "message": "macOS Dock-style magnification"
+  },
   "settings_wallpaper_title": {
     "message": "New Tab wallpaper"
   },
@@ -1639,6 +1645,9 @@
   },
   "newtab_shortcuts_add": {
     "message": "Add shortcut"
+  },
+  "newtab_shortcuts_add_hidden": {
+    "message": "“+” hidden. Re-enable it in Settings → Appearance → Shortcuts → Show “+”."
   },
   "newtab_shortcuts_dialog_title": {
     "message": "Add shortcut"

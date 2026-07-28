@@ -33,6 +33,24 @@ assert.strictEqual(settings.normalizeNewtabShortcutsVisible(true), true);
 assert.strictEqual(settings.normalizeNewtabShortcutsVisible(undefined), true);
 assert.strictEqual(settings.normalizeNewtabShortcutsVisible('false'), true);
 
+assert.strictEqual(settings.normalizeNewtabShortcutAddVisible(false), false);
+assert.strictEqual(settings.normalizeNewtabShortcutAddVisible(true), true);
+assert.strictEqual(settings.normalizeNewtabShortcutAddVisible(undefined), true);
+assert.strictEqual(settings.normalizeNewtabShortcutAddVisible('false'), true);
+assert.strictEqual(
+  settings.NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
+  '_x_extension_newtab_shortcut_add_visible_2026_unique_'
+);
+
+assert.strictEqual(settings.normalizeNewtabShortcutDockMagnificationEnabled(false), false);
+assert.strictEqual(settings.normalizeNewtabShortcutDockMagnificationEnabled(true), true);
+assert.strictEqual(settings.normalizeNewtabShortcutDockMagnificationEnabled(undefined), true);
+assert.strictEqual(settings.normalizeNewtabShortcutDockMagnificationEnabled('false'), true);
+assert.strictEqual(
+  settings.NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
+  '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_'
+);
+
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(false), false);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(true), true);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(undefined), true);

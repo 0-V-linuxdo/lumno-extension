@@ -420,6 +420,55 @@ assert(
   'New Tab shortcuts changes should refresh options sync status'
 );
 assert(
+  /NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY\s*=\s*['_"]_x_extension_newtab_shortcut_add_visible_2026_unique_['_"]/.test(optionsSource),
+  'options sync should define the New Tab add shortcut visibility key'
+);
+assert(
+  /const SYNC_KEYS = \[[\s\S]*NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
+  'the New Tab add shortcut preference should be included in sync export and import'
+);
+assert(
+  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  'the New Tab add shortcut preference should be included in local-to-sync migration'
+);
+assert(
+  /data-i18n="settings_newtab_shortcut_add_title"/.test(optionsHtml),
+  'the New Tab add shortcut preference label should be wired through i18n'
+);
+localeNames.forEach((locale) => {
+  ['settings_newtab_shortcut_add_title', 'newtab_shortcuts_add_hidden'].forEach((key) => {
+    assert(
+      localeMessages[locale][key] &&
+        String(localeMessages[locale][key].message || '').trim(),
+      `${locale} should localize ${key}`
+    );
+  });
+});
+assert(
+  /NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY\s*=\s*['_"]_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_['_"]/.test(optionsSource),
+  'options sync should define the New Tab shortcut Dock magnification key'
+);
+assert(
+  /const SYNC_KEYS = \[[\s\S]*NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
+  'the New Tab shortcut Dock magnification preference should be included in sync export and import'
+);
+assert(
+  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  'the New Tab shortcut Dock magnification preference should be included in local-to-sync migration'
+);
+assert(
+  /data-i18n="settings_newtab_shortcut_dock_magnification_title"/.test(optionsHtml),
+  'the New Tab shortcut Dock magnification label should be wired through i18n'
+);
+localeNames.forEach((locale) => {
+  const key = 'settings_newtab_shortcut_dock_magnification_title';
+  assert(
+    localeMessages[locale][key] &&
+      String(localeMessages[locale][key].message || '').trim(),
+    `${locale} should localize ${key}`
+  );
+});
+assert(
   /NEWTAB_SHORTCUTS_STORAGE_KEY\s*=\s*['_"]_x_extension_newtab_shortcuts_2026_unique_['_"]/.test(backgroundSource),
   'background sync migration should define the New Tab shortcuts storage key'
 );

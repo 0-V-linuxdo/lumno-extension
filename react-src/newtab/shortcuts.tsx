@@ -76,7 +76,9 @@ export interface ShortcutsViewOptions {
   onNativeDragStart?: (event: ReactDragEvent<HTMLButtonElement>) => void;
   getAddLabel?: () => string;
   getAddIconSvg?: () => string;
+  getAddVisible?: () => boolean;
   onAdd?: (sourceElement: HTMLButtonElement) => void;
+  onAddContextMenu?: (sourceElement: HTMLButtonElement) => void;
 }
 
 export interface ShortcutsViewController {
@@ -131,7 +133,9 @@ interface NormalizedOptions {
   onNativeDragStart: (event: ReactDragEvent<HTMLButtonElement>) => void;
   getAddLabel: () => string;
   getAddIconSvg: () => string;
+  getAddVisible: () => boolean;
   onAdd: (sourceElement: HTMLButtonElement) => void;
+  onAddContextMenu: (sourceElement: HTMLButtonElement) => void;
 }
 
 function normalizeOptions(
@@ -170,7 +174,9 @@ function normalizeOptions(
     }),
     getAddLabel: options.getAddLabel || (() => ''),
     getAddIconSvg: options.getAddIconSvg || (() => ''),
-    onAdd: options.onAdd || (() => {})
+    getAddVisible: options.getAddVisible || (() => true),
+    onAdd: options.onAdd || (() => {}),
+    onAddContextMenu: options.onAddContextMenu || (() => {})
   };
 }
 
@@ -355,7 +361,7 @@ function ShortcutsList({
         ref={addButtonRef}
         type="button"
         className="x-nt-shortcut-tile x-nt-shortcut-tile--add"
-        hidden={items.length >= options.maxShortcuts}
+        hidden={!options.getAddVisible() || items.length >= options.maxShortcuts}
         data-tooltip={addLabel}
         aria-label={addLabel}
         onClick={(event) => {
@@ -363,6 +369,12 @@ function ShortcutsList({
           event.stopPropagation();
           options.hideTooltip();
           options.onAdd(event.currentTarget);
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.hideTooltip();
+          options.onAddContextMenu(event.currentTarget);
         }}
       >
         <span
