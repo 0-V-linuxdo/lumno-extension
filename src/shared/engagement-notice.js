@@ -176,6 +176,16 @@
     return links && links.wechatQr ? links.wechatQr : WECHAT_QR_URL;
   }
 
+  function getCommunityChannel(locale) {
+    const links = typeof COMMUNITY_LINKS.getLinks === 'function'
+      ? COMMUNITY_LINKS.getLinks()
+      : null;
+    if (typeof COMMUNITY_LINKS.getCommunityChannel === 'function') {
+      return COMMUNITY_LINKS.getCommunityChannel(links, locale);
+    }
+    return /^zh(?:[-_]|$)/i.test(String(locale || '')) ? 'wechat' : 'discord';
+  }
+
   function loadCommunityUrl(options) {
     const settings = options && typeof options === 'object' ? options : {};
     if (typeof COMMUNITY_LINKS.load !== 'function') {
@@ -258,6 +268,7 @@
     const delayMs = Number.isFinite(Number(config.delayMs))
       ? Math.max(0, Number(config.delayMs))
       : (surface === 'overlay' ? 1200 : 1800);
+    const communityChannel = getCommunityChannel(config.locale);
     let state = normalizeEngagementState(null);
     let destroyed = false;
     let suppressed = false;
@@ -340,9 +351,13 @@
         },
         {
           id: 'community',
-          icon: 'ri-external-link-line',
+          icon: communityChannel === 'wechat'
+            ? 'ri-wechat-fill'
+            : 'ri-discord-fill',
           labelKey: 'engagement_notice_community',
-          labelFallback: 'join Discord',
+          labelFallback: communityChannel === 'wechat'
+            ? 'join WeChat group'
+            : 'join Discord',
           variant: 'secondary',
           onClick(event) {
             finishAction('community', event);
@@ -453,6 +468,7 @@
     WECHAT_QR_URL,
     createEngagementNotice,
     createEngagementNoticeDefinition,
+    getCommunityChannel,
     getCommunityUrl,
     loadCommunityUrl,
     getDayKey,

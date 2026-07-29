@@ -245,6 +245,8 @@ export function createBookmarksTopbar(
   let visible = false;
   let overflowRight = false;
   let overflowSyncFrameId = 0;
+  let wheelScrollFrameId = 0;
+  let pendingWheelDelta = 0;
   let destroyed = false;
 
   const setSurfaceColor = (value: unknown) => {
@@ -413,23 +415,48 @@ export function createBookmarksTopbar(
 
   const onScroll = () => scheduleOverflowFadeSync();
   const onResize = () => scheduleOverflowFadeSync();
+  const flushWheelScroll = () => {
+    wheelScrollFrameId = 0;
+    const delta = pendingWheelDelta;
+    pendingWheelDelta = 0;
+    if (
+      destroyed ||
+      !active ||
+      !visible ||
+      !delta ||
+      viewport.scrollWidth <= viewport.clientWidth
+    ) {
+      return;
+    }
+    viewport.scrollLeft += delta;
+    scheduleOverflowFadeSync();
+  };
+  const scheduleWheelScroll = (delta: number) => {
+    pendingWheelDelta += delta;
+    if (wheelScrollFrameId) {
+      return;
+    }
+    if (typeof windowObj.requestAnimationFrame !== 'function') {
+      flushWheelScroll();
+      return;
+    }
+    wheelScrollFrameId = windowObj.requestAnimationFrame(flushWheelScroll);
+  };
   const onWheel = (event: WheelEvent) => {
     if (!active || !visible) {
       return;
     }
     const horizontalDelta = Math.abs(Number(event.deltaX) || 0);
     const verticalDelta = Math.abs(Number(event.deltaY) || 0);
-    const delta =
-      horizontalDelta > verticalDelta ? event.deltaX : event.deltaY;
-    if (!delta || viewport.scrollWidth <= viewport.clientWidth) {
+    if (!verticalDelta || horizontalDelta >= verticalDelta) {
       return;
     }
-    event.preventDefault();
-    viewport.scrollLeft += delta;
-    scheduleOverflowFadeSync();
+    scheduleWheelScroll(Number(event.deltaY) || 0);
   };
   viewport.addEventListener('scroll', onScroll, { passive: true });
-  viewport.addEventListener('wheel', onWheel, { passive: false });
+  // Keep horizontal trackpad gestures on the browser's compositor thread.
+  // Traditional vertical wheel input is translated once per animation frame.
+  viewport.addEventListener('wheel', onWheel, { passive: true });
   windowObj.addEventListener('resize', onResize);
 
   const runtime: BookmarksTopbarRuntime = {
@@ -447,6 +474,11 @@ export function createBookmarksTopbar(
         windowObj.cancelAnimationFrame?.(overflowSyncFrameId);
         overflowSyncFrameId = 0;
       }
+      if (wheelScrollFrameId) {
+        windowObj.cancelAnimationFrame?.(wheelScrollFrameId);
+        wheelScrollFrameId = 0;
+      }
+      pendingWheelDelta = 0;
       viewport.removeEventListener('scroll', onScroll);
       viewport.removeEventListener('wheel', onWheel);
       windowObj.removeEventListener('resize', onResize);

@@ -75,13 +75,13 @@ const communityLinks = require('../src/shared/community-links.js');
   });
   assert.strictEqual(
     communityLinks.getCommunityChannel(overriddenCommunity, 'zh-HK'),
-    'discord',
-    'the remote locale map should be able to override the fallback channel'
+    'wechat',
+    'a stale remote locale map must not route Traditional Chinese users to Discord'
   );
   assert.strictEqual(
     communityLinks.getCommunityUrl(overriddenCommunity, 'zh-HK'),
-    'https://discord.example/invite',
-    'community URLs should follow the normalized remote locale map'
+    communityLinks.FALLBACK_LINKS.wechatQr,
+    'Traditional Chinese should still resolve the WeChat QR URL when remote routing is stale'
   );
 
   const requests = [];

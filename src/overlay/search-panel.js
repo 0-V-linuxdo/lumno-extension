@@ -1466,6 +1466,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           featureHints: FEATURE_HINTS,
           chromeApi: chrome,
           surface: 'overlay',
+          locale: overlayLanguageMode === 'system'
+            ? getSystemLocale()
+            : normalizeLocale(overlayLanguageMode),
           t,
           getRiSvg,
           exposureGate: overlayUpdateNoticeController && overlayUpdateNoticeController.ready,

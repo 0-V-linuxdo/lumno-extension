@@ -17,6 +17,7 @@ afterEach(() => {
   }
   runtime = null;
   document.body.innerHTML = '';
+  vi.restoreAllMocks();
 });
 
 describe('New Tab React bookmarks topbar', () => {
@@ -98,5 +99,65 @@ describe('New Tab React bookmarks topbar', () => {
     runtime.setVisible(true);
     expect(runtime.syncOverflowFade()).toBe(true);
     expect(runtime.edgeFade.dataset.visible).toBe('true');
+  });
+
+  it('keeps horizontal wheel gestures native and batches vertical wheel input', () => {
+    const animationFrames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 1;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      const frameId = nextFrameId;
+      nextFrameId += 1;
+      animationFrames.set(frameId, callback);
+      return frameId;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((frameId) => {
+      animationFrames.delete(frameId);
+    });
+    const flushAnimationFrames = () => {
+      while (animationFrames.size > 0) {
+        const pendingFrames = Array.from(animationFrames.entries());
+        animationFrames.clear();
+        pendingFrames.forEach(([, callback]) => callback(0));
+      }
+    };
+
+    act(() => {
+      runtime = createBookmarksTopbar({
+        documentObj: document,
+        windowObj: window
+      });
+    });
+    if (!runtime) {
+      throw new Error('Expected bookmarks topbar runtime');
+    }
+    Object.defineProperties(runtime.viewport, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 500 }
+    });
+    runtime.activate();
+    runtime.setVisible(true);
+    flushAnimationFrames();
+
+    const horizontalWheel = new WheelEvent('wheel', {
+      cancelable: true,
+      deltaX: 48,
+      deltaY: 4
+    });
+    runtime.viewport.dispatchEvent(horizontalWheel);
+    expect(horizontalWheel.defaultPrevented).toBe(false);
+    expect(runtime.viewport.scrollLeft).toBe(0);
+    expect(animationFrames.size).toBe(0);
+
+    runtime.viewport.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: 24 })
+    );
+    runtime.viewport.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: 36 })
+    );
+    expect(runtime.viewport.scrollLeft).toBe(0);
+    expect(animationFrames.size).toBe(1);
+
+    flushAnimationFrames();
+    expect(runtime.viewport.scrollLeft).toBe(60);
   });
 });

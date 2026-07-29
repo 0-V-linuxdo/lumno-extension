@@ -78,6 +78,11 @@ function createEligibleState(surface, now) {
     'Traditional Chinese users should also be guided to the WeChat QR code'
   );
   assert.strictEqual(
+    engagementNotice.getCommunityChannel('zh_TW'),
+    'wechat',
+    'Traditional Chinese engagement actions should use the WeChat treatment'
+  );
+  assert.strictEqual(
     engagementNotice.getCommunityUrl('en'),
     engagementNotice.DISCORD_URL,
     'non-Chinese users should be guided to Discord'
@@ -163,6 +168,7 @@ function createEligibleState(surface, now) {
     delayMs: 0,
     documentObj: { defaultView: fakeWindow },
     featureHints,
+    locale: 'zh_TW',
     now: () => now,
     onReview() {
       reviewClicks += 1;
@@ -194,11 +200,10 @@ function createEligibleState(surface, now) {
       ),
     'the engagement prompt should reuse the Lumno icon and solid wordmark mask'
   );
-  assert(
-    featureHintOptions.actions.every(
-      (action) => action.icon === 'ri-external-link-line'
-    ),
-    'rating and community actions should use the shared external-link icon'
+  assert.deepStrictEqual(
+    featureHintOptions.actions.map((action) => action.icon),
+    ['ri-external-link-line', 'ri-wechat-fill'],
+    'the Traditional Chinese engagement action should identify WeChat'
   );
   assert.strictEqual(
     featureHintOptions.actions[0].labelFallback,
@@ -437,8 +442,8 @@ function createEligibleState(surface, now) {
       zhTwMessages.engagement_notice_community.message,
       zhTwMessages.engagement_notice_trailing.message
     ],
-    ['如果用得開心，歡迎', '留下五星好評', '，或是', '加入社群', '和我們聊聊。'],
-    'Traditional Chinese engagement copy should use native community language'
+    ['如果用得開心，歡迎', '留下五星好評', '，或是', '加入微信群組', '和我們聊聊。'],
+    'Traditional Chinese engagement copy should name the WeChat group directly'
   );
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
   assert(

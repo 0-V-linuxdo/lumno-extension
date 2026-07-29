@@ -4135,33 +4135,6 @@
         wallpaperRuntime.updateTopContentModeUi();
       }
     });
-    storageArea.get([NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY], (result) => {
-      const raw = result[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
-      const nextValue = normalizeNewtabShortcutsVisible(raw);
-      newtabShortcutsVisible = nextValue;
-      if (raw !== nextValue) {
-        storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: nextValue });
-      }
-      applyNewtabShortcutsVisibility();
-    });
-    storageArea.get([NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY], (result) => {
-      const raw = result[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY];
-      const nextValue = normalizeNewtabShortcutAddVisible(raw);
-      newtabShortcutAddVisible = nextValue;
-      if (raw !== nextValue) {
-        storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: nextValue });
-      }
-      renderShortcuts();
-    });
-    storageArea.get([NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY], (result) => {
-      const raw = result[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY];
-      const nextValue = normalizeNewtabShortcutDockMagnificationEnabled(raw);
-      newtabShortcutDockMagnificationEnabled = nextValue;
-      if (raw !== nextValue) {
-        storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: nextValue });
-      }
-      applyNewtabShortcutDockMagnification();
-    });
     storageArea.get([RECENT_MODE_STORAGE_KEY], (result) => {
       const stored = result[RECENT_MODE_STORAGE_KEY];
       const hasStored = stored === 'latest' || stored === 'most';
@@ -7737,60 +7710,47 @@
       });
   }
 
-  function loadNewtabShortcutsVisibility() {
+  function loadNewtabShortcutPreferences() {
     if (!storageArea) {
       newtabShortcutsVisible = true;
+      newtabShortcutAddVisible = true;
+      newtabShortcutDockMagnificationEnabled = true;
       applyNewtabShortcutsVisibility();
-      return Promise.resolve(newtabShortcutsVisible);
+      applyNewtabShortcutDockMagnification();
+      return Promise.resolve();
     }
     return new Promise((resolve) => {
-      storageArea.get([NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY], (result) => {
-        const raw = result && result[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
-        const nextValue = normalizeNewtabShortcutsVisible(raw);
-        newtabShortcutsVisible = nextValue;
-        if (raw !== nextValue) {
-          storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: nextValue });
+      storageArea.get([
+        NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
+        NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
+        NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY
+      ], (result) => {
+        const stored = result || {};
+        const rawVisible = stored[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
+        const rawAddVisible = stored[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY];
+        const rawMagnification =
+          stored[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY];
+        newtabShortcutsVisible = normalizeNewtabShortcutsVisible(rawVisible);
+        newtabShortcutAddVisible = normalizeNewtabShortcutAddVisible(rawAddVisible);
+        newtabShortcutDockMagnificationEnabled =
+          normalizeNewtabShortcutDockMagnificationEnabled(rawMagnification);
+        const repairs = {};
+        if (rawVisible !== newtabShortcutsVisible) {
+          repairs[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] = newtabShortcutsVisible;
+        }
+        if (rawAddVisible !== newtabShortcutAddVisible) {
+          repairs[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY] = newtabShortcutAddVisible;
+        }
+        if (rawMagnification !== newtabShortcutDockMagnificationEnabled) {
+          repairs[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] =
+            newtabShortcutDockMagnificationEnabled;
+        }
+        if (Object.keys(repairs).length > 0) {
+          storageArea.set(repairs);
         }
         applyNewtabShortcutsVisibility();
-        resolve(newtabShortcutsVisible);
-      });
-    });
-  }
-
-  function loadNewtabShortcutAddVisibility() {
-    if (!storageArea) {
-      newtabShortcutAddVisible = true;
-      return Promise.resolve(newtabShortcutAddVisible);
-    }
-    return new Promise((resolve) => {
-      storageArea.get([NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY], (result) => {
-        const raw = result && result[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY];
-        const nextValue = normalizeNewtabShortcutAddVisible(raw);
-        newtabShortcutAddVisible = nextValue;
-        if (raw !== nextValue) {
-          storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: nextValue });
-        }
-        resolve(newtabShortcutAddVisible);
-      });
-    });
-  }
-
-  function loadNewtabShortcutDockMagnification() {
-    if (!storageArea) {
-      newtabShortcutDockMagnificationEnabled = true;
-      applyNewtabShortcutDockMagnification();
-      return Promise.resolve(newtabShortcutDockMagnificationEnabled);
-    }
-    return new Promise((resolve) => {
-      storageArea.get([NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY], (result) => {
-        const raw = result && result[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY];
-        const nextValue = normalizeNewtabShortcutDockMagnificationEnabled(raw);
-        newtabShortcutDockMagnificationEnabled = nextValue;
-        if (raw !== nextValue) {
-          storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: nextValue });
-        }
         applyNewtabShortcutDockMagnification();
-        resolve(newtabShortcutDockMagnificationEnabled);
+        resolve();
       });
     });
   }
@@ -14316,6 +14276,7 @@
         featureHints: FEATURE_HINTS,
         chromeApi: chrome,
         surface: 'newtab',
+        locale: getFeedbackWebLocale(),
         t,
         getRiSvg,
         exposureGate: updateNoticeController && updateNoticeController.ready,
@@ -14852,31 +14813,38 @@
     positionBookmarkCascadeLevels();
   }, { passive: true });
   bottomDockRuntime.onScroll(scheduleWallpaperAdaptiveToneUpdate, { passive: true });
-  const shortcutsReadyPromise = Promise.all([
-    loadNewtabShortcutsVisibility(),
-    loadNewtabShortcutAddVisibility(),
-    loadNewtabShortcutDockMagnification()
-  ]).then(loadVisibleShortcuts);
-  Promise.all([
-    bootstrapInitialThemeMode(),
-    bootstrapInitialLanguageMode(),
-    bootstrapInitialWallpaper(),
-    bootstrapInitialWallpaperOverlay(),
-    bootstrapInitialWallpaperEffect(),
-    bootstrapInitialNewtabFavicon(),
-    initialBookmarkViewModeReadyPromise,
-    loadZenMode(),
+  const shortcutPreferencesReadyPromise = loadNewtabShortcutPreferences();
+  const shortcutsReadyPromise = shortcutPreferencesReadyPromise.then(loadVisibleShortcuts);
+  const sectionPolicyReadyPromise = Promise.all([
     loadSearchBlacklistItems(),
     loadFaviconRequestBlacklistItems(),
     loadFaviconEnhancedFetchEnabled()
+  ]);
+  Promise.all([
+    bootstrapInitialWallpaper(),
+    bootstrapInitialWallpaperOverlay(),
+    bootstrapInitialWallpaperEffect(),
+    bootstrapInitialNewtabFavicon()
+  ]).catch((error) => {
+    console.warn('[Lumno] Deferred new tab appearance setup failed.', error);
+  });
+  const initialVisualReadyPromise = Promise.all([
+    bootstrapInitialThemeMode(),
+    bootstrapInitialLanguageMode(),
+    initialBookmarkViewModeReadyPromise,
+    loadZenMode(),
+    shortcutPreferencesReadyPromise
   ]).then(() => {
     hydrateSectionsFromCache();
-    return shortcutsReadyPromise;
-  }).then(() => {
-    loadRecentSites();
-    loadBookmarks();
     maybeShowFileAccessNotice();
     markNewtabReady();
+  });
+  Promise.all([initialVisualReadyPromise, sectionPolicyReadyPromise]).then(() => {
+    loadRecentSites();
+    loadBookmarks();
+  });
+  shortcutsReadyPromise.catch((error) => {
+    console.warn('[Lumno] Deferred shortcut loading failed.', error);
   });
   updateBookmarkSectionPosition();
 

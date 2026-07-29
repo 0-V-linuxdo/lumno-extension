@@ -49,7 +49,7 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /Promise\.all\(\[[\s\S]*?bootstrapInitialNewtabFavicon\(\),[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.then/,
+  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.then\(\(\) => \{[\s\S]*?markNewtabReady\(\);/,
   'New Tab should restore Zen mode before marking the page ready'
 );
 

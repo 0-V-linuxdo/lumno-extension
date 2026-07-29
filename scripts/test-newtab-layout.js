@@ -447,8 +447,8 @@ function testNewtabContainsRootOverscroll() {
   );
   assert.match(
     newtabHtml,
-    /\.x-nt-bookmarks-topbar-viewport\s*\{[\s\S]*?overflow-x:\s*auto;[\s\S]*?overscroll-behavior-x:\s*contain;/,
-    'newtab root isolation should preserve intentional horizontal scrolling inside the bookmarks topbar'
+    /\.x-nt-bookmarks-topbar-viewport\s*\{[\s\S]*?overflow-x:\s*auto;[\s\S]*?overscroll-behavior:\s*contain;/,
+    'newtab root isolation should preserve topbar scrolling without chaining wheel input to the page'
   );
   assert.match(
     newtabHtml,
@@ -458,6 +458,21 @@ function testNewtabContainsRootOverscroll() {
 }
 
 testNewtabContainsRootOverscroll();
+
+function testTopbarBookmarkTitlesStayReadableUntilWallpaperToneIsReady() {
+  assert.match(
+    newtabHtml,
+    /body\[data-wallpaper-active="true"\] \.x-nt-bookmarks-topbar\[data-surface-mode="adaptive"\],[\s\S]*?--x-nt-bookmarks-topbar-ink:\s*var\(--x-nt-bookmark-title,\s*#111827\);/,
+    'topbar bookmark titles should use the theme foreground before wallpaper sampling finishes'
+  );
+  assert.match(
+    newtabHtml,
+    /\.x-nt-bookmarks-topbar\[data-wallpaper-ink\]\[data-surface-mode="adaptive"\],[\s\S]*?--x-nt-bookmarks-topbar-ink:\s*var\(--x-nt-wallpaper-adaptive-ink,/,
+    'topbar bookmark titles should switch to sampled wallpaper ink once it is available'
+  );
+}
+
+testTopbarBookmarkTitlesStayReadableUntilWallpaperToneIsReady();
 
 function testBookmarkNavigationHoverSpacingIsOpticallyBalanced() {
   assert.match(

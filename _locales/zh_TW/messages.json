@@ -621,7 +621,7 @@
     "message": "留下五星好評"
   },
   "engagement_notice_community": {
-    "message": "加入社群"
+    "message": "加入微信群組"
   },
   "engagement_notice_close": {
     "message": "關閉評分與社群提示"
@@ -675,22 +675,22 @@
     "message": "寄送郵件"
   },
   "newtab_feedback_wechat_label": {
-    "message": "微信"
+    "message": "微信群組"
   },
   "newtab_feedback_wechat_tooltip": {
-    "message": "加入微信群組"
+    "message": "加入 Lumno 微信群組"
   },
   "newtab_feedback_wechat_panel_title": {
-    "message": "Bug 回報與新功能需求"
+    "message": "問題回報與功能建議"
   },
   "newtab_feedback_wechat_refresh_tooltip": {
-    "message": "重新整理 QR Code"
+    "message": "重新載入 QR Code"
   },
   "newtab_feedback_wechat_refresh_success": {
-    "message": "已取得最新 QR Code"
+    "message": "已載入最新 QR Code"
   },
   "newtab_feedback_wechat_refresh_error": {
-    "message": "重新整理失敗，請稍後再試"
+    "message": "無法更新 QR Code，請稍後再試"
   },
   "newtab_feedback_wechat_close_tooltip": {
     "message": "關閉"
@@ -702,10 +702,10 @@
     "message": "加入 Discord"
   },
   "newtab_feedback_wechat_qr_title": {
-    "message": "微信群二維碼"
+    "message": "微信群組 QR Code"
   },
   "newtab_feedback_wechat_qr_alt": {
-    "message": "Lumno 微信群二維碼"
+    "message": "Lumno 微信群組 QR Code"
   },
   "newtab_feedback_mail_subject": {
     "message": "Lumno 回饋"

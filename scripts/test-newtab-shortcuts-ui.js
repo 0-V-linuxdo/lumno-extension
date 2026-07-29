@@ -2133,16 +2133,39 @@ assertContains(
   'newtab runtime should load shortcut metadata and local icons together'
 );
 
-assert.ok(
-  newtabJs.indexOf('const shortcutsReadyPromise = loadNewtabShortcutsVisibility().then(loadVisibleShortcuts);') <
-    newtabJs.indexOf('markNewtabReady();'),
-  'newtab runtime should not mark the page ready before shortcut loading starts'
+assert.match(
+  newtabJs,
+  /function loadNewtabShortcutPreferences\(\)\s*\{[\s\S]*?storageArea\.get\(\[[\s\S]*?NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,[\s\S]*?NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,[\s\S]*?NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY[\s\S]*?\],/,
+  'newtab runtime should batch shortcut preference reads into one storage request'
 );
 
 assert.match(
   newtabJs,
-  /return shortcutsReadyPromise;[\s\S]*markNewtabReady\(\);/,
-  'newtab ready transition should wait for stored shortcuts to render'
+  /const shortcutsReadyPromise = shortcutPreferencesReadyPromise\.then\(loadVisibleShortcuts\);/,
+  'newtab runtime should start shortcut payload loading after its display preferences resolve'
+);
+
+assert.match(
+  newtabJs,
+  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?shortcutPreferencesReadyPromise[\s\S]*?\]\)\.then\(\(\) => \{[\s\S]*?markNewtabReady\(\);[\s\S]*?\}\);/,
+  'newtab ready transition should wait only for lightweight visual preferences'
+);
+
+const initialVisualDependencyBlock = newtabJs.slice(
+  newtabJs.indexOf('const initialVisualReadyPromise = Promise.all(['),
+  newtabJs.indexOf(']).then(() => {',
+    newtabJs.indexOf('const initialVisualReadyPromise = Promise.all(['))
+);
+assert.doesNotMatch(
+  initialVisualDependencyBlock,
+  /bootstrapInitialWallpaper|shortcutsReadyPromise|loadVisibleShortcuts|loadShortcutIcons/,
+  'newtab ready transition should not wait for wallpaper or shortcut asset payloads'
+);
+
+assert.ok(
+  newtabJs.indexOf('markNewtabReady();') <
+    newtabJs.indexOf("console.warn('[Lumno] Deferred shortcut loading failed.'"),
+  'newtab ready transition should not wait for shortcut icon payloads'
 );
 
 assertContains(

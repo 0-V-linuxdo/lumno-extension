@@ -100,6 +100,11 @@
 
   function getCommunityChannel(links, locale) {
     const webLocale = normalizeWebLocale(locale);
+    // Chinese community support lives in WeChat. Keep this product policy
+    // local so a stale remote map cannot send zh-CN or zh-TW users to Discord.
+    if (webLocale === 'zh-CN' || webLocale === 'zh-TW') {
+      return 'wechat';
+    }
     const source = links && typeof links === 'object' ? links : FALLBACK_LINKS;
     const communityMap = source.communityByLocale &&
         typeof source.communityByLocale === 'object'

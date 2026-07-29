@@ -1699,7 +1699,7 @@
         flex: 1 1 auto;
         overflow-x: auto;
         overflow-y: hidden;
-        overscroll-behavior-x: contain;
+        overscroll-behavior: contain;
         scrollbar-width: none;
         scroll-behavior: auto;
         contain: paint;
@@ -1977,8 +1977,10 @@
             --x-nt-wallpaper-surface-border,
             var(--x-nt-bookmarks-topbar-wallpaper-border-fallback)
           );
-        --x-nt-bookmarks-topbar-ink:
-          var(--x-nt-wallpaper-adaptive-ink, var(--x-nt-bookmark-title, #111827));
+        /* The wallpaper sampler applies its local ink after image decode. Until
+           then, keep the theme-matched foreground readable on the initial
+           surface instead of inheriting the wallpaper's light-ink fallback. */
+        --x-nt-bookmarks-topbar-ink: var(--x-nt-bookmark-title, #111827);
         --x-nt-bookmarks-topbar-action-hover:
           var(
             --x-nt-wallpaper-adaptive-hover-bg,
@@ -1989,6 +1991,15 @@
             --x-nt-wallpaper-adaptive-hover-bg,
             var(--x-nt-bookmarks-topbar-wallpaper-hover-fallback)
           );
+      }
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-wallpaper-ink][data-surface-mode="adaptive"],
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-wallpaper-ink][data-surface-mode="clear"],
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-wallpaper-ink][data-surface-mode="transparent"] {
+        --x-nt-bookmarks-topbar-ink:
+          var(--x-nt-wallpaper-adaptive-ink, var(--x-nt-bookmark-title, #111827));
       }
       body[data-wallpaper-active="true"]
         .x-nt-bookmarks-topbar[data-surface-mode="transparent"] {

@@ -309,8 +309,23 @@ assert.strictEqual(
 );
 assert.strictEqual(
   getMessage(zhTwMessages, 'newtab_feedback_wechat_panel_title'),
-  'Bug 回報與新功能需求',
+  '問題回報與功能建議',
   'zh-TW should label the expanded wechat panel idiomatically'
+);
+assert.deepStrictEqual(
+  [
+    getMessage(zhTwMessages, 'newtab_feedback_wechat_label'),
+    getMessage(zhTwMessages, 'newtab_feedback_wechat_tooltip'),
+    getMessage(zhTwMessages, 'newtab_feedback_wechat_qr_title'),
+    getMessage(zhTwMessages, 'newtab_feedback_wechat_qr_alt')
+  ],
+  [
+    '微信群組',
+    '加入 Lumno 微信群組',
+    '微信群組 QR Code',
+    'Lumno 微信群組 QR Code'
+  ],
+  'zh-TW should use clear, consistent WeChat group copy throughout the feedback UI'
 );
 assert.strictEqual(
   getMessage(enMessages, 'newtab_feedback_wechat_panel_title'),
@@ -337,9 +352,9 @@ assert.strictEqual(
   [
     zhTwMessages,
     {
-      refresh: '重新整理 QR Code',
-      success: '已取得最新 QR Code',
-      error: '重新整理失敗，請稍後再試',
+      refresh: '重新載入 QR Code',
+      success: '已載入最新 QR Code',
+      error: '無法更新 QR Code，請稍後再試',
       close: '關閉'
     },
     'zh-TW'
