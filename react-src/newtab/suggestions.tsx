@@ -1814,6 +1814,15 @@ function SearchSuggestionRow({
     }
   };
 
+  const preserveCommandInputFocus = (
+    event: ReactMouseEvent<HTMLElement>
+  ): void => {
+    if (command) {
+      // New Tab clears slash commands on input blur, before click fires.
+      event.preventDefault();
+    }
+  };
+
   const handleAuxClick = (
     event: ReactMouseEvent<HTMLElement>
   ): void => {
@@ -1899,6 +1908,7 @@ function SearchSuggestionRow({
       data-row-state={isPrimary ? 'active' : undefined}
       data-command-row={command ? 'true' : undefined}
       onMouseEnter={handleRowMouseEnter}
+      onMouseDown={preserveCommandInputFocus}
       onMouseLeave={() => {
         if (itemRef.current) {
           itemRef.current._xIsHovering = false;

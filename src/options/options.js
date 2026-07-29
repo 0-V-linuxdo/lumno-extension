@@ -46,6 +46,10 @@
   const overlayTabQuickSwitchToggle = document.getElementById('_x_extension_overlay_tab_quick_switch_2024_unique_');
   const newtabWordmarkToggle = document.getElementById('_x_extension_newtab_wordmark_toggle_2026_unique_');
   const newtabShortcutsToggle = document.getElementById('_x_extension_newtab_shortcuts_toggle_2026_unique_');
+  const newtabShortcutAddRow = document.getElementById('_x_extension_newtab_shortcut_add_row_2026_unique_');
+  const newtabShortcutAddToggle = document.getElementById('_x_extension_newtab_shortcut_add_toggle_2026_unique_');
+  const newtabShortcutDockMagnificationRow = document.getElementById('_x_extension_newtab_shortcut_dock_magnification_row_2026_unique_');
+  const newtabShortcutDockMagnificationToggle = document.getElementById('_x_extension_newtab_shortcut_dock_magnification_toggle_2026_unique_');
   const restrictedActionSelect = document.getElementById('_x_extension_restricted_action_select_2024_unique_');
   const searchResultPrioritySelect = document.getElementById('_x_extension_search_result_priority_select_2026_unique_');
   const searchResultSourceTypeGroupHost = document.getElementById('_x_extension_search_result_source_types_2026_unique_');
@@ -233,6 +237,21 @@
     });
     record.controller.render(record.model);
   }
+
+  function syncNewtabShortcutSubtoggleAvailability() {
+    const disabled = Boolean(newtabShortcutsToggle && !newtabShortcutsToggle.checked);
+    [newtabShortcutAddToggle, newtabShortcutDockMagnificationToggle].forEach((toggle) => {
+      if (toggle) {
+        setOptionsToggleState(toggle, toggle.checked, disabled);
+      }
+    });
+    [newtabShortcutAddRow, newtabShortcutDockMagnificationRow].forEach((row) => {
+      if (row) {
+        row.setAttribute('data-disabled', disabled ? 'true' : 'false');
+        row.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+      }
+    });
+  }
   [
     [updateNoticeToggle, 'update-notice'],
     [autoPipToggle, 'auto-pip'],
@@ -241,6 +260,8 @@
     [overlayTabQuickSwitchToggle, 'overlay-tab-quick-switch'],
     [newtabWordmarkToggle, 'newtab-wordmark'],
     [newtabShortcutsToggle, 'newtab-shortcuts'],
+    [newtabShortcutAddToggle, 'newtab-shortcut-add'],
+    [newtabShortcutDockMagnificationToggle, 'newtab-shortcut-dock-magnification'],
     [faviconEnhancedFetchToggle, 'favicon-enhanced-fetch'],
     [tabSwitcherToggle, 'tab-switcher'],
     [documentPipToggle, 'document-pip'],
@@ -419,6 +440,8 @@
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
   const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
+  const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
+  const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const AUTO_PIP_ENABLED_STORAGE_KEY = '_x_extension_auto_pip_enabled_2026_unique_';
   const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
@@ -471,6 +494,8 @@
     HIDDEN_RECENT_SITES_STORAGE_KEY,
     NEWTAB_SHORTCUTS_STORAGE_KEY,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     AUTO_PIP_ENABLED_STORAGE_KEY,
     TAB_SWITCHER_ENABLED_STORAGE_KEY,
@@ -1312,6 +1337,18 @@
   function normalizeNewtabShortcutsVisible(value) {
     return typeof SETTINGS.normalizeNewtabShortcutsVisible === 'function'
       ? SETTINGS.normalizeNewtabShortcutsVisible(value)
+      : value !== false;
+  }
+
+  function normalizeNewtabShortcutAddVisible(value) {
+    return typeof SETTINGS.normalizeNewtabShortcutAddVisible === 'function'
+      ? SETTINGS.normalizeNewtabShortcutAddVisible(value)
+      : value !== false;
+  }
+
+  function normalizeNewtabShortcutDockMagnificationEnabled(value) {
+    return typeof SETTINGS.normalizeNewtabShortcutDockMagnificationEnabled === 'function'
+      ? SETTINGS.normalizeNewtabShortcutDockMagnificationEnabled(value)
       : value !== false;
   }
 
@@ -3491,6 +3528,8 @@
     NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
     NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     PINNED_RECENT_SITES_STORAGE_KEY,
     HIDDEN_RECENT_SITES_STORAGE_KEY,
     NEWTAB_SHORTCUTS_STORAGE_KEY,
@@ -3847,10 +3886,34 @@
   if (newtabShortcutsToggle) {
     newtabShortcutsToggle.addEventListener('change', () => {
       const next = normalizeNewtabShortcutsVisible(newtabShortcutsToggle.checked);
+      setOptionsToggleState(newtabShortcutsToggle, next);
+      syncNewtabShortcutSubtoggleAvailability();
       if (!storageArea) {
         return;
       }
       storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: next });
+    });
+  }
+  if (newtabShortcutAddToggle) {
+    newtabShortcutAddToggle.addEventListener('change', () => {
+      const next = normalizeNewtabShortcutAddVisible(newtabShortcutAddToggle.checked);
+      setOptionsToggleState(newtabShortcutAddToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: next });
+    });
+  }
+  if (newtabShortcutDockMagnificationToggle) {
+    newtabShortcutDockMagnificationToggle.addEventListener('change', () => {
+      const next = normalizeNewtabShortcutDockMagnificationEnabled(
+        newtabShortcutDockMagnificationToggle.checked
+      );
+      setOptionsToggleState(newtabShortcutDockMagnificationToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: next });
     });
   }
   if (updateNoticeToggle) {
@@ -4390,8 +4453,39 @@
       if (newtabShortcutsToggle) {
         setOptionsToggleState(newtabShortcutsToggle, stored);
       }
+      syncNewtabShortcutSubtoggleAvailability();
       if (rawValue !== stored) {
         storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY];
+      const stored = normalizeNewtabShortcutAddVisible(rawValue);
+      if (newtabShortcutAddToggle) {
+        setOptionsToggleState(
+          newtabShortcutAddToggle,
+          stored,
+          Boolean(newtabShortcutsToggle && !newtabShortcutsToggle.checked)
+        );
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY];
+      const stored = normalizeNewtabShortcutDockMagnificationEnabled(rawValue);
+      if (newtabShortcutDockMagnificationToggle) {
+        setOptionsToggleState(
+          newtabShortcutDockMagnificationToggle,
+          stored,
+          Boolean(newtabShortcutsToggle && !newtabShortcutsToggle.checked)
+        );
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -5378,6 +5472,8 @@
         changes[BOOKMARK_VIEW_MODE_STORAGE_KEY] ||
         changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] ||
         changes[NEWTAB_SHORTCUTS_STORAGE_KEY] ||
+        changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY] ||
+        changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] ||
         changes[AUTO_PIP_ENABLED_STORAGE_KEY] ||
         changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY] ||
         changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] ||
@@ -5496,8 +5592,35 @@
       const raw = changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY].newValue;
       const next = normalizeNewtabShortcutsVisible(raw);
       setOptionsToggleState(newtabShortcutsToggle, next);
+      syncNewtabShortcutSubtoggleAvailability();
       if (raw !== next && storageArea) {
         storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY] && newtabShortcutAddToggle) {
+      const raw = changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY].newValue;
+      const next = normalizeNewtabShortcutAddVisible(raw);
+      setOptionsToggleState(
+        newtabShortcutAddToggle,
+        next,
+        Boolean(newtabShortcutsToggle && !newtabShortcutsToggle.checked)
+      );
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] && newtabShortcutDockMagnificationToggle) {
+      const raw = changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeNewtabShortcutDockMagnificationEnabled(raw);
+      setOptionsToggleState(
+        newtabShortcutDockMagnificationToggle,
+        next,
+        Boolean(newtabShortcutsToggle && !newtabShortcutsToggle.checked)
+      );
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }
