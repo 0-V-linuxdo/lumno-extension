@@ -4,6 +4,8 @@
 
 Lumno is free and open source software. Financial contributions help sustain maintenance, distribution, documentation, localization, security work, and community infrastructure.
 
+> **Review note:** This document records Lumno's external funding policy for eligibility review. Sponsorship is not currently surfaced inside the extension. Any in-extension entry remains disabled pending written confirmation from the 1Password for Open Source team.
+
 ## Official funding channel
 
 Lumno accepts voluntary, one-time contributions through the project's official Stripe Payment Links. Pick the amount of light you want to add:

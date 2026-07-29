@@ -129,10 +129,6 @@ npm run test:onboarding-content
 - 同梱アイコンセット：[Remix Icon](https://remixicon.com/)
 - 同梱書体：Open Sans
 
-## スポンサーシップ
-
-Lumno に少し光を足してみませんか？[1 ピクセルを灯す（HK$18）](https://buy.stripe.com/fZu6oIfZP5bp3N5dQdcV201)、[Lumno を充電する（HK$50・おすすめ）](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)、または[一晩を照らす（HK$128）](https://buy.stripe.com/3cI6oI6pf6ft1EX8vTcV202)から選べます。いずれも 1 回限りの任意のオープンソース支援で、非公開機能、優先サポート、ロードマップの決定権などの特典はありません。支払方法は Stripe が動的に表示し、Alipay と WeChat Pay は承認待ちです。詳細は[スポンサーシップポリシー](SPONSORING.md)をご覧ください。
-
 ## Star History
 
 <p align="center">
