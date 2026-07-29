@@ -131,6 +131,32 @@ assert(
     );
   });
 });
+{
+  const modeKey = '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
+  assert(
+    /BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY\s*=\s*[\s\S]*?['_"]_x_extension_bookmark_topbar_surface_mode_2026_unique_['_"]/.test(newtabSource),
+    'new tab should define the local-only bookmark topbar surface mode key'
+  );
+  [
+    ['options', optionsSource],
+    ['background', backgroundSource],
+    ['shared sync settings', sharedSettingsSource]
+  ].forEach(([surface, source]) => {
+    assert(
+      !source.includes(modeKey),
+      `${surface} should not include the local-only bookmark topbar surface mode key`
+    );
+  });
+  const persistModeSource = getFunctionSource(
+    newtabSource,
+    'persistBookmarkTopbarSurfaceMode'
+  );
+  assert(
+    /bookmarkTopbarSurfaceColorStorageArea\.set/.test(persistModeSource) &&
+      !/storage\.sync|syncArea/.test(persistModeSource),
+    'bookmark topbar surface mode changes should persist only through local storage'
+  );
+}
 assert(
   !optionsSource.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_') &&
     !backgroundSource.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_') &&
@@ -253,8 +279,61 @@ assert(
     'initial rendering should use only colors already stored on the current machine'
   );
 }
+{
+  const modeKey = '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
+  const legacyKey = '_x_extension_bookmark_topbar_surface_color_2026_unique_';
+  const darkKey = '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
+  const appliedModes = [];
+  const localArea = {
+    get(keys, callback) {
+      assert.deepStrictEqual(keys, [modeKey, darkKey, legacyKey]);
+      callback({ [darkKey]: '#223344' });
+    }
+  };
+  const createInitialModeLoader = new Function(
+    'bookmarkTopbarSurfaceColorStorageArea',
+    'initialThemeReadyPromise',
+    'BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY',
+    'getCurrentBookmarkTopbarResolvedTheme',
+    'getBookmarkTopbarSurfaceColorStorageKey',
+    'normalizeBookmarkTopbarSurfaceColor',
+    'bookmarkTopbarSurfaceModeRevision',
+    'applyBookmarkTopbarSurfaceMode',
+    `${getFunctionSource(newtabSource, 'isBookmarkTopbarSurfaceMode')}
+    ${getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceMode')}
+    return loadInitialBookmarkTopbarSurfaceMode;`
+  );
+  const loadInitialBookmarkTopbarSurfaceMode = createInitialModeLoader(
+    localArea,
+    { then(callback) { callback(); } },
+    modeKey,
+    legacyKey,
+    () => 'dark',
+    () => darkKey,
+    (value) => /^#[0-9a-f]{6}$/.test(String(value || '')) ? value : '',
+    0,
+    (mode, options) => appliedModes.push({ mode, options })
+  );
+  loadInitialBookmarkTopbarSurfaceMode();
+  assert.strictEqual(appliedModes.length, 1);
+  assert.strictEqual(
+    appliedModes[0].mode,
+    'custom',
+    'an existing per-theme color should migrate to custom material mode'
+  );
+  assert.strictEqual(
+    appliedModes[0].options.persist,
+    true,
+    'the inferred custom material mode should be persisted locally'
+  );
+}
 localeNames.forEach((locale) => {
   [
+    'bookmark_topbar_surface_adaptive',
+    'bookmark_topbar_surface_clear',
+    'bookmark_topbar_surface_transparent',
+    'bookmark_topbar_surface_custom',
     'bookmark_topbar_color_pick',
     'bookmark_topbar_color_reset',
     'bookmark_topbar_color_picked',
