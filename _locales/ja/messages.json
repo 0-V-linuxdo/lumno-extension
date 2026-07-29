@@ -1646,6 +1646,9 @@
   "newtab_shortcuts_add": {
     "message": "ショートカットを追加"
   },
+  "newtab_shortcuts_hide_add": {
+    "message": "非表示"
+  },
   "newtab_shortcuts_add_hidden": {
     "message": "「+」を非表示にしました。設定 → 外観 → ショートカット → 「+」を表示 から再表示できます。"
   },

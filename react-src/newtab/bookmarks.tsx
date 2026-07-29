@@ -706,9 +706,8 @@ function BookmarkCard({
     setFolderExpanded(false);
   }
 
-  function dispose(): void {
+  function clearDragClickSuppression(): void {
     const card = cardRef.current;
-    clearHoverIntentTimer();
     if (
       card?._xBookmarkSuppressClickTimer &&
       typeof options.windowObj.clearTimeout === 'function'
@@ -716,6 +715,23 @@ function BookmarkCard({
       options.windowObj.clearTimeout(card._xBookmarkSuppressClickTimer);
       card._xBookmarkSuppressClickTimer = 0;
     }
+    if (card) {
+      card._xBookmarkSuppressClick = false;
+    }
+  }
+
+  function consumeDragClickSuppression(): boolean {
+    const card = cardRef.current;
+    if (!card?._xBookmarkSuppressClick) {
+      return false;
+    }
+    clearDragClickSuppression();
+    return true;
+  }
+
+  function dispose(): void {
+    clearHoverIntentTimer();
+    clearDragClickSuppression();
   }
 
   function setCopyActionVisible(visible: boolean): void {
@@ -770,7 +786,7 @@ function BookmarkCard({
     if (!card) {
       return;
     }
-    if (card._xBookmarkSuppressClick) {
+    if (event.type === 'click' && consumeDragClickSuppression()) {
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -944,6 +960,7 @@ function BookmarkCard({
         }
       }}
       onPointerDown={(event) => {
+        clearDragClickSuppression();
         clearHoverIntentTimer();
         if (
           cardRef.current &&

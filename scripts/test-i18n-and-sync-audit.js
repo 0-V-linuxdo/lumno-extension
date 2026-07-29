@@ -150,10 +150,11 @@ assert(
     'bookmark topbar color changes should persist only through the local storage adapter'
   );
   assert(
-    /syncArea\.get\(keys, readLocalAndMigrate\)/.test(loadSource) &&
-      /localArea\.set\(localUpdates, finishMigration\)/.test(loadSource) &&
-      /hasSyncedColor[\s\S]*syncArea\.remove\(keys\)/.test(loadSource),
-    'existing synced bookmark topbar colors should migrate locally before their sync keys are removed'
+    /localArea\.get\(keys/.test(loadSource) &&
+      /localArea\.set\(localUpdates, finishLocalMigration\)/.test(loadSource) &&
+      /hasSyncedColor[\s\S]*syncArea\.remove\(keys\)/.test(loadSource) &&
+      !/syncResult\[key\][\s\S]*localUpdates\[key\]/.test(loadSource),
+    'existing synced bookmark topbar colors should be removed without being imported locally'
   );
   assert(
     /areaName !== ['"]local['"]/.test(changeSource),
@@ -231,11 +232,11 @@ assert(
   loadInitialBookmarkTopbarSurfaceColors();
   assert.deepStrictEqual(
     localWrites,
-    [{ [darkKey]: '#112233' }],
-    'the current machine should copy its effective synced dark color into local storage'
+    [],
+    'the current machine should not copy a synced color into local storage'
   );
   assert.strictEqual(localData[lightKey], '#f1f2f3');
-  assert.strictEqual(localData[darkKey], '#112233');
+  assert.strictEqual(localData[darkKey], undefined);
   assert.deepStrictEqual(
     localRemovals,
     [],
@@ -244,12 +245,12 @@ assert(
   assert.deepStrictEqual(
     syncRemovals,
     [lightKey, darkKey, legacyKey],
-    'all bookmark topbar color keys should be removed from sync after the local write completes'
+    'all bookmark topbar color keys should be removed from sync without importing their values'
   );
   assert.deepStrictEqual(
     appliedResults,
-    [{ [lightKey]: '#f1f2f3', [darkKey]: '#112233' }],
-    'initial rendering should use the migrated local light and dark colors'
+    [{ [lightKey]: '#f1f2f3' }],
+    'initial rendering should use only colors already stored on the current machine'
   );
 }
 localeNames.forEach((locale) => {
@@ -436,7 +437,11 @@ assert(
   'the New Tab add shortcut preference label should be wired through i18n'
 );
 localeNames.forEach((locale) => {
-  ['settings_newtab_shortcut_add_title', 'newtab_shortcuts_add_hidden'].forEach((key) => {
+  [
+    'settings_newtab_shortcut_add_title',
+    'newtab_shortcuts_hide_add',
+    'newtab_shortcuts_add_hidden'
+  ].forEach((key) => {
     assert(
       localeMessages[locale][key] &&
         String(localeMessages[locale][key].message || '').trim(),

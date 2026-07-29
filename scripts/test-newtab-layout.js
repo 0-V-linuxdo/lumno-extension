@@ -459,6 +459,21 @@ function testNewtabContainsRootOverscroll() {
 
 testNewtabContainsRootOverscroll();
 
+function testBookmarkNavigationHoverSpacingIsOpticallyBalanced() {
+  assert.match(
+    newtabHtml,
+    /\.x-nt-bookmarks-heading\.x-nt-bookmarks-heading--link\s*\{[\s\S]*?padding:\s*3px 5px 3px 7px;[\s\S]*?margin-left:\s*-7px;/,
+    'the nested bookmark heading should keep its text aligned while compensating its visible inline padding'
+  );
+  assert.match(
+    newtabHtml,
+    /\.x-nt-bookmarks-crumb\s*\{[\s\S]*?padding:\s*0 5px 0 7px;/,
+    'bookmark breadcrumb hover targets should use the same optical inline padding compensation'
+  );
+}
+
+testBookmarkNavigationHoverSpacingIsOpticallyBalanced();
+
 function testCompactDockKeepsSearchEntryClearOnShortViewports() {
   const { bottomDock, controller } = createFixture({
     innerHeight: 620,

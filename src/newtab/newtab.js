@@ -446,7 +446,7 @@
   let addShortcutButton = null;
   let shortcutDialogController = null;
   let shortcutContextMenu = null;
-  let shortcutContextMenuTargetId = '';
+  let shortcutContextMenuTarget = null;
   let newtabShortcuts = [];
   let newtabShortcutIcons = {};
   let newtabShortcutsVisible = true;
@@ -459,6 +459,7 @@
   const SHORTCUT_DIALOG_ITEM_FOLDER = 'folder';
   const SHORTCUT_CONTEXT_MENU_EDIT_VALUE = 'edit';
   const SHORTCUT_CONTEXT_MENU_REMOVE_VALUE = 'remove';
+  const SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE = 'hide-add';
   const shortcutIconStore = NEWTAB_SHORTCUT_ICON_STORE.createShortcutIconStore({
     documentObj: document,
     windowObj: window,
@@ -843,71 +844,49 @@
       ? chrome.storage.sync
       : null;
     initialThemeReadyPromise.then(() => {
-      const readLocalAndMigrate = (syncResult) => {
-        localArea.get(keys, (localResult) => {
-          const resolvedLocalResult = Object.assign({}, localResult || {});
-          const localUpdates = {};
+      localArea.get(keys, (localResult) => {
+        const resolvedLocalResult = Object.assign({}, localResult || {});
+        const localUpdates = {};
+        const hasLocalLegacyColor = Object.prototype.hasOwnProperty.call(
+          resolvedLocalResult,
+          BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
+        );
+        const localLegacyColor = resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
+        const currentThemeKey = getBookmarkTopbarSurfaceColorStorageKey(
+          getCurrentBookmarkTopbarResolvedTheme()
+        );
+        if (typeof localLegacyColor !== 'undefined' &&
+            typeof resolvedLocalResult[currentThemeKey] === 'undefined') {
+          resolvedLocalResult[currentThemeKey] = localLegacyColor;
+          localUpdates[currentThemeKey] = localLegacyColor;
+        }
+        delete resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
+        const readRevisions = {
+          light: bookmarkTopbarSurfaceColorRevisions.light,
+          dark: bookmarkTopbarSurfaceColorRevisions.dark
+        };
+        const finishLocalMigration = () => {
+          if (hasLocalLegacyColor && typeof localArea.remove === 'function') {
+            localArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
+          }
+          applyInitialBookmarkTopbarSurfaceColors(resolvedLocalResult, readRevisions);
+        };
+        if (Object.keys(localUpdates).length > 0 && typeof localArea.set === 'function') {
+          localArea.set(localUpdates, finishLocalMigration);
+          return;
+        }
+        finishLocalMigration();
+      });
+      if (syncArea && syncArea !== localArea && typeof syncArea.get === 'function') {
+        syncArea.get(keys, (syncResult) => {
           const hasSyncedColor = keys.some((key) => (
             syncResult && Object.prototype.hasOwnProperty.call(syncResult, key)
           ));
-          const hasLocalLegacyColor = Object.prototype.hasOwnProperty.call(
-            resolvedLocalResult,
-            BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
-          );
-          [
-            BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
-            BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY
-          ].forEach((key) => {
-            if (syncResult &&
-                Object.prototype.hasOwnProperty.call(syncResult, key) &&
-                !Object.prototype.hasOwnProperty.call(resolvedLocalResult, key)) {
-              resolvedLocalResult[key] = syncResult[key];
-              localUpdates[key] = syncResult[key];
-            }
-          });
-          const syncedLegacyColor = syncResult &&
-            Object.prototype.hasOwnProperty.call(syncResult, BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY)
-            ? syncResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]
-            : undefined;
-          const localLegacyColor = resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
-          const legacyColor = typeof syncedLegacyColor !== 'undefined'
-            ? syncedLegacyColor
-            : localLegacyColor;
-          const currentThemeKey = getBookmarkTopbarSurfaceColorStorageKey(
-            getCurrentBookmarkTopbarResolvedTheme()
-          );
-          if (typeof legacyColor !== 'undefined' &&
-              typeof resolvedLocalResult[currentThemeKey] === 'undefined') {
-            resolvedLocalResult[currentThemeKey] = legacyColor;
-            localUpdates[currentThemeKey] = legacyColor;
+          if (hasSyncedColor && typeof syncArea.remove === 'function') {
+            syncArea.remove(keys);
           }
-          delete resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
-          const readRevisions = {
-            light: bookmarkTopbarSurfaceColorRevisions.light,
-            dark: bookmarkTopbarSurfaceColorRevisions.dark
-          };
-          const finishMigration = () => {
-            if (hasLocalLegacyColor && typeof localArea.remove === 'function') {
-              localArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
-            }
-            if (hasSyncedColor && syncArea && syncArea !== localArea &&
-                typeof syncArea.remove === 'function') {
-              syncArea.remove(keys);
-            }
-            applyInitialBookmarkTopbarSurfaceColors(resolvedLocalResult, readRevisions);
-          };
-          if (Object.keys(localUpdates).length > 0 && typeof localArea.set === 'function') {
-            localArea.set(localUpdates, finishMigration);
-            return;
-          }
-          finishMigration();
         });
-      };
-      if (syncArea && syncArea !== localArea && typeof syncArea.get === 'function') {
-        syncArea.get(keys, readLocalAndMigrate);
-        return;
       }
-      readLocalAndMigrate({});
     });
   }
 
@@ -6057,7 +6036,7 @@
     }, Object.assign({
       placement: 'bottom',
       maxWidth: 360,
-      spacing: -6,
+      spacing: () => (newtabShortcutDockMagnificationEnabled ? -6 : -2),
       showOnFocus: false
     }, tooltipOptions));
   }
@@ -6336,7 +6315,15 @@
     }
   }
 
-  function getShortcutContextMenuOptions() {
+  function getShortcutContextMenuOptions(target) {
+    if (target && target.kind === 'add') {
+      return [
+        {
+          value: SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE,
+          label: t('newtab_shortcuts_hide_add', 'Hide')
+        }
+      ];
+    }
     return [
       {
         value: SHORTCUT_CONTEXT_MENU_EDIT_VALUE,
@@ -6360,8 +6347,10 @@
     if (typeof shortcutContextMenuSelectController.setOptions === 'function') {
       shortcutContextMenuSelectController.setOptions(
         shortcutContextMenu.control,
-        getShortcutContextMenuOptions(),
-        SHORTCUT_CONTEXT_MENU_EDIT_VALUE
+        getShortcutContextMenuOptions(shortcutContextMenuTarget),
+        shortcutContextMenuTarget && shortcutContextMenuTarget.kind === 'add'
+          ? SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE
+          : SHORTCUT_CONTEXT_MENU_EDIT_VALUE
       );
     }
   }
@@ -6525,8 +6514,8 @@
     if (!shortcutGrid) {
       return;
     }
-    if (isShortcutContextMenuOpen() && shortcutContextMenuTargetId) {
-      const activeTile = getShortcutTileById(shortcutContextMenuTargetId);
+    if (isShortcutContextMenuOpen() && shortcutContextMenuTarget) {
+      const activeTile = shortcutContextMenuTarget.tile;
       if (activeTile) {
         applyShortcutContextMenuDockHover(activeTile);
         return;
@@ -6644,14 +6633,17 @@
   }
 
   function clearShortcutContextMenuTileActive() {
-    getShortcutReorderTiles().forEach((tile) => {
+    const tiles = shortcutGrid
+      ? Array.from(shortcutGrid.querySelectorAll('.x-nt-shortcut-tile'))
+      : [];
+    tiles.forEach((tile) => {
       tile.removeAttribute('data-shortcut-context-menu-open');
     });
   }
 
-  function setShortcutContextMenuTileActive(shortcutId) {
+  function setShortcutContextMenuTileActive(target) {
     clearShortcutContextMenuTileActive();
-    const tile = getShortcutTileById(shortcutId);
+    const tile = target && target.tile;
     if (tile) {
       tile.setAttribute('data-shortcut-context-menu-open', 'true');
     }
@@ -6698,13 +6690,13 @@
   function closeShortcutContextMenu(options) {
     const closeOptions = options && typeof options === 'object' ? options : {};
     if (!shortcutContextMenu || !shortcutContextMenuSelectController) {
-      shortcutContextMenuTargetId = '';
+      shortcutContextMenuTarget = null;
       clearShortcutContextMenuTileActive();
       return;
     }
-    const wasOpen = isShortcutContextMenuOpen() || Boolean(shortcutContextMenuTargetId);
+    const wasOpen = isShortcutContextMenuOpen() || Boolean(shortcutContextMenuTarget);
     shortcutContextMenuSelectController.setOpen(shortcutContextMenu.control, false);
-    shortcutContextMenuTargetId = '';
+    shortcutContextMenuTarget = null;
     clearShortcutContextMenuTileActive();
     if (!wasOpen) {
       return;
@@ -6739,11 +6731,21 @@
 
   function handleShortcutContextMenuAction(actionValue) {
     const action = String(actionValue || '');
-    const targetId = shortcutContextMenuTargetId;
+    const target = shortcutContextMenuTarget;
+    const targetId = target && target.kind === 'shortcut'
+      ? String(target.shortcutId || '')
+      : '';
     const shortcut = getShortcutById(targetId);
-    const sourceElement = getShortcutTileById(targetId);
+    const sourceElement = target && target.tile;
     closeShortcutContextMenu();
-    if (!shortcut || !action) {
+    if (!target || !action) {
+      return;
+    }
+    if (target.kind === 'add' && action === SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE) {
+      hideShortcutAddFromContextMenu(sourceElement);
+      return;
+    }
+    if (!shortcut) {
       return;
     }
     if (action === SHORTCUT_CONTEXT_MENU_EDIT_VALUE) {
@@ -6832,9 +6834,12 @@
     };
   }
 
-  function openShortcutContextMenu(tile) {
-    const shortcutId = getShortcutTileId(tile);
-    if (!shortcutId) {
+  function openShortcutContextMenu(target) {
+    const tile = target && target.tile;
+    const shortcutId = target && target.kind === 'shortcut'
+      ? String(target.shortcutId || '')
+      : '';
+    if (!tile || (target.kind === 'shortcut' && !shortcutId)) {
       return;
     }
     if (!shortcutContextMenu) {
@@ -6845,18 +6850,21 @@
     }
     hideShortcutTooltip();
     resetShortcutDockHover();
-    shortcutContextMenuTargetId = shortcutId;
-    setShortcutContextMenuTileActive(shortcutId);
+    shortcutContextMenuTarget = target;
+    setShortcutContextMenuTileActive(target);
     applyShortcutContextMenuDockHover(tile);
     setShortcutContextMenuPosition(tile);
+    const defaultValue = target.kind === 'add'
+      ? SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE
+      : SHORTCUT_CONTEXT_MENU_EDIT_VALUE;
     if (typeof shortcutContextMenuSelectController.setOptions === 'function') {
       shortcutContextMenuSelectController.setOptions(
         shortcutContextMenu.control,
-        getShortcutContextMenuOptions(),
-        SHORTCUT_CONTEXT_MENU_EDIT_VALUE
+        getShortcutContextMenuOptions(target),
+        defaultValue
       );
     }
-    shortcutContextMenu.select.value = SHORTCUT_CONTEXT_MENU_EDIT_VALUE;
+    shortcutContextMenu.select.value = defaultValue;
     shortcutContextMenuSelectController.sync(shortcutContextMenu.control);
     shortcutContextMenuSelectController.setOpen(shortcutContextMenu.control, true);
   }
@@ -6868,7 +6876,22 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    openShortcutContextMenu(tile);
+    openShortcutContextMenu({
+      kind: 'shortcut',
+      shortcutId: getShortcutTileId(tile),
+      tile
+    });
+  }
+
+  function openShortcutAddContextMenu(sourceElement) {
+    const tile = sourceElement || addShortcutButton;
+    if (!tile || tile.hidden) {
+      return;
+    }
+    openShortcutContextMenu({
+      kind: 'add',
+      tile
+    });
   }
 
   function getBookmarkContextMenuOptions() {
@@ -7517,7 +7540,11 @@
     }
     applyNewtabShortcutsVisibility();
     updateShortcutLanguageStrings();
-    updateBookmarkSectionPosition();
+    updateBookmarkSectionPosition({
+      preserveSearchEntryLayout: Boolean(
+        document.body && document.body.getAttribute('data-nt-ready') === '1'
+      )
+    });
   }
 
   function loadShortcuts() {
@@ -7847,7 +7874,7 @@
     hideShortcutTooltip();
     resetShortcutDockHover();
     applyNewtabShortcutsVisibility();
-    updateBookmarkSectionPosition();
+    updateBookmarkSectionPosition({ preserveSearchEntryLayout: true });
     scheduleWallpaperAdaptiveToneUpdate();
     if (storageArea) {
       storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: false });
@@ -7892,7 +7919,7 @@
         hideShortcutTooltip();
         openShortcutDialog({ sourceElement });
       },
-      onAddContextMenu: hideShortcutAddFromContextMenu
+      onAddContextMenu: openShortcutAddContextMenu
     });
     shortcutsView.render([]);
     addShortcutButton = shortcutsView.getAddButton();
@@ -8557,7 +8584,8 @@
     const layoutOptions = options || {};
     if (layoutController && typeof layoutController.updateBottomDockLayout === 'function') {
       layoutController.updateBottomDockLayout({
-        preserveSearchEntryLayout: shouldPreserveSearchEntryLayout(),
+        preserveSearchEntryLayout: Boolean(layoutOptions.preserveSearchEntryLayout) ||
+          shouldPreserveSearchEntryLayout(),
         stabilizeDockDensity: Boolean(layoutOptions.stabilizeDockDensity),
         releaseDockDensityLock: Boolean(layoutOptions.releaseDockDensityLock),
         onRecentHidden: () => {

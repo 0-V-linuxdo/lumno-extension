@@ -375,6 +375,25 @@ describe('Bookmarks React island', () => {
       card.click();
     });
     expect(opened).toHaveLength(2);
+    expect(card._xBookmarkSuppressClick).toBe(false);
+
+    act(() => {
+      card.click();
+    });
+    expect(opened).toEqual([
+      {
+        url: 'https://example.com/docs',
+        background: true
+      },
+      {
+        url: 'https://example.com/docs',
+        background: true
+      },
+      {
+        url: 'https://example.com/docs',
+        background: false
+      }
+    ]);
 
     expect(copyButton).toBeInstanceOf(HTMLButtonElement);
     await act(async () => {
@@ -383,6 +402,55 @@ describe('Bookmarks React island', () => {
       await Promise.resolve();
     });
     expect(copied).toEqual(['https://example.com/docs']);
+  });
+
+  it('clears stale drag click suppression when a folder card is reused', () => {
+    const openedFolders: string[] = [];
+    const { view } = createView({
+      openFolder: (folderId) => {
+        openedFolders.push(String(folderId || ''));
+      }
+    });
+    const folder: BookmarkItem = {
+      id: 'nested-folder',
+      parentId: 'parent-folder',
+      index: 0,
+      type: 'folder',
+      title: 'Nested folder'
+    };
+    const sibling: BookmarkItem = {
+      id: 'sibling',
+      parentId: 'parent-folder',
+      index: 1,
+      type: 'bookmark',
+      title: 'Sibling',
+      url: 'https://example.com/sibling'
+    };
+    const initial = renderItems(view, [folder, sibling], {
+      folderId: 'parent-folder'
+    });
+    const folderCard = view.getCards()[0];
+    folderCard._xBookmarkSuppressClick = true;
+    folderCard._xBookmarkSuppressClickTimer = window.setTimeout(
+      () => {},
+      420
+    );
+
+    renderItems(view, [
+      { ...sibling, index: 0 },
+      { ...folder, index: 1 }
+    ], {
+      folderId: 'parent-folder',
+      signature: initial.signature
+    });
+
+    const reusedFolderCard = view.getCards()[1];
+    expect(reusedFolderCard).toBe(folderCard);
+    expect(reusedFolderCard._xBookmarkSuppressClick).toBe(false);
+    act(() => {
+      reusedFolderCard.click();
+    });
+    expect(openedFolders).toEqual(['nested-folder']);
   });
 
   it('renders the non-root empty state without a legacy cache', () => {

@@ -994,18 +994,18 @@ assertContains(
 );
 assertContains(
   newtabHtml,
-  '.x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover',
-  'disabled shortcut Dock magnification should leave a subtle hover surface on only the hovered tile'
+  '.x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover .x-nt-shortcut-icon',
+  'disabled shortcut Dock magnification should limit hover feedback to the hovered icon'
 );
 assertContains(
   newtabHtml,
-  'background: rgba(15, 23, 42, 0.05);',
-  'disabled shortcut Dock magnification should use a subtle light-theme hover background'
+  'filter: brightness(0.96);',
+  'disabled shortcut Dock magnification should gently darken the hovered icon in the light theme'
 );
 assertContains(
   newtabHtml,
-  'background: rgba(255, 255, 255, 0.08);',
-  'disabled shortcut Dock magnification should use a subtle dark-theme hover background'
+  'filter: brightness(1.06);',
+  'disabled shortcut Dock magnification should gently lighten the hovered icon in the dark theme'
 );
 
 assertContains(
@@ -1133,13 +1133,25 @@ assertContains(
 assertContains(
   shortcutsReact,
   'onContextMenu={(event) => {',
-  'the add tile should expose a right-click hide action'
+  'the add tile should expose a right-click menu action'
 );
 
 assertContains(
   newtabJs,
-  'onAddContextMenu: hideShortcutAddFromContextMenu',
-  'the newtab adapter should route add tile right-clicks to the hide preference'
+  'onAddContextMenu: openShortcutAddContextMenu',
+  'the newtab adapter should open a menu when the add tile is right-clicked'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'openShortcutAddContextMenu'),
+  "kind: 'add'",
+  'the add tile should be represented as an add-menu target instead of hiding immediately'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'handleShortcutContextMenuAction'),
+  'hideShortcutAddFromContextMenu(sourceElement);',
+  'the add tile should hide only after the menu action is selected'
 );
 
 assertContains(
@@ -1150,8 +1162,20 @@ assertContains(
 
 assert.match(
   getFunctionSource(newtabJs, 'renderShortcuts'),
-  /shortcutsView\.render\(items\);[\s\S]*?updateBookmarkSectionPosition\(\);/,
-  'shortcut rendering should refresh the dock layout after the React DOM changes height'
+  /shortcutsView\.render\(items\);[\s\S]*?updateBookmarkSectionPosition\(\{[\s\S]*?preserveSearchEntryLayout:\s*Boolean\([\s\S]*?data-nt-ready/,
+  'settled shortcut rendering should refresh the dock without moving the logo/search entry'
+);
+
+assert.match(
+  getFunctionSource(newtabJs, 'hideShortcutAddFromContextMenu'),
+  /updateBookmarkSectionPosition\(\{\s*preserveSearchEntryLayout:\s*true\s*\}\);[\s\S]*?showToast\(/,
+  'hiding the add tile should preserve the logo/search position while its toast appears'
+);
+
+assert.match(
+  getFunctionSource(newtabJs, 'updateBookmarkSectionPosition'),
+  /preserveSearchEntryLayout:\s*Boolean\(layoutOptions\.preserveSearchEntryLayout\)\s*\|\|[\s\S]*?shouldPreserveSearchEntryLayout\(\)/,
+  'callers should be able to preserve the settled search entry during a dock refresh'
 );
 
 assertNotContains(
@@ -1605,8 +1629,8 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'spacing: -6',
-  'shortcut title tooltips should sit close to the icon'
+  'spacing: () => (newtabShortcutDockMagnificationEnabled ? -6 : -2)',
+  'shortcut title tooltips should move slightly farther from the icon when Dock magnification is disabled'
 );
 
 assertContains(
@@ -1895,8 +1919,14 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'function openShortcutContextMenu(tile) {',
-  'shortcut runtime should open the context menu at the right-clicked shortcut'
+  "label: t('newtab_shortcuts_hide_add', 'Hide')",
+  'the add tile context menu should include a localized Hide action'
+);
+
+assertContains(
+  newtabJs,
+  'function openShortcutContextMenu(target) {',
+  'shortcut runtime should open the shared context menu for its current target'
 );
 
 assertContains(
@@ -1913,8 +1943,8 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'shortcutContextMenu.select.value = SHORTCUT_CONTEXT_MENU_EDIT_VALUE;',
-  'shortcut context menu should keep the Edit option selected so the menu highlight stays black'
+  'shortcutContextMenu.select.value = defaultValue;',
+  'shortcut context menu should select the default action for the current target'
 );
 
 assertContains(
@@ -1943,7 +1973,7 @@ assertContains(
 
 assertContains(
   getFunctionSource(newtabJs, 'handleShortcutContextMenu'),
-  'openShortcutContextMenu(tile);',
+  'openShortcutContextMenu({',
   'shortcut context menu should open from the shortcut icon anchor instead of the right-click pointer coordinates'
 );
 
@@ -1979,8 +2009,8 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'function setShortcutContextMenuTileActive(shortcutId) {',
-  'shortcut context menu should mark the target shortcut while the menu is open'
+  'function setShortcutContextMenuTileActive(target) {',
+  'shortcut context menu should mark its target tile while the menu is open'
 );
 
 assertContains(
@@ -2168,6 +2198,7 @@ assertContains(
 
 [
   'newtab_shortcuts_add',
+  'newtab_shortcuts_hide_add',
   'newtab_shortcuts_add_hidden',
   'newtab_shortcuts_dialog_title',
   'newtab_shortcuts_name_label',

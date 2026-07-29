@@ -190,6 +190,29 @@ assert.ok(
 controller.hide();
 assert.strictEqual(element.getAttribute('data-visible'), 'false', 'hide() should mark tooltip hidden');
 
+let dynamicSpacingTarget = null;
+tooltip.position(element, target, {
+  windowObj: {
+    innerWidth: 320,
+    innerHeight: 240
+  },
+  placement: 'bottom',
+  spacing: (positionTarget) => {
+    dynamicSpacingTarget = positionTarget;
+    return 4;
+  }
+});
+assert.strictEqual(
+  dynamicSpacingTarget,
+  target,
+  'position() should resolve dynamic spacing against the current tooltip target'
+);
+assert.strictEqual(
+  element.style.getPropertyValue('top'),
+  '116px',
+  'position() should apply the dynamically resolved spacing value'
+);
+
 const focusTarget = createFakeElement('button');
 controller.bind(focusTarget, () => 'Focus tooltip');
 assert.strictEqual(

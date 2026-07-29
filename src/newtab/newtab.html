@@ -676,14 +676,11 @@
       .x-nt-shortcut-tile[data-dock-side="after"][data-dock-distance="2"] .x-nt-shortcut-icon {
         --x-nt-shortcut-dock-shift-x: var(--x-nt-shortcut-hover-shift-far, 1px);
       }
-      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile {
-        transition: background-color 160ms ease;
+      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover .x-nt-shortcut-icon {
+        filter: brightness(0.96);
       }
-      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover {
-        background: rgba(15, 23, 42, 0.05);
-      }
-      body[data-theme="dark"] .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover {
-        background: rgba(255, 255, 255, 0.08);
+      body[data-theme="dark"] .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover .x-nt-shortcut-icon {
+        filter: brightness(1.06);
       }
       .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile .x-nt-shortcut-icon {
         --x-nt-shortcut-dock-scale: 1;
@@ -1010,10 +1007,10 @@
       }
       .x-nt-bookmarks-heading.x-nt-bookmarks-heading--link {
         cursor: pointer;
-        padding: 3px 6px;
+        padding: 3px 5px 3px 7px;
         margin-top: -3px;
         margin-bottom: -3px;
-        margin-left: -6px;
+        margin-left: -7px;
         border-radius: 6px;
       }
       .x-nt-bookmarks-heading.x-nt-bookmarks-heading--link:hover {
@@ -1107,7 +1104,7 @@
         display: inline-flex;
         align-items: center;
         height: 20px;
-        padding: 0 6px;
+        padding: 0 5px 0 7px;
         border-radius: 6px;
         max-width: 180px;
         color: var(--x-nt-subtext, #6b7280);

@@ -102,6 +102,11 @@
     return Number.isFinite(parsed) ? parsed : fallback;
   }
 
+  function getDynamicNumber(value, target, fallback) {
+    const resolved = typeof value === 'function' ? value(target) : value;
+    return getNumber(resolved, fallback);
+  }
+
   function getElementRect(element, fallback) {
     if (element && typeof element.getBoundingClientRect === 'function') {
       return element.getBoundingClientRect();
@@ -177,7 +182,7 @@
       ? config.placement
       : 'top';
     const margin = getNumber(config.margin, 8);
-    const spacing = getNumber(config.spacing, 10);
+    const spacing = getDynamicNumber(config.spacing, target, 10);
     const viewportWidth = getNumber(windowObj.innerWidth, 1024);
     const viewportHeight = getNumber(windowObj.innerHeight, 768);
     const boundaryElement = config.boundaryElement || null;

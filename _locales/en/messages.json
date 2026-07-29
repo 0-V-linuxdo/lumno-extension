@@ -1646,6 +1646,9 @@
   "newtab_shortcuts_add": {
     "message": "Add shortcut"
   },
+  "newtab_shortcuts_hide_add": {
+    "message": "Hide"
+  },
   "newtab_shortcuts_add_hidden": {
     "message": "“+” hidden. Re-enable it in Settings → Appearance → Shortcuts → Show “+”."
   },
