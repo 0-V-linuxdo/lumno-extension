@@ -8,25 +8,20 @@
   const ENGAGEMENT_NOTICE_STORAGE_KEY = '_x_lumno_engagement_notice_state_2026_unique_';
   const ENGAGEMENT_NOTICE_ID = 'engagement-notice';
   const ENGAGEMENT_NOTICE_VERSION = '1';
-  /*
-   * TEMPORARILY PAUSED — 2026-07-28
-   *
-   * This single switch disables the complete rating/community lifecycle on both
-   * new-tab and overlay surfaces. While false, no hint DOM is created and no
-   * engagement state is read or written. Keep the component, copy, timing rules,
-   * and integrations intact so the mechanism can be reviewed and restored later.
-   *
-   * Re-enable only after the product review by changing this value to true.
-   * Tests may bypass the pause with forceEnabledForTesting; production callers
-   * must never pass that option.
-   */
-  const ENGAGEMENT_NOTICE_ENABLED = false;
+  const ENGAGEMENT_NOTICE_ENABLED = true;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const RETRY_COOLDOWN_MS = 14 * DAY_MS;
   const MAX_EXPOSURES = 2;
   const REVIEW_URL = 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb';
-  const DISCORD_URL = 'https://discord.gg/2u9sg7ZNkJ';
-  const WECHAT_QR_URL = 'https://lumno.kubai.design/qrcode.JPG';
+  const COMMUNITY_LINKS = root && root.LumnoCommunityLinks
+    ? root.LumnoCommunityLinks
+    : {};
+  const DISCORD_URL = COMMUNITY_LINKS.FALLBACK_LINKS
+    ? COMMUNITY_LINKS.FALLBACK_LINKS.discord
+    : '';
+  const WECHAT_QR_URL = COMMUNITY_LINKS.FALLBACK_LINKS
+    ? COMMUNITY_LINKS.FALLBACK_LINKS.wechatQr
+    : '';
 
   const SURFACE_THRESHOLDS = Object.freeze({
     newtab: Object.freeze({
@@ -172,10 +167,30 @@
   }
 
   function getCommunityUrl(locale) {
-    const normalized = String(locale || '').trim().toLowerCase();
-    return normalized === 'zh_cn' || normalized === 'zh-cn'
-      ? WECHAT_QR_URL
-      : DISCORD_URL;
+    const links = typeof COMMUNITY_LINKS.getLinks === 'function'
+      ? COMMUNITY_LINKS.getLinks()
+      : null;
+    if (typeof COMMUNITY_LINKS.getCommunityUrl === 'function') {
+      return COMMUNITY_LINKS.getCommunityUrl(links, locale);
+    }
+    return links && links.wechatQr ? links.wechatQr : WECHAT_QR_URL;
+  }
+
+  function loadCommunityUrl(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    if (typeof COMMUNITY_LINKS.load !== 'function') {
+      return Promise.resolve(getCommunityUrl(settings.locale));
+    }
+    return COMMUNITY_LINKS.load(settings)
+      .then((links) => {
+        if (typeof COMMUNITY_LINKS.getCommunityUrl === 'function') {
+          return COMMUNITY_LINKS.getCommunityUrl(links, settings.locale);
+        }
+        return links && links.wechatQr
+          ? links.wechatQr
+          : getCommunityUrl(settings.locale);
+      })
+      .catch(() => getCommunityUrl(settings.locale));
   }
 
   function getExtensionAssetUrl(chromeApi, path, fallback) {
@@ -212,11 +227,11 @@
       badgeKey: 'engagement_notice_badge',
       badgeFallback: 'Lumno',
       textKey: 'engagement_notice_text',
-      textFallback: 'If this extension brings you a little joy, feel free to',
+      textFallback: 'Like Lumno? Why not',
       connectorKey: 'engagement_notice_connector',
       connectorFallback: 'or',
       trailingKey: 'engagement_notice_trailing',
-      trailingFallback: 'and chat with us.',
+      trailingFallback: 'and say hi.',
       closeLabelKey: 'engagement_notice_close',
       closeLabelFallback: 'Dismiss rating and community prompt'
     });
@@ -231,17 +246,11 @@
     const featureHints = config.featureHints || (root && root.LumnoFeatureHints) || {};
     const chromeApi = config.chromeApi || (root && root.chrome) || null;
     const surface = config.surface === 'overlay' ? 'overlay' : 'newtab';
-    const previewMode = config.previewMode === true;
     if (!documentObj || !featureHints || typeof featureHints.createFeatureHint !== 'function') {
       return null;
     }
 
-    const baseDefinition = createEngagementNoticeDefinition(surface);
-    const definition = previewMode
-      ? Object.freeze(Object.assign({}, baseDefinition, {
-        dismissStorage: 'none'
-      }))
-      : baseDefinition;
+    const definition = createEngagementNoticeDefinition(surface);
     const now = typeof config.now === 'function' ? config.now : () => Date.now();
     const windowObj = config.windowObj ||
       documentObj.defaultView ||
@@ -277,9 +286,6 @@
 
     function markCompleted() {
       state.completedAt = Math.max(1, Number(now()) || Date.now());
-      if (previewMode) {
-        return Promise.resolve(state);
-      }
       return setStoredEngagementState(chromeApi, state);
     }
 
@@ -312,21 +318,21 @@
       ),
       badgeWordmarkImageSrc: getExtensionAssetUrl(
         chromeApi,
-        'assets/images/lumno-wordmark.svg',
-        '../../assets/images/lumno-wordmark.svg'
+        'assets/images/lumno-wordmark-mask.svg',
+        '../../assets/images/lumno-wordmark-mask.svg'
       ),
       badgeWordmarkDarkImageSrc: getExtensionAssetUrl(
         chromeApi,
-        'assets/images/lumno-wordmark-dark.svg',
-        '../../assets/images/lumno-wordmark-dark.svg'
+        'assets/images/lumno-wordmark-mask.svg',
+        '../../assets/images/lumno-wordmark-mask.svg'
       ),
       initiallyVisible: false,
       actions: [
         {
           id: 'review',
-          icon: 'ri-star-line',
+          icon: 'ri-external-link-line',
           labelKey: 'engagement_notice_review',
-          labelFallback: 'Rate Lumno',
+          labelFallback: 'leave 5 stars',
           variant: 'primary',
           onClick(event) {
             finishAction('review', event);
@@ -334,9 +340,9 @@
         },
         {
           id: 'community',
-          icon: 'ri-group-line',
+          icon: 'ri-external-link-line',
           labelKey: 'engagement_notice_community',
-          labelFallback: 'Join community',
+          labelFallback: 'join Discord',
           variant: 'secondary',
           onClick(event) {
             finishAction('community', event);
@@ -357,22 +363,18 @@
 
     function exposeIfEligible() {
       showTimer = 0;
-      if ((!previewMode && !shouldShowEngagementNotice(state, surface, now())) ||
-          !canShowNow()) {
+      if (!shouldShowEngagementNotice(state, surface, now()) || !canShowNow()) {
         return;
       }
-      if (!previewMode) {
-        state.exposureCount += 1;
-        state.lastShownAt = Math.max(1, Number(now()) || Date.now());
-        setStoredEngagementState(chromeApi, state);
-      }
+      state.exposureCount += 1;
+      state.lastShownAt = Math.max(1, Number(now()) || Date.now());
+      setStoredEngagementState(chromeApi, state);
       hintController.setVisible(true);
     }
 
     function scheduleExposure() {
       clearShowTimer();
-      if ((!previewMode && !shouldShowEngagementNotice(state, surface, now())) ||
-          !canShowNow()) {
+      if (!shouldShowEngagementNotice(state, surface, now()) || !canShowNow()) {
         return;
       }
       if (!windowObj || typeof windowObj.setTimeout !== 'function') {
@@ -392,9 +394,13 @@
         if (meaningfulUseRecorded) {
           state = recordMeaningfulUseInState(state, surface, now());
         }
-        return previewMode
-          ? state
-          : setStoredEngagementState(chromeApi, state);
+        return setStoredEngagementState(chromeApi, state);
+      })
+      .then(() => {
+        if (destroyed) {
+          return null;
+        }
+        return Promise.resolve(config.exposureGate).catch(() => null);
       })
       .then(() => {
         if (!destroyed) {
@@ -423,9 +429,7 @@
           return;
         }
         state = recordMeaningfulUseInState(state, surface, now());
-        if (!previewMode) {
-          setStoredEngagementState(chromeApi, state);
-        }
+        setStoredEngagementState(chromeApi, state);
       },
       suppressForSession() {
         suppressed = true;
@@ -450,6 +454,7 @@
     createEngagementNotice,
     createEngagementNoticeDefinition,
     getCommunityUrl,
+    loadCommunityUrl,
     getDayKey,
     getStoredEngagementState,
     normalizeEngagementState,

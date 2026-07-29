@@ -15,6 +15,11 @@
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
+  // Keep the original key value so existing installations migrate from boolean to mode in place.
+  const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
+  const NEWTAB_TOP_CONTENT_BRAND = 'brand';
+  const NEWTAB_TOP_CONTENT_TIME = 'time';
+  const NEWTAB_TOP_CONTENT_OFF = 'off';
 
   function normalizeLocale(locale) {
     const raw = String(locale || '').trim();
@@ -65,8 +70,18 @@
     return Math.min(max, Math.max(min, Math.round(number)));
   }
 
+  function normalizeNewtabTopContentMode(value) {
+    if (value === NEWTAB_TOP_CONTENT_TIME) {
+      return NEWTAB_TOP_CONTENT_TIME;
+    }
+    if (value === NEWTAB_TOP_CONTENT_OFF || value === false) {
+      return NEWTAB_TOP_CONTENT_OFF;
+    }
+    return NEWTAB_TOP_CONTENT_BRAND;
+  }
+
   function normalizeNewtabWordmarkVisible(value) {
-    return value !== false;
+    return normalizeNewtabTopContentMode(value) !== NEWTAB_TOP_CONTENT_OFF;
   }
 
   function normalizeNewtabShortcutsVisible(value) {
@@ -194,10 +209,15 @@
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
+    NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+    NEWTAB_TOP_CONTENT_BRAND,
+    NEWTAB_TOP_CONTENT_TIME,
+    NEWTAB_TOP_CONTENT_OFF,
     normalizeLocale,
     localeToHtmlLang,
     normalizeNewtabWidthMode,
     normalizeNewtabSearchWidth,
+    normalizeNewtabTopContentMode,
     normalizeNewtabWordmarkVisible,
     normalizeNewtabShortcutsVisible,
     normalizeNewtabShortcutAddVisible,

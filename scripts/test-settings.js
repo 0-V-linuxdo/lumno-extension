@@ -27,6 +27,18 @@ assert.strictEqual(settings.normalizeNewtabSearchWidth(680, { min: 640, max: 104
 assert.strictEqual(settings.normalizeNewtabWordmarkVisible(false), false);
 assert.strictEqual(settings.normalizeNewtabWordmarkVisible(true), true);
 assert.strictEqual(settings.normalizeNewtabWordmarkVisible(undefined), true);
+assert.strictEqual(settings.normalizeNewtabWordmarkVisible('time'), true);
+assert.strictEqual(settings.normalizeNewtabWordmarkVisible('off'), false);
+assert.strictEqual(settings.normalizeNewtabTopContentMode(false), 'off');
+assert.strictEqual(settings.normalizeNewtabTopContentMode(true), 'brand');
+assert.strictEqual(settings.normalizeNewtabTopContentMode('brand'), 'brand');
+assert.strictEqual(settings.normalizeNewtabTopContentMode('time'), 'time');
+assert.strictEqual(settings.normalizeNewtabTopContentMode('off'), 'off');
+assert.strictEqual(settings.normalizeNewtabTopContentMode(undefined), 'brand');
+assert.strictEqual(
+  settings.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+  '_x_extension_newtab_wordmark_visible_2026_unique_'
+);
 
 assert.strictEqual(settings.normalizeNewtabShortcutsVisible(false), false);
 assert.strictEqual(settings.normalizeNewtabShortcutsVisible(true), true);

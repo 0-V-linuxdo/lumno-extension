@@ -241,7 +241,7 @@ function createFixture(options) {
     root,
     searchLayer,
     inputParts: { container: inputContainer },
-    wordmarkContainer: wordmark,
+    topContentContainer: wordmark,
     shortcutSection,
     bottomDock,
     bookmarkSection,
@@ -462,8 +462,8 @@ testNewtabContainsRootOverscroll();
 function testBookmarkNavigationHoverSpacingIsOpticallyBalanced() {
   assert.match(
     newtabHtml,
-    /\.x-nt-bookmarks-heading\.x-nt-bookmarks-heading--link\s*\{[\s\S]*?padding:\s*3px 5px 3px 7px;[\s\S]*?margin-left:\s*-7px;/,
-    'the nested bookmark heading should keep its text aligned while compensating its visible inline padding'
+    /\.x-nt-bookmarks-heading\.x-nt-bookmarks-heading--link\s*\{[\s\S]*?padding:\s*3px 5px;[\s\S]*?margin-left:\s*-5px;[\s\S]*?margin-right:\s*-5px;/,
+    'the nested bookmark heading should use symmetric inline padding without shifting adjacent controls'
   );
   assert.match(
     newtabHtml,

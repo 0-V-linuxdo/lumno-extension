@@ -7,7 +7,7 @@ import { createShortcutDialogApi } from './shortcut-dialog';
 import { createShortcutsViewApi } from './shortcuts';
 import { createSuggestionsViewApi } from './suggestions';
 import { createToastApi } from './toast';
-import { createWordmarkApi } from './wordmark';
+import { createTopContentApi } from './wordmark';
 import { createPageStructureApi } from './page-structure';
 import { createBookmarksTopbarApi } from './bookmarks-topbar';
 import { createPageNoticeApi } from './page-notice';
@@ -34,7 +34,8 @@ const runtime = globalThis as typeof globalThis & {
     shortcuts: ReturnType<typeof createShortcutsViewApi>;
     suggestions: ReturnType<typeof createSuggestionsViewApi>;
     toast: ReturnType<typeof createToastApi>;
-    wordmark: ReturnType<typeof createWordmarkApi>;
+    topContent: ReturnType<typeof createTopContentApi>;
+    wordmark: ReturnType<typeof createTopContentApi>;
     pageStructure: ReturnType<typeof createPageStructureApi>;
     bookmarksTopbar: ReturnType<typeof createBookmarksTopbarApi>;
     pageNotice: ReturnType<typeof createPageNoticeApi>;
@@ -61,8 +62,10 @@ const runtime = globalThis as typeof globalThis & {
   LumnoNewtabSuggestionsViewReact?: ReturnType<typeof createSuggestionsViewApi>;
   LumnoNewtabToast?: ReturnType<typeof createToastApi>;
   LumnoNewtabToastReact?: ReturnType<typeof createToastApi>;
-  LumnoNewtabWordmark?: ReturnType<typeof createWordmarkApi>;
-  LumnoNewtabWordmarkReact?: ReturnType<typeof createWordmarkApi>;
+  LumnoNewtabTopContent?: ReturnType<typeof createTopContentApi>;
+  LumnoNewtabTopContentReact?: ReturnType<typeof createTopContentApi>;
+  LumnoNewtabWordmark?: ReturnType<typeof createTopContentApi>;
+  LumnoNewtabWordmarkReact?: ReturnType<typeof createTopContentApi>;
   LumnoNewtabPageStructure?: ReturnType<typeof createPageStructureApi>;
   LumnoNewtabPageStructureReact?: ReturnType<typeof createPageStructureApi>;
   LumnoNewtabBookmarksTopbar?: ReturnType<typeof createBookmarksTopbarApi>;
@@ -104,7 +107,7 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   const shortcutsApi = createShortcutsViewApi();
   const suggestionsApi = createSuggestionsViewApi();
   const toastApi = createToastApi();
-  const wordmarkApi = createWordmarkApi();
+  const topContentApi = createTopContentApi();
   const pageStructureApi = createPageStructureApi();
   const bookmarksTopbarApi = createBookmarksTopbarApi();
   const pageNoticeApi = createPageNoticeApi();
@@ -135,8 +138,10 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoNewtabSuggestionsView = suggestionsApi;
   runtime.LumnoNewtabToastReact = toastApi;
   runtime.LumnoNewtabToast = toastApi;
-  runtime.LumnoNewtabWordmarkReact = wordmarkApi;
-  runtime.LumnoNewtabWordmark = wordmarkApi;
+  runtime.LumnoNewtabTopContentReact = topContentApi;
+  runtime.LumnoNewtabTopContent = topContentApi;
+  runtime.LumnoNewtabWordmarkReact = topContentApi;
+  runtime.LumnoNewtabWordmark = topContentApi;
   runtime.LumnoNewtabPageStructureReact = pageStructureApi;
   runtime.LumnoNewtabPageStructure = pageStructureApi;
   runtime.LumnoNewtabBookmarksTopbarReact = bookmarksTopbarApi;
@@ -170,7 +175,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
     shortcuts: shortcutsApi,
     suggestions: suggestionsApi,
     toast: toastApi,
-    wordmark: wordmarkApi,
+    topContent: topContentApi,
+    wordmark: topContentApi,
     pageStructure: pageStructureApi,
     bookmarksTopbar: bookmarksTopbarApi,
     pageNotice: pageNoticeApi,

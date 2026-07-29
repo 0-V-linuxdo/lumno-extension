@@ -2,12 +2,14 @@
   const WALLPAPER_ADAPTIVE_TONE = globalThis.LumnoNewtabWallpaperAdaptiveTone || {};
   const WALLPAPER_EFFECTS = globalThis.LumnoNewtabWallpaperEffects || {};
   const WALLPAPER_LOCAL_STORE = globalThis.LumnoNewtabWallpaperLocalStore || {};
+  const SETTINGS = globalThis.LumnoSettings || {};
   const DEFAULT_STORAGE_KEYS = {
     wallpaper: '_x_extension_newtab_wallpaper_2026_unique_',
     localWallpaper: '_x_extension_newtab_local_wallpaper_2026_unique_',
     overlay: '_x_extension_newtab_wallpaper_overlay_2026_unique_',
     effect: '_x_extension_newtab_wallpaper_effect_2026_unique_',
-    wordmark: '_x_extension_newtab_wordmark_visible_2026_unique_',
+    topContentMode: SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
+      '_x_extension_newtab_wordmark_visible_2026_unique_',
     favicon: '_x_extension_newtab_favicon_2026_unique_'
   };
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
@@ -76,7 +78,7 @@
     const NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY = storageKeys.localWallpaper;
     const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = storageKeys.overlay;
     const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = storageKeys.effect;
-    const NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY = storageKeys.wordmark;
+    const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = storageKeys.topContentMode;
     const NEWTAB_FAVICON_STORAGE_KEY = storageKeys.favicon;
     const t = typeof options.t === 'function'
       ? options.t
@@ -139,12 +141,12 @@
     const applyWordmarkThemeAppearance = typeof options.applyWordmarkThemeAppearance === 'function'
       ? options.applyWordmarkThemeAppearance
       : function() {};
-    const hasWordmarkVisibleGetter = typeof options.getWordmarkVisible === 'function';
-    const getWordmarkVisible = hasWordmarkVisibleGetter
-      ? options.getWordmarkVisible
-      : function() { return true; };
-    const setWordmarkVisible = typeof options.setWordmarkVisible === 'function'
-      ? options.setWordmarkVisible
+    const hasTopContentModeGetter = typeof options.getTopContentMode === 'function';
+    const getTopContentMode = hasTopContentModeGetter
+      ? options.getTopContentMode
+      : function() { return 'brand'; };
+    const setTopContentMode = typeof options.setTopContentMode === 'function'
+      ? options.setTopContentMode
       : function() {};
     const getAdaptiveToneTargets = typeof options.getAdaptiveToneTargets === 'function'
       ? options.getAdaptiveToneTargets
@@ -338,8 +340,12 @@
     let wallpaperPanelHeader = null;
     let wallpaperPanelTitle = null;
     let wallpaperEnabledToggle = null;
-    let logoPanelTitle = null;
-    let logoEnabledToggle = null;
+    let topContentTitle = null;
+    let topContentTabs = null;
+    let topContentTabsIndicator = null;
+    let topContentBrandTab = null;
+    let topContentTimeTab = null;
+    let topContentOffTab = null;
     let wallpaperAppearanceTitle = null;
     let wallpaperAppearanceInfoButton = null;
     let wallpaperAppearanceScopeTabs = null;
@@ -384,6 +390,7 @@
     let wallpaperTabsIndicatorRefreshFrame = 0;
     let wallpaperModeTabsIndicatorRefreshFrame = 0;
     let wallpaperEffectTabsIndicatorRefreshFrame = 0;
+    let topContentTabsIndicatorRefreshFrame = 0;
     let wallpaperActiveSlider = null;
     let wallpaperAppearanceAnimationTimers = [];
     let wallpaperAppearanceModeLabelsHeld = false;
@@ -660,7 +667,7 @@
       light: '',
       dark: ''
     };
-    let currentWordmarkVisible = normalizeNewtabWordmarkVisible(getWordmarkVisible());
+    let currentTopContentMode = normalizeNewtabTopContentMode(getTopContentMode());
     let currentNewtabFaviconId = NEWTAB_FAVICON_DEFAULT_ID;
 
     function normalizeWallpaperMode(mode) {
@@ -746,8 +753,14 @@
         NEWTAB_WALLPAPER_DEFAULT_ID;
     }
 
-    function normalizeNewtabWordmarkVisible(value) {
-      return value !== false;
+    function normalizeNewtabTopContentMode(value) {
+      if (typeof SETTINGS.normalizeNewtabTopContentMode === 'function') {
+        return SETTINGS.normalizeNewtabTopContentMode(value);
+      }
+      if (value === 'time') {
+        return 'time';
+      }
+      return value === 'off' || value === false ? 'off' : 'brand';
     }
 
     function getNewtabFaviconById(id) {
@@ -2049,6 +2062,14 @@
       );
     }
 
+    function updateTopContentTabsIndicator() {
+      updateWallpaperTabsIndicatorFor(
+        topContentTabs,
+        topContentTabsIndicator,
+        'button[data-newtab-top-content][data-active="true"]'
+      );
+    }
+
     function scheduleWallpaperTabsIndicatorRefresh() {
       if (wallpaperTabsIndicatorRefreshFrame) {
         return;
@@ -2073,16 +2094,30 @@
       });
     }
 
+    function scheduleTopContentTabsIndicatorRefresh() {
+      if (topContentTabsIndicatorRefreshFrame) {
+        return;
+      }
+      topContentTabsIndicatorRefreshFrame = requestAnimationFrame(() => {
+        topContentTabsIndicatorRefreshFrame = requestAnimationFrame(() => {
+          topContentTabsIndicatorRefreshFrame = 0;
+          updateTopContentTabsIndicator();
+        });
+      });
+    }
+
     function updateWallpaperPanelTabIndicators() {
       updateWallpaperModeTabsIndicator();
       updateWallpaperTabsIndicator();
       updateWallpaperEffectTabsIndicator();
+      updateTopContentTabsIndicator();
     }
 
     function scheduleWallpaperPanelTabIndicatorsRefresh() {
       scheduleWallpaperModeTabsIndicatorRefresh();
       scheduleWallpaperTabsIndicatorRefresh();
       scheduleWallpaperEffectTabsIndicatorRefresh();
+      scheduleTopContentTabsIndicatorRefresh();
     }
 
     function scheduleWallpaperPanelOpenTabIndicatorsRefresh() {
@@ -2604,33 +2639,34 @@
       });
     }
 
-    function updateLogoSwitchUi() {
-      if (hasWordmarkVisibleGetter) {
-        currentWordmarkVisible = normalizeNewtabWordmarkVisible(getWordmarkVisible());
+    function updateTopContentModeUi() {
+      if (hasTopContentModeGetter) {
+        currentTopContentMode = normalizeNewtabTopContentMode(getTopContentMode());
       }
-      if (logoEnabledToggle) {
-        logoEnabledToggle.checked = currentWordmarkVisible;
-        logoEnabledToggle.setAttribute('aria-checked', currentWordmarkVisible ? 'true' : 'false');
-        logoEnabledToggle.setAttribute(
-          'aria-label',
-          t('settings_newtab_wordmark_title', 'Show brand mark above the New Tab search bar')
-        );
-      }
+      [topContentBrandTab, topContentTimeTab, topContentOffTab].forEach((button) => {
+        if (!button) {
+          return;
+        }
+        const active = button.getAttribute('data-newtab-top-content') === currentTopContentMode;
+        button.setAttribute('data-active', active ? 'true' : 'false');
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      scheduleTopContentTabsIndicatorRefresh();
     }
 
-    function applyWordmarkVisible(value) {
-      currentWordmarkVisible = normalizeNewtabWordmarkVisible(value);
-      setWordmarkVisible(currentWordmarkVisible);
-      updateLogoSwitchUi();
+    function applyTopContentMode(value) {
+      currentTopContentMode = normalizeNewtabTopContentMode(value);
+      setTopContentMode(currentTopContentMode);
+      updateTopContentModeUi();
     }
 
-    function persistWordmarkVisible(value) {
-      const nextValue = normalizeNewtabWordmarkVisible(value);
-      applyWordmarkVisible(nextValue);
-      if (!storageArea || !NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY) {
+    function persistTopContentMode(value) {
+      const nextValue = normalizeNewtabTopContentMode(value);
+      applyTopContentMode(nextValue);
+      if (!storageArea || !NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY) {
         return;
       }
-      storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: nextValue });
+      storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
     }
 
     function getNewtabFaviconOptionButtons() {
@@ -3636,9 +3672,28 @@
       if (wallpaperLocalGrid) {
         wallpaperLocalGrid.setAttribute('aria-label', t('newtab_wallpaper_local_section', 'Local'));
       }
-      if (logoPanelTitle) {
-        logoPanelTitle.textContent = t('newtab_logo_title', 'Brand mark');
+      if (topContentTitle) {
+        topContentTitle.textContent = t('settings_newtab_wordmark_title', 'Content above the search bar');
       }
+      if (topContentTabs) {
+        topContentTabs.setAttribute('aria-label', t('settings_newtab_wordmark_title', 'Content above the search bar'));
+      }
+      if (topContentBrandTab) {
+        const label = t('newtab_top_content_brand', 'Brand');
+        topContentBrandTab.textContent = label;
+        topContentBrandTab.setAttribute('aria-label', label);
+      }
+      if (topContentTimeTab) {
+        const label = t('newtab_top_content_time', 'Time');
+        topContentTimeTab.textContent = label;
+        topContentTimeTab.setAttribute('aria-label', label);
+      }
+      if (topContentOffTab) {
+        const label = t('newtab_top_content_off', 'Hide');
+        topContentOffTab.textContent = label;
+        topContentOffTab.setAttribute('aria-label', label);
+      }
+      scheduleTopContentTabsIndicatorRefresh();
       updateWallpaperModeControlsUi({ animate: false });
     }
 
@@ -3685,7 +3740,7 @@
       updateWallpaperEffectControlUi();
       updateCustomWallpaperUploadTile();
       updateWallpaperSectionLanguageStrings();
-      updateLogoSwitchUi();
+      updateTopContentModeUi();
       updateNewtabFaviconSelectionUi();
       updateWallpaperAppearanceModeLabels();
       updateWallpaperScaleLanguageStrings();
@@ -3757,6 +3812,11 @@
           wallpaper: getRiSvg('ri-t-shirt-2-line', 'ri-size-20')
         },
         moreSettingsUrl: buildAppearanceSettingsUrl(),
+        topContentOptions: [
+          { value: 'brand', label: t('newtab_top_content_brand', 'Brand') },
+          { value: 'time', label: t('newtab_top_content_time', 'Time') },
+          { value: 'off', label: t('newtab_top_content_off', 'Hide') }
+        ],
         searchWidth: {
           min: getSearchWidthMin(),
           max: getSearchWidthMax(),
@@ -3778,8 +3838,12 @@
       wallpaperPanelHeader = refs.panelHeader;
       wallpaperPanelTitle = refs.panelTitle;
       wallpaperEnabledToggle = refs.enabledToggle;
-      logoPanelTitle = refs.logoTitle;
-      logoEnabledToggle = refs.logoToggle;
+      topContentTitle = refs.topContentTitle;
+      topContentTabs = refs.topContentTabs;
+      topContentTabsIndicator = refs.topContentTabsIndicator;
+      topContentBrandTab = refs.topContentBrandTab;
+      topContentTimeTab = refs.topContentTimeTab;
+      topContentOffTab = refs.topContentOffTab;
       wallpaperAppearanceTitle = refs.appearanceTitle;
       wallpaperAppearanceInfoButton = refs.appearanceInfoButton;
       wallpaperAppearanceScopeTabs = refs.appearanceScopeTabs;
@@ -3967,8 +4031,10 @@
           persistNewtabFavicon(tile.getAttribute('data-newtab-favicon-id'));
         });
       });
-      logoEnabledToggle.addEventListener('change', () => {
-        persistWordmarkVisible(logoEnabledToggle.checked);
+      topContentTabs.querySelectorAll('[data-newtab-top-content]').forEach((button) => {
+        button.addEventListener('click', () => {
+          persistTopContentMode(button.getAttribute('data-newtab-top-content'));
+        });
       });
     }
 
@@ -4134,12 +4200,12 @@
         }
         handled = true;
       }
-      if (NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY && changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]) {
-        const raw = changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY].newValue;
-        const nextValue = normalizeNewtabWordmarkVisible(raw);
-        applyWordmarkVisible(nextValue);
+      if (NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY && changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]) {
+        const raw = changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY].newValue;
+        const nextValue = normalizeNewtabTopContentMode(raw);
+        applyTopContentMode(nextValue);
         if (storageArea && raw !== nextValue) {
-          storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: nextValue });
+          storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
         }
         handled = true;
       }
@@ -4174,7 +4240,7 @@
       updateLanguageStrings: updateWallpaperLanguageStrings,
       updateAppearanceSelectionUi: updateWallpaperAppearanceSelectionUi,
       updateSearchWidthUi: updateWallpaperSearchWidthControlUi,
-      updateWordmarkVisibilityUi: updateLogoSwitchUi,
+      updateTopContentModeUi,
       bootstrapInitialWallpaper,
       bootstrapInitialWallpaperOverlay,
       bootstrapInitialWallpaperEffect,

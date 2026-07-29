@@ -432,7 +432,16 @@
     "message": "ダーク"
   },
   "settings_newtab_wordmark_title": {
-    "message": "新しいタブの検索ボックス上にブランドマークを表示"
+    "message": "検索ボックス上のコンテンツ"
+  },
+  "newtab_top_content_brand": {
+    "message": "ブランド"
+  },
+  "newtab_top_content_time": {
+    "message": "時刻"
+  },
+  "newtab_top_content_off": {
+    "message": "非表示"
   },
   "settings_newtab_shortcuts_title": {
     "message": "ショートカット"
@@ -600,19 +609,19 @@
     "message": "Lumno"
   },
   "engagement_notice_text": {
-    "message": "この拡張機能が少しでも楽しい時間を届けられたら、ぜひ"
+    "message": "気に入ったら、"
   },
   "engagement_notice_connector": {
-    "message": "または"
+    "message": "するか、"
   },
   "engagement_notice_trailing": {
-    "message": "でお話ししましょう。"
+    "message": "してみませんか。"
   },
   "engagement_notice_review": {
-    "message": "評価を残す"
+    "message": "★5で評価"
   },
   "engagement_notice_community": {
-    "message": "グループに参加"
+    "message": "Discord に参加"
   },
   "engagement_notice_close": {
     "message": "評価とコミュニティの案内を閉じる"

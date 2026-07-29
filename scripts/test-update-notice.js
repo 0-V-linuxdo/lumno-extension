@@ -505,6 +505,7 @@ function flushMicrotasks() {
   };
   const chromeApi = createStorageBackedChrome({}, syncStore, '0.9.10');
   const detailsClicks = [];
+  let sessionSlotClaims = 0;
   const firstController = updateNotice.createUpdateNotice({
     documentObj: createFakeDocument(),
     featureHints,
@@ -517,6 +518,9 @@ function flushMicrotasks() {
     },
     getRiSvg() {
       return '';
+    },
+    onSessionSlotClaimed() {
+      sessionSlotClaims += 1;
     },
     onDetailsClick(notice, event) {
       detailsClicks.push({ notice, event });
@@ -536,6 +540,12 @@ function flushMicrotasks() {
 
   assert(firstController, 'first update notice should be created');
   assert(secondController, 'second update notice should be created');
+  assert.strictEqual(
+    firstController.hasSessionSlot(),
+    false,
+    'the update prompt should not claim the shared slot before async state is ready'
+  );
+  const firstSessionClaimed = await firstController.ready;
   await flushMicrotasks();
   await flushMicrotasks();
 
@@ -544,6 +554,9 @@ function flushMicrotasks() {
     'true',
     'current update notice should become visible'
   );
+  assert.strictEqual(firstSessionClaimed, true, 'ready should resolve after the visible update claims the slot');
+  assert.strictEqual(firstController.hasSessionSlot(), true, 'the visible update should own the session slot');
+  assert.strictEqual(sessionSlotClaims, 1, 'the session slot callback should fire only on the first claim');
   assert.strictEqual(firstController.element.children[0].children[0].textContent, '🦋');
   assert.strictEqual(firstController.element.children[0].children[1].textContent, '已更新至 0.9.10');
   assert.strictEqual(firstController.element.children[1].textContent, 'Release title from GitHub');
@@ -567,6 +580,11 @@ function flushMicrotasks() {
   firstController.dismiss();
   await flushMicrotasks();
   assert.strictEqual(
+    firstController.hasSessionSlot(),
+    true,
+    'dismissing an update should not release the rating slot again in the same page session'
+  );
+  assert.strictEqual(
     syncStore[firstDismissKey],
     true,
     'dismissing should persist the current version dismiss marker'
@@ -575,6 +593,28 @@ function flushMicrotasks() {
     secondController.element.getAttribute('data-visible'),
     'false',
     'dismissing one update notice should hide the other current-version instance'
+  );
+  const laterSessionController = updateNotice.createUpdateNotice({
+    documentObj: createFakeDocument(),
+    featureHints,
+    chromeApi,
+    t(key, fallback) {
+      return fallback;
+    },
+    getRiSvg() {
+      return '';
+    }
+  });
+  assert(laterSessionController, 'a later-session update controller should still be creatable');
+  assert.strictEqual(
+    await laterSessionController.ready,
+    false,
+    'a previously dismissed update should leave the rating slot open on later pages'
+  );
+  assert.strictEqual(
+    laterSessionController.hasSessionSlot(),
+    false,
+    'stored update dismissal must not permanently starve the rating prompt'
   );
 
   const disabledStore = {
@@ -600,6 +640,11 @@ function flushMicrotasks() {
     disabledController.element.getAttribute('data-visible'),
     'false',
     'update notice should stay hidden when the global prompt switch is off'
+  );
+  assert.strictEqual(
+    await disabledController.ready,
+    false,
+    'a disabled update notice should leave the session slot available'
   );
   disabledChromeApi.storage.sync.set({ [updateNotice.UPDATE_NOTICE_ENABLED_STORAGE_KEY]: true }, () => {});
   await flushMicrotasks();
@@ -685,6 +730,7 @@ function flushMicrotasks() {
 
   firstController.destroy();
   secondController.destroy();
+  laterSessionController.destroy();
   disabledController.destroy();
   oldController.destroy();
   hydratedController.destroy();

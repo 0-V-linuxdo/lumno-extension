@@ -123,13 +123,23 @@ assert.match(
 );
 assert.match(
   shellSource,
-  /--x-ov-panel-radius:\s*32px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
-  'overlay shell should preserve the original 32px outer corner radius'
+  /--x-ov-panel-radius:\s*32px;[\s\S]*?--x-ov-panel-top-radius:\s*28px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
+  'overlay shell should expose separate 32px outer and 28px expanded-top corner radii'
 );
 assert.doesNotMatch(
   searchPanelSource,
   /var\(--x-ov-panel-radius,\s*16px\)/,
   'overlay input and collapsed-state fallbacks should not shrink the panel radius'
+);
+assert.match(
+  searchPanelSource,
+  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 32px\)'\s*:\s*'var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-radius, 32px\) var\(--x-ov-panel-radius, 32px\)'/,
+  'collapsed overlays should keep the 32px shell radius while expanded overlays use 28px top and 32px bottom corners'
+);
+assert.match(
+  searchPanelSource,
+  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 32px\)'\s*:\s*'var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-top-radius, 28px\) 0 0'/,
+  'the input should switch from the collapsed shell radius to the expanded 28px top-corner radius'
 );
 assert.match(
   suggestionsViewSource,

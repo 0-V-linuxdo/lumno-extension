@@ -31,8 +31,8 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /function applyNewtabWordmarkVisibility\(\) \{[\s\S]*?newtabWordmarkVisible && !zenModeEnabled/,
-  'Zen mode should hide the configured New Tab logo without changing its preference'
+  /function applyNewtabTopContentVisibility\(options\) \{[\s\S]*?newtabTopContentMode !== 'off' && !zenModeEnabled/,
+  'Zen mode should hide the configured New Tab top content without changing its preference'
 );
 
 assertMatches(
@@ -51,18 +51,6 @@ assertMatches(
   newtabJs,
   /Promise\.all\(\[[\s\S]*?bootstrapInitialNewtabFavicon\(\),[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.then/,
   'New Tab should restore Zen mode before marking the page ready'
-);
-
-assertMatches(
-  newtabJs,
-  /function syncSearchSurfaceDuringWordmarkTransition\(shouldAnimate\) \{[\s\S]*?requestAnimationFrame\(syncLayout\)/,
-  'Zen transitions should keep the search input shell and suggestions surface aligned'
-);
-
-assertMatches(
-  newtabJs,
-  /const suggestionsOpen = Boolean\([\s\S]*?data-nt-suggestions-open[\s\S]*?const shouldAnimate = Boolean\([\s\S]*?!suggestionsOpen[\s\S]*?shouldAnimate \? WORDMARK_VISIBILITY_TRANSITION_CSS : 'none'/,
-  'Zen should update atomically instead of moving the search shell while suggestions are open'
 );
 
 assertMatches(

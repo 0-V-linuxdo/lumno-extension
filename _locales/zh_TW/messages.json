@@ -432,7 +432,16 @@
     "message": "深色"
   },
   "settings_newtab_wordmark_title": {
-    "message": "在新分頁搜尋框上方顯示品牌標識"
+    "message": "搜尋框上方內容"
+  },
+  "newtab_top_content_brand": {
+    "message": "品牌標識"
+  },
+  "newtab_top_content_time": {
+    "message": "時間"
+  },
+  "newtab_top_content_off": {
+    "message": "隱藏"
   },
   "settings_newtab_shortcuts_title": {
     "message": "快捷方式"
@@ -600,19 +609,19 @@
     "message": "Lumno"
   },
   "engagement_notice_text": {
-    "message": "如果本擴充功能能為你帶來一些樂趣，歡迎"
+    "message": "如果用得開心，歡迎"
   },
   "engagement_notice_connector": {
-    "message": "，或者"
+    "message": "，或是"
   },
   "engagement_notice_trailing": {
     "message": "和我們聊聊。"
   },
   "engagement_notice_review": {
-    "message": "留下評分"
+    "message": "留下五星好評"
   },
   "engagement_notice_community": {
-    "message": "進群"
+    "message": "加入社群"
   },
   "engagement_notice_close": {
     "message": "關閉評分與社群提示"

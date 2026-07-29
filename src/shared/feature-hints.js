@@ -347,6 +347,12 @@
     let requestedVisible = config.initiallyVisible !== false;
     let dismissStateLoaded = dismissStorage === 'none';
     let firstShowRemembered = false;
+    let destroyed = false;
+    let readySettled = false;
+    let resolveReady = null;
+    const ready = new Promise((resolve) => {
+      resolveReady = resolve;
+    });
     const badgeIconText = String(definition.badgeIconText || '').trim();
     const activateLink = (event) => {
       event.preventDefault();
@@ -472,6 +478,11 @@
         getCssNumber(elementStyle, 'padding-bottom') -
         getCssNumber(elementStyle, 'border-top-width') -
         getCssNumber(elementStyle, 'border-bottom-width');
+      const contentWidth = rect.width -
+        getCssNumber(elementStyle, 'padding-left') -
+        getCssNumber(elementStyle, 'padding-right') -
+        getCssNumber(elementStyle, 'border-left-width') -
+        getCssNumber(elementStyle, 'border-right-width');
       const textRect = text.getBoundingClientRect();
       const badgeRect = badge.getBoundingClientRect();
       const linkRect = hasLink && linkButton
@@ -485,6 +496,36 @@
       }, 0);
       const lineHeight = getCssNumber(textStyle, 'line-height') ||
         ((getCssNumber(textStyle, 'font-size') || 12) * 1.45);
+      const isEngagementNotice = element.classList &&
+        element.classList.contains('x-lumno-feature-hint--engagement-notice');
+      const inlineSentence = isEngagementNotice && typeof element.querySelector === 'function'
+        ? element.querySelector('.x-lumno-feature-hint__sentence')
+        : null;
+      if (inlineSentence && inlineSentence.children) {
+        const sentenceItems = Array.from(inlineSentence.children);
+        const sentenceWidth = sentenceItems.reduce((width, item) => {
+          if (!item || typeof item.getBoundingClientRect !== 'function') {
+            return width;
+          }
+          const itemRect = item.getBoundingClientRect();
+          const itemStyle = windowObj.getComputedStyle(item);
+          const currentInlineMargin =
+            getCssNumber(itemStyle, 'margin-left') +
+            getCssNumber(itemStyle, 'margin-right');
+          const reservedHoverMargin =
+            getCssNumber(itemStyle, '--x-lumno-engagement-action-hover-margin') * 2;
+          return width + itemRect.width +
+            Math.max(currentInlineMargin, reservedHoverMargin);
+        }, 0);
+        const inlineGap = getCssNumber(elementStyle, 'column-gap') ||
+          getCssNumber(elementStyle, 'gap');
+        const requiredInlineWidth = badgeRect.width + inlineGap + sentenceWidth;
+        element.setAttribute(
+          'data-multiline',
+          requiredInlineWidth > contentWidth + 1 ? 'true' : 'false'
+        );
+        return;
+      }
       const maxChildHeight = Math.max(
         textRect.height,
         badgeRect.height,
@@ -571,11 +612,26 @@
       }
     }
 
+    function settleReady() {
+      if (readySettled) {
+        return;
+      }
+      readySettled = true;
+      if (resolveReady) {
+        resolveReady(element.getAttribute('data-visible') === 'true');
+      }
+    }
+
     controller = {
       definition,
       element,
       textId: text.id,
       destroy() {
+        if (destroyed) {
+          return;
+        }
+        destroyed = true;
+        settleReady();
         disconnectAlignmentObserver();
         if (alignUpdateFrame && windowObj && typeof windowObj.cancelAnimationFrame === 'function') {
           windowObj.cancelAnimationFrame(alignUpdateFrame);
@@ -584,7 +640,7 @@
         viewController.destroy();
       },
       dismiss() {
-        if (dismissed) {
+        if (destroyed || dismissed) {
           return;
         }
         dismissed = true;
@@ -600,11 +656,21 @@
       isDismissed() {
         return dismissed;
       },
+      isVisible() {
+        return element.getAttribute('data-visible') === 'true';
+      },
+      ready,
       setVisible(visible) {
+        if (destroyed) {
+          return;
+        }
         requestedVisible = Boolean(visible);
         syncVisibility();
       },
       updateLanguage() {
+        if (destroyed) {
+          return;
+        }
         const badgeLabel = getMessage(t, definition.badgeKey, definition.badgeFallback);
         const rawTextLabel = getMessage(t, definition.textKey, definition.textFallback);
         const navigatorLike = config.navigatorLike ||
@@ -654,13 +720,19 @@
     syncVisibility();
     if (dismissStorage !== 'none') {
       getStoredDismissed(chromeApi, dismissKey, dismissStorage).then((isDismissed) => {
+        if (destroyed) {
+          return;
+        }
         dismissStateLoaded = true;
         if (isDismissed && !dismissed) {
           dismissed = true;
           element.setAttribute('data-dismissed', 'true');
         }
         syncVisibility();
+        settleReady();
       });
+    } else {
+      settleReady();
     }
     return controller;
   }

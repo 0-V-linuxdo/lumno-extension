@@ -25,7 +25,7 @@ describe('New Tab React bookmarks topbar', () => {
     const grid = document.createElement('div');
     const modeControl = document.createElement('button');
     const managerButton = document.createElement('button');
-    section.append(grid, modeControl, managerButton);
+    section.append(grid, managerButton, modeControl);
     document.body.appendChild(section);
     const onVisibilityChange = vi.fn();
     act(() => {
@@ -50,8 +50,8 @@ describe('New Tab React bookmarks topbar', () => {
     expect(runtime.activate()).toBe(true);
     expect(runtime.itemsHost.firstElementChild).toBe(grid);
     expect(Array.from(runtime.actions.children)).toEqual([
-      modeControl,
-      managerButton
+      managerButton,
+      modeControl
     ]);
     expect(runtime.setVisible(true)).toBe(true);
     expect(onVisibilityChange).toHaveBeenCalledWith(
@@ -61,8 +61,8 @@ describe('New Tab React bookmarks topbar', () => {
     expect(runtime.deactivate()).toBe(true);
     expect(Array.from(section.children)).toEqual([
       grid,
-      modeControl,
-      managerButton
+      managerButton,
+      modeControl
     ]);
   });
 

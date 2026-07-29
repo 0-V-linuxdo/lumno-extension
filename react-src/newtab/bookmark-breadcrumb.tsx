@@ -40,7 +40,10 @@ export function createBookmarkBreadcrumbController(
               const title = String(item.title || '');
               const current = index === items.length - 1;
               return (
-                <span key={`${id}:${index}`}>
+                <span
+                  className="x-nt-bookmarks-crumb-item"
+                  key={`${id}:${index}`}
+                >
                   <span
                     aria-hidden="true"
                     className="x-nt-bookmarks-crumb-sep"

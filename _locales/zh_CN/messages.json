@@ -432,7 +432,16 @@
     "message": "深色"
   },
   "settings_newtab_wordmark_title": {
-    "message": "在新标签页搜索框上方显示品牌标识"
+    "message": "搜索框上方内容"
+  },
+  "newtab_top_content_brand": {
+    "message": "品牌标识"
+  },
+  "newtab_top_content_time": {
+    "message": "时间"
+  },
+  "newtab_top_content_off": {
+    "message": "隐藏"
   },
   "settings_newtab_shortcuts_title": {
     "message": "快捷方式"
@@ -600,7 +609,7 @@
     "message": "Lumno"
   },
   "engagement_notice_text": {
-    "message": "如果本插件能给你带来一些乐趣，欢迎"
+    "message": "如果用得开心，诚邀"
   },
   "engagement_notice_connector": {
     "message": "，或者"
@@ -609,7 +618,7 @@
     "message": "和我们聊聊。"
   },
   "engagement_notice_review": {
-    "message": "留个评分"
+    "message": "满分好评"
   },
   "engagement_notice_community": {
     "message": "进群"

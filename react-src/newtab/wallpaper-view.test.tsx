@@ -40,6 +40,11 @@ describe('New Tab React wallpaper view', () => {
             max: 1040,
             ticks: []
           },
+          topContentOptions: [
+            { value: 'brand', label: 'Brand' },
+            { value: 'time', label: 'Time' },
+            { value: 'off', label: 'Hide' }
+          ],
           wallpapers: [
             { id: 'coast', path: '/coast.webp', thumbnailUrl: '/coast-thumb.webp' }
           ]
@@ -58,6 +63,11 @@ describe('New Tab React wallpaper view', () => {
     expect(
       controller.control.querySelectorAll('.x-nt-effect-option')
     ).toHaveLength(2);
+    const topContentGroup = controller.getRefs().topContentTabs;
+    expect(topContentGroup?.getAttribute('role')).toBe('group');
+    const topContentButtons = topContentGroup?.querySelectorAll('button');
+    expect(topContentButtons).toHaveLength(3);
+    expect(topContentButtons?.[0]?.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('updates custom wallpaper tiles without replacing the panel', () => {

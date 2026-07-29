@@ -98,6 +98,7 @@
     );
   }
 
+  const SETTINGS = globalThis.LumnoSettings || {};
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
@@ -105,7 +106,8 @@
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
-  const NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
+  const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
+    '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
   const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
   const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
@@ -115,25 +117,7 @@
   const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
   const NEWTAB_FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
   const LUMNO_CHROME_WEB_STORE_URL = 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao?utm_source=item-share-cb';
-  const LUMNO_CHROME_WEB_STORE_REVIEW_URL = 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb';
-  const LUMNO_WEB_ORIGIN = 'https://lumno.kubai.design';
-  const LUMNO_COMMUNITY_LINKS_URL = `${LUMNO_WEB_ORIGIN}/community-links.json`;
-  const LUMNO_FEEDBACK_GITHUB_ISSUE_URL = 'https://github.com/kubai087/lumno-extension/issues/new';
-  const LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS = 2500;
   const LUMNO_FEEDBACK_QR_REFRESH_TIMEOUT_MS = 5000;
-  const LUMNO_FEEDBACK_LINKS_FALLBACK = Object.freeze({
-    x: 'https://x.com/kubai087',
-    githubIssue: LUMNO_FEEDBACK_GITHUB_ISSUE_URL,
-    chromeReview: LUMNO_CHROME_WEB_STORE_REVIEW_URL,
-    discord: 'https://discord.gg/2u9sg7ZNkJ',
-    wechatQr: `${LUMNO_WEB_ORIGIN}/qrcode.JPG`,
-    communityByLocale: Object.freeze({
-      'zh-CN': 'wechat',
-      'zh-TW': 'discord',
-      ja: 'discord',
-      en: 'discord'
-    })
-  });
   const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
   const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
@@ -162,7 +146,6 @@
   const FAVICON_REQUEST_BLACKLIST_STORAGE_KEY = '_x_extension_favicon_request_blacklist_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
-  const SETTINGS = globalThis.LumnoSettings || {};
   const EXTENSION_ROUTES = globalThis.LumnoExtensionRoutes || {};
   const NAVIGATION_DISPOSITION = globalThis.LumnoNavigationDisposition || {};
   const SEARCH_UTILS = globalThis.LumnoSearchUtils || {};
@@ -174,6 +157,8 @@
   const FEATURE_HINTS = globalThis.LumnoFeatureHints || {};
   const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
   const ENGAGEMENT_NOTICE = globalThis.LumnoEngagementNotice || {};
+  const COMMUNITY_LINKS = globalThis.LumnoCommunityLinks || {};
+  const LUMNO_FEEDBACK_LINKS_FALLBACK = COMMUNITY_LINKS.FALLBACK_LINKS;
   const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
   const NEWTAB_FAVICON_CACHE = globalThis.LumnoFaviconCache || globalThis.LumnoNewtabFaviconCache || {};
   const NEWTAB_FAVICON_THEME = globalThis.LumnoNewtabFaviconTheme || {};
@@ -209,7 +194,8 @@
   const NEWTAB_WALLPAPER_VIEW = globalThis.LumnoNewtabWallpaperView || {};
   const NEWTAB_FEEDBACK_CONTROL = globalThis.LumnoNewtabFeedbackControl || {};
   const NEWTAB_SELECT_MENU = globalThis.LumnoNewtabSelectMenu || {};
-  const NEWTAB_WORDMARK = globalThis.LumnoNewtabWordmark || {};
+  const NEWTAB_TOP_CONTENT = globalThis.LumnoNewtabTopContent ||
+    globalThis.LumnoNewtabWordmark || {};
   const NEWTAB_PAGE_STRUCTURE = globalThis.LumnoNewtabPageStructure || {};
   const NEWTAB_BOOKMARK_CASCADE_VIEW =
     globalThis.LumnoNewtabBookmarkCascadeView || {};
@@ -263,6 +249,7 @@
       typeof NEWTAB_WALLPAPER_ADAPTIVE_TONE.createWallpaperAdaptiveTone !== 'function' ||
       typeof NEWTAB_WALLPAPER_EFFECTS.createWallpaperEffects !== 'function' ||
       typeof NEWTAB_WALLPAPER.createWallpaperRuntime !== 'function' ||
+      typeof NEWTAB_TOP_CONTENT.createTopContentController !== 'function' ||
       typeof NEWTAB_PAGE_STRUCTURE.createPageStructure !== 'function' ||
       typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createMenu !== 'function' ||
       typeof NEWTAB_BOOKMARK_CASCADE_VIEW.createLevel !== 'function' ||
@@ -326,6 +313,7 @@
   });
   let initialLanguageApplied = false;
   let hasLanguageBootstrapStarted = false;
+  let languageApplyRequestId = 0;
   let resolveInitialLanguageReady = null;
   const initialLanguageReadyPromise = new Promise((resolve) => {
     resolveInitialLanguageReady = resolve;
@@ -390,12 +378,11 @@
   let bookmarkFolderIconsVisible = true;
   let tabRankScoreDebugEnabled = false;
   let searchLayer = null;
-  let wordmarkContainer = null;
-  let wordmarkController = null;
+  let topContentContainer = null;
+  let topContentController = null;
   let wordmarkImageEl = null;
   let wordmarkSolidEl = null;
-  let wordmarkVisibilityTransitionTimer = 0;
-  let wordmarkVisibilityLayoutFrame = 0;
+  const topContentLayoutAnimations = new Set();
   let wordmarkEntryTransitionTimer = 0;
   let wallpaperControl = null;
   let wallpaperRuntime = null;
@@ -405,11 +392,10 @@
   let feedbackRefreshResultTooltipTimer = 0;
   let feedbackLinks = LUMNO_FEEDBACK_LINKS_FALLBACK;
   let feedbackLinksLoaded = false;
-  let feedbackLinksLoadingPromise = null;
   let updateNoticeController = null;
   let engagementNoticeController = null;
   let pageNoticeController = null;
-  let newtabWordmarkVisible = true;
+  let newtabTopContentMode = 'brand';
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -532,12 +518,8 @@
   const WORDMARK_WALLPAPER_COVER_DARK_OPACITY = '0.32';
   const WORDMARK_WALLPAPER_COVER_LIGHT_OPACITY = '0.32';
   const WORDMARK_WALLPAPER_SOLID_OPACITY = '0.6';
-  const WORDMARK_VISIBILITY_TRANSITION_MS = 260;
-  const WORDMARK_VISIBILITY_TRANSITION_CSS =
-    'max-height 260ms cubic-bezier(0.22, 1, 0.36, 1), ' +
-    'margin-bottom 260ms cubic-bezier(0.22, 1, 0.36, 1), ' +
-    'opacity 180ms ease, ' +
-    'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)';
+  const TOP_CONTENT_LAYOUT_TRANSITION_MS = 260;
+  const TOP_CONTENT_LAYOUT_TRANSITION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
   const BOOKMARK_CARD_TARGET_WIDTH_PX = 154;
   const BOOKMARK_GRID_GAP_PX = 12;
   const RECENT_CARD_TARGET_WIDTH_PX = 248;
@@ -1130,10 +1112,14 @@
     return Math.min(config.max, Math.max(config.min, Math.round(number)));
   }
 
-  function normalizeNewtabWordmarkVisible(value) {
-    return typeof SETTINGS.normalizeNewtabWordmarkVisible === 'function'
-      ? SETTINGS.normalizeNewtabWordmarkVisible(value)
-      : value !== false;
+  function normalizeNewtabTopContentMode(value) {
+    if (typeof SETTINGS.normalizeNewtabTopContentMode === 'function') {
+      return SETTINGS.normalizeNewtabTopContentMode(value);
+    }
+    if (value === 'time') {
+      return 'time';
+    }
+    return value === 'off' || value === false ? 'off' : 'brand';
   }
 
   function normalizeNewtabShortcutsVisible(value) {
@@ -1213,14 +1199,84 @@
     return value === true;
   }
 
-  function applyNewtabWordmarkVisibility() {
-    if (!wordmarkContainer) {
+  function getTopContentMotionElements() {
+    return [
+      root,
+      shortcutSection,
+      bookmarkSection,
+      recentSection,
+      updateNoticeController && updateNoticeController.element,
+      engagementNoticeController && engagementNoticeController.element
+    ].filter((element, index, elements) => (
+      element &&
+      element.isConnected &&
+      typeof element.getBoundingClientRect === 'function' &&
+      elements.indexOf(element) === index
+    ));
+  }
+
+  function captureTopContentLayout() {
+    const positions = new Map();
+    getTopContentMotionElements().forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      if (!rect || !Number.isFinite(rect.top) || (rect.width <= 0 && rect.height <= 0)) {
+        return;
+      }
+      positions.set(element, rect.top);
+    });
+    return positions;
+  }
+
+  function cancelTopContentLayoutAnimations() {
+    topContentLayoutAnimations.forEach((animation) => animation.cancel());
+    topContentLayoutAnimations.clear();
+  }
+
+  function animateTopContentLayout(fromPositions) {
+    if (!fromPositions || fromPositions.size === 0) {
       return;
     }
+    const toPositions = captureTopContentLayout();
+    fromPositions.forEach((fromTop, element) => {
+      if (!toPositions.has(element) || typeof element.animate !== 'function') {
+        return;
+      }
+      const deltaY = fromTop - toPositions.get(element);
+      if (!Number.isFinite(deltaY) || Math.abs(deltaY) < 0.5) {
+        return;
+      }
+      const animation = element.animate(
+        [
+          { translate: `0 ${deltaY}px` },
+          { translate: '0 0' }
+        ],
+        {
+          duration: TOP_CONTENT_LAYOUT_TRANSITION_MS,
+          easing: TOP_CONTENT_LAYOUT_TRANSITION_EASING,
+          fill: 'both'
+        }
+      );
+      topContentLayoutAnimations.add(animation);
+      animation.oncancel = () => {
+        topContentLayoutAnimations.delete(animation);
+      };
+      animation.onfinish = () => {
+        topContentLayoutAnimations.delete(animation);
+        animation.cancel();
+      };
+    });
+  }
+
+  function applyNewtabTopContentVisibility(options) {
+    if (!topContentContainer) {
+      return;
+    }
+    const transitionOptions = options || {};
     const body = document.body;
-    const nextVisible = Boolean(newtabWordmarkVisible && !zenModeEnabled);
-    const wasVisible = wordmarkContainer.getAttribute('data-visible') !== 'false';
+    const nextVisible = Boolean(newtabTopContentMode !== 'off' && !zenModeEnabled);
+    const wasVisible = topContentContainer.getAttribute('data-visible') !== 'false';
     const stateChanged = wasVisible !== nextVisible;
+    const layoutChanged = stateChanged || Boolean(transitionOptions.contentChanged);
     const prefersReducedMotion = window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const suggestionsOpen = Boolean(
@@ -1229,72 +1285,47 @@
     const shouldAnimate = Boolean(
       body &&
       body.getAttribute('data-nt-ready') === '1' &&
-      stateChanged &&
+      layoutChanged &&
       !suggestionsOpen &&
       !prefersReducedMotion
     );
-    if (stateChanged && wordmarkVisibilityTransitionTimer) {
-      window.clearTimeout(wordmarkVisibilityTransitionTimer);
-      wordmarkVisibilityTransitionTimer = 0;
+    const fromLayout = shouldAnimate
+      ? (transitionOptions.fromLayout || captureTopContentLayout())
+      : null;
+    cancelTopContentLayoutAnimations();
+    topContentContainer.setAttribute('data-visible', nextVisible ? 'true' : 'false');
+    topContentContainer.style.setProperty('display', 'flex');
+    topContentContainer.style.setProperty('transition', 'none');
+    if (nextVisible) {
+      topContentContainer.style.removeProperty('height');
+    } else {
+      topContentContainer.style.setProperty('height', '0px');
     }
-    if (body) {
-      if (shouldAnimate) {
-        body.setAttribute('data-wordmark-transition', 'true');
-      } else if (!wordmarkVisibilityTransitionTimer) {
-        body.removeAttribute('data-wordmark-transition');
-      }
-    }
-    wordmarkContainer.setAttribute('data-visible', nextVisible ? 'true' : 'false');
-    wordmarkContainer.style.setProperty('display', 'flex');
-    wordmarkContainer.style.setProperty(
-      'transition',
-      shouldAnimate ? WORDMARK_VISIBILITY_TRANSITION_CSS : 'none'
-    );
-    wordmarkContainer.style.setProperty('max-height', nextVisible ? '74px' : '0');
-    wordmarkContainer.style.setProperty('margin-bottom', nextVisible ? '28px' : '0');
-    wordmarkContainer.style.setProperty('opacity', nextVisible ? '1' : '0');
-    wordmarkContainer.style.setProperty(
+    topContentContainer.style.setProperty('max-height', nextVisible ? '74px' : '0');
+    topContentContainer.style.setProperty('margin-bottom', nextVisible ? '28px' : '0');
+    topContentContainer.style.setProperty('opacity', nextVisible ? '1' : '0');
+    topContentContainer.style.setProperty(
       'transform',
       nextVisible ? 'translate3d(0, 0, 0)' : 'translate3d(0, -8px, 0)'
     );
-    wordmarkContainer.style.setProperty('pointer-events', nextVisible ? 'auto' : 'none');
+    topContentContainer.style.setProperty('pointer-events', nextVisible ? 'auto' : 'none');
+    topContentContainer.inert = !nextVisible;
+    if (nextVisible) {
+      topContentContainer.removeAttribute('aria-hidden');
+    } else {
+      topContentContainer.setAttribute('aria-hidden', 'true');
+    }
     if (stateChanged && !nextVisible) {
       finishWordmarkEntryAnimation();
-    } else if (shouldAnimate && nextVisible) {
+    } else if (stateChanged && shouldAnimate && nextVisible) {
       restartWordmarkEntryAnimation();
     }
     updateSearchEntryLayout();
-    syncSearchSurfaceDuringWordmarkTransition(shouldAnimate);
-    scheduleWallpaperAdaptiveToneUpdate();
-    if (shouldAnimate && body) {
-      wordmarkVisibilityTransitionTimer = window.setTimeout(() => {
-        wordmarkVisibilityTransitionTimer = 0;
-        body.removeAttribute('data-wordmark-transition');
-        updateSearchEntryLayout();
-        updateSuggestionsFloatingLayout();
-      }, WORDMARK_VISIBILITY_TRANSITION_MS + 80);
-    }
-  }
-
-  function syncSearchSurfaceDuringWordmarkTransition(shouldAnimate) {
-    if (wordmarkVisibilityLayoutFrame) {
-      window.cancelAnimationFrame(wordmarkVisibilityLayoutFrame);
-      wordmarkVisibilityLayoutFrame = 0;
-    }
     updateSuggestionsFloatingLayout();
-    if (!shouldAnimate || typeof window.requestAnimationFrame !== 'function') {
-      return;
+    if (shouldAnimate) {
+      animateTopContentLayout(fromLayout);
     }
-    const syncUntil = Date.now() + WORDMARK_VISIBILITY_TRANSITION_MS + 80;
-    const syncLayout = () => {
-      updateSuggestionsFloatingLayout();
-      if (Date.now() >= syncUntil) {
-        wordmarkVisibilityLayoutFrame = 0;
-        return;
-      }
-      wordmarkVisibilityLayoutFrame = window.requestAnimationFrame(syncLayout);
-    };
-    wordmarkVisibilityLayoutFrame = window.requestAnimationFrame(syncLayout);
+    scheduleWallpaperAdaptiveToneUpdate();
   }
 
   function finishWordmarkEntryAnimation() {
@@ -1302,13 +1333,13 @@
       window.clearTimeout(wordmarkEntryTransitionTimer);
       wordmarkEntryTransitionTimer = 0;
     }
-    if (wordmarkContainer) {
-      wordmarkContainer.setAttribute('data-enter', 'done');
+    if (topContentContainer) {
+      topContentContainer.setAttribute('data-enter', 'done');
     }
   }
 
   function restartWordmarkEntryAnimation() {
-    if (!wordmarkContainer) {
+    if (!topContentContainer) {
       return;
     }
     const prefersReducedMotion = window.matchMedia &&
@@ -1317,16 +1348,16 @@
       finishWordmarkEntryAnimation();
       return;
     }
-    const wordmarkButton = wordmarkContainer.querySelector('button');
+    const wordmarkContent = topContentContainer.querySelector('.x-nt-wordmark-content');
     if (wordmarkEntryTransitionTimer) {
       window.clearTimeout(wordmarkEntryTransitionTimer);
       wordmarkEntryTransitionTimer = 0;
     }
-    wordmarkContainer.setAttribute('data-enter', 'done');
-    if (wordmarkButton) {
-      void wordmarkButton.offsetWidth;
+    topContentContainer.setAttribute('data-enter', 'done');
+    if (wordmarkContent) {
+      void wordmarkContent.offsetWidth;
     }
-    wordmarkContainer.setAttribute('data-enter', 'run');
+    topContentContainer.setAttribute('data-enter', 'run');
     wordmarkEntryTransitionTimer = window.setTimeout(
       finishWordmarkEntryAnimation,
       WORDMARK_ENTRY_ANIMATION_TOTAL_MS
@@ -1343,10 +1374,10 @@
   }
 
   function applyWordmarkSolidFill(fill) {
-    if (!wordmarkContainer || !wordmarkSolidEl) {
+    if (!topContentContainer) {
       return;
     }
-    wordmarkContainer.style.setProperty('--x-nt-wordmark-solid-fill', fill);
+    topContentContainer.style.setProperty('--x-nt-wordmark-solid-fill', fill);
   }
 
   function applyWordmarkSolidLayerVisible(visible) {
@@ -1360,17 +1391,21 @@
   }
 
   function applyWordmarkThemeAppearance(resolvedTheme) {
-    if (!wordmarkImageEl) {
-      return;
-    }
     const theme = resolvedTheme || (document.body ? document.body.getAttribute('data-theme') : 'light');
     const wallpaperActive = document.body &&
       document.body.getAttribute('data-wallpaper-active') === 'true';
+    const wallpaperInk = topContentContainer
+      ? topContentContainer.getAttribute('data-wallpaper-ink')
+      : '';
+    applyWordmarkSolidFill(getWordmarkSolidFill(wallpaperActive, wallpaperInk, theme));
+    if (!wordmarkImageEl) {
+      return;
+    }
     const lightSrc = '../../assets/images/lumno-wordmark.svg';
     const darkSrc = '../../assets/images/lumno-wordmark-dark.svg';
     if (wallpaperActive) {
-      const wallpaperOverlayCover = wordmarkContainer &&
-        wordmarkContainer.getAttribute('data-wallpaper-overlay-cover') === 'true';
+      const wallpaperOverlayCover = topContentContainer &&
+        topContentContainer.getAttribute('data-wallpaper-overlay-cover') === 'true';
       if (wallpaperOverlayCover) {
         applyWordmarkSolidLayerVisible(false);
         const themeSrc = theme === 'dark' ? darkSrc : lightSrc;
@@ -1386,9 +1421,6 @@
         );
         return;
       }
-      const wallpaperInk = wordmarkContainer
-        ? wordmarkContainer.getAttribute('data-wallpaper-ink')
-        : '';
       const wallpaperSrc = wallpaperInk === 'dark' ? lightSrc : darkSrc;
       if (wordmarkImageEl.getAttribute('src') !== wallpaperSrc) {
         wordmarkImageEl.setAttribute('src', wallpaperSrc);
@@ -1412,6 +1444,37 @@
     }
     applyWordmarkSolidFill(getWordmarkSolidFill(false, '', theme));
     wordmarkImageEl.style.setProperty('opacity', '0.82');
+  }
+
+  function renderNewtabTopContent(animateEntry) {
+    if (!topContentController) {
+      return;
+    }
+    topContentController.render({
+      animateEntry: Boolean(animateEntry),
+      ariaLabel: 'Lumno Chrome Web Store',
+      imageSrc: '../../assets/images/lumno-wordmark.svg',
+      locale: document.documentElement ? document.documentElement.lang : undefined,
+      mode: newtabTopContentMode === 'time' ? 'time' : 'brand'
+    });
+    wordmarkImageEl = topContentController.getImage();
+    wordmarkSolidEl = topContentController.getSolid();
+    applyWordmarkThemeAppearance();
+    scheduleWallpaperAdaptiveToneUpdate();
+  }
+
+  function setNewtabTopContentMode(value) {
+    const nextMode = normalizeNewtabTopContentMode(value);
+    const contentChanged = nextMode !== newtabTopContentMode;
+    if (!contentChanged) {
+      return;
+    }
+    const fromLayout = captureTopContentLayout();
+    newtabTopContentMode = nextMode;
+    if (nextMode !== 'off') {
+      renderNewtabTopContent(false);
+    }
+    applyNewtabTopContentVisibility({ contentChanged, fromLayout });
   }
 
   function formatTabRankDebugText(tab) {
@@ -1859,52 +1922,9 @@
   }
 
   function normalizeFeedbackHttpsUrl(value) {
-    const raw = String(value || '').trim();
-    if (!raw) {
-      return '';
-    }
-    try {
-      const url = new URL(raw);
-      return url.protocol === 'https:' ? url.toString() : '';
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function normalizeFeedbackCommunityChannel(value, fallback) {
-    return value === 'wechat' || value === 'discord' ? value : fallback;
-  }
-
-  function normalizeFeedbackCommunityMap(value) {
-    const fallbackMap = LUMNO_FEEDBACK_LINKS_FALLBACK.communityByLocale;
-    const source = value && typeof value === 'object' ? value : {};
-    return {
-      'zh-CN': normalizeFeedbackCommunityChannel(source['zh-CN'] || source.zh_CN, fallbackMap['zh-CN']),
-      'zh-TW': normalizeFeedbackCommunityChannel(source['zh-TW'] || source.zh_TW, fallbackMap['zh-TW']),
-      ja: normalizeFeedbackCommunityChannel(source.ja, fallbackMap.ja),
-      en: normalizeFeedbackCommunityChannel(source.en, fallbackMap.en)
-    };
-  }
-
-  function normalizeFeedbackLinksPayload(payload) {
-    const source = payload && typeof payload === 'object' ? payload : {};
-    const links = source.links && typeof source.links === 'object' ? source.links : source;
-    return {
-      x: normalizeFeedbackHttpsUrl(links.x) || LUMNO_FEEDBACK_LINKS_FALLBACK.x,
-      githubIssue: normalizeFeedbackHttpsUrl(links.githubIssue || links.github_issue || links.issue) ||
-        LUMNO_FEEDBACK_LINKS_FALLBACK.githubIssue,
-      chromeReview: normalizeFeedbackHttpsUrl(
-        links.chromeReview ||
-        links.chrome_review ||
-        links.chromeWebStoreReview ||
-        links.chrome_web_store_review ||
-        links.chromeRating ||
-        links.chrome_rating
-      ) || LUMNO_FEEDBACK_LINKS_FALLBACK.chromeReview,
-      discord: normalizeFeedbackHttpsUrl(links.discord) || LUMNO_FEEDBACK_LINKS_FALLBACK.discord,
-      wechatQr: normalizeFeedbackHttpsUrl(links.wechatQr) || LUMNO_FEEDBACK_LINKS_FALLBACK.wechatQr,
-      communityByLocale: normalizeFeedbackCommunityMap(source.communityByLocale)
-    };
+    return typeof COMMUNITY_LINKS.normalizeHttpsUrl === 'function'
+      ? COMMUNITY_LINKS.normalizeHttpsUrl(value)
+      : '';
   }
 
   function loadFeedbackLinks(options) {
@@ -1912,36 +1932,15 @@
     if (!force && feedbackLinksLoaded) {
       return Promise.resolve(feedbackLinks);
     }
-    if (feedbackLinksLoadingPromise) {
-      return feedbackLinksLoadingPromise;
+    if (typeof COMMUNITY_LINKS.load !== 'function') {
+      return Promise.resolve(feedbackLinks);
     }
-    const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timeoutId = controller
-      ? window.setTimeout(() => controller.abort(), LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS)
-      : 0;
-    feedbackLinksLoadingPromise = fetch(LUMNO_COMMUNITY_LINKS_URL, {
-      cache: 'no-store',
-      signal: controller ? controller.signal : undefined
-    })
-      .then((response) => {
-        if (!response || !response.ok) {
-          throw new Error('feedback links unavailable');
-        }
-        return response.json();
-      })
-      .then((payload) => {
-        feedbackLinks = normalizeFeedbackLinksPayload(payload);
+    return COMMUNITY_LINKS.load({ force })
+      .then((links) => {
+        feedbackLinks = links || LUMNO_FEEDBACK_LINKS_FALLBACK;
         feedbackLinksLoaded = true;
         return feedbackLinks;
-      })
-      .catch(() => feedbackLinks || LUMNO_FEEDBACK_LINKS_FALLBACK)
-      .finally(() => {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId);
-        }
-        feedbackLinksLoadingPromise = null;
       });
-    return feedbackLinksLoadingPromise;
   }
 
   function getFeedbackWebLocale() {
@@ -1960,9 +1959,9 @@
   }
 
   function getFeedbackCommunityChannel(links) {
-    const source = links && links.communityByLocale ? links.communityByLocale : LUMNO_FEEDBACK_LINKS_FALLBACK.communityByLocale;
-    const channel = source[getFeedbackWebLocale()];
-    return channel === 'wechat' ? 'wechat' : 'discord';
+    return typeof COMMUNITY_LINKS.getCommunityChannel === 'function'
+      ? COMMUNITY_LINKS.getCommunityChannel(links, getFeedbackWebLocale())
+      : 'discord';
   }
 
   function clearFeedbackRefreshResultTooltipTimer() {
@@ -1974,13 +1973,9 @@
   }
 
   function buildFreshFeedbackQrUrl(value) {
-    const safeUrl = normalizeFeedbackHttpsUrl(value);
-    if (!safeUrl) {
-      return '';
-    }
-    const url = new URL(safeUrl);
-    url.searchParams.set('_lumno_refresh', String(Date.now()));
-    return url.toString();
+    return typeof COMMUNITY_LINKS.buildFreshQrUrl === 'function'
+      ? COMMUNITY_LINKS.buildFreshQrUrl(value)
+      : '';
   }
 
   function preloadFeedbackQrImage(url) {
@@ -2206,8 +2201,10 @@
           getEffectiveBookmarkTopbarSurfaceMode() === 'custom'
       },
       {
-        element: wordmarkContainer,
-        sampleElement: wordmarkImageEl || wordmarkContainer,
+        element: topContentContainer,
+        sampleElement: topContentController && typeof topContentController.getContent === 'function'
+          ? (topContentController.getContent() || topContentContainer)
+          : (wordmarkImageEl || topContentContainer),
         minWidth: 220,
         minHeight: 72
       },
@@ -2274,7 +2271,7 @@
       localWallpaper: NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY,
       overlay: NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
       effect: NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
-      wordmark: NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
+      topContentMode: NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
       favicon: NEWTAB_FAVICON_STORAGE_KEY
     },
     searchWidthConfig: NEWTAB_SEARCH_WIDTH_CONFIG,
@@ -2290,10 +2287,9 @@
     showTopActionTooltip,
     hideTopActionTooltip,
     applyWordmarkThemeAppearance,
-    getWordmarkVisible: () => newtabWordmarkVisible,
-    setWordmarkVisible: (value) => {
-      newtabWordmarkVisible = normalizeNewtabWordmarkVisible(value);
-      applyNewtabWordmarkVisibility();
+    getTopContentMode: () => newtabTopContentMode,
+    setTopContentMode: (value) => {
+      setNewtabTopContentMode(value);
     },
     getSearchWidth: getEffectiveNewtabSearchWidth,
     setSearchWidth: (value, options) => {
@@ -3499,6 +3495,9 @@
 
   function applyLanguageStrings() {
     document.title = t('newtab_page_title', 'New Tab');
+    if (topContentController && newtabTopContentMode === 'time') {
+      renderNewtabTopContent(false);
+    }
     updateRecentHeading();
     updateBookmarkHeading();
     updateBookmarkPagerLabels();
@@ -3554,6 +3553,7 @@
 
 
   function applyLanguageMode(mode) {
+    const requestId = ++languageApplyRequestId;
     currentLanguageMode = mode || 'system';
     const targetLocale = currentLanguageMode === 'system' ? getSystemLocale() : normalizeLocale(currentLanguageMode);
     currentResolvedLocale = targetLocale;
@@ -3567,31 +3567,35 @@
         resolveInitialLanguageReady();
       }
     };
-    if (storageArea) {
-      storageArea.get([LANGUAGE_MESSAGES_STORAGE_KEY], (result) => {
-        const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
-        if (payload && payload.locale === targetLocale && payload.messages) {
-          currentMessages = payload.messages || {};
-          applyLanguageStrings();
-          forceReloadRecentSitesForI18n();
-          finalizeLanguageInit();
-          return;
-        }
-        loadLocaleMessages(targetLocale).then((messages) => {
-          currentMessages = messages || {};
-          applyLanguageStrings();
-          forceReloadRecentSitesForI18n();
-          finalizeLanguageInit();
-        });
-      });
-      return;
-    }
-    loadLocaleMessages(targetLocale).then((messages) => {
+    const applyResolvedMessages = (messages) => {
+      if (requestId !== languageApplyRequestId) {
+        return;
+      }
       currentMessages = messages || {};
       applyLanguageStrings();
       forceReloadRecentSitesForI18n();
       finalizeLanguageInit();
-    });
+    };
+    const loadPackagedMessages = (fallbackMessages) => {
+      loadLocaleMessages(targetLocale).then((messages) => {
+        // 同步存储里的消息可能来自旧扩展版本，只在包内语言文件读取失败时兜底。
+        const packagedMessages = messages && Object.keys(messages).length > 0
+          ? messages
+          : fallbackMessages;
+        applyResolvedMessages(packagedMessages);
+      });
+    };
+    if (storageArea) {
+      storageArea.get([LANGUAGE_MESSAGES_STORAGE_KEY], (result) => {
+        const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
+        const fallbackMessages = payload && payload.locale === targetLocale
+          ? payload.messages
+          : null;
+        loadPackagedMessages(fallbackMessages);
+      });
+      return;
+    }
+    loadPackagedMessages(null);
   }
 
   function refreshShortcutTileThemes() {
@@ -3908,14 +3912,13 @@
         wallpaperRuntime.updateSearchWidthUi();
       }
     }
-    if (changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]) {
-      const raw = changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY].newValue;
-      const nextValue = normalizeNewtabWordmarkVisible(raw);
-      newtabWordmarkVisible = nextValue;
+    if (changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabTopContentMode(raw);
       if (storageArea && raw !== nextValue) {
-        storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: nextValue });
+        storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
       }
-      applyNewtabWordmarkVisibility();
+      setNewtabTopContentMode(nextValue);
     }
     if (changes[NEWTAB_ZEN_MODE_STORAGE_KEY]) {
       zenModeEnabled = normalizeZenModeEnabled(changes[NEWTAB_ZEN_MODE_STORAGE_KEY].newValue);
@@ -4018,14 +4021,8 @@
         persist: false
       });
     }
-    if (changes[LANGUAGE_MESSAGES_STORAGE_KEY]) {
-      const payload = changes[LANGUAGE_MESSAGES_STORAGE_KEY].newValue;
-      const targetLocale = currentLanguageMode === 'system' ? getSystemLocale() : normalizeLocale(currentLanguageMode);
-      if (payload && payload.locale === targetLocale && payload.messages) {
-        currentMessages = payload.messages || {};
-        applyLanguageStrings();
-        forceReloadRecentSitesForI18n();
-      }
+    if (changes[LANGUAGE_MESSAGES_STORAGE_KEY] && !changes[LANGUAGE_STORAGE_KEY]) {
+      applyLanguageMode(currentLanguageMode);
     }
     if (changes[PINNED_RECENT_SITES_STORAGE_KEY]) {
       pinnedRecentSites = normalizePinnedRecentSites(changes[PINNED_RECENT_SITES_STORAGE_KEY].newValue);
@@ -4127,16 +4124,15 @@
       updateBookmarkGridHeightLock();
       updateBookmarkSectionPosition();
     });
-    storageArea.get([NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY], (result) => {
-      const raw = result[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY];
-      const nextValue = normalizeNewtabWordmarkVisible(raw);
-      newtabWordmarkVisible = nextValue;
+    storageArea.get([NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY], (result) => {
+      const raw = result[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY];
+      const nextValue = normalizeNewtabTopContentMode(raw);
       if (raw !== nextValue) {
-        storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: nextValue });
+        storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
       }
-      applyNewtabWordmarkVisibility();
-      if (wallpaperRuntime && typeof wallpaperRuntime.updateWordmarkVisibilityUi === 'function') {
-        wallpaperRuntime.updateWordmarkVisibilityUi();
+      setNewtabTopContentMode(nextValue);
+      if (wallpaperRuntime && typeof wallpaperRuntime.updateTopContentModeUi === 'function') {
+        wallpaperRuntime.updateTopContentModeUi();
       }
     });
     storageArea.get([NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY], (result) => {
@@ -4443,7 +4439,7 @@
     if (document.body) {
       document.body.setAttribute('data-zen-mode', zenModeEnabled ? 'true' : 'false');
     }
-    applyNewtabWordmarkVisibility();
+    applyNewtabTopContentVisibility();
     applyNewtabShortcutsVisibility();
     syncSectionZenVisibility(bookmarkSection);
     syncSectionZenVisibility(recentSection);
@@ -4701,7 +4697,7 @@
     RECENT_COUNT_STORAGE_KEY,
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
-    NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
+    NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
     NEWTAB_WALLPAPER_STORAGE_KEY,
@@ -8171,7 +8167,7 @@
     () => bookmarkOpenManagerButton.getAttribute('data-tooltip') || t('bookmarks_open_manager', '打开书签管理页')
   );
   if (bookmarkModeMenu) {
-    bookmarkTitleWrap.insertBefore(bookmarkModeMenu.control, bookmarkBreadcrumb);
+    bookmarkPager.appendChild(bookmarkModeMenu.control);
   }
   bookmarkHeading.addEventListener('click', () => {
     if (!bookmarkHeading._xCanNavigateRoot) {
@@ -8385,7 +8381,7 @@
     root,
     searchLayer: () => searchLayer,
     inputParts: () => inputParts,
-    wordmarkContainer: () => wordmarkContainer,
+    topContentContainer: () => topContentContainer,
     shortcutSection: () => shortcutSection,
     bookmarkSection,
     recentSection,
@@ -8767,9 +8763,9 @@
     scheduleWallpaperAdaptiveToneUpdate();
   }
 
-  function updateSearchEntryLayout() {
+  function updateSearchEntryLayout(options) {
     if (layoutController && typeof layoutController.updateSearchEntryLayout === 'function') {
-      layoutController.updateSearchEntryLayout();
+      layoutController.updateSearchEntryLayout(options);
     }
   }
 
@@ -10185,7 +10181,14 @@
     }
     hideCursorTooltip();
     closeBookmarkContextMenu();
-    if (sourceKind !== 'cascade') {
+    const isOpenCascadeAnchor = Boolean(
+      sourceKind !== 'cascade' &&
+      bookmarkCascadeRuntime &&
+      typeof bookmarkCascadeRuntime.isOpen === 'function' &&
+      bookmarkCascadeRuntime.isOpen() &&
+      card.getAttribute('aria-expanded') === 'true'
+    );
+    if (sourceKind !== 'cascade' && !isOpenCascadeAnchor) {
       closeBookmarkCascadeMenu();
     }
     const pageIndex = sourceKind === 'cascade' ? -1 : getBookmarkCardInsertionIndex(card);
@@ -14260,9 +14263,9 @@
   }
   const shouldAnimateWordmarkEntry = !window.matchMedia ||
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  wordmarkContainer = document.createElement('div');
-  wordmarkController = NEWTAB_WORDMARK.createWordmarkController(
-    wordmarkContainer,
+  topContentContainer = document.createElement('div');
+  topContentController = NEWTAB_TOP_CONTENT.createTopContentController(
+    topContentContainer,
     {
       onActivate(disposition) {
         openWordmarkUrl(disposition);
@@ -14274,15 +14277,15 @@
       }
     }
   );
-  wordmarkController.render({
-    animateEntry: shouldAnimateWordmarkEntry,
-    ariaLabel: 'Lumno Chrome Web Store',
-    imageSrc: '../../assets/images/lumno-wordmark.svg'
-  });
-  wordmarkImageEl = wordmarkController.getImage();
-  wordmarkSolidEl = wordmarkController.getSolid();
-  applyNewtabWordmarkVisibility();
-  applyWordmarkThemeAppearance();
+  renderNewtabTopContent(shouldAnimateWordmarkEntry);
+  applyNewtabTopContentVisibility();
+  function updateNoticeClaimsSessionSlot() {
+    return Boolean(
+      updateNoticeController &&
+      typeof updateNoticeController.hasSessionSlot === 'function' &&
+      updateNoticeController.hasSessionSlot()
+    );
+  }
   updateNoticeController = typeof UPDATE_NOTICE.createUpdateNotice === 'function'
     ? UPDATE_NOTICE.createUpdateNotice({
       documentObj: document,
@@ -14291,6 +14294,12 @@
       surface: 'newtab',
       t,
       getRiSvg,
+      onSessionSlotClaimed() {
+        if (engagementNoticeController &&
+            typeof engagementNoticeController.suppressForSession === 'function') {
+          engagementNoticeController.suppressForSession();
+        }
+      },
       onDetailsClick(_notice, event) {
         chrome.runtime.sendMessage({
           action: 'openReleasePage',
@@ -14300,8 +14309,8 @@
       }
     })
     : null;
-  engagementNoticeController =
-    typeof ENGAGEMENT_NOTICE.createEngagementNotice === 'function'
+  function createNewtabEngagementNoticeController() {
+    return typeof ENGAGEMENT_NOTICE.createEngagementNotice === 'function'
       ? ENGAGEMENT_NOTICE.createEngagementNotice({
         documentObj: document,
         featureHints: FEATURE_HINTS,
@@ -14309,6 +14318,7 @@
         surface: 'newtab',
         t,
         getRiSvg,
+        exposureGate: updateNoticeController && updateNoticeController.ready,
         canShow() {
           const updateNoticeVisible = Boolean(
             updateNoticeController &&
@@ -14316,6 +14326,7 @@
             updateNoticeController.element.getAttribute('data-visible') === 'true'
           );
           return !updateNoticeVisible &&
+            !updateNoticeClaimsSessionSlot() &&
             document.visibilityState === 'visible' &&
             !String(inputParts.input.value || '').trim() &&
             document.body.getAttribute('data-nt-suggestions-open') !== 'true' &&
@@ -14329,16 +14340,20 @@
           );
         },
         onCommunity(event) {
-          if (!feedbackReactController ||
-              typeof feedbackReactController.openCommunity !== 'function') {
-            return;
-          }
-          feedbackReactController.openCommunity(
-            getOpenDisposition(event, 'newTab')
-          );
+          const disposition = getOpenDisposition(event, 'newTab');
+          const communityUrlPromise = typeof ENGAGEMENT_NOTICE.loadCommunityUrl === 'function'
+            ? ENGAGEMENT_NOTICE.loadCommunityUrl({
+              force: true,
+              locale: getFeedbackWebLocale()
+            })
+            : Promise.resolve(ENGAGEMENT_NOTICE.WECHAT_QR_URL);
+          communityUrlPromise.then((url) => {
+            openFeedbackExternalUrl(url, disposition);
+          });
         }
       })
       : null;
+  }
   inputParts.input.addEventListener('input', function() {
     if (!String(inputParts.input.value || '').trim() ||
         !engagementNoticeController ||
@@ -14709,7 +14724,7 @@
     closeWallpaperPanel({ restoreFocus: true });
   }, true);
 
-  document.body.insertBefore(wordmarkContainer, root);
+  document.body.insertBefore(topContentContainer, root);
   searchLayer.appendChild(inputParts.container);
   root.appendChild(searchLayer);
   const newtabUpdateNoticeAnchor = root.nextSibling;
@@ -14719,12 +14734,32 @@
   if (updateNoticeController && updateNoticeController.element) {
     document.body.insertBefore(updateNoticeController.element, newtabUpdateNoticeAnchor);
   }
-  if (engagementNoticeController && engagementNoticeController.element) {
-    document.body.insertBefore(engagementNoticeController.element, newtabUpdateNoticeAnchor);
-  }
   document.body.insertBefore(suggestionsSurface, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsOutline, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsContainer, newtabUpdateNoticeAnchor);
+  // 等首轮语言解析完成后再创建，避免默认文案在新标签页首帧短暂闪现。
+  Promise.all([
+    initialLanguageReadyPromise,
+    updateNoticeController && updateNoticeController.ready
+      ? updateNoticeController.ready
+      : Promise.resolve(false)
+  ]).then(() => {
+    if (engagementNoticeController) {
+      return;
+    }
+    engagementNoticeController = createNewtabEngagementNoticeController();
+    if (!engagementNoticeController || !engagementNoticeController.element) {
+      return;
+    }
+    const engagementNoticeAnchor = suggestionsSurface.parentNode === document.body
+      ? suggestionsSurface
+      : newtabUpdateNoticeAnchor;
+    document.body.insertBefore(engagementNoticeController.element, engagementNoticeAnchor);
+    if (String(inputParts.input.value || '').trim() &&
+        typeof engagementNoticeController.recordMeaningfulUse === 'function') {
+      engagementNoticeController.recordMeaningfulUse();
+    }
+  });
   if (bookmarkTopbarRuntime) {
     bookmarkTopbarRuntime.mount(document.body);
   }

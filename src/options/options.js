@@ -1,5 +1,8 @@
 (function() {
   const NAVIGATION_DISPOSITION = globalThis.LumnoNavigationDisposition || {};
+  const COMMUNITY_LINKS = globalThis.LumnoCommunityLinks || {};
+  const SETTINGS = globalThis.LumnoSettings || {};
+  const LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK = COMMUNITY_LINKS.FALLBACK_LINKS;
   const panel = document.getElementById('_x_extension_settings_panel_2024_unique_');
   const optionsRoot = document.getElementById('_x_extension_options_root_2024_unique_');
   const tabsRow = document.querySelector('._x_extension_settings_tabs_row_2024_unique_');
@@ -44,7 +47,10 @@
   const documentPipToggle = document.getElementById('_x_extension_document_pip_toggle_2026_unique_');
   const pinnedTabRecoveryToggle = document.getElementById('_x_extension_pinned_tab_recovery_toggle_2026_unique_');
   const overlayTabQuickSwitchToggle = document.getElementById('_x_extension_overlay_tab_quick_switch_2024_unique_');
-  const newtabWordmarkToggle = document.getElementById('_x_extension_newtab_wordmark_toggle_2026_unique_');
+  const newtabTopContentTabsWrap = document.getElementById('_x_extension_newtab_top_content_tabs_wrap_2026_unique_');
+  const newtabTopContentTabsIndicator = newtabTopContentTabsWrap
+    ? newtabTopContentTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
+    : null;
   const newtabShortcutsToggle = document.getElementById('_x_extension_newtab_shortcuts_toggle_2026_unique_');
   const newtabShortcutAddRow = document.getElementById('_x_extension_newtab_shortcut_add_row_2026_unique_');
   const newtabShortcutAddToggle = document.getElementById('_x_extension_newtab_shortcut_add_toggle_2026_unique_');
@@ -190,6 +196,11 @@
     'search-result-priority',
     handleSearchResultPrioritySelection
   );
+  const newtabTopContentTabsController = createOptionsSegmentedControlController(
+    newtabTopContentTabsWrap,
+    'newtab-top-content',
+    handleNewtabTopContentSelection
+  );
   const optionsToggleControlRecords = new Map();
   function registerOptionsToggleControl(input, kind) {
     if (!input ||
@@ -258,7 +269,6 @@
     [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
     [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
     [overlayTabQuickSwitchToggle, 'overlay-tab-quick-switch'],
-    [newtabWordmarkToggle, 'newtab-wordmark'],
     [newtabShortcutsToggle, 'newtab-shortcuts'],
     [newtabShortcutAddToggle, 'newtab-shortcut-add'],
     [newtabShortcutDockMagnificationToggle, 'newtab-shortcut-dock-magnification'],
@@ -406,22 +416,6 @@
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
-  const LUMNO_WEB_ORIGIN = 'https://lumno.kubai.design';
-  const LUMNO_COMMUNITY_LINKS_URL = `${LUMNO_WEB_ORIGIN}/community-links.json`;
-  const LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS = 2500;
-  const LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK = Object.freeze({
-    x: 'https://x.com/kubai087',
-    githubIssue: 'https://github.com/kubai087/lumno-extension/issues/new',
-    chromeReview: 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb',
-    discord: 'https://discord.gg/2u9sg7ZNkJ',
-    wechatQr: `${LUMNO_WEB_ORIGIN}/qrcode.JPG`,
-    communityByLocale: Object.freeze({
-      'zh-CN': 'wechat',
-      'zh-TW': 'discord',
-      ja: 'discord',
-      en: 'discord'
-    })
-  });
   const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
@@ -448,7 +442,8 @@
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
   const PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY = '_x_extension_pinned_tab_recovery_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
-  const NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
+  const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
+    '_x_extension_newtab_wordmark_visible_2026_unique_';
   const RESTRICTED_ACTION_STORAGE_KEY = '_x_extension_restricted_action_2024_unique_';
   const RESTRICTED_ACTION_AUTO_BROWSER_SETTING_DONE_STORAGE_KEY = '_x_extension_restricted_action_auto_browser_setting_done_2026_unique_';
   const SEARCH_RESULT_PRIORITY_STORAGE_KEY = '_x_extension_search_result_priority_2026_unique_';
@@ -461,7 +456,6 @@
   const FAVICON_REQUEST_BLACKLIST_STORAGE_KEY = '_x_extension_favicon_request_blacklist_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
-  const SETTINGS = globalThis.LumnoSettings || {};
   let currentMessages = null;
   let currentLanguageMode = 'system';
   if (searchResultSourceTypeController) {
@@ -502,7 +496,7 @@
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
     PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY,
     OVERLAY_TAB_PRIORITY_STORAGE_KEY,
-    NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
+    NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     RESTRICTED_ACTION_STORAGE_KEY,
     SEARCH_RESULT_PRIORITY_STORAGE_KEY,
     SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
@@ -564,13 +558,13 @@
     : [];
 
   let feedbackSupportLinks = LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK;
-  let feedbackSupportLinksLoadingPromise = null;
   let currentThemeMode = 'system';
   let currentRecentMode = 'most';
   let currentNewtabWidthMode = 'wide';
   let currentOverlaySizeMode = 'standard';
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
+  let currentNewtabTopContentMode = 'brand';
   let currentActiveSettingsTab = 'appearance';
   const optionsSelectControlRecords = new Map();
   function registerOptionsSelectControl(select, kind) {
@@ -738,65 +732,6 @@
     return fallback || '';
   }
 
-  function normalizeFeedbackSupportHttpsUrl(value) {
-    const raw = String(value || '').trim();
-    if (!raw) {
-      return '';
-    }
-    try {
-      const url = new URL(raw);
-      return url.protocol === 'https:' ? url.toString() : '';
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function normalizeFeedbackSupportChannel(value, fallback) {
-    return value === 'wechat' || value === 'discord' ? value : fallback;
-  }
-
-  function normalizeFeedbackSupportCommunityMap(value) {
-    const fallbackMap = LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.communityByLocale;
-    const source = value && typeof value === 'object' ? value : {};
-    return {
-      'zh-CN': normalizeFeedbackSupportChannel(
-        source['zh-CN'] || source.zh_CN,
-        fallbackMap['zh-CN']
-      ),
-      'zh-TW': normalizeFeedbackSupportChannel(
-        source['zh-TW'] || source.zh_TW,
-        fallbackMap['zh-TW']
-      ),
-      ja: normalizeFeedbackSupportChannel(source.ja, fallbackMap.ja),
-      en: normalizeFeedbackSupportChannel(source.en, fallbackMap.en)
-    };
-  }
-
-  function normalizeFeedbackSupportLinksPayload(payload) {
-    const source = payload && typeof payload === 'object' ? payload : {};
-    const links = source.links && typeof source.links === 'object' ? source.links : source;
-    return {
-      x: normalizeFeedbackSupportHttpsUrl(links.x) ||
-        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.x,
-      githubIssue: normalizeFeedbackSupportHttpsUrl(
-        links.githubIssue || links.github_issue || links.issue
-      ) || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.githubIssue,
-      chromeReview: normalizeFeedbackSupportHttpsUrl(
-        links.chromeReview ||
-        links.chrome_review ||
-        links.chromeWebStoreReview ||
-        links.chrome_web_store_review ||
-        links.chromeRating ||
-        links.chrome_rating
-      ) || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.chromeReview,
-      discord: normalizeFeedbackSupportHttpsUrl(links.discord) ||
-        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.discord,
-      wechatQr: normalizeFeedbackSupportHttpsUrl(links.wechatQr) ||
-        LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.wechatQr,
-      communityByLocale: normalizeFeedbackSupportCommunityMap(source.communityByLocale)
-    };
-  }
-
   function getFeedbackSupportWebLocale() {
     const locale = currentLanguageMode === 'system'
       ? getSystemLocale()
@@ -814,9 +749,12 @@
   }
 
   function getFeedbackSupportCommunityChannel() {
-    const source = feedbackSupportLinks.communityByLocale ||
-      LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK.communityByLocale;
-    return source[getFeedbackSupportWebLocale()] === 'wechat' ? 'wechat' : 'discord';
+    return typeof COMMUNITY_LINKS.getCommunityChannel === 'function'
+      ? COMMUNITY_LINKS.getCommunityChannel(
+          feedbackSupportLinks,
+          getFeedbackSupportWebLocale()
+        )
+      : 'discord';
   }
 
   function renderFeedbackSupport() {
@@ -876,41 +814,15 @@
   }
 
   function loadFeedbackSupportLinks() {
-    if (feedbackSupportLinksLoadingPromise) {
-      return feedbackSupportLinksLoadingPromise;
+    if (typeof COMMUNITY_LINKS.load !== 'function') {
+      return Promise.resolve(feedbackSupportLinks);
     }
-    const controller = typeof AbortController === 'function'
-      ? new AbortController()
-      : null;
-    const timeoutId = controller
-      ? window.setTimeout(
-          () => controller.abort(),
-          LUMNO_FEEDBACK_LINKS_FETCH_TIMEOUT_MS
-        )
-      : 0;
-    feedbackSupportLinksLoadingPromise = fetch(LUMNO_COMMUNITY_LINKS_URL, {
-      cache: 'no-store',
-      signal: controller ? controller.signal : undefined
-    })
-      .then((response) => {
-        if (!response || !response.ok) {
-          throw new Error('feedback links unavailable');
-        }
-        return response.json();
-      })
-      .then((payload) => {
-        feedbackSupportLinks = normalizeFeedbackSupportLinksPayload(payload);
+    return COMMUNITY_LINKS.load()
+      .then((links) => {
+        feedbackSupportLinks = links || LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK;
         renderFeedbackSupport();
         return feedbackSupportLinks;
-      })
-      .catch(() => feedbackSupportLinks)
-      .finally(() => {
-        if (timeoutId) {
-          window.clearTimeout(timeoutId);
-        }
-        feedbackSupportLinksLoadingPromise = null;
       });
-    return feedbackSupportLinksLoadingPromise;
   }
 
   renderFeedbackSupport();
@@ -1328,10 +1240,14 @@
       : value !== 'newtabFirst' && value !== false;
   }
 
-  function normalizeNewtabWordmarkVisible(value) {
-    return typeof SETTINGS.normalizeNewtabWordmarkVisible === 'function'
-      ? SETTINGS.normalizeNewtabWordmarkVisible(value)
-      : value !== false;
+  function normalizeNewtabTopContentMode(value) {
+    if (typeof SETTINGS.normalizeNewtabTopContentMode === 'function') {
+      return SETTINGS.normalizeNewtabTopContentMode(value);
+    }
+    if (value === 'time') {
+      return 'time';
+    }
+    return value === 'off' || value === false ? 'off' : 'brand';
   }
 
   function normalizeNewtabShortcutsVisible(value) {
@@ -1538,6 +1454,14 @@
     );
   }
 
+  function updateNewtabTopContentTabsIndicator() {
+    updateInlineTabsIndicator(
+      newtabTopContentTabsWrap,
+      newtabTopContentTabsIndicator,
+      'button[data-newtab-top-content][data-active="true"]'
+    );
+  }
+
   function refreshAllTabsIndicators() {
     const measurements = [
       measureTabIndicator(),
@@ -1566,6 +1490,11 @@
         searchResultPriorityTabsWrap,
         searchResultPriorityTabsIndicator,
         'button[data-search-result-priority][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        newtabTopContentTabsWrap,
+        newtabTopContentTabsIndicator,
+        'button[data-newtab-top-content][data-active="true"]'
       )
     ];
     measurements.forEach(applyTabsIndicatorMeasurement);
@@ -1695,6 +1624,36 @@
     requestAnimationFrame(updateNewtabWidthTabsIndicator);
   }
 
+  function setNewtabTopContentTabState(mode) {
+    const nextMode = normalizeNewtabTopContentMode(mode);
+    currentNewtabTopContentMode = nextMode;
+    renderSegmentedControlState(
+      newtabTopContentTabsController,
+      {
+        activeValue: nextMode,
+        dataAttribute: 'data-newtab-top-content',
+        items: [
+          {
+            value: 'brand',
+            labelKey: 'newtab_top_content_brand',
+            label: getMessage('newtab_top_content_brand', '品牌标识')
+          },
+          {
+            value: 'time',
+            labelKey: 'newtab_top_content_time',
+            label: getMessage('newtab_top_content_time', '时间')
+          },
+          {
+            value: 'off',
+            labelKey: 'newtab_top_content_off',
+            label: getMessage('newtab_top_content_off', '隐藏')
+          }
+        ]
+      }
+    );
+    requestAnimationFrame(updateNewtabTopContentTabsIndicator);
+  }
+
   function updateRecentModeTabsVisibility(countValue) {
     if (!recentModeTabsWrap) {
       return;
@@ -1814,6 +1773,15 @@
     storageArea.set({ [SEARCH_RESULT_PRIORITY_STORAGE_KEY]: nextPriority });
   }
 
+  function handleNewtabTopContentSelection(value) {
+    const nextMode = normalizeNewtabTopContentMode(value);
+    setNewtabTopContentTabState(nextMode);
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextMode });
+  }
+
   function handleRecentModeSelection(value) {
     const nextMode = value === 'most' ? 'most' : 'latest';
     setRecentModeTabState(nextMode);
@@ -1844,6 +1812,7 @@
   setSearchResultPriorityTabState(currentSearchResultPriority);
   setRecentModeTabState(currentRecentMode);
   setRestrictedActionTabState(currentRestrictedAction);
+  setNewtabTopContentTabState(currentNewtabTopContentMode);
 
   function storageGet(area, keys) {
     return new Promise((resolve) => {
@@ -2531,6 +2500,7 @@
       setSearchResultPriorityTabState(currentSearchResultPriority);
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
+      setNewtabTopContentTabState(currentNewtabTopContentMode);
       renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
@@ -3148,6 +3118,7 @@
           updateRecentModeTabsIndicator();
           updateNewtabWidthTabsIndicator();
           updateOverlaySizeTabsIndicator();
+          updateNewtabTopContentTabsIndicator();
         });
       });
     }
@@ -3526,7 +3497,7 @@
     NEWTAB_WALLPAPER_STORAGE_KEY,
     NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
     NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
-    NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
+    NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
@@ -3872,15 +3843,6 @@
         return;
       }
       storageArea.set({ [OVERLAY_TAB_PRIORITY_STORAGE_KEY]: next });
-    });
-  }
-  if (newtabWordmarkToggle) {
-    newtabWordmarkToggle.addEventListener('change', () => {
-      const next = normalizeNewtabWordmarkVisible(newtabWordmarkToggle.checked);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: next });
     });
   }
   if (newtabShortcutsToggle) {
@@ -4436,14 +4398,12 @@
       }
       refreshCustomSelects();
     });
-    storageArea.get([NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY], (result) => {
-      const rawValue = result[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY];
-      const stored = normalizeNewtabWordmarkVisible(rawValue);
-      if (newtabWordmarkToggle) {
-        setOptionsToggleState(newtabWordmarkToggle, stored);
-      }
+    storageArea.get([NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY];
+      const stored = normalizeNewtabTopContentMode(rawValue);
+      setNewtabTopContentTabState(stored);
       if (rawValue !== stored) {
-        storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: stored });
+        storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -5477,7 +5437,7 @@
         changes[AUTO_PIP_ENABLED_STORAGE_KEY] ||
         changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY] ||
         changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] ||
-        changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY] ||
+        changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY] ||
         changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] ||
         changes[RESTRICTED_ACTION_STORAGE_KEY] ||
         changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY] ||
@@ -5579,12 +5539,12 @@
       }
       refreshCustomSelects();
     }
-    if (changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY] && newtabWordmarkToggle) {
-      const raw = changes[NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY].newValue;
-      const next = normalizeNewtabWordmarkVisible(raw);
-      setOptionsToggleState(newtabWordmarkToggle, next);
+    if (changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY].newValue;
+      const next = normalizeNewtabTopContentMode(raw);
+      setNewtabTopContentTabState(next);
       if (raw !== next && storageArea) {
-        storageArea.set({ [NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY]: next });
+        storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }

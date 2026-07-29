@@ -372,6 +372,8 @@
     let updateNoticeEnabled = normalizeUpdateNoticeEnabled(config.updateNoticeEnabled);
     let destroyed = false;
     let titleRefreshPromise = null;
+    let sessionSlotClaimed = false;
+    let readyPromise = null;
 
     function translate(key, fallback) {
       if (key === 'update_notice_badge') {
@@ -425,15 +427,37 @@
       t: translate,
       getRiSvg: config.getRiSvg,
       initiallyVisible: false,
-      onLinkClick: openDetails
+      onLinkClick: openDetails,
+      onDismiss() {
+        if (typeof config.onDismiss === 'function') {
+          config.onDismiss();
+        }
+      }
     });
     if (!hintController) {
       return null;
     }
 
+    function isVisible() {
+      return typeof hintController.isVisible === 'function'
+        ? hintController.isVisible()
+        : hintController.element.getAttribute('data-visible') === 'true';
+    }
+
+    function claimSessionSlotIfVisible() {
+      if (destroyed || sessionSlotClaimed || !isVisible()) {
+        return;
+      }
+      sessionSlotClaimed = true;
+      if (typeof config.onSessionSlotClaimed === 'function') {
+        config.onSessionSlotClaimed();
+      }
+    }
+
     function syncNoticeVisibility() {
       hintController.updateLanguage();
       hintController.setVisible(Boolean(updateNoticeEnabled && notice));
+      claimSessionSlotIfVisible();
       if (updateNoticeEnabled) {
         refreshMissingTitle();
       }
@@ -475,12 +499,19 @@
         });
     }
 
-    Promise.all([
+    const storedNoticeReadyPromise = Promise.all([
       getStoredUpdateNotice(chromeApi),
       getStoredUpdateNoticeEnabled(chromeApi)
     ]).then(([payload, enabled]) => {
       updateNoticeEnabled = enabled;
       applyNoticePayload(payload);
+    });
+    readyPromise = Promise.all([
+      storedNoticeReadyPromise,
+      hintController.ready || Promise.resolve(false)
+    ]).then(() => {
+      claimSessionSlotIfVisible();
+      return sessionSlotClaimed;
     });
 
     function handleStorageChanged(changes, areaName) {
@@ -525,6 +556,11 @@
       getNotice() {
         return notice;
       },
+      hasSessionSlot() {
+        return sessionSlotClaimed;
+      },
+      isVisible,
+      ready: readyPromise,
       getDetailsUrl() {
         const activeNotice = getActiveNotice();
         return activeNotice ? activeNotice.releaseUrl : '';

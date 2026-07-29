@@ -112,18 +112,28 @@ describe('Feature hint React view', () => {
         labels: {
           actions: {
             community: '进群',
-            review: '留个评分'
+            review: '满分好评'
           },
           badge: 'Lumno',
           close: '关闭',
           connector: '，或者',
-          text: '如果本插件能给你带来一些乐趣，欢迎',
+          text: '如果用得开心，诚邀',
           trailing: '和我们聊聊。'
         },
         model: {
           actions: [
-            { id: 'review', variant: 'primary' },
-            { id: 'community', variant: 'secondary' }
+            {
+              iconHtml:
+                '<i class="ri-icon ri-size-12 ri-external-link-line" aria-hidden="true"></i>',
+              id: 'review',
+              variant: 'primary'
+            },
+            {
+              iconHtml:
+                '<i class="ri-icon ri-size-12 ri-external-link-line" aria-hidden="true"></i>',
+              id: 'community',
+              variant: 'secondary'
+            }
           ],
           alignMode: 'auto',
           arrowAlign: 'center',
@@ -157,9 +167,14 @@ describe('Feature hint React view', () => {
     expect(
       view.element.querySelector('.x-lumno-feature-hint__sentence')?.textContent
     ).toBe(
-      '如果本插件能给你带来一些乐趣，欢迎留个评分，或者进群和我们聊聊。'
+      '如果用得开心，诚邀满分好评，或者进群和我们聊聊。'
     );
     expect(view.element.querySelector('.x-lumno-feature-hint__actions')).toBeNull();
     expect(view.actionButtons).toHaveLength(2);
+    expect(
+      view.element.querySelectorAll(
+        '.x-lumno-feature-hint__action-icon .ri-external-link-line'
+      )
+    ).toHaveLength(2);
   });
 });

@@ -31,6 +31,7 @@ describe('New Tab bookmark breadcrumb', () => {
 
     expect(host.dataset.reactIsland).toBe('newtab-bookmark-breadcrumb');
     expect(host.style.display).toBe('inline-flex');
+    expect(host.querySelectorAll('.x-nt-bookmarks-crumb-item')).toHaveLength(2);
     const buttons = host.querySelectorAll<HTMLButtonElement>('button');
     expect(buttons).toHaveLength(2);
     expect(buttons[1]?.disabled).toBe(true);
