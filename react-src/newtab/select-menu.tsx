@@ -12,9 +12,12 @@ import { createRoot, type Root } from 'react-dom/client';
 
 export interface SelectMenuOption {
   action?: string;
+  checked?: boolean;
   dividerBefore?: boolean;
   iconClass?: string;
   label: string;
+  radio?: boolean;
+  uncheckedIconClass?: string;
   value: string;
 }
 
@@ -252,6 +255,9 @@ function SelectMenu({
   };
   const selectedOption =
     options.find((option) => option.value === selectedValue) || options[0];
+  const usesMenuSemantics = options.some(
+    (option) => Boolean(option.action || option.radio)
+  );
   const menuMinWidth = toCssLength(config.menuMinWidth, '0');
   const menuMaxWidth = toCssLength(
     config.menuMaxWidth,
@@ -269,7 +275,7 @@ function SelectMenu({
       }
       data-open={open ? 'true' : 'false'}
       ref={menuRef}
-      role="listbox"
+      role={usesMenuSemantics ? 'menu' : 'listbox'}
       style={
         {
           '--x-extension-menu-surface-max-width': menuMaxWidth,
@@ -289,31 +295,66 @@ function SelectMenu({
       ) : null}
       {options.map((option, index) => {
         const selected = !option.action && option.value === selectedValue;
+        const radioItem = usesMenuSemantics && (!option.action || option.radio);
+        const checked = option.radio ? option.checked === true : selected;
+        const radioIconClass = checked
+          ? 'ri-check-line'
+          : String(option.uncheckedIconClass || '').trim();
         return (
-          <div
-            aria-selected={selected}
-            className="_x_extension_select_option_2024_unique_"
-            data-active={open && activeIndex === index ? 'true' : undefined}
-            data-divider-before={
-              option.dividerBefore ? 'true' : undefined
-            }
-            data-selected={selected ? 'true' : 'false'}
-            data-value={option.value}
-            key={`${option.action || option.value}:${index}`}
-            onClick={() => chooseOption(option)}
-            onMouseEnter={() => setActiveIndex(index)}
-            role="option"
-          >
-            {option.iconClass ? (
-              <i
-                aria-hidden="true"
-                className={`_x_extension_select_option_icon_2026_unique_ ri-icon ri-size-16 ${option.iconClass}`}
-              />
+          <Fragment key={`${option.action || option.value}:${index}`}>
+            {usesMenuSemantics && option.dividerBefore ? (
+              <div aria-orientation="horizontal" role="separator" />
             ) : null}
-            <span className="_x_extension_select_option_label_2026_unique_">
-              {option.label}
-            </span>
-          </div>
+            <div
+              aria-checked={radioItem ? checked : undefined}
+              aria-selected={!usesMenuSemantics ? selected : undefined}
+              className={`_x_extension_select_option_2024_unique_${
+                option.radio ? ' _x_extension_select_option_radio_2026_unique_' : ''
+              }`}
+              data-active={open && activeIndex === index ? 'true' : undefined}
+              data-divider-before={
+                option.dividerBefore ? 'true' : undefined
+              }
+              data-radio-checked={
+                option.radio ? (checked ? 'true' : 'false') : undefined
+              }
+              data-selected={selected ? 'true' : 'false'}
+              data-value={option.value}
+              onClick={() => chooseOption(option)}
+              onMouseEnter={() => setActiveIndex(index)}
+              role={
+                usesMenuSemantics
+                  ? radioItem
+                    ? 'menuitemradio'
+                    : 'menuitem'
+                  : 'option'
+              }
+            >
+              {option.iconClass ? (
+                <i
+                  aria-hidden="true"
+                  className={`_x_extension_select_option_icon_2026_unique_ ri-icon ri-size-16 ${option.iconClass}`}
+                />
+              ) : null}
+              <span className="_x_extension_select_option_label_2026_unique_">
+                {option.label}
+              </span>
+              {option.radio ? (
+                <span
+                  aria-hidden="true"
+                  className={`_x_extension_select_option_check_2026_unique_${
+                    checked ? ' _x_extension_select_option_checked_2026_unique_' : ''
+                  }`}
+                >
+                  {radioIconClass ? (
+                    <i
+                      className={`ri-icon ri-size-16 ${radioIconClass}`}
+                    />
+                  ) : null}
+                </span>
+              ) : null}
+            </div>
+          </Fragment>
         );
       })}
     </div>
@@ -340,7 +381,7 @@ function SelectMenu({
       </select>
       <button
         aria-expanded={open}
-        aria-haspopup="listbox"
+        aria-haspopup={usesMenuSemantics ? 'menu' : 'listbox'}
         aria-label={config.ariaLabel}
         className="_x_extension_select_trigger_2024_unique_"
         data-tooltip={config.tooltip}

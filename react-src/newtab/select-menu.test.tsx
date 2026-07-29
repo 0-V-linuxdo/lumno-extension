@@ -130,6 +130,7 @@ describe('New Tab select menu React island', () => {
     expect(onAction).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'pick-color' })
     );
+    expect(instance.menu.getAttribute('role')).toBe('menu');
 
     act(() => {
       controller.setMenuTitle(instance.wrapper, 'Anzeige');
@@ -147,6 +148,76 @@ describe('New Tab select menu React island', () => {
     ).toBe('Anzeige');
     expect(instance.select.value).toBe('list');
     expect(instance.menu.textContent).toContain('Liste');
+  });
+
+  it('exposes independent action choices as an accessible radio group', () => {
+    const { instance } = createMenu({
+      ...baseConfig,
+      options: [
+        ...(baseConfig.options || []),
+        {
+          action: 'surface:adaptive',
+          checked: true,
+          dividerBefore: true,
+          label: 'Adaptive mist',
+          radio: true,
+          value: '__surface_adaptive__'
+        },
+        {
+          action: 'surface:clear',
+          checked: false,
+          label: 'Clear glass',
+          radio: true,
+          value: '__surface_clear__'
+        },
+        {
+          action: 'surface:custom',
+          checked: false,
+          label: 'Custom color',
+          radio: true,
+          uncheckedIconClass: 'ri-dropper-line',
+          value: '__surface_custom__'
+        }
+      ]
+    });
+
+    const adaptive = instance.menu.querySelector<HTMLElement>(
+      '[data-value="__surface_adaptive__"]'
+    );
+    const clear = instance.menu.querySelector<HTMLElement>(
+      '[data-value="__surface_clear__"]'
+    );
+    const custom = instance.menu.querySelector<HTMLElement>(
+      '[data-value="__surface_custom__"]'
+    );
+    expect(instance.menu.getAttribute('role')).toBe('menu');
+    expect(instance.menu.querySelector('[role="separator"]')).not.toBeNull();
+    expect(adaptive?.getAttribute('role')).toBe('menuitemradio');
+    expect(adaptive?.getAttribute('aria-checked')).toBe('true');
+    expect(adaptive?.querySelector('.ri-check-line')).not.toBeNull();
+    expect(clear?.getAttribute('aria-checked')).toBe('false');
+    expect(custom?.querySelector('.ri-dropper-line')).not.toBeNull();
+    expect(custom?.querySelector('.ri-check-line')).toBeNull();
+
+    const selectedCustom = createMenu({
+      ...baseConfig,
+      id: 'selected-custom-menu',
+      options: [
+        {
+          action: 'surface:custom',
+          checked: true,
+          label: 'Custom color',
+          radio: true,
+          uncheckedIconClass: 'ri-dropper-line',
+          value: '__selected_surface_custom__'
+        }
+      ],
+      selectId: 'selected-custom-menu-select'
+    }).instance.menu.querySelector<HTMLElement>(
+      '[data-value="__selected_surface_custom__"]'
+    );
+    expect(selectedCustom?.querySelector('.ri-check-line')).not.toBeNull();
+    expect(selectedCustom?.querySelector('.ri-dropper-line')).toBeNull();
   });
 
   it('closes when focus moves to an outside pointer target', () => {

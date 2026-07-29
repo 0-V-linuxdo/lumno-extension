@@ -12,6 +12,24 @@ export const BOOKMARK_TOPBAR_IDS = Object.freeze({
 
 export const BOOKMARK_TOPBAR_HEIGHT_PX = 36;
 
+export type BookmarkTopbarSurfaceMode =
+  | 'adaptive'
+  | 'clear'
+  | 'transparent'
+  | 'custom';
+
+export function normalizeSurfaceMode(
+  value: unknown,
+  fallback: BookmarkTopbarSurfaceMode = 'adaptive'
+): BookmarkTopbarSurfaceMode {
+  return value === 'clear' ||
+    value === 'transparent' ||
+    value === 'custom' ||
+    value === 'adaptive'
+    ? value
+    : fallback;
+}
+
 const SURFACE_STYLE_PROPERTIES = Object.freeze([
   '--x-nt-bookmarks-topbar-surface',
   '--x-nt-bookmarks-topbar-terminal-surface',
@@ -179,6 +197,7 @@ export interface BookmarksTopbarRuntime {
   itemsHost: HTMLDivElement;
   mount(parent?: HTMLElement | null): BookmarksTopbarRuntime;
   setSurfaceColor(value: unknown): string;
+  setSurfaceMode(value: unknown): BookmarkTopbarSurfaceMode;
   setVisible(visible: boolean): boolean;
   syncOverflowFade(): boolean;
   updateLanguage(ariaLabel: string): void;
@@ -195,6 +214,7 @@ export function createBookmarksTopbar(
   element.id = BOOKMARK_TOPBAR_IDS.topbar;
   element.className = 'x-nt-bookmarks-topbar';
   element.dataset.reactIsland = 'newtab-bookmarks-topbar';
+  element.dataset.surfaceMode = 'adaptive';
   element.dataset.visible = 'false';
   element.setAttribute('aria-label', String(options.ariaLabel || 'Bookmarks'));
   const reactRoot: Root = createRoot(element);
@@ -259,6 +279,12 @@ export function createBookmarksTopbar(
     );
     element.dataset.customSurface = 'true';
     return tokens.surfaceColor;
+  };
+
+  const setSurfaceMode = (value: unknown) => {
+    const mode = normalizeSurfaceMode(value);
+    element.dataset.surfaceMode = mode;
+    return mode;
   };
 
   const setOverflowFadeVisible = (nextVisible: boolean) => {
@@ -442,6 +468,7 @@ export function createBookmarksTopbar(
       return runtime;
     },
     setSurfaceColor,
+    setSurfaceMode,
     setVisible,
     syncOverflowFade,
     updateLanguage(ariaLabel) {
@@ -460,6 +487,7 @@ export function createBookmarksTopbarApi() {
     implementation: 'react',
     createBookmarksTopbar,
     getSurfaceColorTokens,
+    normalizeSurfaceMode,
     normalizeSurfaceColor
   });
 }

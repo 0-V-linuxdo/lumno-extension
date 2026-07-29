@@ -4,6 +4,7 @@ import {
   createBookmarksTopbar,
   createBookmarksTopbarApi,
   getSurfaceColorTokens,
+  normalizeSurfaceMode,
   normalizeSurfaceColor,
   type BookmarksTopbarRuntime
 } from './bookmarks-topbar';
@@ -78,6 +79,10 @@ describe('New Tab React bookmarks topbar', () => {
     expect(normalizeSurfaceColor('#EdF4Fe')).toBe('#edf4fe');
     expect(normalizeSurfaceColor('#abc')).toBe('#aabbcc');
     expect(getSurfaceColorTokens('#111827')?.ink).toBe('#f8fafc');
+    expect(normalizeSurfaceMode('clear')).toBe('clear');
+    expect(normalizeSurfaceMode('transparent')).toBe('transparent');
+    expect(runtime.setSurfaceMode('transparent')).toBe('transparent');
+    expect(runtime.element.dataset.surfaceMode).toBe('transparent');
     expect(runtime.setSurfaceColor('#edf4fe')).toBe('#edf4fe');
     expect(
       runtime.element.style.getPropertyValue(

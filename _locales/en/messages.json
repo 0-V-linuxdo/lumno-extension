@@ -1094,6 +1094,18 @@
   "bookmark_view_mode_top": {
     "message": "Top bookmarks bar"
   },
+  "bookmark_topbar_surface_adaptive": {
+    "message": "Adaptive mist"
+  },
+  "bookmark_topbar_surface_clear": {
+    "message": "Clear glass"
+  },
+  "bookmark_topbar_surface_transparent": {
+    "message": "Transparent"
+  },
+  "bookmark_topbar_surface_custom": {
+    "message": "Custom color"
+  },
   "bookmark_topbar_color_pick": {
     "message": "Pick background color"
   },
@@ -1101,7 +1113,7 @@
     "message": "Restore automatic colors"
   },
   "bookmark_topbar_color_picked": {
-    "message": "Browser toolbar color matched"
+    "message": "Color picked"
   },
   "bookmark_topbar_color_reset_done": {
     "message": "Automatic colors restored"

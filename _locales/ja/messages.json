@@ -1094,6 +1094,18 @@
   "bookmark_view_mode_top": {
     "message": "上部ブックマークバー"
   },
+  "bookmark_topbar_surface_adaptive": {
+    "message": "自動調整フロスト"
+  },
+  "bookmark_topbar_surface_clear": {
+    "message": "クリアガラス"
+  },
+  "bookmark_topbar_surface_transparent": {
+    "message": "透明"
+  },
+  "bookmark_topbar_surface_custom": {
+    "message": "カスタムカラー"
+  },
   "bookmark_topbar_color_pick": {
     "message": "背景色を取得"
   },
@@ -1101,7 +1113,7 @@
     "message": "自動配色に戻す"
   },
   "bookmark_topbar_color_picked": {
-    "message": "ブラウザ上部バーの色に合わせました"
+    "message": "色を取得しました"
   },
   "bookmark_topbar_color_reset_done": {
     "message": "自動配色に戻しました"

@@ -1078,6 +1078,39 @@
       .x-nt-section-mode-portal ._x_extension_select_option_2024_unique_ {
         font-size: 12px;
       }
+      .x-nt-section-mode-portal ._x_extension_select_option_radio_2026_unique_ {
+        display: flex;
+        align-items: center;
+      }
+      .x-nt-section-mode-portal ._x_extension_select_option_radio_2026_unique_
+        ._x_extension_select_option_label_2026_unique_ {
+        flex: 1 1 auto;
+      }
+      ._x_extension_select_option_check_2026_unique_ {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #111827;
+        transition: color 140ms ease;
+      }
+      ._x_extension_select_option_checked_2026_unique_ {
+        color: #111827;
+      }
+      .x-nt-section-mode-portal
+        ._x_extension_select_option_radio_2026_unique_[data-radio-checked="true"] {
+        background: rgba(15, 23, 42, 0.055);
+      }
+      body[data-theme="dark"] ._x_extension_select_option_check_2026_unique_,
+      body[data-theme="dark"] ._x_extension_select_option_checked_2026_unique_ {
+        color: #f8fafc;
+      }
+      body[data-theme="dark"] .x-nt-section-mode-portal
+        ._x_extension_select_option_radio_2026_unique_[data-radio-checked="true"] {
+        background: rgba(248, 250, 252, 0.08);
+      }
       .x-nt-section-mode-select ._x_extension_select_menu_title_2024_unique_,
       .x-nt-section-mode-portal ._x_extension_select_menu_title_2024_unique_ {
         padding: 4px 8px 6px;
@@ -1578,8 +1611,17 @@
       }
       .x-nt-bookmarks-topbar {
         --x-nt-bookmarks-topbar-surface:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.82));
-        --x-nt-bookmarks-topbar-terminal-surface: rgba(248, 250, 252, 0.62);
+          linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 250, 252, 0.62));
+        --x-nt-bookmarks-topbar-terminal-surface: rgba(248, 250, 252, 0.78);
+        --x-nt-bookmarks-topbar-border: rgba(15, 23, 42, 0.065);
+        --x-nt-bookmarks-topbar-blur: 14px;
+        --x-nt-bookmarks-topbar-saturate: 118%;
+        --x-nt-bookmarks-topbar-mist-fallback: rgba(248, 250, 252, 0.66);
+        --x-nt-bookmarks-topbar-mist-terminal-fallback: rgba(248, 250, 252, 0.8);
+        --x-nt-bookmarks-topbar-clear-fallback: rgba(248, 250, 252, 0.38);
+        --x-nt-bookmarks-topbar-clear-terminal-fallback: rgba(248, 250, 252, 0.54);
+        --x-nt-bookmarks-topbar-wallpaper-border-fallback: rgba(15, 23, 42, 0.08);
+        --x-nt-bookmarks-topbar-wallpaper-hover-fallback: rgba(15, 23, 42, 0.08);
         --x-nt-bookmarks-topbar-ink: var(--x-nt-bookmark-title, #111827);
         --x-nt-bookmarks-topbar-action-bg: transparent;
         --x-nt-bookmarks-topbar-action-hover: rgba(15, 23, 42, 0.065);
@@ -1602,11 +1644,37 @@
         color: var(--x-nt-bookmarks-topbar-ink);
         background: var(--x-nt-bookmarks-topbar-surface);
         border: none;
-        box-shadow: none;
-        backdrop-filter: blur(18px) saturate(135%);
-        -webkit-backdrop-filter: blur(18px) saturate(135%);
+        border-bottom: 1px solid var(--x-nt-bookmarks-topbar-border);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        backdrop-filter:
+          blur(var(--x-nt-bookmarks-topbar-blur))
+          saturate(var(--x-nt-bookmarks-topbar-saturate));
+        -webkit-backdrop-filter:
+          blur(var(--x-nt-bookmarks-topbar-blur))
+          saturate(var(--x-nt-bookmarks-topbar-saturate));
         font-family: "Open Sans", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "Helvetica Neue", Arial, sans-serif;
+      }
+      .x-nt-bookmarks-topbar[data-surface-mode="clear"] {
+        --x-nt-bookmarks-topbar-surface: var(--x-nt-bookmarks-topbar-clear-fallback);
+        --x-nt-bookmarks-topbar-terminal-surface:
+          var(--x-nt-bookmarks-topbar-clear-terminal-fallback);
+        --x-nt-bookmarks-topbar-blur: 18px;
+        --x-nt-bookmarks-topbar-saturate: 108%;
+      }
+      .x-nt-bookmarks-topbar[data-surface-mode="transparent"] {
+        --x-nt-bookmarks-topbar-surface: transparent;
+        --x-nt-bookmarks-topbar-terminal-surface: transparent;
+        --x-nt-bookmarks-topbar-border: transparent;
+        --x-nt-bookmarks-topbar-blur: 0px;
+        --x-nt-bookmarks-topbar-saturate: 100%;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      .x-nt-bookmarks-topbar[data-surface-mode="custom"] {
+        --x-nt-bookmarks-topbar-blur: 0px;
+        --x-nt-bookmarks-topbar-saturate: 100%;
       }
       .x-nt-bookmarks-topbar[data-visible="true"] {
         display: flex;
@@ -1812,8 +1880,15 @@
       }
       body[data-theme="dark"] .x-nt-bookmarks-topbar {
         --x-nt-bookmarks-topbar-surface:
-          linear-gradient(180deg, rgba(28, 28, 30, 0.94), rgba(20, 20, 22, 0.88));
-        --x-nt-bookmarks-topbar-terminal-surface: rgba(20, 20, 22, 0.56);
+          linear-gradient(180deg, rgba(28, 30, 34, 0.78), rgba(18, 20, 24, 0.68));
+        --x-nt-bookmarks-topbar-terminal-surface: rgba(18, 20, 24, 0.8);
+        --x-nt-bookmarks-topbar-border: rgba(248, 250, 252, 0.1);
+        --x-nt-bookmarks-topbar-mist-fallback: rgba(18, 20, 24, 0.7);
+        --x-nt-bookmarks-topbar-mist-terminal-fallback: rgba(18, 20, 24, 0.82);
+        --x-nt-bookmarks-topbar-clear-fallback: rgba(18, 20, 24, 0.4);
+        --x-nt-bookmarks-topbar-clear-terminal-fallback: rgba(18, 20, 24, 0.56);
+        --x-nt-bookmarks-topbar-wallpaper-border-fallback: rgba(248, 250, 252, 0.1);
+        --x-nt-bookmarks-topbar-wallpaper-hover-fallback: rgba(255, 255, 255, 0.09);
         --x-nt-bookmarks-topbar-ink: var(--x-nt-bookmark-title, #e2e8f0);
         --x-nt-bookmarks-topbar-action-hover: rgba(255, 255, 255, 0.09);
         --x-nt-bookmarks-topbar-item-hover: rgba(255, 255, 255, 0.09);
@@ -1860,11 +1935,56 @@
         color: var(--x-nt-bookmarks-topbar-ink);
         background: var(--x-nt-bookmarks-topbar-action-hover) !important;
       }
-      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar {
+      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar[data-surface-mode="adaptive"] {
         --x-nt-bookmarks-topbar-surface:
-          color-mix(in srgb, var(--x-nt-panel-bg, rgba(255, 255, 255, 0.82)) 86%, transparent);
+          var(--x-nt-wallpaper-surface-mist, var(--x-nt-bookmarks-topbar-mist-fallback));
         --x-nt-bookmarks-topbar-terminal-surface:
-          color-mix(in srgb, var(--x-nt-panel-bg, rgba(255, 255, 255, 0.82)) 52%, transparent);
+          var(
+            --x-nt-wallpaper-surface-mist-terminal,
+            var(--x-nt-bookmarks-topbar-mist-terminal-fallback)
+          );
+      }
+      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar[data-surface-mode="clear"] {
+        --x-nt-bookmarks-topbar-surface:
+          var(--x-nt-wallpaper-surface-clear, var(--x-nt-bookmarks-topbar-clear-fallback));
+        --x-nt-bookmarks-topbar-terminal-surface:
+          var(
+            --x-nt-wallpaper-surface-clear-terminal,
+            var(--x-nt-bookmarks-topbar-clear-terminal-fallback)
+          );
+      }
+      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar[data-surface-mode="adaptive"],
+      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar[data-surface-mode="clear"],
+      body[data-wallpaper-active="true"] .x-nt-bookmarks-topbar[data-surface-mode="transparent"] {
+        --x-nt-bookmarks-topbar-border:
+          var(
+            --x-nt-wallpaper-surface-border,
+            var(--x-nt-bookmarks-topbar-wallpaper-border-fallback)
+          );
+        --x-nt-bookmarks-topbar-ink:
+          var(--x-nt-wallpaper-adaptive-ink, var(--x-nt-bookmark-title, #111827));
+        --x-nt-bookmarks-topbar-action-hover:
+          var(
+            --x-nt-wallpaper-adaptive-hover-bg,
+            var(--x-nt-bookmarks-topbar-wallpaper-hover-fallback)
+          );
+        --x-nt-bookmarks-topbar-item-hover:
+          var(
+            --x-nt-wallpaper-adaptive-hover-bg,
+            var(--x-nt-bookmarks-topbar-wallpaper-hover-fallback)
+          );
+      }
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-surface-mode="transparent"] {
+        --x-nt-bookmarks-topbar-border: transparent;
+      }
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-wallpaper-ink="light"]:not([data-surface-mode="custom"]) {
+        --x-nt-bookmarks-topbar-folder-hover: rgba(96, 165, 250, 0.13);
+      }
+      body[data-wallpaper-active="true"]
+        .x-nt-bookmarks-topbar[data-wallpaper-ink="dark"]:not([data-surface-mode="custom"]) {
+        --x-nt-bookmarks-topbar-folder-hover: rgba(37, 99, 235, 0.09);
       }
       body[data-wallpaper-active="true"][data-bookmark-view-mode="top"] .x-nt-bookmarks-topbar
         .x-nt-bookmarks-topbar-actions
@@ -1878,6 +1998,19 @@
         box-shadow: none;
         filter: none;
         text-shadow: none;
+      }
+      @media (forced-colors: active) {
+        .x-nt-bookmarks-topbar {
+          --x-nt-bookmarks-topbar-ink: CanvasText;
+          --x-nt-bookmarks-topbar-action-hover: Highlight;
+          --x-nt-bookmarks-topbar-item-hover: Highlight;
+          --x-nt-bookmarks-topbar-folder-hover: Highlight;
+          background: Canvas;
+          border-bottom-color: CanvasText;
+          box-shadow: none;
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
       }
       @media (max-width: 640px) {
         .x-nt-bookmarks-topbar .x-nt-bookmark-card {

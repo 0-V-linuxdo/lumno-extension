@@ -1094,6 +1094,18 @@
   "bookmark_view_mode_top": {
     "message": "頂部書籤列"
   },
+  "bookmark_topbar_surface_adaptive": {
+    "message": "自適應霧面"
+  },
+  "bookmark_topbar_surface_clear": {
+    "message": "通透玻璃"
+  },
+  "bookmark_topbar_surface_transparent": {
+    "message": "透明"
+  },
+  "bookmark_topbar_surface_custom": {
+    "message": "自訂顏色"
+  },
   "bookmark_topbar_color_pick": {
     "message": "背景取色"
   },
@@ -1101,7 +1113,7 @@
     "message": "恢復自動配色"
   },
   "bookmark_topbar_color_picked": {
-    "message": "已匹配瀏覽器頂部列顏色"
+    "message": "已取色"
   },
   "bookmark_topbar_color_reset_done": {
     "message": "已恢復自動配色"

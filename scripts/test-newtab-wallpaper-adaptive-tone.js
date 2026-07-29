@@ -180,7 +180,8 @@ function flushAsyncWork() {
         sampleElement: target,
         minWidth: 42,
         minHeight: 42,
-        iconButton: true
+        iconButton: true,
+        surface: 'topbar'
       }];
     },
     getCurrentWallpaper() {
@@ -207,8 +208,17 @@ function flushAsyncWork() {
 
   const darkInk = target.getAttribute('data-wallpaper-ink');
   const darkAdaptiveColor = target.style.getPropertyValue('--x-nt-wallpaper-adaptive-ink');
+  const darkMistSurface = target.style.getPropertyValue('--x-nt-wallpaper-surface-mist');
+  const darkClearSurface = target.style.getPropertyValue('--x-nt-wallpaper-surface-clear');
   assert.strictEqual(darkInk, 'light');
   assert.ok(darkAdaptiveColor, 'the initial wallpaper should apply an adaptive color');
+  assert.ok(darkMistSurface, 'the topbar target should receive an adaptive mist surface');
+  assert.ok(darkClearSurface, 'the topbar target should receive a protected clear surface');
+  assert.notStrictEqual(
+    darkMistSurface,
+    darkClearSurface,
+    'mist and clear surfaces should retain different opacity levels'
+  );
   assert.strictEqual(scheduledFrames.size, 1, 'the initial apply should schedule a follow-up sample');
 
   currentWallpaper = {
@@ -284,6 +294,11 @@ function flushAsyncWork() {
     darkAdaptiveColor,
     'the replacement sampler should overwrite the retained adaptive color'
   );
+  assert.notStrictEqual(
+    target.style.getPropertyValue('--x-nt-wallpaper-surface-mist'),
+    darkMistSurface,
+    'the replacement sampler should retint the topbar material'
+  );
 
   currentWallpaper = {
     id: 'failed-wallpaper',
@@ -308,6 +323,11 @@ function flushAsyncWork() {
     target.style.getPropertyValue('--x-nt-wallpaper-adaptive-ink'),
     '',
     'a current wallpaper load failure should restore the theme fallback'
+  );
+  assert.strictEqual(
+    target.style.getPropertyValue('--x-nt-wallpaper-surface-mist'),
+    '',
+    'a current wallpaper load failure should clear the sampled topbar material'
   );
 
   console.log('new tab wallpaper adaptive tone transition tests passed');

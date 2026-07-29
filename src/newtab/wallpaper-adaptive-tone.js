@@ -34,6 +34,11 @@
     '--x-nt-wallpaper-icon-solid-bg-hover',
     '--x-nt-wallpaper-icon-solid-ink',
     '--x-nt-wallpaper-icon-solid-ink-hover',
+    '--x-nt-wallpaper-surface-border',
+    '--x-nt-wallpaper-surface-clear',
+    '--x-nt-wallpaper-surface-clear-terminal',
+    '--x-nt-wallpaper-surface-mist',
+    '--x-nt-wallpaper-surface-mist-terminal',
     '--x-nt-shortcut-wallpaper-icon-bg',
     '--x-nt-shortcut-wallpaper-icon-color',
     '--x-nt-shortcut-add-bg',
@@ -506,6 +511,40 @@
       formatRgb(15, 23, 42, mixNumber(12, 22, amount)));
   }
 
+  function applySurfaceToneStyles(element, luminance, ink, color, textureContrast, effectType) {
+    const sourceColor = getValidToneColor(color);
+    const neutralColor = ink === 'dark'
+      ? { red: 248, green: 250, blue: 252 }
+      : { red: 18, green: 24, blue: 34 };
+    const hueStrength = smoothstep((getColorChroma(sourceColor) - 0.025) / 0.25);
+    const surfaceColor = mixColor(
+      neutralColor,
+      sourceColor,
+      mixNumber(0.08, 0.18, hueStrength)
+    );
+    const textureRisk = isHighTextureTone(textureContrast, effectType, 0.16)
+      ? 1
+      : clampNumber((Number(textureContrast) || 0) / 0.2, 0, 1);
+    const middleLuminanceRisk = 1 - Math.min(1, Math.abs(luminance - 0.52) / 0.48);
+    const protection = Math.max(textureRisk, middleLuminanceRisk * 0.5);
+    const mistAlpha = mixNumber(ink === 'dark' ? 64 : 62, 74, protection);
+    const clearAlpha = mixNumber(ink === 'dark' ? 32 : 36, 50, protection);
+    const borderColor = ink === 'dark'
+      ? { red: 15, green: 23, blue: 42 }
+      : { red: 248, green: 250, blue: 252 };
+
+    setStyleProperty(element, '--x-nt-wallpaper-surface-mist',
+      formatRgb(surfaceColor.red, surfaceColor.green, surfaceColor.blue, mistAlpha));
+    setStyleProperty(element, '--x-nt-wallpaper-surface-mist-terminal',
+      formatRgb(surfaceColor.red, surfaceColor.green, surfaceColor.blue, Math.min(88, mistAlpha + 13)));
+    setStyleProperty(element, '--x-nt-wallpaper-surface-clear',
+      formatRgb(surfaceColor.red, surfaceColor.green, surfaceColor.blue, clearAlpha));
+    setStyleProperty(element, '--x-nt-wallpaper-surface-clear-terminal',
+      formatRgb(surfaceColor.red, surfaceColor.green, surfaceColor.blue, Math.min(72, clearAlpha + 14)));
+    setStyleProperty(element, '--x-nt-wallpaper-surface-border',
+      formatRgb(borderColor.red, borderColor.green, borderColor.blue, ink === 'dark' ? 8 : 13));
+  }
+
   function createWallpaperAdaptiveTone(options) {
     const documentObj = getOption(options, 'documentObj', root.document);
     const windowObj = getOption(options, 'windowObj', root.window);
@@ -877,6 +916,16 @@
           sample.textureContrast,
           effectType
         );
+        if (target.surface === 'topbar') {
+          applySurfaceToneStyles(
+            target.element,
+            luminance,
+            nextInk,
+            sample.color,
+            sample.textureContrast,
+            effectType
+          );
+        }
         if (target.iconButton) {
           applyIconSolidBackgroundStyles(
             target.element,
