@@ -1112,12 +1112,6 @@
   "bookmark_topbar_color_failed": {
     "message": "取色失敗，請再試一次"
   },
-  "bookmark_topbar_transparent": {
-    "message": "書籤背景-透明"
-  },
-  "bookmark_topbar_acrylic": {
-    "message": "書籤背景-亞克力"
-  },
   "bookmarks_empty_folder": {
     "message": "暫無內容"
   },
@@ -1651,6 +1645,9 @@
   },
   "newtab_shortcuts_add": {
     "message": "新增快捷方式"
+  },
+  "newtab_shortcuts_hide_add": {
+    "message": "隱藏"
   },
   "newtab_shortcuts_add_hidden": {
     "message": "已隱藏「+」，可在設定 → 外觀 → 快捷方式 → 顯示「+」中重新開啟"

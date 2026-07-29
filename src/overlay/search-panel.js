@@ -106,6 +106,25 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   function getSearchUtilsRuntime() {
     return window.LumnoSearchUtils || SEARCH_UTILS || {};
   }
+  function applyOverlayInputExtensionIsolation(input) {
+    if (!input || typeof input.setAttribute !== 'function') {
+      return;
+    }
+    const exclusionAttributes = {
+      'data-1p-ignore': 'true',
+      'data-op-ignore': 'true',
+      'data-lpignore': 'true',
+      'data-bwignore': 'true',
+      'data-form-type': 'other',
+      'data-gramm': 'false',
+      'data-lt-active': 'false',
+      'spellcheck': 'false',
+      'writingsuggestions': 'false'
+    };
+    Object.entries(exclusionAttributes).forEach(([name, value]) => {
+      input.setAttribute(name, value);
+    });
+  }
   const normalizedOverlayContext = (overlayContext && typeof overlayContext === 'object') ? overlayContext : {};
   const requestedTabZoomFactorRaw = Number(normalizedOverlayContext.tabZoomFactor);
   const initialPrefillQuery = typeof normalizedOverlayContext.prefillQuery === 'string'
@@ -1390,8 +1409,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       showUnderlineWhenEmpty: true
     });
     let searchInput = inputParts.input;
-    searchInput.setAttribute('data-1p-ignore', 'true');
-    searchInput.setAttribute('data-op-ignore', 'true');
+    applyOverlayInputExtensionIsolation(searchInput);
     const inputContainer = inputParts.container;
     const rightIcon = inputParts.rightIcon;
     inputHistoryController =

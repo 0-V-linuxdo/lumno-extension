@@ -255,27 +255,45 @@ function testSearchPanelAppliesInitialSystemThemeBeforeAppend() {
   );
 }
 
-function testSearchPanelExcludesPasswordManagersBeforeMountAndFocus() {
+function testSearchPanelExcludesInputExtensionsBeforeMountAndFocus() {
   const searchPanelSource = fs.readFileSync(path.join(__dirname, '../src/overlay/search-panel.js'), 'utf8');
-  const inputCreatedIndex = searchPanelSource.indexOf('let searchInput = inputParts.input;');
-  const onePasswordIgnoreIndex = searchPanelSource.indexOf(
-    "searchInput.setAttribute('data-1p-ignore', 'true');"
+  const isolationFunctionIndex = searchPanelSource.indexOf(
+    'function applyOverlayInputExtensionIsolation(input)'
   );
-  const opIgnoreIndex = searchPanelSource.indexOf(
-    "searchInput.setAttribute('data-op-ignore', 'true');"
+  const inputCreatedIndex = searchPanelSource.indexOf('let searchInput = inputParts.input;');
+  const isolationCallIndex = searchPanelSource.indexOf(
+    'applyOverlayInputExtensionIsolation(searchInput);'
   );
   const inputMountIndex = searchPanelSource.indexOf('overlay.appendChild(inputContainer);');
   const focusIndex = searchPanelSource.indexOf(
     'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
   );
+  const requiredAttributes = {
+    'data-1p-ignore': 'true',
+    'data-op-ignore': 'true',
+    'data-lpignore': 'true',
+    'data-bwignore': 'true',
+    'data-form-type': 'other',
+    'data-gramm': 'false',
+    'data-lt-active': 'false',
+    spellcheck: 'false',
+    writingsuggestions: 'false'
+  };
+  assert.ok(isolationFunctionIndex > 0, 'search-panel should define input-extension isolation');
+  Object.entries(requiredAttributes).forEach(([name, value]) => {
+    assert.ok(
+      searchPanelSource.includes(`'${name}': '${value}'`),
+      `search-panel should isolate its input with ${name}=${value}`
+    );
+  });
   assert.ok(inputCreatedIndex > 0, 'search-panel should create the search input');
   assert.ok(
-    onePasswordIgnoreIndex > inputCreatedIndex && opIgnoreIndex > onePasswordIgnoreIndex,
-    'search-panel should mark its search input as ignored by 1Password-compatible managers'
+    isolationCallIndex > inputCreatedIndex,
+    'search-panel should isolate its search input after creation'
   );
   assert.ok(
-    opIgnoreIndex < inputMountIndex && inputMountIndex < focusIndex,
-    'password-manager exclusion should be applied before the input is mounted or focused'
+    isolationCallIndex < inputMountIndex && inputMountIndex < focusIndex,
+    'input-extension exclusion should be applied before the input is mounted or focused'
   );
 }
 
@@ -288,6 +306,6 @@ testSearchPanelFusesThemeColorAndVisualSignals();
 testSearchPanelDoesNotShortCircuitExplicitThemeHints();
 testSearchPanelAvoidsBusinessClassNameThemeMatches();
 testSearchPanelAppliesInitialSystemThemeBeforeAppend();
-testSearchPanelExcludesPasswordManagersBeforeMountAndFocus();
+testSearchPanelExcludesInputExtensionsBeforeMountAndFocus();
 
 console.log('overlay page theme tests passed');

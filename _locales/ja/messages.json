@@ -1112,12 +1112,6 @@
   "bookmark_topbar_color_failed": {
     "message": "色を取得できませんでした。もう一度お試しください。"
   },
-  "bookmark_topbar_transparent": {
-    "message": "ブックマーク背景-透明"
-  },
-  "bookmark_topbar_acrylic": {
-    "message": "ブックマーク背景-アクリル"
-  },
   "bookmarks_empty_folder": {
     "message": "内容はありません"
   },
@@ -1651,6 +1645,9 @@
   },
   "newtab_shortcuts_add": {
     "message": "ショートカットを追加"
+  },
+  "newtab_shortcuts_hide_add": {
+    "message": "非表示"
   },
   "newtab_shortcuts_add_hidden": {
     "message": "「+」を非表示にしました。設定 → 外観 → ショートカット → 「+」を表示 から再表示できます。"

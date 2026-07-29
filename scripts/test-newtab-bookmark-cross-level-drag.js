@@ -351,6 +351,14 @@ assert.ok(
   'a completed drag should suppress the synthetic click long enough to keep the cascade open'
 );
 assert.ok(
+  bookmarksViewJs.includes('function consumeDragClickSuppression()') &&
+    bookmarksViewJs.includes("event.type === 'click' && consumeDragClickSuppression()") &&
+    bookmarksViewJs.includes('clearDragClickSuppression();') &&
+    cascadeJs.includes('function consumeBookmarkDragClickSuppression(itemButton)') &&
+    cascadeJs.includes('clearBookmarkDragClickSuppression(itemButton);'),
+  'drag click suppression should be consumed or cleared before a later deliberate folder activation'
+);
+assert.ok(
   !newtabJs.includes('showBookmarkMoveToast(record);'),
   'a normal drag move should not show an undo toast before the user presses the shortcut'
 );

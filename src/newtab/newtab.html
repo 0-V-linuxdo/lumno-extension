@@ -676,14 +676,11 @@
       .x-nt-shortcut-tile[data-dock-side="after"][data-dock-distance="2"] .x-nt-shortcut-icon {
         --x-nt-shortcut-dock-shift-x: var(--x-nt-shortcut-hover-shift-far, 1px);
       }
-      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile {
-        transition: background-color 160ms ease;
+      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover .x-nt-shortcut-icon {
+        filter: brightness(0.96);
       }
-      .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover {
-        background: rgba(15, 23, 42, 0.05);
-      }
-      body[data-theme="dark"] .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover {
-        background: rgba(255, 255, 255, 0.08);
+      body[data-theme="dark"] .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile:not([data-shortcut-dragging="true"]):not([data-shortcut-dropping="true"]):not([data-shortcut-context-menu-open="true"]):hover .x-nt-shortcut-icon {
+        filter: brightness(1.06);
       }
       .x-nt-shortcuts-grid[data-dock-magnification="false"] .x-nt-shortcut-tile .x-nt-shortcut-icon {
         --x-nt-shortcut-dock-scale: 1;
@@ -1010,10 +1007,10 @@
       }
       .x-nt-bookmarks-heading.x-nt-bookmarks-heading--link {
         cursor: pointer;
-        padding: 3px 6px;
+        padding: 3px 5px 3px 7px;
         margin-top: -3px;
         margin-bottom: -3px;
-        margin-left: -6px;
+        margin-left: -7px;
         border-radius: 6px;
       }
       .x-nt-bookmarks-heading.x-nt-bookmarks-heading--link:hover {
@@ -1081,44 +1078,6 @@
       .x-nt-section-mode-portal ._x_extension_select_option_2024_unique_ {
         font-size: 12px;
       }
-      /* Radio-style checkmark for acrylic/transparent options (no toggle switch) */
-      .x-nt-section-mode-portal ._x_extension_select_option_toggle_2026_unique_ {
-        display: flex;
-        align-items: center;
-        gap: 0;
-      }
-      .x-nt-section-mode-portal ._x_extension_select_option_toggle_2026_unique_
-        ._x_extension_select_option_label_2026_unique_ {
-        flex: 1 1 auto;
-      }
-      ._x_extension_select_option_check_2026_unique_ {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 18px;
-        height: 18px;
-        flex: 0 0 auto;
-        border-radius: 4px;
-        font-size: 12px;
-        line-height: 1;
-        color: transparent;
-        transition: color 150ms ease, background 150ms ease;
-      }
-      ._x_extension_select_option_checked_2026_unique_ {
-        color: #fff;
-        background: #3b82f6;
-      }
-      body[data-theme="dark"] ._x_extension_select_option_checked_2026_unique_ {
-        background: #60a5fa;
-      }
-      /* Highlight the entire row when checked */
-      .x-nt-section-mode-portal ._x_extension_select_option_2024_unique_[data-toggle-checked="true"] {
-        background: rgba(59, 130, 246, 0.08);
-      }
-      body[data-theme="dark"] .x-nt-section-mode-portal
-        ._x_extension_select_option_2024_unique_[data-toggle-checked="true"] {
-        background: rgba(96, 165, 250, 0.12);
-      }
       .x-nt-section-mode-select ._x_extension_select_menu_title_2024_unique_,
       .x-nt-section-mode-portal ._x_extension_select_menu_title_2024_unique_ {
         padding: 4px 8px 6px;
@@ -1145,7 +1104,7 @@
         display: inline-flex;
         align-items: center;
         height: 20px;
-        padding: 0 6px;
+        padding: 0 5px 0 7px;
         border-radius: 6px;
         max-width: 180px;
         color: var(--x-nt-subtext, #6b7280);
@@ -1707,7 +1666,6 @@
         position: relative;
         z-index: 2;
         height: 36px;
-        margin-left: auto;
         margin-right: -4px;
         padding: 4px;
         display: inline-flex;
@@ -1920,46 +1878,6 @@
         box-shadow: none;
         filter: none;
         text-shadow: none;
-      }
-      /* 亚克力（毛玻璃）：去掉底色，保留 18px 模糊。
-         关键修复：模糊必须承载在严格 36px 的 ::before 伪元素上，而非 <section> 自身。
-         原因：祖先 body { isolation: isolate } 让该浮层自身的 backdrop-filter 被 Chromium
-         按「全屏 backdrop-root」分配且不裁剪到 36px 盒子，从而在 background:transparent 时
-         把整页罩成灰蒙（即 Bug #2）。伪元素的 backdrop-filter 在 Chromium 中可靠裁剪到自身盒子，
-         因此模糊只作用于书签栏那 36px。section 自身在亚克力模式下不再带 backdrop-filter。 */
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-acrylic="true"] {
-        background: transparent !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-      }
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-acrylic="true"]::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: -1;
-        pointer-events: none;
-        backdrop-filter: blur(18px) saturate(135%);
-        -webkit-backdrop-filter: blur(18px) saturate(135%);
-      }
-      /* 真正透明：无底色 + 完全无模糊 —— 同样仅作用于书签栏 */
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-transparent="true"] {
-        background: transparent !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-      }
-      /* ponytail: mirror data-wallpaper-ink onto topbar so it can use adaptive
-         ink/hover directly. wordmarkContainer (sibling) variables don't cascade. */
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-acrylic="true"][data-wallpaper-ink="light"],
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-transparent="true"][data-wallpaper-ink="light"] {
-        --x-nt-bookmarks-topbar-ink: rgb(248 250 252 / 88%);
-        --x-nt-bookmarks-topbar-action-hover: rgb(248 250 252 / 14%);
-        --x-nt-bookmarks-topbar-item-hover: rgb(248 250 252 / 14%);
-      }
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-acrylic="true"][data-wallpaper-ink="dark"],
-      #_x_extension_newtab_bookmarks_topbar_2026_unique_[data-transparent="true"][data-wallpaper-ink="dark"] {
-        --x-nt-bookmarks-topbar-ink: rgb(15 23 42 / 78%);
-        --x-nt-bookmarks-topbar-action-hover: rgb(15 23 42 / 9%);
-        --x-nt-bookmarks-topbar-item-hover: rgb(15 23 42 / 9%);
       }
       @media (max-width: 640px) {
         .x-nt-bookmarks-topbar .x-nt-bookmark-card {

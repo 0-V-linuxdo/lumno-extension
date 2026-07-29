@@ -6,9 +6,19 @@ Lumno is free and open source software. Financial contributions help sustain mai
 
 ## Official funding channel
 
-Lumno plans to accept voluntary, one-time contributions through a project-owned Stripe Payment Link. The official link will be published here after the account configuration and open source program eligibility have been confirmed.
+Lumno accepts voluntary, one-time contributions through the project's official Stripe Payment Link:
 
-Contributors will choose their own amount. Stripe acts only as the payment processor. Contributions are general support for Lumno's open source work; they are not payment for a product, service, advertisement, or private deliverable.
+**[Support Lumno Open Source — HK$50](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)**
+
+<p align="center">
+  <a href="https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200">
+    <img src="assets/sponsor/lumno-stripe-qr.png" alt="Stripe QR code for supporting Lumno" width="240" />
+  </a>
+</p>
+
+Each contribution is HK$50. Stripe dynamically shows the payment methods available for the contributor's device and region. Cards, Apple Pay, and Link are active; Alipay and WeChat Pay will become available after Stripe approves them and when the transaction is eligible.
+
+Stripe acts only as the payment processor. Contributions are general support for Lumno's open source work; they are not payment for a product, service, advertisement, or private deliverable.
 
 ## What funds may support
 
