@@ -1106,6 +1106,12 @@
   "bookmark_topbar_color_failed": {
     "message": "Could not pick a color. Try again."
   },
+  "bookmark_topbar_transparent": {
+    "message": "Bookmark background - Transparent"
+  },
+  "bookmark_topbar_acrylic": {
+    "message": "Bookmark background - Acrylic"
+  },
   "bookmarks_empty_folder": {
     "message": "No content"
   },

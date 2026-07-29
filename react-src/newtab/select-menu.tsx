@@ -12,9 +12,11 @@ import { createRoot, type Root } from 'react-dom/client';
 
 export interface SelectMenuOption {
   action?: string;
+  checked?: boolean;
   dividerBefore?: boolean;
   iconClass?: string;
   label: string;
+  toggle?: boolean;
   value: string;
 }
 
@@ -288,16 +290,19 @@ function SelectMenu({
         </div>
       ) : null}
       {options.map((option, index) => {
-        const selected = !option.action && option.value === selectedValue;
+        const selected = !option.action && !option.toggle && option.value === selectedValue;
         return (
           <div
             aria-selected={selected}
-            className="_x_extension_select_option_2024_unique_"
+            className={`_x_extension_select_option_2024_unique_${
+              option.toggle ? ' _x_extension_select_option_toggle_2026_unique_' : ''
+            }`}
             data-active={open && activeIndex === index ? 'true' : undefined}
             data-divider-before={
               option.dividerBefore ? 'true' : undefined
             }
-            data-selected={selected ? 'true' : 'false'}
+            data-selected={selected ? 'true' : undefined}
+            data-toggle-checked={option.toggle ? (option.checked ? 'true' : 'false') : undefined}
             data-value={option.value}
             key={`${option.action || option.value}:${index}`}
             onClick={() => chooseOption(option)}
@@ -313,6 +318,16 @@ function SelectMenu({
             <span className="_x_extension_select_option_label_2026_unique_">
               {option.label}
             </span>
+            {option.toggle ? (
+              <span
+                aria-hidden="true"
+                className={`_x_extension_select_option_check_2026_unique_${
+                  option.checked ? ' _x_extension_select_option_checked_2026_unique_' : ''
+                }`}
+              >
+                ✓
+              </span>
+            ) : null}
           </div>
         );
       })}

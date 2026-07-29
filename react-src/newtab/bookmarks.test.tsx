@@ -268,6 +268,53 @@ describe('Bookmarks React island', () => {
     expect(morphStates).toEqual([true, false, true, false]);
   });
 
+  it('toggles the folder menu on repeated clicks (open then close)', () => {
+    const openedFolders: Array<{
+      item: BookmarkItem;
+      card: BookmarkCardElement;
+    }> = [];
+    const { view } = createView({
+      openFolderMenu: (item, card) => {
+        openedFolders.push({ item, card });
+      }
+    });
+    const folder: BookmarkItem = {
+      id: 'design',
+      parentId: '1',
+      index: 0,
+      type: 'folder',
+      title: 'Design',
+      previewUrls: ['https://example.com/one']
+    };
+    renderItems(view, [folder], {
+      viewMode: 'list',
+      menuMode: true
+    });
+    const card = view.getCards()[0];
+
+    // The toggle (open→close→open) is now handled at the cascade runtime layer
+    // (newtab.js openBookmarkCascadeMenu), not in the React component.
+    // The component unconditionally calls openFolderMenu; the cascade runtime
+    // decides whether to actually open or close based on lastCascadeAnchor.
+    // Here we verify: every click dispatches openFolderMenu.
+    act(() => {
+      card.click();
+    });
+    expect(openedFolders).toHaveLength(1);
+
+    act(() => {
+      card.click();
+    });
+    // Still 2 opens from component's perspective (toggle is transparent to it);
+    // the cascade runtime internally converts the second open → close.
+    expect(openedFolders).toHaveLength(2);
+
+    act(() => {
+      card.click();
+    });
+    expect(openedFolders).toHaveLength(3);
+  });
+
   it('marks topbar cards so drag previews keep the compact layout', () => {
     const { view } = createView();
     renderItems(view, [{

@@ -147,6 +147,9 @@
   const BOOKMARK_CASCADE_DEBUG_STORAGE_KEY = '_x_extension_bookmark_cascade_debug_2026_unique_';
   const BOOKMARK_TOPBAR_PICK_COLOR_ACTION = 'pick-bookmark-topbar-color';
   const BOOKMARK_TOPBAR_RESET_COLOR_ACTION = 'reset-bookmark-topbar-color';
+  const BOOKMARK_TOPBAR_SURFACE_MODE_ACTION = 'set-bookmark-topbar-surface-mode';
+  const BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY =
+    '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
   const NEWTAB_FLOATING_TOP_GAP_PX = 12;
   const BOOKMARK_CASCADE_TOPBAR_GAP_PX = 4;
   // Flip this to true when inspecting bookmark cascade hover intent and safe-triangle timing.
@@ -380,6 +383,8 @@
     light: 0,
     dark: 0
   };
+  let bookmarkTopbarSurfaceMode = 'none'; // 'none' | 'acrylic' | 'transparent'
+  let bookmarkTopbarWallpaperInkObserver = null; // ponytail: MutationObserver on wordmarkContainer
   let bookmarkFolderIconsVisible = true;
   let tabRankScoreDebugEnabled = false;
   let searchLayer = null;
@@ -907,6 +912,22 @@
     });
   }
 
+  function loadInitialBookmarkTopbarAcrylicSettings() {
+    const localArea = bookmarkTopbarSurfaceColorStorageArea;
+    if (!localArea || typeof localArea.get !== 'function') {
+      return;
+    }
+    localArea.get(
+      [BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY],
+      (result) => {
+        const saved = result[BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY];
+        bookmarkTopbarSurfaceMode =
+          (saved === 'acrylic' || saved === 'transparent') ? saved : 'none';
+        applyBookmarkTopbarAcrylicEffect();
+      }
+    );
+  }
+
   function handleBookmarkTopbarSurfaceColorStorageChanges(changes, areaName) {
     if (areaName !== 'local') {
       return false;
@@ -944,6 +965,14 @@
         );
       });
     }
+    if (changes[BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY] &&
+        typeof changes[BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY].newValue !== 'undefined') {
+      handled = true;
+      const stored = changes[BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY].newValue;
+      bookmarkTopbarSurfaceMode = (stored === 'acrylic' || stored === 'transparent') ? stored : 'none';
+      applyBookmarkTopbarAcrylicEffect();
+      refreshBookmarkViewModeOptions();
+    }
     return handled;
   }
 
@@ -968,6 +997,13 @@
         showToast(t('bookmark_topbar_color_failed', 'Could not pick a color. Try again.'), true);
         return false;
       }
+      // ponytail: picking a color exits acrylic/transparent (four modes are mutually exclusive)
+      if (bookmarkTopbarSurfaceMode === 'acrylic' ||
+          bookmarkTopbarSurfaceMode === 'transparent') {
+        bookmarkTopbarSurfaceMode = 'none';
+        applyBookmarkTopbarAcrylicEffect();
+        persistBookmarkTopbarAcrylicSettings();
+      }
       applyBookmarkTopbarSurfaceColor(color, { persist: true });
       showToast(t('bookmark_topbar_color_picked', 'Browser toolbar color matched'));
       return true;
@@ -982,7 +1018,77 @@
 
   function resetBookmarkTopbarSurfaceColor() {
     applyBookmarkTopbarSurfaceColor('', { persist: true });
+    // ponytail: exit acrylic/transparent so author's adaptive color CSS takes over
+    if (bookmarkTopbarSurfaceMode === 'acrylic' ||
+        bookmarkTopbarSurfaceMode === 'transparent') {
+      bookmarkTopbarSurfaceMode = 'none';
+      applyBookmarkTopbarAcrylicEffect();
+      persistBookmarkTopbarAcrylicSettings();
+    }
     showToast(t('bookmark_topbar_color_reset_done', 'Automatic colors restored'));
+  }
+
+  function applyBookmarkTopbarAcrylicEffect() {
+    if (!bookmarkTopbarRuntime || !bookmarkTopbarRuntime.element) {
+      return;
+    }
+    const el = bookmarkTopbarRuntime.element;
+    el.dataset.transparent = bookmarkTopbarSurfaceMode === 'transparent' ? 'true' : 'false';
+    el.dataset.acrylic = bookmarkTopbarSurfaceMode === 'acrylic' ? 'true' : 'false';
+    // ponytail: mirror wallpaper ink to topbar — initial sync + observe for changes
+    syncBookmarkTopbarWallpaperInk();
+    ensureBookmarkTopbarWallpaperInkObserver();
+  }
+
+  // ponytail: copy data-wallpaper-ink from wordmarkContainer to topbar element
+  // so CSS [data-wallpaper-ink="dark"] selectors on the topbar can work.
+  // wordmarkContainer is a sibling — its CSS variables don't cascade here.
+  // Never remove the attribute: the adaptive tone system briefly clears then
+  // re-sets it during wallpaper changes; keeping old value prevents a flash.
+  function syncBookmarkTopbarWallpaperInk() {
+    if (!bookmarkTopbarRuntime || !bookmarkTopbarRuntime.element) return;
+    if (!wordmarkContainer) return;
+    const ink = wordmarkContainer.getAttribute('data-wallpaper-ink');
+    if (ink) {
+      bookmarkTopbarRuntime.element.setAttribute('data-wallpaper-ink', ink);
+    }
+  }
+
+  // ponytail: one-time MutationObserver on wordmarkContainer.data-wallpaper-ink.
+  // The adaptive tone system updates this attribute asynchronously after wallpaper
+  // change; the observer syncs it to the topbar immediately — no setTimeout guessing.
+  function ensureBookmarkTopbarWallpaperInkObserver() {
+    if (bookmarkTopbarWallpaperInkObserver || !wordmarkContainer) return;
+    try {
+      bookmarkTopbarWallpaperInkObserver = new MutationObserver(() => {
+        if (bookmarkTopbarSurfaceMode === 'acrylic' ||
+            bookmarkTopbarSurfaceMode === 'transparent') {
+          syncBookmarkTopbarWallpaperInk();
+        }
+      });
+      bookmarkTopbarWallpaperInkObserver.observe(wordmarkContainer, {
+        attributes: true,
+        attributeFilter: ['data-wallpaper-ink']
+      });
+    } catch (_) {
+      bookmarkTopbarWallpaperInkObserver = null;
+    }
+  }
+
+  function persistBookmarkTopbarAcrylicSettings() {
+    if (!bookmarkTopbarSurfaceColorStorageArea ||
+        typeof bookmarkTopbarSurfaceColorStorageArea.set !== 'function') {
+      return;
+    }
+    bookmarkTopbarSurfaceColorStorageArea.set({
+      [BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY]: bookmarkTopbarSurfaceMode
+    });
+  }
+
+  function refreshBookmarkViewModeOptions() {
+    if (bookmarkModeMenu && typeof bookmarkModeMenu.update === 'function') {
+      bookmarkModeMenu.update();
+    }
   }
 
   function handleBookmarkModeMenuAction(action) {
@@ -992,6 +1098,21 @@
     }
     if (action === BOOKMARK_TOPBAR_RESET_COLOR_ACTION) {
       resetBookmarkTopbarSurfaceColor();
+      return;
+    }
+    if (action.startsWith(`${BOOKMARK_TOPBAR_SURFACE_MODE_ACTION}:`)) {
+      // action value carries the mode: 'acrylic' or 'transparent'
+      // e.g. 'set-bookmark-topbar-surface-mode:acrylic'
+      const mode = action.split(':')[1];
+      if (mode !== 'acrylic' && mode !== 'transparent') {
+        return;
+      }
+      // Toggle off if already selected, otherwise switch to that mode
+      bookmarkTopbarSurfaceMode = bookmarkTopbarSurfaceMode === mode ? 'none' : mode;
+      applyBookmarkTopbarAcrylicEffect();
+      persistBookmarkTopbarAcrylicSettings();
+      refreshBookmarkViewModeOptions();
+      return;
     }
   }
 
@@ -4010,6 +4131,7 @@
     });
     loadInitialBookmarkViewMode();
     loadInitialBookmarkTopbarSurfaceColors();
+    loadInitialBookmarkTopbarAcrylicSettings();
     storageArea.get([BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY], (result) => {
       const raw = result[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY];
       const nextValue = normalizeBookmarkFolderIconsVisible(raw);
@@ -6090,6 +6212,12 @@
       if (item && item.dividerBefore) {
         option.dividerBefore = true;
       }
+      if (item && item.toggle) {
+        option.toggle = true;
+      }
+      if (item && item.checked !== undefined) {
+        option.checked = Boolean(item.checked);
+      }
       return option;
     });
   }
@@ -6123,7 +6251,10 @@
       iconClass: 'ri-dropper-line',
       dividerBefore: true
     });
-    if (currentBookmarkTopbarSurfaceColor) {
+    // ponytail: reset visible when manual color exists OR acrylic/transparent is active
+    if (currentBookmarkTopbarSurfaceColor ||
+        bookmarkTopbarSurfaceMode === 'acrylic' ||
+        bookmarkTopbarSurfaceMode === 'transparent') {
       options.push({
         value: '__reset_bookmark_topbar_color__',
         action: BOOKMARK_TOPBAR_RESET_COLOR_ACTION,
@@ -6132,6 +6263,23 @@
         iconClass: 'ri-refresh-line'
       });
     }
+    options.push({
+      value: '__radio_bookmark_topbar_acrylic__',
+      action: BOOKMARK_TOPBAR_SURFACE_MODE_ACTION + ':acrylic',
+      labelKey: 'bookmark_topbar_acrylic',
+      fallback: 'Acrylic',
+      toggle: true,
+      checked: bookmarkTopbarSurfaceMode === 'acrylic',
+      dividerBefore: true
+    });
+    options.push({
+      value: '__radio_bookmark_topbar_transparent__',
+      action: BOOKMARK_TOPBAR_SURFACE_MODE_ACTION + ':transparent',
+      labelKey: 'bookmark_topbar_transparent',
+      fallback: 'Transparent background',
+      toggle: true,
+      checked: bookmarkTopbarSurfaceMode === 'transparent'
+    });
     return options;
   }
 

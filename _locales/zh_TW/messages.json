@@ -1106,6 +1106,12 @@
   "bookmark_topbar_color_failed": {
     "message": "取色失敗，請再試一次"
   },
+  "bookmark_topbar_transparent": {
+    "message": "書籤背景-透明"
+  },
+  "bookmark_topbar_acrylic": {
+    "message": "書籤背景-亞克力"
+  },
   "bookmarks_empty_folder": {
     "message": "暫無內容"
   },

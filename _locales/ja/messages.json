@@ -1106,6 +1106,12 @@
   "bookmark_topbar_color_failed": {
     "message": "色を取得できませんでした。もう一度お試しください。"
   },
+  "bookmark_topbar_transparent": {
+    "message": "ブックマーク背景-透明"
+  },
+  "bookmark_topbar_acrylic": {
+    "message": "ブックマーク背景-アクリル"
+  },
   "bookmarks_empty_folder": {
     "message": "内容はありません"
   },
