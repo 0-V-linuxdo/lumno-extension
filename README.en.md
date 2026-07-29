@@ -131,7 +131,7 @@ npm run test:onboarding-content
 
 ## Sponsorship
 
-Lumno plans to accept one-time, choose-your-own-amount support for open source maintenance through a Stripe Payment Link. Sponsorship does not purchase private features, priority support, roadmap control, or other commercial services. The official link will be enabled after account setup and eligibility confirmation; see the [sponsorship policy](SPONSORING.md).
+Lumno accepts voluntary, one-time HK$50 contributions for open source maintenance through Stripe: [support Lumno](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200). Sponsorship does not purchase private features, priority support, roadmap control, or other commercial services. Stripe dynamically shows eligible payment methods; Alipay and WeChat Pay are pending Stripe approval. See the [sponsorship policy](SPONSORING.md).
 
 ## Star History
 

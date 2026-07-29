@@ -6,9 +6,19 @@ Lumno 是自由开源软件。资金支持将用于持续维护、分发、文�
 
 ## 官方资助渠道
 
-Lumno 计划通过项目所有的 Stripe Payment Link 接受自愿、一次性的资金支持。完成账户配置并确认开源计划资格后，正式链接会发布在这里。
+Lumno 通过项目官方的 Stripe Payment Link 接受自愿、一次性的资金支持：
 
-支持者可以自行选择金额，Stripe 仅作为支付处理方。所有资金均用于支持 Lumno 的一般性开源工作，不构成购买产品、服务、广告或私有交付成果的款项。
+**[支持 Lumno 开源项目 — 每次 HK$50](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)**
+
+<p align="center">
+  <a href="https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200">
+    <img src="assets/sponsor/lumno-stripe-qr.png" alt="支持 Lumno 的 Stripe 付款二维码" width="240" />
+  </a>
+</p>
+
+每次支持金额为 HK$50。Stripe 会根据支持者所在地区和设备动态显示可用的支付方式。目前银行卡、Apple Pay 和 Link 已启用；支付宝与微信支付会在 Stripe 审批通过且交易符合条件时显示。
+
+Stripe 仅作为支付处理方。所有资金均用于支持 Lumno 的一般性开源工作，不构成购买产品、服务、广告或私有交付成果的款项。
 
 ## 资金可用于
 
