@@ -1235,7 +1235,9 @@ const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
 const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
 const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
 const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
-const NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
+const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = (
+  globalThis.LumnoSettings && globalThis.LumnoSettings.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY
+) || '_x_extension_newtab_wordmark_visible_2026_unique_';
 const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
 const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
 const NEWTAB_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_';
@@ -3636,6 +3638,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/search-input-history.js',
     'src/shared/search-input-mode.js',
     'src/shared/shortcut-display.js',
+    'src/shared/community-links.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
     'src/shared/engagement-notice.js',
@@ -5531,7 +5534,7 @@ migrateStorageIfNeeded([
   RECENT_COUNT_STORAGE_KEY,
   NEWTAB_WIDTH_MODE_STORAGE_KEY,
   NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
-  NEWTAB_WORDMARK_VISIBLE_STORAGE_KEY,
+  NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
   NEWTAB_THEME_MODE_STORAGE_KEY,
   NEWTAB_THEME_SCOPE_STORAGE_KEY,
   NEWTAB_WALLPAPER_STORAGE_KEY,

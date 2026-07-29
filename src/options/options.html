@@ -2045,6 +2045,15 @@
         padding-left: 10px;
         padding-right: 10px;
       }
+      ._x_extension_top_content_tabs_2026_unique_ {
+        flex: 0 0 auto;
+        gap: 0;
+      }
+      ._x_extension_top_content_tabs_2026_unique_ ._x_extension_theme_option_2024_unique_ {
+        padding-left: 9px;
+        padding-right: 9px;
+        white-space: nowrap;
+      }
       ._x_extension_theme_gallery_2026_unique_ {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 90px));
@@ -2671,12 +2680,20 @@
           </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
             <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_newtab_wordmark_title">在新标签页搜索框上方显示品牌标识</p>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_newtab_wordmark_title">搜索框上方内容</p>
             </div>
-            <label class="_x_extension_switch_2024_unique_" for="_x_extension_newtab_wordmark_toggle_2026_unique_">
-              <input id="_x_extension_newtab_wordmark_toggle_2026_unique_" type="checkbox" checked>
-              <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
-            </label>
+            <div id="_x_extension_newtab_top_content_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_ _x_extension_top_content_tabs_2026_unique_" role="group" aria-label="搜索框上方内容" data-i18n-aria-label="settings_newtab_wordmark_title">
+              <span class="_x_extension_theme_indicator_2024_unique_" aria-hidden="true"></span>
+              <button class="_x_extension_theme_option_2024_unique_" data-newtab-top-content="brand" data-active="true" aria-pressed="true" type="button">
+                <span data-i18n="newtab_top_content_brand">品牌标识</span>
+              </button>
+              <button class="_x_extension_theme_option_2024_unique_" data-newtab-top-content="time" data-active="false" aria-pressed="false" type="button">
+                <span data-i18n="newtab_top_content_time">时间</span>
+              </button>
+              <button class="_x_extension_theme_option_2024_unique_" data-newtab-top-content="off" data-active="false" aria-pressed="false" type="button">
+                <span data-i18n="newtab_top_content_off">隐藏</span>
+              </button>
+            </div>
           </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
             <div>
@@ -3012,6 +3029,7 @@
     -->
     <script src="../shared/blacklist-utils.js"></script>
     <script src="../shared/navigation-disposition.js"></script>
+    <script src="../shared/community-links.js"></script>
     <script src="../shared/settings.js"></script>
     <script src="../shared/search-utils.js"></script>
     <script src="../shared/tooltip.js"></script>

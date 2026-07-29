@@ -11,6 +11,10 @@ const optionsJs = fs.readFileSync(
   path.join(repoRoot, 'src/options/options.js'),
   'utf8'
 );
+const communityLinksJs = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/community-links.js'),
+  'utf8'
+);
 const feedbackReact = fs.readFileSync(
   path.join(repoRoot, 'react-src/options/feedback-support.tsx'),
   'utf8'
@@ -60,14 +64,19 @@ assert.match(
 }, -1);
 
 assert.match(
-  optionsJs,
-  /const LUMNO_COMMUNITY_LINKS_URL = `\$\{LUMNO_WEB_ORIGIN\}\/community-links\.json`;/,
-  'Options should reuse the remote community links source'
+  optionsHtml,
+  /<script src="\.\.\/shared\/community-links\.js"><\/script>/,
+  'Options should load the shared remote community links runtime'
+);
+assert.match(
+  communityLinksJs,
+  /'zh-CN': 'wechat',[\s\S]*?'zh-TW': 'wechat',[\s\S]*?ja: 'discord',[\s\S]*?en: 'discord'/,
+  'Options should use WeChat for both Chinese locales and Discord for other languages'
 );
 assert.match(
   optionsJs,
-  /'zh-CN': 'wechat',[\s\S]*?'zh-TW': 'discord',[\s\S]*?ja: 'discord',[\s\S]*?en: 'discord'/,
-  'Options should preserve the simplified-Chinese WeChat and other-language Discord mapping'
+  /COMMUNITY_LINKS\.load\(\)[\s\S]*?feedbackSupportLinks = links/,
+  'Options should consume the same shared dynamic loader as other surfaces'
 );
 assert.match(
   optionsJs,

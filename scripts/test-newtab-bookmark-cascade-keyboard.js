@@ -389,6 +389,22 @@ async function flushPromises() {
   assert.strictEqual(getActiveLabel(levels[0]), 'Research', 'opening a cascade should select the first menu item');
   assert.strictEqual(documentObj.activeElement, rootItems[0], 'opening a cascade should move keyboard focus into the menu');
 
+  const initialRootLevel = levels[0];
+  runtime.open({ id: 'root', title: 'Root' }, anchor);
+  await flushPromises();
+  levels = documentObj.body.querySelectorAll('.x-nt-bookmark-cascade-level');
+  assert.strictEqual(
+    levels[0],
+    initialRootLevel,
+    'clicking an already-open folder trigger should reuse the current menu without replaying its open animation'
+  );
+  assert.deepStrictEqual(
+    anchorVisualStates,
+    [true],
+    'clicking an already-open folder trigger should not reactivate its visual state'
+  );
+  rootItems = getMenuItems(levels[0]);
+
   const rootCopyTriggers = levels[0].querySelectorAll('.x-nt-bookmark-cascade-copy-trigger');
   assert.strictEqual(rootCopyTriggers.length, 2, 'URL bookmarks should render copy triggers while folders do not');
   const archiveCopyTrigger = rootCopyTriggers[0];

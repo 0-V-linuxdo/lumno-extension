@@ -278,6 +278,12 @@ assert.ok(
   'bookmark rows should capture the pointer only after movement crosses the drag threshold so menu clicks remain intact'
 );
 assert.ok(
+  beginPointerTrackingSource.includes("card.getAttribute('aria-expanded') === 'true'") &&
+    beginPointerTrackingSource.includes('if (sourceKind !== \'cascade\' && !isOpenCascadeAnchor)') &&
+    startBookmarkDragSource.includes('closeBookmarkCascadeMenu();'),
+  'pressing an already-open folder should keep its cascade mounted until a real drag starts'
+);
+assert.ok(
   /state\.keepCascadeOpenAfterDrop[\s\S]*?if \(state\.isDragging\) \{[\s\S]*?if \(shouldKeepCascadeOpen && bookmarkCascadeRuntime &&[\s\S]*?closeBookmarkCascadeMenu\(\);/.test(newtabJs),
   'releasing a cascade row before the drag threshold should keep it mounted for the following click event'
 );

@@ -14,6 +14,11 @@ type FaviconItem = {
   previewUrl?: string;
 };
 
+type TopContentItem = {
+  label: string;
+  value: 'brand' | 'time' | 'off';
+};
+
 const ref = (name: string) => ({ 'data-wallpaper-ref': name });
 
 function Switch({ name }: { name: string }) {
@@ -197,6 +202,13 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
     { align: 'end', label: '100%' }
   ];
   const checkIcon = String(model.icons?.check || '');
+  const topContentOptions: TopContentItem[] = Array.isArray(model.topContentOptions)
+    ? model.topContentOptions
+    : [
+        { value: 'brand', label: 'Brand' },
+        { value: 'time', label: 'Time' },
+        { value: 'off', label: 'Hide' }
+      ];
   return (
     <>
       <div
@@ -532,12 +544,42 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
           </div>
           <div className="x-nt-panel-divider" />
           <div className="x-nt-wallpaper-section">
-            <div className="x-nt-wallpaper-panel-header">
+            <div className="x-nt-wallpaper-panel-header x-nt-top-content-header">
               <div
-                {...ref('logoTitle')}
+                {...ref('topContentTitle')}
                 className="x-nt-wallpaper-panel-title"
               />
-              <Switch name="logoToggle" />
+              <div
+                {...ref('topContentTabs')}
+                aria-label="Content above the search bar"
+                className="x-nt-wallpaper-tabs x-nt-top-content-tabs"
+                role="group"
+              >
+                <span
+                  {...ref('topContentTabsIndicator')}
+                  aria-hidden="true"
+                  className="x-nt-wallpaper-tabs-indicator"
+                />
+                {topContentOptions.map((item) => (
+                  <button
+                    {...ref(
+                      item.value === 'brand'
+                        ? 'topContentBrandTab'
+                        : item.value === 'time'
+                          ? 'topContentTimeTab'
+                          : 'topContentOffTab'
+                    )}
+                    aria-pressed={item.value === 'brand'}
+                    className="x-nt-wallpaper-tab x-nt-top-content-tab"
+                    data-active={item.value === 'brand' ? 'true' : 'false'}
+                    data-newtab-top-content={item.value}
+                    key={item.value}
+                    type="button"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="x-nt-favicon-group">
               <div

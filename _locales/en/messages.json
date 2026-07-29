@@ -432,7 +432,16 @@
     "message": "Dark"
   },
   "settings_newtab_wordmark_title": {
-    "message": "Show brand mark above the New Tab search bar"
+    "message": "Content above the search bar"
+  },
+  "newtab_top_content_brand": {
+    "message": "Brand"
+  },
+  "newtab_top_content_time": {
+    "message": "Time"
+  },
+  "newtab_top_content_off": {
+    "message": "Hide"
   },
   "settings_newtab_shortcuts_title": {
     "message": "Shortcuts"
@@ -600,19 +609,19 @@
     "message": "Lumno"
   },
   "engagement_notice_text": {
-    "message": "If this extension brings you a little joy, feel free to"
+    "message": "Like Lumno? Why not"
   },
   "engagement_notice_connector": {
     "message": "or"
   },
   "engagement_notice_trailing": {
-    "message": "and chat with us."
+    "message": "and say hi."
   },
   "engagement_notice_review": {
-    "message": "Leave a review"
+    "message": "leave 5 stars"
   },
   "engagement_notice_community": {
-    "message": "Join the group"
+    "message": "join Discord"
   },
   "engagement_notice_close": {
     "message": "Dismiss rating and community prompt"

@@ -857,7 +857,8 @@
       return luminance >= 0.56 ? 'dark' : 'light';
     }
 
-    function apply() {
+    function apply(options) {
+      const config = options || {};
       if (!getCurrentWallpaper() ||
           !sampler ||
           !documentObj.body ||
@@ -900,7 +901,9 @@
           clearAdaptiveToneStyles(target.element);
           return;
         }
-        const currentInk = target.element.getAttribute('data-wallpaper-ink');
+        const currentInk = config.resetInk === true
+          ? null
+          : target.element.getAttribute('data-wallpaper-ink');
         const nextInk = chooseInk(luminance, currentInk);
         const overlayCovered = isWallpaperOverlayCovered(sample.overlayAlpha);
         target.element.setAttribute('data-wallpaper-ink', nextInk);
@@ -1000,7 +1003,7 @@
         }
         pendingImageUrl = '';
         sampler = createSampler(image, imageUrl);
-        apply();
+        apply({ resetInk: true });
         schedule();
       }).catch(() => {
         if (token !== loadToken) {

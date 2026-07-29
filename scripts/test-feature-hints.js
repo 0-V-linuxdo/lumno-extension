@@ -259,6 +259,12 @@ function flushMicrotasks() {
     getRiSvg: () => ''
   });
   assert(firstController, 'first feature hint should be created');
+  assert(firstController.ready instanceof Promise, 'feature hints should expose async visibility readiness');
+  assert.strictEqual(
+    await firstController.ready,
+    true,
+    'feature hint readiness should resolve with its final stored-dismissal visibility'
+  );
   await flushMicrotasks();
 
   assert.strictEqual(
@@ -304,6 +310,11 @@ function flushMicrotasks() {
     getRiSvg: () => ''
   });
   assert(secondController, 'second feature hint should be created');
+  assert.strictEqual(
+    await secondController.ready,
+    false,
+    'a previously dismissed feature hint should resolve readiness as hidden'
+  );
   await flushMicrotasks();
 
   assert.strictEqual(
@@ -367,6 +378,43 @@ function flushMicrotasks() {
     plainController.element.children[0].className,
     'x-lumno-feature-hint__arrow-tip',
     'plain feature hints should not render a rounded arrow tip child'
+  );
+
+  let resolveDeferredStorage = null;
+  const deferredController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-ai-quick-jump',
+    chromeApi: {
+      runtime: { lastError: null },
+      storage: {
+        local: createStorageArea({}),
+        sync: {
+          get(_keys, callback) {
+            resolveDeferredStorage = () => callback({});
+          },
+          set(_values, callback) {
+            if (callback) callback();
+          }
+        }
+      }
+    },
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  assert(deferredController, 'a feature hint with deferred storage should be created');
+  deferredController.destroy();
+  assert.strictEqual(
+    await deferredController.ready,
+    false,
+    'destroying before storage resolves should settle readiness without showing the hint'
+  );
+  assert(resolveDeferredStorage, 'the deferred storage callback should be captured');
+  resolveDeferredStorage();
+  await flushMicrotasks();
+  assert.strictEqual(
+    deferredController.element.getAttribute('data-visible'),
+    'false',
+    'late storage results should not mutate a destroyed feature hint'
   );
 
   console.log('feature hint tests passed');

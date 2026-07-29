@@ -1611,6 +1611,12 @@
       if (!folderId || !anchorElement || !documentObj || !documentObj.body) {
         return;
       }
+      if (isBookmarkCascadeMenuOpenFor(folderId, anchorElement, dragMode)) {
+        cancelBookmarkCascadeHoverIntent();
+        cancelBookmarkCascadeDelayedClose();
+        positionBookmarkCascadeLevels();
+        return;
+      }
       if (!dragMode && isBookmarkCascadeHoverSuppressed(anchorElement, null)) {
         if (typeof anchorElement._xSetBookmarkMenuVisualActive === 'function') {
           anchorElement._xSetBookmarkMenuVisualActive(false);
@@ -1631,6 +1637,12 @@
           if (typeof anchorElement._xSetBookmarkMenuVisualActive === 'function') {
             anchorElement._xSetBookmarkMenuVisualActive(false);
           }
+          return;
+        }
+        if (isBookmarkCascadeMenuOpenFor(folderId, anchorElement, dragMode)) {
+          cancelBookmarkCascadeHoverIntent();
+          cancelBookmarkCascadeDelayedClose();
+          positionBookmarkCascadeLevels();
           return;
         }
         close();
@@ -1655,6 +1667,15 @@
     function getBookmarkCascadeRootFolderId() {
       const rootEntry = getBookmarkCascadeLevelEntry(0);
       return rootEntry ? String(rootEntry.folderId || '') : '';
+    }
+
+    function isBookmarkCascadeMenuOpenFor(folderId, anchorElement, dragMode) {
+      return Boolean(
+        bookmarkCascadeMenu &&
+        bookmarkCascadeAnchor === anchorElement &&
+        getBookmarkCascadeRootFolderId() === folderId &&
+        bookmarkCascadeDragMode === dragMode
+      );
     }
 
     function rebindBookmarkCascadeAnchor(anchorElement, rebindOptions) {

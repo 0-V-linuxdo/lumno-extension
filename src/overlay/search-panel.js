@@ -1377,7 +1377,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         height: '56px',
         'min-height': '56px',
         'max-height': '56px',
-        'border-radius': 'var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px) 0 0',
+        'border-radius': 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) 0 0',
         overflow: 'visible'
       },
       inputStyleOverrides: {
@@ -1426,6 +1426,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         : null;
     overlay._lumnoInputHistoryController = inputHistoryController;
     const handledSearchInputEvents = new WeakSet();
+    function overlayUpdateNoticeClaimsSessionSlot() {
+      return Boolean(
+        overlayUpdateNoticeController &&
+        typeof overlayUpdateNoticeController.hasSessionSlot === 'function' &&
+        overlayUpdateNoticeController.hasSessionSlot()
+      );
+    }
     overlayUpdateNoticeController = typeof UPDATE_NOTICE.createUpdateNotice === 'function'
       ? UPDATE_NOTICE.createUpdateNotice({
         documentObj: document,
@@ -1434,6 +1441,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         surface: 'overlay',
         t,
         getRiSvg,
+        onSessionSlotClaimed() {
+          if (overlayEngagementNoticeController &&
+              typeof overlayEngagementNoticeController.suppressForSession === 'function') {
+            overlayEngagementNoticeController.suppressForSession();
+          }
+        },
         onDetailsClick(_notice, event) {
           chrome.runtime.sendMessage({
             action: 'openReleasePage',
@@ -1455,6 +1468,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           surface: 'overlay',
           t,
           getRiSvg,
+          exposureGate: overlayUpdateNoticeController && overlayUpdateNoticeController.ready,
           canShow() {
             const updateNoticeVisible = Boolean(
               overlayUpdateNoticeController &&
@@ -1462,6 +1476,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               overlayUpdateNoticeController.element.getAttribute('data-visible') === 'true'
             );
             return !updateNoticeVisible &&
+              !overlayUpdateNoticeClaimsSessionSlot() &&
               document.visibilityState === 'visible' &&
               overlay &&
               overlay.isConnected &&
@@ -1475,15 +1490,22 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             });
           },
           onCommunity(event) {
-            const targetLocale = overlayLanguageMode === 'system'
-              ? getSystemLocale()
-              : normalizeLocale(overlayLanguageMode);
-            chrome.runtime.sendMessage({
-              action: 'createTab',
-              url: typeof ENGAGEMENT_NOTICE.getCommunityUrl === 'function'
-                ? ENGAGEMENT_NOTICE.getCommunityUrl(targetLocale)
-                : ENGAGEMENT_NOTICE.DISCORD_URL,
-              disposition: getOpenDisposition(event, 'newTab')
+            const disposition = getOpenDisposition(event, 'newTab');
+            const communityUrlPromise =
+              typeof ENGAGEMENT_NOTICE.loadCommunityUrl === 'function'
+                ? ENGAGEMENT_NOTICE.loadCommunityUrl({
+                  force: true,
+                  locale: overlayLanguageMode === 'system'
+                    ? getSystemLocale()
+                    : normalizeLocale(overlayLanguageMode)
+                })
+                : Promise.resolve(ENGAGEMENT_NOTICE.WECHAT_QR_URL);
+            communityUrlPromise.then((url) => {
+              chrome.runtime.sendMessage({
+                action: 'createTab',
+                url,
+                disposition
+              });
             });
           }
         })
@@ -1698,14 +1720,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       setOverlayPanelScopedStyle(
         overlay,
         'border-radius',
-        'var(--x-ov-panel-radius, 32px)'
+        shouldCollapse
+          ? 'var(--x-ov-panel-radius, 32px)'
+          : 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px)'
       );
       setInputScopedStyle(
         inputContainer,
         'border-radius',
         shouldCollapse
           ? 'var(--x-ov-panel-radius, 32px)'
-          : 'var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px) 0 0'
+          : 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) 0 0'
       );
       if (shouldCollapse) {
         deferredSuggestionsHeightQuery = '';
@@ -5621,6 +5645,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       if (isImeCompositionEvent(e)) {
+        e.stopImmediatePropagation();
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) {

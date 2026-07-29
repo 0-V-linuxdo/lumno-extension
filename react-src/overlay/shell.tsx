@@ -230,6 +230,7 @@ function getPanelStyle(options: OverlayShellOptions): string {
     max-width: calc(100vw - 24px) !important;
     max-height: ${maxHeightVh}vh !important;
     --x-ov-panel-radius: 32px;
+    --x-ov-panel-top-radius: 28px;
     background: var(--x-ov-bg, rgba(255, 255, 255, 0.95)) !important;
     backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
     -webkit-backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;

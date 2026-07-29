@@ -109,8 +109,8 @@
       return resolveElement(options.inputParts);
     }
 
-    function getWordmarkContainer() {
-      return resolveElement(options.wordmarkContainer);
+    function getTopContentContainer() {
+      return resolveElement(options.topContentContainer);
     }
 
     function getBottomDock() {
@@ -514,8 +514,8 @@
         0,
         viewportHeight - occupiedBottomHeight
       );
-      const wordmarkOuterHeight = getElementOuterHeight(getWordmarkContainer());
-      const searchBlockHeight = wordmarkOuterHeight + getSearchEntryBlockHeight();
+      const topContentOuterHeight = getElementOuterHeight(getTopContentContainer());
+      const searchBlockHeight = topContentOuterHeight + getSearchEntryBlockHeight();
       const bookmarkSection = getBookmarkSection();
       const recentSection = getRecentSection();
       const bookmarkVisible = isSectionVisible(bookmarkSection);

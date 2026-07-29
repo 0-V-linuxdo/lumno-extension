@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { JSDOM } = require('jsdom');
 
 const searchPanelSource = fs.readFileSync(
   path.join(__dirname, '../src/overlay/search-panel.js'),
@@ -15,9 +16,10 @@ const handlerEnd = searchPanelSource.indexOf(
 assert.ok(handlerStart > 0 && handlerEnd > handlerStart, 'overlay should define an early key capture handler');
 
 const handlerSource = searchPanelSource.slice(handlerStart, handlerEnd);
-assert.ok(
-  handlerSource.includes('if (isImeCompositionEvent(e))'),
-  'input isolation should leave IME composition events untouched'
+assert.match(
+  handlerSource,
+  /if \(isImeCompositionEvent\(e\)\) \{\s*e\.stopImmediatePropagation\(\);\s*return;\s*\}/,
+  'input isolation should keep IME keys away from the host page without running Lumno key handling'
 );
 assert.ok(
   handlerSource.includes('if (e.metaKey || e.ctrlKey || e.altKey)'),
@@ -51,5 +53,84 @@ assert.ok(
     `overlay should remove the ${eventName} isolation listener on close`
   );
 });
+
+const dom = new JSDOM('<!doctype html><div id="overlay"></div><div id="lumno-host"></div>');
+const { window } = dom;
+const { document } = window;
+const overlay = document.getElementById('overlay');
+const host = document.getElementById('lumno-host');
+const shadowRoot = host.attachShadow({ mode: 'open' });
+const searchInput = document.createElement('input');
+shadowRoot.appendChild(searchInput);
+
+const handledInputKeys = [];
+const hostPageKeys = [];
+const createHandler = new Function(
+  'overlay',
+  'searchInput',
+  'document',
+  'isImeCompositionEvent',
+  'handleSearchInputKeydown',
+  'syncSuggestionActionModifiersFromEvent',
+  `let overlayKeyCaptureHandler;\n${handlerSource}\nreturn overlayKeyCaptureHandler;`
+);
+const overlayKeyCaptureHandler = createHandler(
+  overlay,
+  searchInput,
+  document,
+  (event) => Boolean(event && event.isComposing),
+  (event) => handledInputKeys.push(event.key),
+  () => {}
+);
+
+window.addEventListener('keydown', overlayKeyCaptureHandler, true);
+document.addEventListener('keydown', (event) => {
+  hostPageKeys.push({ key: event.key, targetTag: event.target.tagName });
+});
+searchInput.focus();
+
+const imeKeydown = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  composed: true,
+  key: 'f',
+  code: 'KeyF',
+  isComposing: true
+});
+searchInput.dispatchEvent(imeKeydown);
+
+assert.strictEqual(
+  imeKeydown.defaultPrevented,
+  false,
+  'IME isolation should not prevent the browser from updating the composition'
+);
+assert.deepStrictEqual(
+  handledInputKeys,
+  [],
+  'IME keys should not run Lumno search input shortcuts'
+);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'IME keys from the Shadow DOM input should not reach host-page player shortcuts'
+);
+
+const regularKeydown = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  composed: true,
+  key: 'x',
+  code: 'KeyX'
+});
+searchInput.dispatchEvent(regularKeydown);
+
+assert.deepStrictEqual(
+  handledInputKeys,
+  ['x'],
+  'regular text keys should continue through Lumno input handling'
+);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'regular text keys should remain isolated from host-page shortcuts'
+);
 
 console.log('overlay input extension isolation tests passed');

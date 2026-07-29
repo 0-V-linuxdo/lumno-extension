@@ -5,6 +5,10 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const communityLinksJs = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/community-links.js'),
+  'utf8'
+);
 const feedbackReact = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/feedback.tsx'),
   'utf8'
@@ -189,15 +193,15 @@ assertContains(
 );
 
 assertContains(
-  newtabJs,
-  "const LUMNO_CHROME_WEB_STORE_REVIEW_URL = 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb';",
-  'feedback popover should define a direct Chrome Web Store reviews URL'
+  newtabHtml,
+  '<script src="../shared/community-links.js"></script>',
+  'newtab should load the shared dynamic community links runtime'
 );
 
 assertContains(
-  newtabJs,
-  "chromeReview: LUMNO_CHROME_WEB_STORE_REVIEW_URL,",
-  'feedback link fallback should include the Chrome review URL'
+  communityLinksJs,
+  "chromeReview: 'https://chromewebstore.google.com/detail/lumno-%E8%81%9A%E7%84%A6%E6%90%9C%E7%B4%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E9%A1%B5/nggfkkbmogmadfoikakkfegkoilfcfao/reviews?utm_source=item-share-cb',",
+  'the shared fallback should include the Chrome review URL'
 );
 
 assertContains(
@@ -251,8 +255,8 @@ assert.match(
 );
 
 assertContains(
-  newtabJs,
-  "url.searchParams.set('_lumno_refresh', String(Date.now()));",
+  communityLinksJs,
+  "url.searchParams.set(\n      '_lumno_refresh',",
   'wechat refresh should cache-bust a QR URL even when the server reuses the same path'
 );
 

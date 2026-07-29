@@ -34,6 +34,12 @@ assertContains(
 
 assertContains(
   newtabJs,
+  'bookmarkPager.appendChild(bookmarkModeMenu.control);',
+  'bookmark display mode should sit after the bookmark manager button'
+);
+
+assertContains(
+  newtabJs,
   "bookmarkPagerPrevButton.removeAttribute('title');",
   'previous page button should avoid native title tooltip duplication'
 );
@@ -72,6 +78,21 @@ assertContains(
   newtabHtml,
   '.x-nt-bookmarks-pager-btn[aria-disabled="true"]',
   'pager disabled styling should be driven by aria-disabled'
+);
+
+assert.ok(
+  /body\s+\.x-nt-bookmarks-topbar\s+\.x-nt-section-mode-select\s+\._x_extension_select_trigger_2024_unique_\s+\._x_extension_select_icon_2024_unique_\s*\{[^}]*color:\s*inherit;/.test(newtabHtml),
+  'the topbar more icon should inherit the same color as the bookmark manager button in every interaction state'
+);
+
+assert.ok(
+  /body\[data-wallpaper-active="true"\]\s+\.x-nt-section-mode-select\s+\._x_extension_select_trigger_2024_unique_\s+\._x_extension_select_icon_2024_unique_\s*\{[^}]*color:\s*inherit;/.test(newtabHtml),
+  'wallpaper mode-menu icons should retain the sampled foreground color on hover and while open'
+);
+
+assert.ok(
+  /\.x-nt-recent-header-bar\s+\.x-nt-section-mode-select\s*\{[^}]*margin-left:\s*auto;/.test(newtabHtml),
+  'the recent display mode control should align to the far right of its header row'
 );
 
 console.log('newtab bookmark pager tooltip tests passed');

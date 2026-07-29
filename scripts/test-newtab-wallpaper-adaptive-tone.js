@@ -222,8 +222,8 @@ function flushAsyncWork() {
   assert.strictEqual(scheduledFrames.size, 1, 'the initial apply should schedule a follow-up sample');
 
   currentWallpaper = {
-    id: 'light-wallpaper',
-    url: 'test://light-wallpaper'
+    id: 'middle-wallpaper',
+    url: 'test://middle-wallpaper'
   };
   runtime.refresh();
 
@@ -250,7 +250,7 @@ function flushAsyncWork() {
     'layout updates should not resample the previous image during a wallpaper transition'
   );
 
-  const staleLightImage = getPendingImage('test://light-wallpaper');
+  const staleMiddleImage = getPendingImage('test://middle-wallpaper');
   currentWallpaper = {
     id: 'dark-wallpaper',
     url: 'test://dark-wallpaper'
@@ -268,7 +268,7 @@ function flushAsyncWork() {
     'switching back should resume sampling from the retained active wallpaper'
   );
 
-  staleLightImage.resolve({ red: 244, green: 248, blue: 252 });
+  staleMiddleImage.resolve({ red: 150, green: 150, blue: 150 });
   await flushAsyncWork();
   assert.strictEqual(
     target.getAttribute('data-wallpaper-ink'),
@@ -277,17 +277,17 @@ function flushAsyncWork() {
   );
 
   currentWallpaper = {
-    id: 'light-wallpaper',
-    url: 'test://light-wallpaper'
+    id: 'middle-wallpaper',
+    url: 'test://middle-wallpaper'
   };
   runtime.refresh();
-  getPendingImage('test://light-wallpaper').resolve({ red: 244, green: 248, blue: 252 });
+  getPendingImage('test://middle-wallpaper').resolve({ red: 150, green: 150, blue: 150 });
   await flushAsyncWork();
 
   assert.strictEqual(
     target.getAttribute('data-wallpaper-ink'),
     'dark',
-    'the replacement sampler should atomically apply the new ink choice when ready'
+    'a replacement wallpaper should choose fresh ink instead of inheriting the previous wallpaper hysteresis'
   );
   assert.notStrictEqual(
     target.style.getPropertyValue('--x-nt-wallpaper-adaptive-ink'),

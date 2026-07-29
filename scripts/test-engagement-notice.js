@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
+const communityLinks = require('../src/shared/community-links.js');
 const engagementNotice = require('../src/shared/engagement-notice.js');
 
 function flushMicrotasks() {
@@ -72,9 +73,19 @@ function createEligibleState(surface, now) {
     'Simplified Chinese users should be guided to the WeChat QR code'
   );
   assert.strictEqual(
+    engagementNotice.getCommunityUrl('zh_TW'),
+    engagementNotice.WECHAT_QR_URL,
+    'Traditional Chinese users should also be guided to the WeChat QR code'
+  );
+  assert.strictEqual(
     engagementNotice.getCommunityUrl('en'),
     engagementNotice.DISCORD_URL,
-    'other locales should be guided to Discord'
+    'non-Chinese users should be guided to Discord'
+  );
+  assert.strictEqual(
+    engagementNotice.WECHAT_QR_URL,
+    communityLinks.FALLBACK_LINKS.wechatQr,
+    'the engagement fallback should come from the shared community links runtime'
   );
 
   const localStore = {
@@ -83,14 +94,11 @@ function createEligibleState(surface, now) {
       now
     )
   };
-  let storageGetCalls = 0;
-  let storageSetCalls = 0;
   const chromeApi = {
     runtime: { lastError: null },
     storage: {
       local: {
         get(keys, callback) {
-          storageGetCalls += 1;
           const result = {};
           keys.forEach((key) => {
             result[key] = localStore[key];
@@ -98,7 +106,6 @@ function createEligibleState(surface, now) {
           callback(result);
         },
         set(values, callback) {
-          storageSetCalls += 1;
           Object.assign(localStore, values);
           if (callback) {
             callback();
@@ -146,43 +153,16 @@ function createEligibleState(surface, now) {
       return 1;
     }
   };
-  const disabledController = engagementNotice.createEngagementNotice({
-    chromeApi,
-    documentObj: { defaultView: fakeWindow },
-    featureHints,
-    surface: 'overlay'
-  });
   assert.strictEqual(
     engagementNotice.ENGAGEMENT_NOTICE_ENABLED,
-    false,
-    'the production engagement mechanism should remain centrally paused'
-  );
-  assert.strictEqual(
-    disabledController,
-    null,
-    'a paused production caller should not create an engagement controller'
-  );
-  assert.strictEqual(
-    featureHintOptions,
-    null,
-    'the paused mechanism should not create hint DOM'
-  );
-  assert.strictEqual(
-    storageGetCalls,
-    0,
-    'the paused mechanism should not read engagement storage'
-  );
-  assert.strictEqual(
-    storageSetCalls,
-    0,
-    'the paused mechanism should not write engagement storage'
+    true,
+    'the engagement mechanism should be enabled behind its eligibility lifecycle'
   );
   const controller = engagementNotice.createEngagementNotice({
     chromeApi,
     delayMs: 0,
     documentObj: { defaultView: fakeWindow },
     featureHints,
-    forceEnabledForTesting: true,
     now: () => now,
     onReview() {
       reviewClicks += 1;
@@ -210,9 +190,20 @@ function createEligibleState(surface, now) {
   assert(
     featureHintOptions.badgeIconImageSrc.endsWith('/assets/images/lumno.png') &&
       featureHintOptions.badgeWordmarkImageSrc.endsWith(
-        '/assets/images/lumno-wordmark.svg'
+        '/assets/images/lumno-wordmark-mask.svg'
       ),
-    'the engagement prompt should reuse the Lumno icon and new-tab wordmark'
+    'the engagement prompt should reuse the Lumno icon and solid wordmark mask'
+  );
+  assert(
+    featureHintOptions.actions.every(
+      (action) => action.icon === 'ri-external-link-line'
+    ),
+    'rating and community actions should use the shared external-link icon'
+  );
+  assert.strictEqual(
+    featureHintOptions.actions[0].labelFallback,
+    'leave 5 stars',
+    'the review action should use the updated rating language'
   );
   featureHintOptions.actions[0].onClick({});
   await flushMicrotasks();
@@ -222,53 +213,239 @@ function createEligibleState(surface, now) {
     'acting on the prompt should permanently complete the local lifecycle'
   );
 
-  const storedStateBeforePreview = JSON.stringify(
-    localStore[engagementNotice.ENGAGEMENT_NOTICE_STORAGE_KEY]
-  );
-  const previewController = engagementNotice.createEngagementNotice({
-    chromeApi,
+  const deferredStore = {
+    [engagementNotice.ENGAGEMENT_NOTICE_STORAGE_KEY]: createEligibleState('overlay', now)
+  };
+  const deferredChromeApi = {
+    runtime: { lastError: null },
+    storage: {
+      local: {
+        get(keys, callback) {
+          const result = {};
+          keys.forEach((key) => {
+            result[key] = deferredStore[key];
+          });
+          callback(result);
+        },
+        set(values, callback) {
+          Object.assign(deferredStore, values);
+          if (callback) {
+            callback();
+          }
+        }
+      }
+    }
+  };
+  let resolveUpdateDecision = null;
+  const updateDecision = new Promise((resolve) => {
+    resolveUpdateDecision = resolve;
+  });
+  let updateClaimsSessionSlot = false;
+  const deferredElementAttributes = {};
+  const deferredFeatureHints = {
+    createFeatureHint() {
+      return {
+        destroy() {},
+        dismiss() {},
+        element: {
+          setAttribute(name, value) {
+            deferredElementAttributes[name] = String(value);
+          }
+        },
+        setVisible(visible) {
+          deferredElementAttributes['data-visible'] = visible ? 'true' : 'false';
+        },
+        updateLanguage() {}
+      };
+    }
+  };
+  const deferredController = engagementNotice.createEngagementNotice({
+    chromeApi: deferredChromeApi,
     delayMs: 0,
     documentObj: { defaultView: fakeWindow },
-    featureHints,
-    forceEnabledForTesting: true,
+    exposureGate: updateDecision,
+    featureHints: deferredFeatureHints,
     now: () => now,
-    previewMode: true,
-    surface: 'newtab'
+    canShow() {
+      return !updateClaimsSessionSlot;
+    },
+    surface: 'overlay'
   });
-  assert(previewController, 'preview engagement notice controller should be created');
+  assert(deferredController, 'a gated engagement controller should be created');
   await flushMicrotasks();
-  await flushMicrotasks();
-  assert.strictEqual(
-    elementAttributes['data-visible'],
+  assert.notStrictEqual(
+    deferredElementAttributes['data-visible'],
     'true',
-    'preview mode should reveal the prompt even after the production lifecycle completed'
+    'the rating prompt should wait for the update notice decision before exposing'
+  );
+  updateClaimsSessionSlot = true;
+  resolveUpdateDecision(true);
+  await flushMicrotasks();
+  await flushMicrotasks();
+  assert.notStrictEqual(
+    deferredElementAttributes['data-visible'],
+    'true',
+    'an update-owned session should keep the rating prompt hidden after the gate resolves'
   );
   assert.strictEqual(
-    JSON.stringify(localStore[engagementNotice.ENGAGEMENT_NOTICE_STORAGE_KEY]),
-    storedStateBeforePreview,
-    'preview mode should not mutate persisted engagement state'
+    deferredStore[engagementNotice.ENGAGEMENT_NOTICE_STORAGE_KEY].exposureCount,
+    0,
+    'deferring for an update should not consume a rating exposure'
   );
-  previewController.destroy();
+  deferredController.destroy();
+
+  const resumedController = engagementNotice.createEngagementNotice({
+    chromeApi: deferredChromeApi,
+    delayMs: 0,
+    documentObj: { defaultView: fakeWindow },
+    exposureGate: Promise.resolve(false),
+    featureHints: deferredFeatureHints,
+    now: () => now + 1,
+    canShow() {
+      return true;
+    },
+    surface: 'overlay'
+  });
+  assert(resumedController, 'the deferred rating prompt should remain eligible next session');
+  await flushMicrotasks();
+  await flushMicrotasks();
+  assert.strictEqual(
+    deferredElementAttributes['data-visible'],
+    'true',
+    'the next session should expose a rating prompt that an update previously deferred'
+  );
+  assert.strictEqual(
+    deferredStore[engagementNotice.ENGAGEMENT_NOTICE_STORAGE_KEY].exposureCount,
+    1,
+    'only the actually visible rating prompt should count as an exposure'
+  );
+  resumedController.destroy();
 
   const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
   const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
+  const newtabReactEntrySource = fs.readFileSync(
+    'react-src/newtab/react-islands-entry.ts',
+    'utf8'
+  );
+  const overlayReactEntrySource = fs.readFileSync(
+    'react-src/overlay/react-islands-entry.ts',
+    'utf8'
+  );
   assert(
     newtabSource.includes('engagementNoticeController.recordMeaningfulUse()'),
     'newtab input should suppress the prompt and count meaningful use'
+  );
+  assert(
+    newtabSource.includes('function createNewtabEngagementNoticeController()') &&
+      newtabSource.includes('initialLanguageReadyPromise,') &&
+      newtabSource.includes('updateNoticeController && updateNoticeController.ready') &&
+      newtabSource.includes('engagementNoticeController = createNewtabEngagementNoticeController();'),
+    'newtab should not create the prompt until language and update arbitration are ready'
+  );
+  assert(
+    newtabSource.includes('loadPackagedMessages(fallbackMessages);') &&
+      !newtabSource.includes('currentMessages = payload.messages || {};'),
+    'newtab should prefer packaged locale messages over a potentially stale storage payload'
   );
   assert(
     overlaySource.includes('overlayEngagementNoticeController.recordMeaningfulUse()'),
     'overlay input should suppress the prompt for the active invocation'
   );
   assert(
-    overlaySource.includes("action: 'createTab'") &&
-      overlaySource.includes('ENGAGEMENT_NOTICE.getCommunityUrl(targetLocale)'),
-    'overlay community guidance should open the locale-appropriate destination'
+      overlaySource.includes('ENGAGEMENT_NOTICE.loadCommunityUrl({') &&
+      overlaySource.includes("locale: overlayLanguageMode === 'system'") &&
+      overlaySource.includes("const disposition = getOpenDisposition(event, 'newTab');") &&
+      /chrome\.runtime\.sendMessage\(\{\s*action: 'createTab',\s*url,\s*disposition\s*\}\);/.test(
+        overlaySource
+      ) &&
+      newtabSource.includes('ENGAGEMENT_NOTICE.loadCommunityUrl({') &&
+      newtabSource.includes('locale: getFeedbackWebLocale()') &&
+      newtabSource.includes('openFeedbackExternalUrl(url, disposition);'),
+    'both surfaces should preserve click disposition while resolving the shared community URL'
   );
   assert(
-    !newtabSource.includes('previewMode: true') &&
-      !overlaySource.includes('previewMode: true'),
-    'production surfaces should not force the paused prompt into preview mode'
+    newtabReactEntrySource.includes(
+      "import { createFeatureHintViewApi } from '../shared/feature-hint-view';"
+    ) &&
+      overlayReactEntrySource.includes(
+        "import { createFeatureHintViewApi } from '../shared/feature-hint-view';"
+      ),
+    'newtab and overlay should render engagement hints through the same shared React component'
+  );
+  assert(
+    !newtabSource.includes('previewMode') &&
+      !overlaySource.includes('previewMode') &&
+      !fs.readFileSync('src/shared/engagement-notice.js', 'utf8').includes('previewMode'),
+    'engagement runtime should not ship the temporary visual-review bypass'
+  );
+  assert(
+    newtabSource.includes('exposureGate: updateNoticeController && updateNoticeController.ready') &&
+      newtabSource.includes('!updateNoticeClaimsSessionSlot()') &&
+      overlaySource.includes('exposureGate: overlayUpdateNoticeController && overlayUpdateNoticeController.ready') &&
+      overlaySource.includes('!overlayUpdateNoticeClaimsSessionSlot()'),
+    'both surfaces should wait for update arbitration and keep the update slot sticky for the session'
+  );
+  const zhCnMessages = JSON.parse(
+    fs.readFileSync('_locales/zh_CN/messages.json', 'utf8')
+  );
+  const enMessages = JSON.parse(
+    fs.readFileSync('_locales/en/messages.json', 'utf8')
+  );
+  const jaMessages = JSON.parse(
+    fs.readFileSync('_locales/ja/messages.json', 'utf8')
+  );
+  const zhTwMessages = JSON.parse(
+    fs.readFileSync('_locales/zh_TW/messages.json', 'utf8')
+  );
+  assert.strictEqual(
+    zhCnMessages.engagement_notice_text.message,
+    '如果用得开心，诚邀',
+    'the Chinese prompt should stay concise enough for the compact layout'
+  );
+  assert.strictEqual(
+    zhCnMessages.engagement_notice_review.message,
+    '满分好评',
+    'the Chinese rating action should ask for a full-score review'
+  );
+  assert.deepStrictEqual(
+    [
+      enMessages.engagement_notice_text.message,
+      enMessages.engagement_notice_review.message,
+      enMessages.engagement_notice_connector.message,
+      enMessages.engagement_notice_community.message,
+      enMessages.engagement_notice_trailing.message
+    ],
+    ['Like Lumno? Why not', 'leave 5 stars', 'or', 'join Discord', 'and say hi.'],
+    'English engagement copy should name Discord directly'
+  );
+  assert.deepStrictEqual(
+    [
+      jaMessages.engagement_notice_text.message,
+      jaMessages.engagement_notice_review.message,
+      jaMessages.engagement_notice_connector.message,
+      jaMessages.engagement_notice_community.message,
+      jaMessages.engagement_notice_trailing.message
+    ],
+    ['気に入ったら、', '★5で評価', 'するか、', 'Discord に参加', 'してみませんか。'],
+    'Japanese engagement copy should name Discord directly'
+  );
+  assert.deepStrictEqual(
+    [
+      zhTwMessages.engagement_notice_text.message,
+      zhTwMessages.engagement_notice_review.message,
+      zhTwMessages.engagement_notice_connector.message,
+      zhTwMessages.engagement_notice_community.message,
+      zhTwMessages.engagement_notice_trailing.message
+    ],
+    ['如果用得開心，歡迎', '留下五星好評', '，或是', '加入社群', '和我們聊聊。'],
+    'Traditional Chinese engagement copy should use native community language'
+  );
+  const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+  assert(
+    manifest.web_accessible_resources.some((entry) =>
+      entry.resources.includes('assets/images/lumno-wordmark-mask.svg')
+    ),
+    'the injected overlay should be able to load the Lumno wordmark mask'
   );
 
   console.log('engagement notice tests passed');

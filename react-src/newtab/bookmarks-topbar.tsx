@@ -347,11 +347,11 @@ export function createBookmarksTopbar(
     if (grid) {
       itemsHost.appendChild(grid);
     }
-    if (modeControl) {
-      actions.appendChild(modeControl);
-    }
     if (managerButton) {
       actions.appendChild(managerButton);
+    }
+    if (modeControl) {
+      actions.appendChild(modeControl);
     }
     active = true;
     element.dataset.active = 'true';

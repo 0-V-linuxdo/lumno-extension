@@ -755,7 +755,9 @@ function BookmarkCard({
     }
     if (options.shouldSuppressHover(card, event.nativeEvent)) {
       clearHoverIntentTimer();
-      setHoverVisualActive(false);
+      if (!shouldKeepMenuVisualActive()) {
+        setHoverVisualActive(false);
+      }
       return;
     }
     const pointerType = String(event.pointerType || '');
@@ -794,6 +796,9 @@ function BookmarkCard({
     options.hideCursorTooltip();
     if (isFolder) {
       if (menuMode) {
+        if (shouldKeepMenuVisualActive()) {
+          return;
+        }
         setMenuVisualLocked(true);
         options.openFolderMenu(item, card);
         return;
@@ -967,7 +972,8 @@ function BookmarkCard({
           options.shouldSuppressHover(
             cardRef.current,
             event.nativeEvent
-          )
+          ) &&
+          !shouldKeepMenuVisualActive()
         ) {
           setHoverVisualActive(false);
         }

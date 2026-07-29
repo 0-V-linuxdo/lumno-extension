@@ -519,9 +519,38 @@ function createFakeWallpaperViewController(config) {
   });
 
   const brandSection = add(scroll, 'div', 'x-nt-wallpaper-section');
-  const logoHeader = add(brandSection, 'div', 'x-nt-wallpaper-panel-header');
-  add(logoHeader, 'div', 'x-nt-wallpaper-panel-title', {}, 'logoTitle');
-  addSwitch(logoHeader, 'logoToggle');
+  const topContentHeader = add(brandSection, 'div', 'x-nt-wallpaper-panel-header x-nt-top-content-header');
+  add(topContentHeader, 'div', 'x-nt-wallpaper-panel-title', {}, 'topContentTitle');
+  const topContentTabs = add(
+    topContentHeader,
+    'div',
+    'x-nt-wallpaper-tabs x-nt-top-content-tabs',
+    {},
+    'topContentTabs'
+  );
+  add(
+    topContentTabs,
+    'span',
+    'x-nt-wallpaper-tabs-indicator',
+    {},
+    'topContentTabsIndicator'
+  );
+  (model.topContentOptions || []).forEach((item) => {
+    add(
+      topContentTabs,
+      'button',
+      'x-nt-wallpaper-tab x-nt-top-content-tab',
+      {
+        'data-newtab-top-content': item.value,
+        'data-active': item.value === 'brand' ? 'true' : 'false'
+      },
+      item.value === 'brand'
+        ? 'topContentBrandTab'
+        : item.value === 'time'
+          ? 'topContentTimeTab'
+          : 'topContentOffTab'
+    );
+  });
   const faviconGroup = add(brandSection, 'div', 'x-nt-favicon-group');
   add(
     faviconGroup,
@@ -901,36 +930,48 @@ function readLocaleMessages(locale) {
 function assertBrandMarkCopy() {
   const expected = {
     zh_CN: {
-      title: '品牌标识',
-      toggle: '在新标签页搜索框上方显示品牌标识'
+      title: '搜索框上方内容',
+      brand: '品牌标识',
+      time: '时间',
+      off: '隐藏'
     },
     zh_TW: {
-      title: '品牌標識',
-      toggle: '在新分頁搜尋框上方顯示品牌標識'
+      title: '搜尋框上方內容',
+      brand: '品牌標識',
+      time: '時間',
+      off: '隱藏'
     },
     en: {
-      title: 'Brand mark',
-      toggle: 'Show brand mark above the New Tab search bar'
+      title: 'Content above the search bar',
+      brand: 'Brand',
+      time: 'Time',
+      off: 'Hide'
     },
     ja: {
-      title: 'ブランドマーク',
-      toggle: '新しいタブの検索ボックス上にブランドマークを表示'
+      title: '検索ボックス上のコンテンツ',
+      brand: 'ブランド',
+      time: '時刻',
+      off: '非表示'
     }
   };
   Object.keys(expected).forEach((locale) => {
     const messages = readLocaleMessages(locale);
-    assert.strictEqual(messages.newtab_logo_title.message, expected[locale].title);
-    assert.strictEqual(messages.settings_newtab_wordmark_title.message, expected[locale].toggle);
+    assert.strictEqual(messages.settings_newtab_wordmark_title.message, expected[locale].title);
+    assert.strictEqual(messages.newtab_top_content_brand.message, expected[locale].brand);
+    assert.strictEqual(messages.newtab_top_content_time.message, expected[locale].time);
+    assert.strictEqual(messages.newtab_top_content_off.message, expected[locale].off);
   });
 
   const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
-  assert.match(wallpaperSource, /t\('newtab_logo_title', 'Brand mark'\)/);
   assert.match(
     wallpaperSource,
-    /t\('settings_newtab_wordmark_title', 'Show brand mark above the New Tab search bar'\)/
+    /t\('settings_newtab_wordmark_title', 'Content above the search bar'\)/
   );
+  assert.match(wallpaperSource, /data-newtab-top-content/);
   const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
-  assert.match(optionsHtml, /在新标签页搜索框上方显示品牌标识/);
+  assert.match(optionsHtml, /data-newtab-top-content="brand"/);
+  assert.match(optionsHtml, /data-newtab-top-content="time"/);
+  assert.match(optionsHtml, /data-newtab-top-content="off"/);
 }
 
 function assertThemeAwareAlternateFaviconAsset() {

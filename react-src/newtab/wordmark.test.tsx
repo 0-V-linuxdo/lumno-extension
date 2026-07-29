@@ -1,19 +1,19 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createWordmarkApi,
-  createWordmarkController,
-  type WordmarkController
+  createTopContentApi,
+  createTopContentController,
+  type TopContentController
 } from './wordmark';
 
-let controllers: WordmarkController[] = [];
+let controllers: TopContentController[] = [];
 
-function createController(animateEntry = true) {
+function createController(animateEntry = true, mode: 'brand' | 'time' = 'brand') {
   const host = document.createElement('div');
   const onActivate = vi.fn();
   const onEntryAnimationComplete = vi.fn();
   document.body.appendChild(host);
-  const controller = createWordmarkController(host, {
+  const controller = createTopContentController(host, {
     onActivate,
     onEntryAnimationComplete
   });
@@ -22,7 +22,9 @@ function createController(animateEntry = true) {
     controller.render({
       animateEntry,
       ariaLabel: 'Lumno Chrome Web Store',
-      imageSrc: '/wordmark.svg'
+      imageSrc: '/wordmark.svg',
+      locale: 'zh-CN',
+      mode
     });
   });
   return { controller, host, onActivate, onEntryAnimationComplete };
@@ -34,11 +36,11 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('New Tab wordmark React island', () => {
+describe('New Tab top-content React island', () => {
   it('owns the existing wordmark host and visual elements', () => {
     const { controller, host } = createController();
 
-    expect(createWordmarkApi().implementation).toBe('react');
+    expect(createTopContentApi().implementation).toBe('react');
     expect(host.id).toBe('_x_extension_newtab_wordmark_2026_unique_');
     expect(host.dataset.reactIsland).toBe('newtab-wordmark');
     expect(host.dataset.enter).toBe('run');
@@ -46,6 +48,8 @@ describe('New Tab wordmark React island', () => {
       'Lumno Chrome Web Store'
     );
     expect(controller.getImage()?.getAttribute('src')).toBe('/wordmark.svg');
+    expect(controller.getImage()?.getAttribute('width')).toBe('112');
+    expect(controller.getImage()?.getAttribute('height')).toBe('25.1557');
     expect(controller.getSolid()?.className).toBe('x-nt-wordmark-solid');
   });
 
@@ -70,6 +74,21 @@ describe('New Tab wordmark React island', () => {
       ['backgroundTab'],
       ['backgroundTab']
     ]);
+  });
+
+  it('renders a single-line animated hour and minute clock', () => {
+    const { controller, host } = createController(true, 'time');
+    const clock = host.querySelector<HTMLElement>('time.x-nt-time-mark');
+
+    expect(controller.getContent()).toBe(clock);
+    expect(clock?.getAttribute('datetime')).toMatch(/^\d{2}:\d{2}$/);
+    expect(clock?.style.display).toBe('inline-flex');
+    expect(clock?.style.fontFamily).toContain('Open Sans');
+    expect(clock?.querySelectorAll('number-flow-react')).toHaveLength(2);
+    expect(clock?.querySelector('br')).toBeNull();
+    expect(controller.getButton()).toBeNull();
+    expect(controller.getImage()).toBeNull();
+    expect(controller.getSolid()).toBeNull();
   });
 
   it('reports the named entry animation and reduced-motion state', () => {

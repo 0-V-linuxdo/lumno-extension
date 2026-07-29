@@ -197,6 +197,7 @@ describe('Bookmarks React island', () => {
 
   it('keeps folder hover, menu locking, and live icon visibility hooks', () => {
     const morphStates: boolean[] = [];
+    let suppressHover = false;
     const openedFolders: Array<{
       item: BookmarkItem;
       card: BookmarkCardElement;
@@ -205,6 +206,7 @@ describe('Bookmarks React island', () => {
       playFolderPathMorph: (_icon, active) => {
         morphStates.push(active);
       },
+      shouldSuppressHover: () => suppressHover,
       openFolderMenu: (item, card) => {
         openedFolders.push({ item, card });
       }
@@ -250,8 +252,17 @@ describe('Bookmarks React island', () => {
 
     act(() => {
       card.click();
+      suppressHover = true;
+      card.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        pointerType: 'mouse'
+      }));
+      card.click();
     });
     expect(openedFolders).toEqual([{ item: folder, card }]);
+    expect(card.classList.contains('x-nt-bookmark-card--hover')).toBe(
+      true
+    );
     expect(
       card.classList.contains(
         'x-nt-bookmark-card--folder-expanded'
