@@ -142,7 +142,7 @@ npm run test:onboarding-content
 
 ## 赞助
 
-Lumno 通过 Stripe Payment Link 接受每次 HK$50 的一次性、自愿开源维护支持：[立即支持 Lumno](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)。赞助不会购买私有功能、优先支持、路线图控制权或其他商业服务。支付方式由 Stripe 根据地区和设备动态显示；支付宝和微信支付正在等待 Stripe 审批。详见[赞助政策](SPONSORING.zh-CN.md)。
+想给 Lumno 添点光？可以[点亮一颗像素（HK$18）](https://buy.stripe.com/fZu6oIfZP5bp3N5dQdcV201)、[续一格电（HK$50，推荐）](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)，或[点亮一整个夜晚（HK$128）](https://buy.stripe.com/3cI6oI6pf6ft1EX8vTcV202)。都是一次性、自愿的开源维护支持；没有隐藏特权，也不会购买私有功能、优先支持或路线图控制权。支付方式由 Stripe 动态显示，支付宝和微信支付正在等待审批。详见[赞助政策](SPONSORING.zh-CN.md)。
 
 ## GitHub Star 变化
 

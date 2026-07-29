@@ -6,17 +6,21 @@ Lumno is free and open source software. Financial contributions help sustain mai
 
 ## Official funding channel
 
-Lumno accepts voluntary, one-time contributions through the project's official Stripe Payment Link:
+Lumno accepts voluntary, one-time contributions through the project's official Stripe Payment Links. Pick the amount of light you want to add:
 
-**[Support Lumno Open Source — HK$50](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200)**
+| Level | One-time amount | A little atmosphere |
+| --- | ---: | --- |
+| [Light One Pixel ✨](https://buy.stripe.com/fZu6oIfZP5bp3N5dQdcV201) | HK$18 | Keep one pixel from going dark tonight |
+| [Recharge Lumno ⚡](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200) | HK$50 | Recommended — keep the open source glow going |
+| [Light Up the Night 🌙](https://buy.stripe.com/3cI6oI6pf6ft1EX8vTcV202) | HK$128 | Leave a lamp on for a solid maintenance session |
 
 <p align="center">
   <a href="https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200">
-    <img src="assets/sponsor/lumno-stripe-qr.png" alt="Stripe QR code for supporting Lumno" width="240" />
+    <img src="assets/sponsor/lumno-stripe-qr.png" alt="Stripe QR code for the recommended HK$50 Lumno support level" width="240" />
   </a>
 </p>
 
-Each contribution is HK$50. Stripe dynamically shows the payment methods available for the contributor's device and region. Cards, Apple Pay, and Link are active; Alipay and WeChat Pay will become available after Stripe approves them and when the transaction is eligible.
+The QR code opens the recommended HK$50 level. Every level provides the same warm glow and exactly zero secret perks. Stripe dynamically shows the payment methods available for the contributor's device and region. Cards, Apple Pay, and Link are active; Alipay and WeChat Pay will become available after Stripe approves them and when the transaction is eligible.
 
 Stripe acts only as the payment processor. Contributions are general support for Lumno's open source work; they are not payment for a product, service, advertisement, or private deliverable.
 

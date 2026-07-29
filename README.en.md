@@ -131,7 +131,7 @@ npm run test:onboarding-content
 
 ## Sponsorship
 
-Lumno accepts voluntary, one-time HK$50 contributions for open source maintenance through Stripe: [support Lumno](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200). Sponsorship does not purchase private features, priority support, roadmap control, or other commercial services. Stripe dynamically shows eligible payment methods; Alipay and WeChat Pay are pending Stripe approval. See the [sponsorship policy](SPONSORING.md).
+Want to add a little light to Lumno? [Light one pixel (HK$18)](https://buy.stripe.com/fZu6oIfZP5bp3N5dQdcV201), [recharge Lumno (HK$50, recommended)](https://buy.stripe.com/00w9AU7tjfQ3fvN9zXcV200), or [light up the night (HK$128)](https://buy.stripe.com/3cI6oI6pf6ft1EX8vTcV202). Every level is voluntary, one-time open source support with zero secret perks—no private features, priority support, or roadmap control. Stripe dynamically shows eligible payment methods; Alipay and WeChat Pay are pending approval. See the [sponsorship policy](SPONSORING.md).
 
 ## Star History
 
