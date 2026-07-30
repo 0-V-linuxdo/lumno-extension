@@ -803,6 +803,9 @@
   "newtab_wallpaper_name_monet_lily_pond_white": {
     "message": "Lily pond"
   },
+  "newtab_wallpaper_name_impressionist_orchard_white": {
+    "message": "Orchard morning"
+  },
   "newtab_wallpaper_name_seurat_coast_white": {
     "message": "Seurat coast"
   },
@@ -812,8 +815,14 @@
   "newtab_wallpaper_name_seurat_riverside_white": {
     "message": "Seurat riverside"
   },
+  "newtab_wallpaper_name_pointillist_lakeside_white": {
+    "message": "Lakeside pointillism"
+  },
   "newtab_wallpaper_name_white_3d_architecture": {
     "message": "Daylight architecture"
+  },
+  "newtab_wallpaper_name_white_3d_observatory": {
+    "message": "Misty observatory"
   },
   "newtab_wallpaper_name_white_linocut_topographic": {
     "message": "Daylight topography"
@@ -823,6 +832,9 @@
   },
   "newtab_wallpaper_name_white_shanshui": {
     "message": "Clear shanshui"
+  },
+  "newtab_wallpaper_name_white_shanshui_bamboo_bridge": {
+    "message": "Bamboo bridge"
   },
   "newtab_wallpaper_name_settings_bg_light_monet_newtab": {
     "message": "Monet light"

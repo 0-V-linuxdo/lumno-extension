@@ -1345,6 +1345,32 @@ const runtime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
 
 runtime.createControls();
 const control = runtime.getControlElement();
+[
+  {
+    id: 'impressionist-orchard-white',
+    path: 'assets/wallpapers/lumno-newtab-impressionist-orchard-white.webp'
+  },
+  {
+    id: 'pointillist-lakeside-white',
+    path: 'assets/wallpapers/lumno-newtab-pointillist-lakeside-white.webp'
+  },
+  {
+    id: 'white-3d-observatory',
+    path: 'assets/wallpapers/lumno-newtab-white-3d-observatory.webp'
+  },
+  {
+    id: 'white-shanshui-bamboo-bridge',
+    path: 'assets/wallpapers/lumno-newtab-white-shanshui-bamboo-bridge.webp'
+  }
+].forEach((item) => {
+  const tile = getDescendantByAttribute(control, 'data-wallpaper-id', item.id);
+  assert.ok(tile, `${item.id} should render as a built-in wallpaper`);
+  assert.strictEqual(
+    tile.getAttribute('data-wallpaper-path'),
+    item.path,
+    `${item.id} should point to its full-size wallpaper asset`
+  );
+});
 const panel = control.children[0];
 const slider = documentObj.createElement('input');
 slider.type = 'range';

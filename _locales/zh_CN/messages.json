@@ -803,6 +803,9 @@
   "newtab_wallpaper_name_monet_lily_pond_white": {
     "message": "睡莲池"
   },
+  "newtab_wallpaper_name_impressionist_orchard_white": {
+    "message": "晨光果园"
+  },
   "newtab_wallpaper_name_seurat_coast_white": {
     "message": "修拉海岸"
   },
@@ -812,8 +815,14 @@
   "newtab_wallpaper_name_seurat_riverside_white": {
     "message": "修拉河岸"
   },
+  "newtab_wallpaper_name_pointillist_lakeside_white": {
+    "message": "点彩湖畔"
+  },
   "newtab_wallpaper_name_white_3d_architecture": {
     "message": "白昼建筑"
+  },
+  "newtab_wallpaper_name_white_3d_observatory": {
+    "message": "雾蓝观星台"
   },
   "newtab_wallpaper_name_white_linocut_topographic": {
     "message": "白昼等高线"
@@ -823,6 +832,9 @@
   },
   "newtab_wallpaper_name_white_shanshui": {
     "message": "山水晴光"
+  },
+  "newtab_wallpaper_name_white_shanshui_bamboo_bridge": {
+    "message": "淡墨竹桥"
   },
   "newtab_wallpaper_name_settings_bg_light_monet_newtab": {
     "message": "莫奈浅色背景"

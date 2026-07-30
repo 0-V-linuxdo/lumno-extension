@@ -803,6 +803,9 @@
   "newtab_wallpaper_name_monet_lily_pond_white": {
     "message": "睡蓮池"
   },
+  "newtab_wallpaper_name_impressionist_orchard_white": {
+    "message": "朝の果樹園"
+  },
   "newtab_wallpaper_name_seurat_coast_white": {
     "message": "スーラの海岸"
   },
@@ -812,8 +815,14 @@
   "newtab_wallpaper_name_seurat_riverside_white": {
     "message": "スーラの河岸"
   },
+  "newtab_wallpaper_name_pointillist_lakeside_white": {
+    "message": "点描の湖畔"
+  },
   "newtab_wallpaper_name_white_3d_architecture": {
     "message": "明るい建築"
+  },
+  "newtab_wallpaper_name_white_3d_observatory": {
+    "message": "霧の天文台"
   },
   "newtab_wallpaper_name_white_linocut_topographic": {
     "message": "明るい等高線"
@@ -823,6 +832,9 @@
   },
   "newtab_wallpaper_name_white_shanshui": {
     "message": "晴れの山水"
+  },
+  "newtab_wallpaper_name_white_shanshui_bamboo_bridge": {
+    "message": "水墨の竹橋"
   },
   "newtab_wallpaper_name_settings_bg_light_monet_newtab": {
     "message": "モネ風ライト背景"

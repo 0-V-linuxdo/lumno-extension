@@ -207,6 +207,12 @@
         file: 'lumno-newtab-monet-lily-pond-white.webp'
       },
       {
+        id: 'impressionist-orchard-white',
+        nameKey: 'newtab_wallpaper_name_impressionist_orchard_white',
+        fallbackName: 'Orchard morning',
+        file: 'lumno-newtab-impressionist-orchard-white.webp'
+      },
+      {
         id: 'seurat-coast-white',
         nameKey: 'newtab_wallpaper_name_seurat_coast_white',
         fallbackName: 'Seurat coast',
@@ -225,10 +231,22 @@
         file: 'lumno-newtab-seurat-riverside-white.webp'
       },
       {
+        id: 'pointillist-lakeside-white',
+        nameKey: 'newtab_wallpaper_name_pointillist_lakeside_white',
+        fallbackName: 'Lakeside pointillism',
+        file: 'lumno-newtab-pointillist-lakeside-white.webp'
+      },
+      {
         id: 'white-3d-architecture',
         nameKey: 'newtab_wallpaper_name_white_3d_architecture',
         fallbackName: 'Daylight architecture',
         file: 'lumno-newtab-white-3d-architecture.webp'
+      },
+      {
+        id: 'white-3d-observatory',
+        nameKey: 'newtab_wallpaper_name_white_3d_observatory',
+        fallbackName: 'Misty observatory',
+        file: 'lumno-newtab-white-3d-observatory.webp'
       },
       {
         id: 'white-linocut-topographic',
@@ -247,6 +265,12 @@
         nameKey: 'newtab_wallpaper_name_white_shanshui',
         fallbackName: 'Clear shanshui',
         file: 'lumno-newtab-white-shanshui.webp'
+      },
+      {
+        id: 'white-shanshui-bamboo-bridge',
+        nameKey: 'newtab_wallpaper_name_white_shanshui_bamboo_bridge',
+        fallbackName: 'Bamboo bridge',
+        file: 'lumno-newtab-white-shanshui-bamboo-bridge.webp'
       },
       {
         id: 'settings-bg-light-monet-newtab',
