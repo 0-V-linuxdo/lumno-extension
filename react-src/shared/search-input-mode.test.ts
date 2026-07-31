@@ -70,6 +70,21 @@ interface ModeController {
   shouldRemoveModeTagOnBackspace(event?: { repeat?: boolean }): boolean;
 }
 
+function getTestContrastRatio(firstRgb: number[], secondRgb: number[]) {
+  const getLuminance = (rgb: number[]) => rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.03928
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  }).reduce((total, channel, index) => (
+    total + (channel * [0.2126, 0.7152, 0.0722][index])
+  ), 0);
+  const firstLuminance = getLuminance(firstRgb);
+  const secondLuminance = getLuminance(secondRgb);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+
 declare global {
   interface Window {
     LumnoSearchInputMode: {
@@ -1057,7 +1072,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('uses a themed Remix chevron and a neutralized chip surface', () => {
+  it('uses a contrast-safe themed label on a taller borderless chip', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
@@ -1074,24 +1089,31 @@ describe('Shared search scope menu', () => {
     expect(parts.modePrefixChevron.classList.contains('ri-arrow-down-s-line')).toBe(
       true
     );
-    expect(parts.modePrefixChevron.style.color).toBe('rgb(41, 122, 160)');
+    expect(parts.modePrefixChevron.style.color).toBe('rgb(5, 121, 169)');
     expect(parts.modePrefixChevron.style.opacity).toBe('');
     expect(
       parts.container.style.getPropertyValue('--x-lumno-search-mode-accent')
-    ).toBe('rgb(41, 122, 160)');
+    ).toBe('rgb(5, 121, 169)');
     expect(
       parts.container.style.getPropertyValue('--x-lumno-search-mode-selected-bg')
     ).toBe('rgba(0, 174, 236, 0.075)');
-    expect(parts.modePrefix.style.border).toContain('rgba(41, 122, 160, 0.18)');
-    expect(parts.modePrefix.style.boxShadow).toBe(
-      '0 5px 14px rgba(15, 23, 42, 0.075)'
-    );
+    expect(parts.modePrefix.style.color).toBe('rgb(5, 121, 169)');
+    expect(parts.modePrefix.style.height).toBe('32px');
+    expect(parts.modePrefix.style.padding).toBe('0px 10px');
+    expect(parts.modePrefix.style.borderStyle).toBe('none');
+    expect(parts.modePrefix.style.boxShadow).toBe('none');
+    expect(getTestContrastRatio(
+      [5, 121, 169],
+      [0, 174, 236].map((channel) => Math.round(
+        (channel * 0.075) + (255 * 0.925)
+      ))
+    )).toBeGreaterThanOrEqual(4.5);
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefix.style.justifyContent).toBe('flex-start');
     expect(parts.modePrefixText.style.display).toBe('block');
     expect(parts.modePrefixText.style.flex).toBe('1 1 auto');
     expect(parts.modePrefixText.style.lineHeight).toBe('18px');
-    expect(parts.modePrefixCurrent.style.fontSize).toBe('10px');
+    expect(parts.modePrefixCurrent.style.fontSize).toBe('13px');
     expect(parts.modePrefixCurrent.style.lineHeight).toBe('18px');
     expect(parts.modePrefixCurrent.style.display).toBe('none');
     expect(parts.modePrefixCurrent.style.overflow).toBe('visible');
@@ -1209,7 +1231,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('shows a new chip directly without scale or opacity animation', () => {
+  it('enters open-tabs mode with its browser icon and no default-search ghost', () => {
     const parts = createModeParts();
     const animation = {
       cancel: vi.fn(),
@@ -1224,16 +1246,57 @@ describe('Shared search scope menu', () => {
       configurable: true,
       value: animate
     });
+    const iconAnimation = {
+      cancel: vi.fn(),
+      oncancel: null as null | (() => void),
+      onfinish: null as null | (() => void)
+    };
+    const animateIcon = vi.fn(
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+        iconAnimation as unknown as Animation
+    );
     const controller = window.LumnoSearchInputMode.createInputModeController(parts);
+    const lineIcon = parts.modePrefix.querySelector<HTMLElement>(
+      '[data-search-input-mode-line-icon]'
+    );
+    expect(lineIcon).not.toBeNull();
+    Object.defineProperty(lineIcon as HTMLElement, 'animate', {
+      configurable: true,
+      value: animateIcon
+    });
 
-    controller.setPrefixText('Bookmarks', {}, {
+    controller.setPrefixText('Search open tabs', {}, {
       animate: true,
-      iconClass: 'ri-bookmark-3-line',
-      menuIconName: 'bookmark',
-      modeId: 'local:bookmark'
+      iconClass: 'ri-window-line',
+      menuIconName: 'browser',
+      modeId: 'openTabs'
     });
 
     expect(animate).not.toHaveBeenCalled();
+    expect(lineIcon?.style.display).toBe('inline-flex');
+    expect(parts.modePrefixGlyph.style.display).toBe('none');
+    expect(animateIcon).toHaveBeenCalledWith([
+      { opacity: 0.45, offset: 0, transform: 'scale(0.84)' },
+      {
+        easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        opacity: 1,
+        offset: 0.62,
+        transform: 'scale(1.05)'
+      },
+      {
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        opacity: 1,
+        offset: 0.84,
+        transform: 'scale(0.99)'
+      },
+      { opacity: 1, offset: 1, transform: 'scale(1)' }
+    ], {
+      duration: 180,
+      easing: 'linear'
+    });
+    expect(
+      parts.modePrefix.querySelector('[data-search-input-mode-icon-ghost]')
+    ).toBeNull();
     expect(parts.modePrefix.style.opacity).toBe('1');
     expect(parts.modePrefix.style.transform).toBe(
       'translateY(-50%) translateX(0) scale(1)'
@@ -1244,14 +1307,18 @@ describe('Shared search scope menu', () => {
 
   it('shows the current label only while the menu is open and resizes the chip', () => {
     const parts = createModeParts();
+    const animationStartStates: Array<Record<string, string | undefined>> = [];
+    const measurementStates: Array<Record<string, string | undefined>> = [];
     const resizeAnimation = {
       cancel: vi.fn(),
       oncancel: null as null | (() => void),
       onfinish: null as null | (() => void)
     };
     const animate = vi.fn(
-      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
-        resizeAnimation as unknown as Animation
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) => {
+        animationStartStates.push({ ...parts.modePrefix.dataset });
+        return resizeAnimation as unknown as Animation;
+      }
     );
     Object.defineProperty(parts.modePrefix, 'animate', {
       configurable: true,
@@ -1259,16 +1326,41 @@ describe('Shared search scope menu', () => {
     });
     Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
       configurable: true,
+      value: () => {
+        if (parts.modePrefix.dataset.currentMeasuring === 'true') {
+          measurementStates.push({ ...parts.modePrefix.dataset });
+        }
+        const includesCurrent = parts.modePrefix.dataset.currentMeasuring === 'true' ||
+          parts.modePrefix.dataset.currentVisible === 'true';
+        return {
+          bottom: 0,
+          height: 26,
+          left: 0,
+          right: includesCurrent ? 162 : 132,
+          toJSON: () => ({}),
+          top: 0,
+          width: includesCurrent ? 162 : 132,
+          x: 0,
+          y: 0
+        };
+      }
+    });
+    Object.defineProperty(parts.modePrefix, 'clientLeft', {
+      configurable: true,
+      value: 1
+    });
+    Object.defineProperty(parts.modePrefixChevron, 'getBoundingClientRect', {
+      configurable: true,
       value: () => ({
-        bottom: 0,
-        height: 26,
-        left: 0,
-        right: parts.modePrefix.dataset.menuOpen === 'true' ? 162 : 132,
+        bottom: 21,
+        height: 16,
+        left: 87,
+        right: 103,
         toJSON: () => ({}),
-        top: 0,
-        width: parts.modePrefix.dataset.menuOpen === 'true' ? 162 : 132,
-        x: 0,
-        y: 0
+        top: 5,
+        width: 16,
+        x: 87,
+        y: 5
       })
     });
     const controller = window.LumnoSearchInputMode.createInputModeController(
@@ -1289,19 +1381,53 @@ describe('Shared search scope menu', () => {
 
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefixCurrent.style.display).toBe('none');
+    expect(parts.modePrefix.dataset.currentMeasuring).toBe('false');
     expect(controller.openModeMenu('none')).toBe(true);
     expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
+    expect(parts.modePrefix.dataset.currentVisible).toBe('true');
+    expect(parts.modePrefix.dataset.currentMeasuring).toBe('false');
+    expect(parts.modePrefix.dataset.currentOverlay).toBe('true');
+    expect(measurementStates.length).toBeGreaterThan(0);
+    expect(measurementStates.every((state) => (
+      state.currentVisible === 'false' && state.currentMeasuring === 'true'
+    ))).toBe(true);
+    expect(animationStartStates[0]).toMatchObject({
+      currentMeasuring: 'false',
+      currentOverlay: 'true',
+      currentVisible: 'true'
+    });
+    expect(
+      parts.modePrefix.style.getPropertyValue(
+        '--x-lumno-search-mode-current-overlay-left'
+      )
+    ).toBe('86px');
     expect(animate.mock.calls[0][0]).toEqual([
       { width: '132px' },
       { width: '162px' }
     ]);
     expect(animate.mock.calls[0][1]).toEqual({
-      duration: 160,
-      easing: 'linear'
+      duration: 140,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
     });
+    resizeAnimation.onfinish?.();
+    expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
+    expect(parts.modePrefix.dataset.currentVisible).toBe('true');
+    expect(parts.modePrefix.dataset.currentOverlay).toBe('false');
+    expect(
+      parts.modePrefix.style.getPropertyValue(
+        '--x-lumno-search-mode-current-overlay-left'
+      )
+    ).toBe('');
+    expect(
+      parts.modePrefixCurrent.querySelector(
+        '[data-search-input-mode-current-text]'
+      )?.textContent
+    ).toBe('当前');
 
     expect(controller.closeModeMenu(false)).toBe(true);
     expect(parts.modePrefixCurrent.style.display).toBe('none');
+    expect(parts.modePrefix.dataset.currentVisible).toBe('false');
+    expect(parts.modePrefix.dataset.currentOverlay).toBe('false');
     expect(animate.mock.calls[1][0]).toEqual([
       { width: '162px' },
       { width: '132px' }
@@ -1335,7 +1461,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('stretches before revealing a longer label and fades the fixed icon in place', () => {
+  it('stretches on a curve before elastically swapping the scope icon', () => {
     const parts = createModeParts();
     const resizeAnimation = {
       cancel: vi.fn(),
@@ -1362,6 +1488,27 @@ describe('Shared search scope menu', () => {
     Object.defineProperty(parts.modePrefixGlyph, 'animate', {
       configurable: true,
       value: animateIcon
+    });
+    const outgoingIconAnimation = {
+      cancel: vi.fn(),
+      oncancel: null as null | (() => void),
+      onfinish: null as null | (() => void)
+    };
+    const animateOutgoingIcon = vi.fn(
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+        outgoingIconAnimation as unknown as Animation
+    );
+    Object.defineProperty(parts.modePrefixGlyph, 'cloneNode', {
+      configurable: true,
+      value: vi.fn(() => {
+        const clone = document.createElement('i');
+        clone.className = parts.modePrefixGlyph.className;
+        Object.defineProperty(clone, 'animate', {
+          configurable: true,
+          value: animateOutgoingIcon
+        });
+        return clone;
+      })
     });
     Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
       configurable: true,
@@ -1395,8 +1542,8 @@ describe('Shared search scope menu', () => {
       { width: '176px' }
     ]);
     expect(animate.mock.calls[0][1]).toEqual({
-      duration: 160,
-      easing: 'linear'
+      duration: 140,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
     });
     expect(
       (animate.mock.calls[0][0] as Keyframe[]).every((frame) =>
@@ -1407,24 +1554,41 @@ describe('Shared search scope menu', () => {
     expect(parts.modePrefixGlyph.className).toContain('ri-window-line');
     expect(animateIcon).not.toHaveBeenCalled();
     expect(parts.modePrefixGlyph.style.transition).toBe('none');
-    expect(parts.modePrefix.style.transition).toContain('background-color 180ms ease');
+    expect(parts.modePrefix.style.transition).toContain('background-color 140ms ease');
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefix.style.willChange).toBe('width');
     resizeAnimation.onfinish?.();
     expect(parts.modePrefixText.textContent).toBe('Brave Search');
     expect(parts.modePrefixGlyph.className).toContain('ri-global-line');
     expect(animateIcon).toHaveBeenCalledWith([
-      { opacity: 0 },
-      { opacity: 1 }
+      { opacity: 0.45, offset: 0, transform: 'scale(0.84)' },
+      {
+        easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        opacity: 1,
+        offset: 0.62,
+        transform: 'scale(1.05)'
+      },
+      {
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        opacity: 1,
+        offset: 0.84,
+        transform: 'scale(0.99)'
+      },
+      { opacity: 1, offset: 1, transform: 'scale(1)' }
+    ], {
+      duration: 180,
+      easing: 'linear'
+    });
+    expect(animateOutgoingIcon).toHaveBeenCalledWith([
+      { opacity: 1, transform: 'scale(1)' },
+      { opacity: 0, transform: 'scale(0.84)' }
     ], {
       duration: 100,
-      easing: 'ease-out'
+      easing: 'cubic-bezier(0.4, 0, 1, 1)'
     });
     expect(
-      (animateIcon.mock.calls[0][0] as Keyframe[]).every((frame) =>
-        !('transform' in frame)
-      )
-    ).toBe(true);
+      parts.modePrefix.querySelector('[data-search-input-mode-icon-ghost]')
+    ).not.toBeNull();
     expect(parts.modePrefixGlyph.style.transform).toBe('none');
     expect(parts.modePrefix.style.willChange).toBe('auto');
     controller.destroy();
@@ -1540,6 +1704,9 @@ describe('Shared search scope menu', () => {
     expect(controller.menuElement.style.left).toBe('-6px');
     expect(controller.menuElement.style.right).toBe('-6px');
     expect(controller.menuElement.style.width).toBe('auto');
+    expect(controller.menuElement.style.height).toBe(
+      'min(360px, 62vh, var(--x-lumno-search-mode-menu-viewport-max-height, 360px))'
+    );
     expect(controller.menuElement.style.padding).toBe('0px');
     expect(
       controller.menuElement.classList.contains(
@@ -1585,11 +1752,10 @@ describe('Shared search scope menu', () => {
       configurable: true,
       value: 70
     });
-    let renderedMenuContentHeight = 360;
     Object.defineProperty(controller.menuElement, 'offsetHeight', {
       configurable: true,
       get: () => Math.min(
-        renderedMenuContentHeight,
+        360,
         Number.parseFloat(
           controller.menuElement.style.getPropertyValue(
             '--x-lumno-search-mode-menu-viewport-max-height'
@@ -1614,12 +1780,6 @@ describe('Shared search scope menu', () => {
       viewportBottom: 1209
     })).toBe(511);
 
-    renderedMenuContentHeight = 200;
-    expect(controller.fitModeMenuWithinViewport({
-      bottomInset: 24,
-      viewportBottom: 1209
-    })).toBe(671);
-    renderedMenuContentHeight = 360;
     expect(controller.fitModeMenuWithinViewport({
       bottomInset: 24,
       viewportBottom: 1209

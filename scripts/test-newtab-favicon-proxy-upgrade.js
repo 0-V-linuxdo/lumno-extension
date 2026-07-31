@@ -304,6 +304,30 @@ function createRuntime(options) {
     'confirmed persisted favicon data should refresh its local cache entry'
   );
 
+  const shortcutCachedDataUrl = 'data:image/png;base64,c2hvcnRjdXQtY2FjaGU=';
+  const shortcutRuntime = createRuntime({
+    getPersistedFaviconEntry() {
+      return { url: primaryUrl, updatedAt: Date.now() };
+    },
+    getPersistedFaviconDataEntry() {
+      return { dataUrl: persistedDataUrl, updatedAt: Date.now() };
+    },
+    detectDefaultExtensionFavicon() {
+      return Promise.resolve(false);
+    }
+  });
+  const shortcutImg = createFakeImage();
+  shortcutRuntime.attachFaviconWithFallbacks(shortcutImg, pageUrl, 'futurecomm.cn', {
+    primaryUrl: extensionUrl,
+    browserUrl: shortcutCachedDataUrl,
+    skipPersisted: true
+  });
+  assert.strictEqual(
+    shortcutImg.src,
+    extensionUrl,
+    'shortcut tiles should prefer the page-specific browser favicon over stale host and shortcut caches'
+  );
+
   const privatePageUrl = 'https://foo.example.com/private';
   const publicPageUrl = 'https://foo.example.com/public';
   const matrixDirectUrl = 'https://foo.example.com/favicon.ico';

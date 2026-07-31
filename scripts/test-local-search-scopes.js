@@ -323,6 +323,11 @@ assert.match(
 );
 assert.match(
   inputModeSource,
+  /'height', 'min\(360px, 62vh, var\(--x-lumno-search-mode-menu-viewport-max-height, 360px\)\)'/,
+  'the scope menu should keep a stable height while filtering reduces its visible items'
+);
+assert.match(
+  inputModeSource,
   /max-height', 'min\(360px, 62vh, var\(--x-lumno-search-mode-menu-viewport-max-height, 360px\)\)'/,
   'the scope menu should remain internally scrollable when the viewport itself is short'
 );

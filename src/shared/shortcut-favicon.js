@@ -21,7 +21,7 @@
     gh: 'assets/images/site-search/github.svg',
     gpt: 'assets/images/site-search/openai.svg',
     gm: 'assets/images/site-search/gemini.svg',
-    dbai: 'assets/images/site-search/doubao.svg',
+    dbai: 'assets/images/site-search/doubao-mascot.png',
     qw: 'assets/images/site-search/qwen.svg',
     yb: 'assets/images/site-search/yuanbao.svg',
     mx: 'assets/images/site-search/minimax.svg',
@@ -37,8 +37,8 @@
     db: 'assets/images/site-search/douban.svg',
     jj: 'assets/images/site-search/juejin.svg',
     wx: 'assets/images/site-search/sogou.svg',
-    tb: 'assets/images/site-search/taobao.svg',
-    tm: 'assets/images/site-search/tmall.svg',
+    tb: 'assets/images/site-search/taobao.png',
+    tm: 'assets/images/site-search/tmall.png',
     tw: 'assets/images/site-search/x.svg',
     rd: 'assets/images/site-search/reddit.svg',
     wk: 'assets/images/site-search/wikipedia.svg',
@@ -634,6 +634,8 @@
     const storageArea = settings.storageArea || null;
     const storageKey = String(settings.storageKey || DEFAULT_STORAGE_KEY);
     const chromeApi = settings.chromeApi || null;
+    const lockManager = settings.lockManager || null;
+    const lockName = `lumno-shortcut-favicon-store:${storageKey}`;
     const cacheOptions = normalizeCacheOptions(settings);
 
     function getRuntimeError() {
@@ -674,7 +676,38 @@
       });
     }
 
-    return Object.freeze({ storageKey, cacheOptions, readAll, writeAll });
+    function runExclusive(task) {
+      if (lockManager && typeof lockManager.request === 'function') {
+        return Promise.resolve(lockManager.request(lockName, task));
+      }
+      return Promise.resolve().then(task);
+    }
+
+    function updateAll(updater) {
+      return runExclusive(() => readAll().then((current) => {
+        const next = typeof updater === 'function' ? updater(current) : current;
+        return writeAll(next);
+      }));
+    }
+
+    function mergeAll(cacheMap) {
+      const additions = normalizeCacheMap(cacheMap, undefined, cacheOptions);
+      return updateAll((current) => normalizeCacheMap({
+        ...current,
+        ...additions
+      }, undefined, cacheOptions));
+    }
+
+    function retainAll(pageUrls) {
+      return updateAll((current) => retainCachedIcons(
+        current,
+        pageUrls,
+        undefined,
+        cacheOptions
+      ));
+    }
+
+    return Object.freeze({ storageKey, cacheOptions, readAll, writeAll, mergeAll, retainAll });
   }
 
   return Object.freeze({

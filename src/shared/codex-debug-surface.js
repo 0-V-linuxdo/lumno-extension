@@ -269,6 +269,16 @@
     element.value = value;
   }
 
+  function setNativeChecked(element, checked, windowObj) {
+    const prototype = windowObj.HTMLInputElement && windowObj.HTMLInputElement.prototype;
+    const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, 'checked');
+    if (descriptor && typeof descriptor.set === 'function') {
+      descriptor.set.call(element, checked);
+      return;
+    }
+    element.checked = checked;
+  }
+
   function dispatchInputEvents(element, windowObj) {
     element.dispatchEvent(new windowObj.Event('input', { bubbles: true, composed: true }));
     element.dispatchEvent(new windowObj.Event('change', { bubbles: true, composed: true }));
@@ -316,7 +326,8 @@
       }
       const checked = Boolean(params.checked);
       if (element.checked !== checked) {
-        element.click();
+        setNativeChecked(element, checked, windowObj);
+        dispatchInputEvents(element, windowObj);
       }
     } else if (action === 'selectOption') {
       if (String(element.tagName || '').toLowerCase() !== 'select') {
@@ -351,8 +362,18 @@
     if (!clone.querySelectorAll) {
       return clone;
     }
-    clone.querySelectorAll('script, style, noscript, template').forEach((element) => element.remove());
-    clone.querySelectorAll('*').forEach((element) => {
+    const omittedSelector = 'script, style, noscript, template';
+    if (typeof clone.matches === 'function' && clone.matches(omittedSelector)) {
+      const placeholder = clone.ownerDocument.createElement('span');
+      placeholder.setAttribute(
+        'data-lumno-omitted-element',
+        String(clone.tagName || '').toLowerCase()
+      );
+      placeholder.textContent = '[omitted-element]';
+      return placeholder;
+    }
+    clone.querySelectorAll(omittedSelector).forEach((element) => element.remove());
+    [clone, ...clone.querySelectorAll('*')].forEach((element) => {
       Array.from(element.attributes || []).forEach((attribute) => {
         const name = String(attribute.name || '').toLowerCase();
         const value = String(attribute.value || '');
@@ -391,7 +412,7 @@
     const maxMarkup = clamp(params && params.maxMarkup, 1000, 500000, 120000);
     const maxText = clamp(params && params.maxText, 1000, 100000, 40000);
     const markup = truncate(clone.outerHTML || '', maxMarkup);
-    const text = truncate(rootElement.innerText || rootElement.textContent || '', maxText);
+    const text = truncate(clone.innerText || clone.textContent || '', maxText);
     return {
       surfaceType,
       url: String(windowObj.location && windowObj.location.href || ''),

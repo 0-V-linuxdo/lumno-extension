@@ -33,10 +33,13 @@ assert.doesNotMatch(
 
 const webAccessibleResources = (manifest.web_accessible_resources || [])
   .flatMap((entry) => entry && Array.isArray(entry.resources) ? entry.resources : []);
-const bundledProviderIconResourcePattern = 'assets/images/site-search/*.svg';
+const bundledProviderIconResourcePatterns = [
+  'assets/images/site-search/*.svg',
+  'assets/images/site-search/*.png'
+];
 assert.ok(
-  webAccessibleResources.includes(bundledProviderIconResourcePattern),
-  'all bundled provider SVGs should remain web-accessible without per-icon manifest maintenance'
+  bundledProviderIconResourcePatterns.every((pattern) => webAccessibleResources.includes(pattern)),
+  'all bundled provider artwork should remain web-accessible without per-icon manifest maintenance'
 );
 const expectedBundledProviderIcons = Object.freeze({
   yt: 'assets/images/site-search/youtube.svg',
@@ -44,7 +47,7 @@ const expectedBundledProviderIcons = Object.freeze({
   gh: 'assets/images/site-search/github.svg',
   gpt: 'assets/images/site-search/openai.svg',
   gm: 'assets/images/site-search/gemini.svg',
-  dbai: 'assets/images/site-search/doubao.svg',
+  dbai: 'assets/images/site-search/doubao-mascot.png',
   qw: 'assets/images/site-search/qwen.svg',
   yb: 'assets/images/site-search/yuanbao.svg',
   mx: 'assets/images/site-search/minimax.svg',
@@ -59,8 +62,8 @@ const expectedBundledProviderIcons = Object.freeze({
   zh: 'assets/images/site-search/zhihu.svg',
   db: 'assets/images/site-search/douban.svg',
   jj: 'assets/images/site-search/juejin.svg',
-  tb: 'assets/images/site-search/taobao.svg',
-  tm: 'assets/images/site-search/tmall.svg',
+  tb: 'assets/images/site-search/taobao.png',
+  tm: 'assets/images/site-search/tmall.png',
   wx: 'assets/images/site-search/sogou.svg',
   tw: 'assets/images/site-search/x.svg',
   rd: 'assets/images/site-search/reddit.svg',
@@ -70,7 +73,7 @@ const expectedBundledProviderIcons = Object.freeze({
 assert.deepStrictEqual(
   shortcutFavicon.SITE_SEARCH_PINNED_ICON_ASSETS,
   expectedBundledProviderIcons,
-  'every built-in provider should resolve to an audited local SVG'
+  'every built-in provider should resolve to an audited local asset'
 );
 const siteSearchProviders = JSON.parse(siteSearchSource).items;
 assert.deepStrictEqual(
@@ -90,16 +93,29 @@ new Set(Object.values(expectedBundledProviderIcons)).forEach((resourcePath) => {
   assert.ok(fs.existsSync(resourcePath), `${resourcePath} should be bundled`);
   assert.ok(
     webAccessibleResources.includes(resourcePath) ||
-      webAccessibleResources.includes(bundledProviderIconResourcePattern),
+      bundledProviderIconResourcePatterns.some((pattern) => webAccessibleResources.includes(pattern)),
     `${resourcePath} should be web-accessible`
   );
-  const vectorSource = fs.readFileSync(resourcePath, 'utf8');
-  assert.match(vectorSource, /<svg[\s\S]*<path/);
-  assert.match(
-    vectorSource,
-    /<svg[^>]*viewBox="-?(?:\d+\.?\d*|\.\d+) -?(?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+)"/,
-    `${resourcePath} should expose a valid vector canvas`
-  );
+  if (resourcePath.endsWith('.svg')) {
+    const vectorSource = fs.readFileSync(resourcePath, 'utf8');
+    assert.ok(
+      /<svg[\s\S]*<path/.test(vectorSource) ||
+        /<svg[\s\S]*<image[^>]+href="[^"]+\.png"/.test(vectorSource),
+      `${resourcePath} should expose vector artwork or a bundled raster wrapper`
+    );
+    assert.match(
+      vectorSource,
+      /<svg[^>]*viewBox="-?(?:\d+\.?\d*|\.\d+) -?(?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+)"/,
+      `${resourcePath} should expose a valid vector canvas`
+    );
+  } else {
+    const pngSignature = fs.readFileSync(resourcePath).subarray(0, 8);
+    assert.deepStrictEqual(
+      [...pngSignature],
+      [137, 80, 78, 71, 13, 10, 26, 10],
+      `${resourcePath} should be a valid PNG asset`
+    );
+  }
 });
 
 const framedProviderIcons = Object.freeze({
@@ -109,15 +125,24 @@ const framedProviderIcons = Object.freeze({
 });
 Object.entries(framedProviderIcons).forEach(([providerKey, colors]) => {
   const resourcePath = expectedBundledProviderIcons[providerKey];
+  if (resourcePath.endsWith('.png')) {
+    const pngSignature = fs.readFileSync(resourcePath).subarray(0, 8);
+    assert.deepStrictEqual(
+      [...pngSignature],
+      [137, 80, 78, 71, 13, 10, 26, 10],
+      `${providerKey} should use a valid bundled raster asset`
+    );
+    return;
+  }
   const vectorSource = fs.readFileSync(resourcePath, 'utf8');
   assert.match(
     vectorSource,
     new RegExp(`<rect[^>]+fill="${colors.background}"`),
     `${providerKey} should carry its own brand background for light-mode contrast`
   );
-  assert.match(
-    vectorSource,
-    new RegExp(`<(?:path|g)[^>]*[\\s\\S]*fill="${colors.foreground}"`),
+  assert.ok(
+    new RegExp(`<(?:path|g)[^>]*[\\s\\S]*fill="${colors.foreground}"`).test(vectorSource) ||
+      /<image[^>]+href="[^"]+\.png"/.test(vectorSource),
     `${providerKey} should reverse its mark for contrast on the bundled background`
   );
 });
@@ -255,14 +280,32 @@ assert.match(
 
 assert.match(
   inputModeSource,
-  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', modeMenuOpen && !modeMenu\.hidden \? 'inline-flex' : 'none'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'visible'\]/,
+  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', currentLabelVisible \? 'inline-flex' : 'none'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'visible'\]/,
   'the current-mode label should keep its full-height line box only while the panel is open'
 );
 
 assert.match(
   inputModeCss,
-  /\[data-search-input-mode-current\] \{[\s\S]*?display: none !important;[\s\S]*?\[data-menu-open="true"\][\s\S]*?\[data-search-input-mode-current\] \{[\s\S]*?display: inline-flex !important;/,
-  'the current-mode label should be hidden outside the open scope panel'
+  /\[data-search-input-mode-current\] \{[\s\S]*?display: none !important;[\s\S]*?\[data-current-visible="true"\][\s\S]*?\[data-search-input-mode-current\] \{[\s\S]*?display: inline-flex !important;/,
+  'the current-mode label should use a dedicated reveal state'
+);
+
+assert.match(
+  inputModeCss,
+  /\[data-current-overlay="true"\][\s\S]*?\[data-search-input-mode-current\] \{[\s\S]*?position: absolute !important;[\s\S]*?left: var\(--x-lumno-search-mode-current-overlay-left, 0\) !important;[\s\S]*?z-index: 1 !important;/,
+  'the current-mode label should stay out of flex layout while the chevron reveals it'
+);
+
+assert.match(
+  inputModeSource,
+  /onStart: nextOpen \? \(\) => \{[\s\S]*?setInputModePrefixCurrentOverlay\(true, currentOverlayLeft\);[\s\S]*?setInputModePrefixCurrentVisible\(true\);[\s\S]*?onFinish: nextOpen \? \(\) => \{[\s\S]*?setInputModePrefixCurrentOverlay\(false\);/,
+  'the current-mode mask should run during the chip resize and return to normal layout afterward'
+);
+
+assert.match(
+  inputModeCss,
+  /\[data-current-visible="true"\][\s\S]*?\[data-search-input-mode-current-text\] \{[\s\S]*?animation: _x_lumno_search_mode_current_mask_reveal_2026_unique_[\s\S]*?140ms cubic-bezier\(0\.22, 1, 0\.36, 1\) both !important;[\s\S]*?@keyframes _x_lumno_search_mode_current_mask_reveal_2026_unique_[\s\S]*?clip-path: inset\(0 100% 0 0\);[\s\S]*?clip-path: inset\(0 0 0 0\);/,
+  'the current-mode label should reveal behind the moving chevron using the chip resize rhythm'
 );
 
 console.log('overlay site-search icon cache tests passed');

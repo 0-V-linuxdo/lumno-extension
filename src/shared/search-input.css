@@ -247,6 +247,8 @@
 }
 
 .x-lumno-search-input-mode__prefix [data-search-input-mode-prefix-chevron] {
+  position: relative !important;
+  z-index: 2 !important;
   flex: 0 0 auto !important;
   color: var(--x-lumno-search-mode-accent, currentColor) !important;
   opacity: 0.76 !important;
@@ -273,9 +275,49 @@
   transition: color 140ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
-.x-lumno-search-input-mode__prefix[data-menu-open="true"]
+.x-lumno-search-input-mode__prefix[data-current-visible="true"]
   [data-search-input-mode-current] {
   display: inline-flex !important;
+}
+
+.x-lumno-search-input-mode__prefix[data-current-measuring="true"]
+  [data-search-input-mode-current] {
+  display: inline-flex !important;
+}
+
+.x-lumno-search-input-mode__prefix[data-current-overlay="true"]
+  [data-search-input-mode-current] {
+  position: absolute !important;
+  left: var(--x-lumno-search-mode-current-overlay-left, 0) !important;
+  top: 50% !important;
+  z-index: 1 !important;
+  transform: translateY(-50%) !important;
+  pointer-events: none !important;
+}
+
+.x-lumno-search-input-mode__prefix
+  [data-search-input-mode-current-text] {
+  display: inline-block !important;
+  clip-path: inset(0 100% 0 0);
+  -webkit-clip-path: inset(0 100% 0 0);
+}
+
+.x-lumno-search-input-mode__prefix[data-current-visible="true"]
+  [data-search-input-mode-current-text] {
+  animation: _x_lumno_search_mode_current_mask_reveal_2026_unique_
+    140ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+
+@keyframes _x_lumno_search_mode_current_mask_reveal_2026_unique_ {
+  from {
+    clip-path: inset(0 100% 0 0);
+    -webkit-clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+    -webkit-clip-path: inset(0 0 0 0);
+  }
 }
 
 .x-lumno-search-input-mode__prefix[data-menu-open="true"]
@@ -722,6 +764,13 @@
 
   .x-lumno-search-input-mode__prefix [data-search-input-mode-current] {
     transition: none !important;
+  }
+
+  .x-lumno-search-input-mode__prefix
+    [data-search-input-mode-current-text] {
+    animation: none !important;
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
   }
 }
 

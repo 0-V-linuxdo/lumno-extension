@@ -21,7 +21,7 @@ function createOptions(
     getShortcutTitle: (shortcut) => String(shortcut.title || shortcut.host || ''),
     getHostFromUrl: () => 'example.com',
     getShortcutIconDataUrl: () => '',
-    getBrowserPageFaviconUrl: (url) => `favicon:${url}`,
+    getPageFaviconCandidateUrl: (url) => `favicon:${url}`,
     getImmediateThemeForSuggestion: () => ({ accent: 'blue' }),
     applyShortcutTileTheme: (tile) => {
       tile.dataset.themed = 'true';
@@ -108,7 +108,16 @@ describe('Shortcuts React island', () => {
     expect(tile.getAttribute('aria-label')).toBe('Open Docs');
     expect(tile._xHost).toBe('example.com');
     expect(view.getAddButton()?.dataset.tooltip).toBe('Add shortcut');
-    expect(attachFavicon).toHaveBeenCalledOnce();
+    expect(attachFavicon).toHaveBeenCalledWith(
+      expect.any(HTMLImageElement),
+      'https://example.com/docs',
+      'example.com',
+      {
+        primaryUrl: 'favicon:https://example.com/docs',
+        browserUrl: '',
+        skipPersisted: true
+      }
+    );
     expect(applyTheme).toHaveBeenCalledOnce();
     expect(bindTooltip).toHaveBeenCalledTimes(2);
   });
@@ -247,13 +256,8 @@ describe('Shortcuts React island', () => {
     );
   });
 
-  it('upgrades the unified fallback to a locally cacheable high-resolution favicon', async () => {
-    const attachFavicon = vi.fn((image: HTMLImageElement) => {
-      image.src = 'data:image/png;base64,bG93LXJlcw==';
-      const fallback = document.createElement('span');
-      fallback.className = '_x_extension_favicon_fallback_2024_unique_';
-      image.parentElement?.appendChild(fallback);
-    });
+  it('adds a resolved high-resolution icon behind the browser favicon', async () => {
+    const attachFavicon = vi.fn();
     let finishResolution: (dataUrl: string) => void = () => {};
     const resolveShortcutFaviconDataUrl = vi.fn(() => new Promise<string>((resolve) => {
       finishResolution = resolve;
@@ -279,18 +283,24 @@ describe('Shortcuts React island', () => {
       await Promise.resolve();
     });
 
-    const image = view.getTiles()[0]
-      .querySelector<HTMLImageElement>('.x-nt-shortcut-favicon');
-    expect(image?.src).toContain('data:image/png;base64,aGlnaC1yZXM=');
-    expect(view.getTiles()[0].querySelector(
-      '._x_extension_favicon_fallback_2024_unique_'
-    )).toBeNull();
-    expect(attachFavicon).toHaveBeenCalledOnce();
+    expect(attachFavicon).toHaveBeenCalledTimes(2);
+    expect(attachFavicon).toHaveBeenLastCalledWith(
+      expect.any(HTMLImageElement),
+      'https://example.com/docs',
+      'example.com',
+      {
+        primaryUrl: 'favicon:https://example.com/docs',
+        browserUrl: 'data:image/png;base64,aGlnaC1yZXM=',
+        skipPersisted: true
+      }
+    );
   });
 
-  it('renders a cached high-resolution favicon without starting the unified loader', () => {
+  it('keeps a path-specific browser favicon ahead of a cached high-resolution fallback', () => {
     const attachFavicon = vi.fn();
     const resolveShortcutFaviconDataUrl = vi.fn(() => Promise.resolve(''));
+    const developerConsoleUrl =
+      'https://chrome.google.com/webstore/devconsole/example?hl=zh-cn';
     const { view } = createView({
       attachFaviconWithFallbacks: attachFavicon,
       getShortcutFaviconDataUrl: () => 'data:image/png;base64,Y2FjaGVkLWhk',
@@ -299,13 +309,22 @@ describe('Shortcuts React island', () => {
     renderItems(view, [{
       id: 'docs',
       title: 'Docs',
-      url: 'https://example.com/docs'
+      url: developerConsoleUrl
     }]);
 
     const image = view.getTiles()[0]
       .querySelector<HTMLImageElement>('.x-nt-shortcut-favicon');
-    expect(image?.src).toContain('data:image/png;base64,Y2FjaGVkLWhk');
-    expect(attachFavicon).not.toHaveBeenCalled();
+    expect(image?.getAttribute('src')).toBeNull();
+    expect(attachFavicon).toHaveBeenCalledWith(
+      image,
+      developerConsoleUrl,
+      'example.com',
+      {
+        primaryUrl: `favicon:${developerConsoleUrl}`,
+        browserUrl: 'data:image/png;base64,Y2FjaGVkLWhk',
+        skipPersisted: true
+      }
+    );
     expect(resolveShortcutFaviconDataUrl).not.toHaveBeenCalled();
   });
 

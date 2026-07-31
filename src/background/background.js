@@ -5630,6 +5630,7 @@ const faviconDataCache = new Map();
 const faviconPending = new Map();
 const shortcutFaviconDataCache = new Map();
 const shortcutFaviconPending = new Map();
+let shortcutFaviconPolicyRevision = 0;
 const titlePinyinCache = new Map();
 const siteThemeColorCache = new Map();
 const siteThemeColorPending = new Map();
@@ -5642,6 +5643,12 @@ const SHORTCUT_FAVICON_MANIFEST_MAX_BYTES = 512 * 1024;
 const SHORTCUT_FAVICON_RESOURCE_MAX_BYTES = 256 * 1024;
 const SITE_SEARCH_ICON_STORAGE_KEY = SHORTCUT_FAVICON.SITE_SEARCH_STORAGE_KEY ||
   '_x_extension_site_search_icon_cache_canonical_2026_unique_';
+
+function invalidateShortcutFaviconPolicyCache() {
+  shortcutFaviconPolicyRevision += 1;
+  shortcutFaviconDataCache.clear();
+  shortcutFaviconPending.clear();
+}
 const SITE_SEARCH_ICON_CACHE_OPTIONS = SHORTCUT_FAVICON.SITE_SEARCH_CACHE_OPTIONS || Object.freeze({
   cacheTtlMs: 1000 * 60 * 60 * 24 * 180,
   cacheMaxEntries: 40,
@@ -6879,7 +6886,9 @@ function fetchShortcutFaviconData(pageUrl, preferredTheme, explicitIconUrl) {
   if (shortcutFaviconPending.has(cacheKey)) {
     return shortcutFaviconPending.get(cacheKey);
   }
-  const promise = Promise.all([
+  const policyRevision = shortcutFaviconPolicyRevision;
+  let promise = null;
+  promise = Promise.all([
     loadFaviconRequestBlacklistItems(),
     loadFaviconEnhancedFetchEnabled()
   ]).then(([, enhancedFetchEnabled]) => {
@@ -6901,16 +6910,22 @@ function fetchShortcutFaviconData(pageUrl, preferredTheme, explicitIconUrl) {
       explicitIcon
     ).finally(() => clearTimeout(timeoutId));
   }).then((result) => {
-    setBoundedBackgroundCacheEntry(
-      shortcutFaviconDataCache,
-      cacheKey,
-      result || null,
-      BACKGROUND_SHORTCUT_FAVICON_CACHE_MAX_ENTRIES
-    );
-    shortcutFaviconPending.delete(cacheKey);
+    if (policyRevision === shortcutFaviconPolicyRevision) {
+      setBoundedBackgroundCacheEntry(
+        shortcutFaviconDataCache,
+        cacheKey,
+        result || null,
+        BACKGROUND_SHORTCUT_FAVICON_CACHE_MAX_ENTRIES
+      );
+    }
+    if (shortcutFaviconPending.get(cacheKey) === promise) {
+      shortcutFaviconPending.delete(cacheKey);
+    }
     return result || null;
   }).catch(() => {
-    shortcutFaviconPending.delete(cacheKey);
+    if (shortcutFaviconPending.get(cacheKey) === promise) {
+      shortcutFaviconPending.delete(cacheKey);
+    }
     return null;
   });
   shortcutFaviconPending.set(cacheKey, promise);
@@ -7868,10 +7883,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY]) {
     faviconRequestBlacklistCache = null;
     faviconRequestBlacklistPromise = null;
+    invalidateShortcutFaviconPolicyCache();
   }
   if (changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY]) {
     faviconEnhancedFetchEnabledCache = null;
     faviconEnhancedFetchEnabledPromise = null;
+    invalidateShortcutFaviconPolicyCache();
   }
   if (changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]) {
     searchResultSourceTypesCache = null;

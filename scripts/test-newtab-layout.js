@@ -1169,6 +1169,64 @@ function testNewtabUsesDistinctMobileGridColumns() {
 
 testNewtabUsesDistinctMobileGridColumns();
 
+function testRecentResizeReusesLoadedDataWithoutReloadFlash() {
+  const resizeHandlerSource = newtabSource.slice(
+    newtabSource.indexOf('function handleNewtabResize()'),
+    newtabSource.indexOf("window.addEventListener('resize', () =>", newtabSource.indexOf('function handleNewtabResize()'))
+  );
+  assert.match(
+    resizeHandlerSource,
+    /recentColumnsChanged\s*&&\s*recentLoadedOnce[\s\S]*?renderRecentSites\(recentSourceItems\)[\s\S]*?animateRecentResizeLayout\(recentLayoutBefore\)/,
+    'recent-site resize should synchronously reuse the rendered source and animate surviving cards'
+  );
+  assert.doesNotMatch(
+    resizeHandlerSource,
+    /markRecentDataDirty\(\)|loadRecentSites\(/,
+    'recent-site column changes should not start an async reload that can flash after resize'
+  );
+
+  const sourceLimitSource = newtabSource.slice(
+    newtabSource.indexOf('function getRecentSourceLimit()'),
+    newtabSource.indexOf('function applyBookmarkGridColumns()')
+  );
+  assert.match(
+    sourceLimitSource,
+    /recentMaxColumns[\s\S]*?return rows \* maxColumns;/,
+    'recent-site loading should keep enough source items for every column count in the active width mode'
+  );
+  assert.match(
+    newtabSource,
+    /getRecentSites\(recentSourceLimit \+ MAX_PINNED_RECENT_SITES, currentRecentMode\)/,
+    'recent-site loading should fill the stable resize source buffer'
+  );
+}
+
+testRecentResizeReusesLoadedDataWithoutReloadFlash();
+
+function testResizeSettleAnimatesSearchPositionChange() {
+  const resizeListenerSource = newtabSource.slice(
+    newtabSource.indexOf("window.addEventListener('resize', () =>"),
+    newtabSource.indexOf('handleTabKey = function')
+  );
+  assert.match(
+    resizeListenerSource,
+    /captureTopContentLayout\(\)[\s\S]*?cancelTopContentLayoutAnimations\(\)[\s\S]*?newtabResizeLayoutLocked\s*=\s*false;[\s\S]*?updateBookmarkSectionPosition\(\{ releaseDockDensityLock: true \}\);[\s\S]*?animateTopContentLayout\(fromLayout\)/,
+    'resize settle should animate the search and content from the locked position to the final layout'
+  );
+  assert.match(
+    newtabSource,
+    /function getTopContentMotionElements\(\)[\s\S]*?topContentContainer,[\s\S]*?root,/,
+    'wordmark and search input should move together during a resize layout transition'
+  );
+  assert.match(
+    newtabSource,
+    /function animateLayoutShift\([\s\S]*?deltaX[\s\S]*?deltaY[\s\S]*?translate:\s*`\$\{deltaX\}px \$\{deltaY\}px`/,
+    'layout shifts should animate both horizontal and vertical position changes'
+  );
+}
+
+testResizeSettleAnimatesSearchPositionChange();
+
 function testWideRecentGridCanReachMaximumColumns() {
   assert.strictEqual(
     layoutRuntime.getGridContentWidthForColumns(6, 248, 12),

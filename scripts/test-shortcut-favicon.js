@@ -31,6 +31,18 @@ function createMemoryStorage(initialValue) {
   };
 }
 
+function createLockManager() {
+  const queues = new Map();
+  return {
+    request(name, task) {
+      const previous = queues.get(name) || Promise.resolve();
+      const next = previous.then(() => task());
+      queues.set(name, next.catch(() => {}));
+      return next;
+    }
+  };
+}
+
 function testCandidateDiscovery() {
   const html = `
     <html><head>
@@ -156,6 +168,73 @@ async function testLocalCache() {
   );
   await store.writeAll(loaded);
   assert.deepStrictEqual(storage.data[shortcutFavicon.DEFAULT_STORAGE_KEY], loaded);
+}
+
+async function testConcurrentCacheUpdates() {
+  const storage = createMemoryStorage();
+  const lockManager = createLockManager();
+  const createStore = () => shortcutFavicon.createShortcutFaviconStore({
+    storageArea: storage,
+    chromeApi: { runtime: {} },
+    lockManager
+  });
+  const firstStore = createStore();
+  const secondStore = createStore();
+  const firstEntry = shortcutFavicon.setCachedIcon(
+    {},
+    'https://first.example/',
+    'data:image/png;base64,Zmlyc3Q=',
+    'https://first.example/icon.png'
+  );
+  const secondEntry = shortcutFavicon.setCachedIcon(
+    {},
+    'https://second.example/',
+    'data:image/png;base64,c2Vjb25k',
+    'https://second.example/icon.png'
+  );
+
+  await Promise.all([
+    firstStore.mergeAll(firstEntry),
+    secondStore.mergeAll(secondEntry)
+  ]);
+
+  const merged = await firstStore.readAll();
+  assert.strictEqual(
+    shortcutFavicon.getCachedIconDataUrl(merged, 'https://first.example/'),
+    'data:image/png;base64,Zmlyc3Q='
+  );
+  assert.strictEqual(
+    shortcutFavicon.getCachedIconDataUrl(merged, 'https://second.example/'),
+    'data:image/png;base64,c2Vjb25k'
+  );
+
+  await firstStore.retainAll(['https://second.example/']);
+  const retained = await secondStore.readAll();
+  assert.strictEqual(Object.keys(retained).length, 1);
+  assert.strictEqual(
+    shortcutFavicon.getCachedIconDataUrl(retained, 'https://second.example/'),
+    'data:image/png;base64,c2Vjb25k'
+  );
+}
+
+function testNewtabCacheWriteIntegration() {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/newtab/newtab.js'), 'utf8');
+  assert(
+    source.includes('lockManager: window.navigator && window.navigator.locks'),
+    'newtab favicon stores should share a cross-tab Web Lock'
+  );
+  assert(
+    source.includes('shortcutFaviconStore.mergeAll(pendingEntries)'),
+    'newtab favicon fetches should merge pending entries instead of overwriting the whole cache'
+  );
+  assert(
+    source.includes('shortcutFaviconStore.retainAll(shortcutUrls)'),
+    'newtab favicon pruning should run inside the same serialized store update path'
+  );
+  assert(
+    !source.includes('shortcutFaviconStore.writeAll(newtabShortcutFavicons)'),
+    'newtab should not overwrite the whole favicon cache from a tab-local snapshot'
+  );
 }
 
 async function testDedicatedSiteSearchCachePolicy() {
@@ -289,7 +368,7 @@ function testCanonicalProviderResolution() {
     ['gg', googleProvider, 'google.svg'],
     ['db', { key: 'db', template: 'https://www.douban.com/search?q={query}' }, 'douban.svg'],
     ['wx', { key: 'wx', template: 'https://weixin.sogou.com/weixin?query={query}' }, 'sogou.svg'],
-    ['tb', { key: 'tb', template: 'https://s.taobao.com/search?q={query}' }, 'taobao.svg'],
+    ['tb', { key: 'tb', template: 'https://s.taobao.com/search?q={query}' }, 'taobao.png'],
     ['rd', { key: 'rd', template: 'https://www.reddit.com/search/?q={query}' }, 'reddit.svg']
   ].forEach(([, provider, assetName]) => {
     const assetPath = path.join(__dirname, '..', 'assets/images/site-search', assetName);
@@ -324,6 +403,8 @@ async function run() {
   testManifestCandidates();
   testResourceInspection();
   await testLocalCache();
+  await testConcurrentCacheUpdates();
+  testNewtabCacheWriteIntegration();
   await testDedicatedSiteSearchCachePolicy();
   testCanonicalProviderResolution();
   console.log('shortcut high-resolution favicon tests passed');

@@ -1,0 +1,149 @@
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const backgroundSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src/background/background.js'),
+  'utf8'
+);
+
+function extractFunctionSource(source, name) {
+  const needle = `function ${name}(`;
+  const start = source.indexOf(needle);
+  assert.notStrictEqual(start, -1, `missing function ${name}`);
+  const openBrace = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = openBrace; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      depth += 1;
+    } else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+  throw new Error(`unterminated function ${name}`);
+}
+
+const extractedFunctions = [
+  'invalidateShortcutFaviconPolicyCache',
+  'fetchShortcutFaviconData'
+].map((name) => extractFunctionSource(backgroundSource, name)).join('\n\n');
+
+const createPolicyCache = new Function('deps', `
+  const SHORTCUT_FAVICON = {
+    normalizePageUrl(value) {
+      return new URL(String(value || '')).href;
+    }
+  };
+  const shortcutFaviconDataCache = new Map();
+  const shortcutFaviconPending = new Map();
+  let shortcutFaviconPolicyRevision = 0;
+  const BACKGROUND_SHORTCUT_FAVICON_CACHE_MAX_ENTRIES = 64;
+  const SHORTCUT_FAVICON_FETCH_TIMEOUT_MS = 1000;
+  let enhancedFetchEnabled = deps.enhancedFetchEnabled;
+
+  function getShortcutFaviconPreferredTheme(value) {
+    return String(value || 'light');
+  }
+  function loadFaviconRequestBlacklistItems() {
+    return Promise.resolve([]);
+  }
+  function loadFaviconEnhancedFetchEnabled() {
+    return Promise.resolve(enhancedFetchEnabled);
+  }
+  function getFaviconTargetPolicy() {
+    return { ok: true, directFetchBlocked: false };
+  }
+  function canFetchPageForFavicon() {
+    return true;
+  }
+  function resolveShortcutFaviconData(...args) {
+    return deps.resolve(...args);
+  }
+  function setBoundedBackgroundCacheEntry(cache, key, value) {
+    cache.set(key, value);
+  }
+
+  ${extractedFunctions}
+
+  return {
+    fetchShortcutFaviconData,
+    invalidateShortcutFaviconPolicyCache,
+    setEnhancedFetchEnabled(value) {
+      enhancedFetchEnabled = value;
+    }
+  };
+`);
+
+async function run() {
+  let resolveCalls = 0;
+  const fetchedResult = {
+    data: 'data:image/png;base64,aWNvbg==',
+    sourceUrl: 'https://example.com/icon.png'
+  };
+  const deps = {
+    enhancedFetchEnabled: false,
+    resolve() {
+      resolveCalls += 1;
+      return Promise.resolve(fetchedResult);
+    }
+  };
+  const cache = createPolicyCache(deps);
+  const pageUrl = 'https://example.com/';
+
+  assert.strictEqual(await cache.fetchShortcutFaviconData(pageUrl), null);
+  cache.setEnhancedFetchEnabled(true);
+  cache.invalidateShortcutFaviconPolicyCache();
+  assert.deepStrictEqual(await cache.fetchShortcutFaviconData(pageUrl), fetchedResult);
+  assert.strictEqual(resolveCalls, 1, 'enabling enhanced fetching should retry a previously cached miss');
+
+  let resolveOldRequest = null;
+  deps.resolve = () => new Promise((resolve) => {
+    resolveOldRequest = resolve;
+  });
+  cache.invalidateShortcutFaviconPolicyCache();
+  const staleRequest = cache.fetchShortcutFaviconData('https://stale.example/');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert(resolveOldRequest, 'the stale request should reach the resolver');
+
+  cache.invalidateShortcutFaviconPolicyCache();
+  const freshResult = {
+    data: 'data:image/png;base64,ZmFzdA==',
+    sourceUrl: 'https://stale.example/fresh.png'
+  };
+  deps.resolve = () => Promise.resolve(freshResult);
+  assert.deepStrictEqual(
+    await cache.fetchShortcutFaviconData('https://stale.example/'),
+    freshResult
+  );
+  resolveOldRequest({
+    data: 'data:image/png;base64,c3RhbGU=',
+    sourceUrl: 'https://stale.example/old.png'
+  });
+  await staleRequest;
+  assert.deepStrictEqual(
+    await cache.fetchShortcutFaviconData('https://stale.example/'),
+    freshResult,
+    'an old in-flight request should not repopulate the cache after policy invalidation'
+  );
+
+  assert(
+    /if \(changes\[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY\]\)[\s\S]{0,300}invalidateShortcutFaviconPolicyCache\(\)/
+      .test(backgroundSource),
+    'favicon blacklist changes should invalidate shortcut favicon results'
+  );
+  assert(
+    /if \(changes\[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY\]\)[\s\S]{0,300}invalidateShortcutFaviconPolicyCache\(\)/
+      .test(backgroundSource),
+    'enhanced-fetch setting changes should invalidate shortcut favicon results'
+  );
+
+  console.log('shortcut favicon policy cache tests passed');
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

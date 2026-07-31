@@ -43,7 +43,7 @@ export interface ShortcutsViewOptions {
   getShortcutIconDataUrl?: (shortcutId: string) => string;
   getShortcutFaviconDataUrl?: (pageUrl: string) => string;
   resolveShortcutFaviconDataUrl?: (pageUrl: string) => Promise<string>;
-  getBrowserPageFaviconUrl?: (url: string) => string;
+  getPageFaviconCandidateUrl?: (url: string) => string;
   getImmediateThemeForSuggestion?: (
     suggestion: ThemeSuggestion
   ) => ThemeValue;
@@ -62,7 +62,11 @@ export interface ShortcutsViewOptions {
     image: HTMLImageElement,
     pageUrl: string,
     host: string,
-    options: { primaryUrl: string }
+    options: {
+      primaryUrl: string;
+      browserUrl?: string;
+      skipPersisted?: boolean;
+    }
   ) => void;
   bindTooltip?: (
     target: HTMLElement,
@@ -102,7 +106,7 @@ interface NormalizedOptions {
   getShortcutIconDataUrl: (shortcutId: string) => string;
   getShortcutFaviconDataUrl: (pageUrl: string) => string;
   resolveShortcutFaviconDataUrl: (pageUrl: string) => Promise<string>;
-  getBrowserPageFaviconUrl: (url: string) => string;
+  getPageFaviconCandidateUrl: (url: string) => string;
   getImmediateThemeForSuggestion: (
     suggestion: ThemeSuggestion
   ) => ThemeValue;
@@ -121,7 +125,11 @@ interface NormalizedOptions {
     image: HTMLImageElement,
     pageUrl: string,
     host: string,
-    options: { primaryUrl: string }
+    options: {
+      primaryUrl: string;
+      browserUrl?: string;
+      skipPersisted?: boolean;
+    }
   ) => void;
   bindTooltip: (
     target: HTMLElement,
@@ -163,8 +171,8 @@ function normalizeOptions(
       options.getShortcutFaviconDataUrl || (() => ''),
     resolveShortcutFaviconDataUrl:
       options.resolveShortcutFaviconDataUrl || (() => Promise.resolve('')),
-    getBrowserPageFaviconUrl:
-      options.getBrowserPageFaviconUrl || (() => ''),
+    getPageFaviconCandidateUrl:
+      options.getPageFaviconCandidateUrl || (() => ''),
     getImmediateThemeForSuggestion:
       options.getImmediateThemeForSuggestion || (() => null),
     applyShortcutTileTheme: options.applyShortcutTileTheme || (() => {}),
@@ -207,7 +215,7 @@ function ShortcutFavicon({
   const [resolvedFaviconDataUrl, setResolvedFaviconDataUrl] = useState(
     cachedFaviconDataUrl
   );
-  const displayDataUrl = localIconDataUrl ||
+  const fallbackFaviconDataUrl =
     resolvedFaviconDataUrl || cachedFaviconDataUrl;
 
   useEffect(() => {
@@ -234,28 +242,30 @@ function ShortcutFavicon({
     if (!image) {
       return;
     }
-    if (displayDataUrl) {
+    if (localIconDataUrl) {
       image.parentElement
         ?.querySelectorAll('._x_extension_favicon_fallback_2024_unique_')
         .forEach((node) => node.remove());
       return;
     }
     options.attachFaviconWithFallbacks(image, url, host, {
-      primaryUrl: options.getBrowserPageFaviconUrl(url)
+      primaryUrl: options.getPageFaviconCandidateUrl(url),
+      browserUrl: fallbackFaviconDataUrl,
+      skipPersisted: true
     });
-  }, [displayDataUrl, host, options, url]);
+  }, [fallbackFaviconDataUrl, host, localIconDataUrl, options, url]);
 
   return (
     <span className="x-nt-shortcut-icon">
       <span className="x-nt-shortcut-favicon-mask">
         <img
-          key={displayDataUrl || url}
+          key={localIconDataUrl || url}
           ref={imageRef}
           className="x-nt-shortcut-favicon"
           alt=""
           loading="lazy"
           draggable={false}
-          src={displayDataUrl || undefined}
+          src={localIconDataUrl || undefined}
         />
       </span>
     </span>

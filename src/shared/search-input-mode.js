@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-07-31-scope-filter-v9';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-07-31-scope-chip-v15';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -12,10 +12,14 @@
   const DEFAULT_MODE_MENU_DOUBLE_TAB_DURATION = 700;
   const DEFAULT_MODE_TAG_REMOVAL_CONFIRMATION_DURATION = 2200;
   const DEFAULT_MODE_MENU_VIEWPORT_BOTTOM_INSET = 24;
-  const DEFAULT_PREFIX_ICON_FADE_DURATION = 100;
-  const DEFAULT_PREFIX_RESIZE_DURATION = 160;
-  const DEFAULT_PREFIX_RESIZE_EASING = 'linear';
-  const DEFAULT_PREFIX_TRANSITION = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease';
+  const DEFAULT_PREFIX_ICON_POP_DURATION = 180;
+  const DEFAULT_PREFIX_ICON_POP_EASING = 'linear';
+  const DEFAULT_PREFIX_ICON_EXIT_DURATION = 100;
+  const DEFAULT_PREFIX_ICON_EXIT_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
+  const DEFAULT_PREFIX_RESIZE_DURATION = 140;
+  const DEFAULT_PREFIX_RESIZE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const DEFAULT_PREFIX_TRANSITION = 'background-color 140ms ease, color 140ms ease';
+  const MIN_PREFIX_TEXT_CONTRAST = 4.5;
   const MODE_MENU_LINE_ICON_PATHS = Object.freeze({
     bookmark: ['M18 7v14l-6-4l-6 4V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4'],
     browser: ['M4 8h16M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm4-2v4'],
@@ -173,17 +177,45 @@
     return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
   }
 
+  function getContrastRatio(firstRgb, secondRgb) {
+    const firstLuminance = getRelativeLuminance(firstRgb);
+    const secondLuminance = getRelativeLuminance(secondRgb);
+    return (Math.max(firstLuminance, secondLuminance) + 0.05) /
+      (Math.min(firstLuminance, secondLuminance) + 0.05);
+  }
+
   function getReadableTextColor(backgroundRgb) {
     const darkText = [17, 24, 39];
     const lightText = [248, 250, 252];
-    const backgroundLuminance = getRelativeLuminance(backgroundRgb);
-    const darkLuminance = getRelativeLuminance(darkText);
-    const lightLuminance = getRelativeLuminance(lightText);
-    const darkContrast = (Math.max(backgroundLuminance, darkLuminance) + 0.05) /
-      (Math.min(backgroundLuminance, darkLuminance) + 0.05);
-    const lightContrast = (Math.max(backgroundLuminance, lightLuminance) + 0.05) /
-      (Math.min(backgroundLuminance, lightLuminance) + 0.05);
+    const darkContrast = getContrastRatio(darkText, backgroundRgb);
+    const lightContrast = getContrastRatio(lightText, backgroundRgb);
     return darkContrast >= lightContrast ? '#111827' : '#F8FAFC';
+  }
+
+  function getAccessibleThemeTextRgb(accentRgb, backgroundRgb) {
+    const darkTarget = [15, 23, 42];
+    const lightTarget = [248, 250, 252];
+    if (getContrastRatio(accentRgb, backgroundRgb) >= MIN_PREFIX_TEXT_CONTRAST) {
+      return accentRgb.slice();
+    }
+    const target = getContrastRatio(darkTarget, backgroundRgb) >=
+      getContrastRatio(lightTarget, backgroundRgb)
+      ? darkTarget
+      : lightTarget;
+    let lowerWeight = 0;
+    let upperWeight = 1;
+    let readableColor = target.slice();
+    for (let iteration = 0; iteration < 12; iteration += 1) {
+      const weight = (lowerWeight + upperWeight) / 2;
+      const candidate = mixRgb(accentRgb, target, weight);
+      if (getContrastRatio(candidate, backgroundRgb) >= MIN_PREFIX_TEXT_CONTRAST) {
+        readableColor = candidate;
+        upperWeight = weight;
+      } else {
+        lowerWeight = weight;
+      }
+    }
+    return readableColor;
   }
 
   function createInputModeController(parts, options) {
@@ -319,6 +351,8 @@
     let inputModePrefixContentRevision = 0;
     let inputModePrefixIconAnimation = null;
     let inputModePrefixIconAnimationElement = null;
+    let inputModePrefixIconGhost = null;
+    let inputModePrefixOutgoingIconAnimation = null;
     let inputModePrefixPendingText = '';
     let layoutResizeObserver = null;
     let modeMenuOpen = false;
@@ -421,6 +455,12 @@
     const siteSearchPrefixCurrent = applyNoTranslate(
       parts.modePrefixCurrent || doc.createElement('span')
     );
+    const siteSearchPrefixCurrentText = applyNoTranslate(
+      typeof siteSearchPrefixCurrent.querySelector === 'function'
+        ? siteSearchPrefixCurrent.querySelector('[data-search-input-mode-current-text]') ||
+          doc.createElement('span')
+        : doc.createElement('span')
+    );
     const siteSearchPrefixChevron = parts.modePrefixChevron || doc.createElement('i');
     const modeMenuWasProvided = Boolean(parts.modeMenu);
     const modeMenu = applyNoTranslate(parts.modeMenu || doc.createElement('div'));
@@ -438,6 +478,9 @@
     siteSearchPrefix.setAttribute('aria-expanded', 'false');
     siteSearchPrefix.setAttribute('aria-controls', `${prefixId}-menu`);
     siteSearchPrefix.setAttribute('data-menu-open', 'false');
+    siteSearchPrefix.setAttribute('data-current-visible', 'false');
+    siteSearchPrefix.setAttribute('data-current-measuring', 'false');
+    siteSearchPrefix.setAttribute('data-current-overlay', 'false');
     if (!siteSearchPrefixGlyph.parentNode) {
       if (typeof siteSearchPrefix.insertBefore === 'function') {
         siteSearchPrefix.insertBefore(siteSearchPrefixGlyph, siteSearchPrefixText);
@@ -471,8 +514,12 @@
         siteSearchPrefix.appendChild(siteSearchPrefixCurrent);
       }
     }
+    if (!siteSearchPrefixCurrentText.parentNode) {
+      siteSearchPrefixCurrent.appendChild(siteSearchPrefixCurrentText);
+    }
     siteSearchPrefixCurrent.setAttribute('aria-hidden', 'true');
     siteSearchPrefixCurrent.setAttribute('data-search-input-mode-current', '');
+    siteSearchPrefixCurrentText.setAttribute('data-search-input-mode-current-text', '');
     siteSearchPrefixGlyph.setAttribute('aria-hidden', 'true');
     siteSearchPrefixChevron.setAttribute('aria-hidden', 'true');
     siteSearchPrefixChevron.className = 'ri-icon ri-size-16 ri-arrow-down-s-line';
@@ -490,8 +537,8 @@
       ['max-width', 'min(220px, 48%)'],
       ['min-width', '0'],
       ['box-sizing', 'border-box'],
-      ['height', '26px'],
-      ['padding', '0 8px'],
+      ['height', '32px'],
+      ['padding', '0 10px'],
       ['white-space', 'nowrap'],
       ['overflow', 'hidden'],
       ['text-overflow', 'ellipsis'],
@@ -502,9 +549,9 @@
       ['letter-spacing', '0'],
       ['color', '#F8FAFC'],
       ['background', '#3B82F6'],
-      ['border', '1px solid transparent'],
-      ['border-radius', '9px'],
-      ['box-shadow', '0 5px 14px rgba(15, 23, 42, 0.08)'],
+      ['border', 'none'],
+      ['border-radius', '10px'],
+      ['box-shadow', 'none'],
       ['opacity', '1'],
       ['transition', prefixTransition],
       ['will-change', 'auto'],
@@ -514,6 +561,8 @@
       ['user-select', 'none']
     ], useImportantStyles);
     setStyle(siteSearchPrefix, 'justify-content', 'flex-start', useImportantStyles);
+    setStyle(siteSearchPrefix, 'height', '32px', useImportantStyles);
+    setStyle(siteSearchPrefix, 'padding', '0 10px', useImportantStyles);
     modeMenu.id = `${prefixId}-menu`;
     modeMenu.className = `x-lumno-search-input-mode__menu ${menuSurfaceClass}`;
     if (typeof menuSurface.apply === 'function') {
@@ -533,6 +582,7 @@
       ['right', modeMenuEdgeOffset],
       ['top', `calc(100% + ${vars.panelGap})`],
       ['width', 'auto'],
+      ['height', 'min(360px, 62vh, var(--x-lumno-search-mode-menu-viewport-max-height, 360px))'],
       ['max-height', 'min(360px, 62vh, var(--x-lumno-search-mode-menu-viewport-max-height, 360px))'],
       ['overflow', 'hidden'],
       ['padding', '0'],
@@ -742,8 +792,8 @@
         return {
           accentColor: surfaceColor,
           background: `color-mix(in srgb, ${surfaceColor} ${isDark ? 14 : 9}%, transparent)`,
-          border: `1px solid color-mix(in srgb, ${surfaceColor} ${isDark ? 28 : 18}%, transparent)`,
-          shadow: `0 5px 14px rgba(15, 23, 42, ${isDark ? 0.2 : 0.075})`,
+          border: 'none',
+          shadow: 'none',
           color: surfaceColor,
           caretColor: surfaceColor
         };
@@ -752,17 +802,20 @@
       const accentRgb = (resolvedTheme && (resolvedTheme.accentRgb || parseCssColor(resolvedTheme.accent))) ||
         defaultAccentColor;
       const isDark = Boolean(isDarkMode());
-      const mutedAccentRgb = mixRgb(
+      const backgroundOpacity = isDark ? 0.14 : 0.075;
+      const backgroundRgb = mixRgb(
         accentRgb,
-        isDark ? [148, 163, 184] : [71, 85, 105],
-        isDark ? 0.54 : 0.58
+        isDark ? [17, 24, 39] : [255, 255, 255],
+        1 - backgroundOpacity
       );
+      const themeTextRgb = getAccessibleThemeTextRgb(accentRgb, backgroundRgb);
+      const themeTextColor = rgbToCss(themeTextRgb);
       return {
-        accentColor: rgbToCss(mutedAccentRgb),
-        background: `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${isDark ? 0.14 : 0.075})`,
-        border: `1px solid rgba(${mutedAccentRgb[0]}, ${mutedAccentRgb[1]}, ${mutedAccentRgb[2]}, ${isDark ? 0.28 : 0.18})`,
-        shadow: `0 5px 14px rgba(15, 23, 42, ${isDark ? 0.2 : 0.075})`,
-        color: isDark ? '#F8FAFC' : '#1E293B',
+        accentColor: themeTextColor,
+        background: `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${backgroundOpacity})`,
+        border: 'none',
+        shadow: 'none',
+        color: themeTextColor,
         caretColor: resolvedTheme && resolvedTheme.placeholderText
           ? resolvedTheme.placeholderText
           : rgbToCss(accentRgb)
@@ -881,47 +934,125 @@
     }
 
     function cancelInputModePrefixIconAnimation() {
-      if (inputModePrefixIconAnimation &&
-          typeof inputModePrefixIconAnimation.cancel === 'function') {
-        inputModePrefixIconAnimation.cancel();
-      }
+      const incomingAnimation = inputModePrefixIconAnimation;
+      const incomingElement = inputModePrefixIconAnimationElement;
+      const outgoingAnimation = inputModePrefixOutgoingIconAnimation;
+      const outgoingIcon = inputModePrefixIconGhost;
       inputModePrefixIconAnimation = null;
-      if (inputModePrefixIconAnimationElement) {
-        setStyle(
-          inputModePrefixIconAnimationElement,
-          'opacity',
-          '1',
-          useImportantStyles
-        );
-      }
       inputModePrefixIconAnimationElement = null;
+      inputModePrefixIconGhost = null;
+      inputModePrefixOutgoingIconAnimation = null;
+      if (incomingAnimation && typeof incomingAnimation.cancel === 'function') {
+        incomingAnimation.cancel();
+      }
+      if (outgoingAnimation && typeof outgoingAnimation.cancel === 'function') {
+        outgoingAnimation.cancel();
+      }
+      if (incomingElement) {
+        setStyle(incomingElement, 'opacity', '1', useImportantStyles);
+        setStyle(incomingElement, 'filter', 'none', useImportantStyles);
+        setStyle(incomingElement, 'transform', 'none', useImportantStyles);
+        setStyle(incomingElement, 'will-change', 'auto', useImportantStyles);
+      }
+      if (outgoingIcon && outgoingIcon.parentNode) {
+        outgoingIcon.parentNode.removeChild(outgoingIcon);
+      }
     }
 
-    function playInputModePrefixIconFade(animateIcon) {
-      cancelInputModePrefixIconAnimation();
+    function createInputModePrefixIconGhost(animateIcon) {
+      if (!animateIcon || shouldReduceInputModeMotion()) {
+        return null;
+      }
+      const activeIcon = [
+        siteSearchPrefixLineIcon,
+        siteSearchPrefixIcon,
+        siteSearchPrefixGlyph
+      ].find((element) => isElementVisible(element));
+      if (!activeIcon || typeof activeIcon.cloneNode !== 'function') {
+        return null;
+      }
+      const ghost = activeIcon.cloneNode(true);
+      const prefixRect = siteSearchPrefix.getBoundingClientRect();
+      const iconRect = activeIcon.getBoundingClientRect();
+      const iconWidth = Number(iconRect.width) || Number(activeIcon.offsetWidth) || 16;
+      const iconHeight = Number(iconRect.height) || Number(activeIcon.offsetHeight) || 16;
+      const iconLeft = Number(iconRect.left) - Number(prefixRect.left);
+      const iconTop = Number(iconRect.top) - Number(prefixRect.top);
+      ghost.removeAttribute('id');
+      ghost.removeAttribute('data-search-input-mode-line-icon');
+      ghost.removeAttribute('data-search-input-mode-prefix-glyph');
+      ghost.removeAttribute('data-search-input-mode-prefix-icon');
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.setAttribute('data-search-input-mode-icon-ghost', '');
+      setStyle(ghost, 'position', 'absolute', useImportantStyles);
+      setStyle(ghost, 'left', `${Number.isFinite(iconLeft) ? iconLeft : 0}px`, useImportantStyles);
+      setStyle(ghost, 'top', `${Number.isFinite(iconTop) ? iconTop : 0}px`, useImportantStyles);
+      setStyle(ghost, 'width', `${iconWidth}px`, useImportantStyles);
+      setStyle(ghost, 'height', `${iconHeight}px`, useImportantStyles);
+      setStyle(ghost, 'display', 'inline-flex', useImportantStyles);
+      setStyle(ghost, 'align-items', 'center', useImportantStyles);
+      setStyle(ghost, 'justify-content', 'center', useImportantStyles);
+      setStyle(ghost, 'pointer-events', 'none', useImportantStyles);
+      setStyle(ghost, 'opacity', '1', useImportantStyles);
+      setStyle(ghost, 'filter', 'none', useImportantStyles);
+      setStyle(ghost, 'transform', 'none', useImportantStyles);
+      setStyle(ghost, 'transform-origin', 'center', useImportantStyles);
+      setStyle(ghost, 'will-change', 'opacity, transform', useImportantStyles);
+      setStyle(ghost, 'z-index', '2', useImportantStyles);
+      siteSearchPrefix.appendChild(ghost);
+      return ghost;
+    }
+
+    function playInputModePrefixIconSwap(animateIcon, outgoingIcon) {
       const activeIcon = [
         siteSearchPrefixLineIcon,
         siteSearchPrefixIcon,
         siteSearchPrefixGlyph
       ].find((element) => isElementVisible(element));
       if (!activeIcon) {
+        if (outgoingIcon && outgoingIcon.parentNode) {
+          outgoingIcon.parentNode.removeChild(outgoingIcon);
+        }
         return;
       }
       setStyle(activeIcon, 'opacity', '1', useImportantStyles);
+      setStyle(activeIcon, 'filter', 'none', useImportantStyles);
       setStyle(activeIcon, 'transform', 'none', useImportantStyles);
+      setStyle(activeIcon, 'transform-origin', 'center', useImportantStyles);
+      setStyle(activeIcon, 'will-change', 'auto', useImportantStyles);
       if (!animateIcon || shouldReduceInputModeMotion() ||
           typeof activeIcon.animate !== 'function') {
+        if (outgoingIcon && outgoingIcon.parentNode) {
+          outgoingIcon.parentNode.removeChild(outgoingIcon);
+        }
         return;
       }
       const animation = activeIcon.animate([
-        { opacity: 0 },
-        { opacity: 1 }
+        {
+          opacity: 0.45,
+          offset: 0,
+          transform: 'scale(0.84)'
+        },
+        {
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+          opacity: 1,
+          offset: 0.62,
+          transform: 'scale(1.05)'
+        },
+        {
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          opacity: 1,
+          offset: 0.84,
+          transform: 'scale(0.99)'
+        },
+        { opacity: 1, offset: 1, transform: 'scale(1)' }
       ], {
-        duration: DEFAULT_PREFIX_ICON_FADE_DURATION,
-        easing: 'ease-out'
+        duration: DEFAULT_PREFIX_ICON_POP_DURATION,
+        easing: DEFAULT_PREFIX_ICON_POP_EASING
       });
       inputModePrefixIconAnimation = animation;
       inputModePrefixIconAnimationElement = activeIcon;
+      setStyle(activeIcon, 'will-change', 'opacity, transform', useImportantStyles);
       animation.onfinish = () => {
         if (inputModePrefixIconAnimation !== animation) {
           return;
@@ -929,6 +1060,9 @@
         inputModePrefixIconAnimation = null;
         inputModePrefixIconAnimationElement = null;
         setStyle(activeIcon, 'opacity', '1', useImportantStyles);
+        setStyle(activeIcon, 'filter', 'none', useImportantStyles);
+        setStyle(activeIcon, 'transform', 'none', useImportantStyles);
+        setStyle(activeIcon, 'will-change', 'auto', useImportantStyles);
       };
       animation.oncancel = () => {
         if (inputModePrefixIconAnimation === animation) {
@@ -936,6 +1070,34 @@
           inputModePrefixIconAnimationElement = null;
         }
       };
+      if (!outgoingIcon || typeof outgoingIcon.animate !== 'function') {
+        if (outgoingIcon && outgoingIcon.parentNode) {
+          outgoingIcon.parentNode.removeChild(outgoingIcon);
+        }
+        return;
+      }
+      const outgoingAnimation = outgoingIcon.animate([
+        { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(0.84)' }
+      ], {
+        duration: DEFAULT_PREFIX_ICON_EXIT_DURATION,
+        easing: DEFAULT_PREFIX_ICON_EXIT_EASING
+      });
+      inputModePrefixIconGhost = outgoingIcon;
+      inputModePrefixOutgoingIconAnimation = outgoingAnimation;
+      const removeOutgoingIcon = () => {
+        if (inputModePrefixOutgoingIconAnimation === outgoingAnimation) {
+          inputModePrefixOutgoingIconAnimation = null;
+        }
+        if (inputModePrefixIconGhost === outgoingIcon) {
+          inputModePrefixIconGhost = null;
+        }
+        if (outgoingIcon.parentNode) {
+          outgoingIcon.parentNode.removeChild(outgoingIcon);
+        }
+      };
+      outgoingAnimation.onfinish = removeOutgoingIcon;
+      outgoingAnimation.oncancel = removeOutgoingIcon;
     }
 
     function measureInputModePrefixWidthForText(prefixText) {
@@ -950,8 +1112,14 @@
       const preserveIconAnimation = Boolean(
         contentOptions && contentOptions.preserveIconAnimation
       );
+      const animateIcon = Boolean(contentOptions && contentOptions.animateIcon);
+      const animateOutgoingIcon = Boolean(
+        contentOptions && contentOptions.animateOutgoingIcon
+      );
+      let outgoingIcon = null;
       if (!preserveIconAnimation) {
         cancelInputModePrefixIconAnimation();
+        outgoingIcon = createInputModePrefixIconGhost(animateOutgoingIcon);
       }
       const contentRevision = ++inputModePrefixContentRevision;
       const iconUrl = contentOptions && contentOptions.iconUrl ? String(contentOptions.iconUrl || '').trim() : '';
@@ -1045,15 +1213,18 @@
         ['white-space', 'nowrap'],
         ['line-height', '18px']
       ], useImportantStyles);
-      siteSearchPrefixCurrent.textContent = formatMessage(
+      siteSearchPrefixCurrentText.textContent = formatMessage(
         'search_scope_current',
         '当前'
       );
+      const currentLabelVisible = siteSearchPrefix.getAttribute(
+        'data-current-visible'
+      ) === 'true';
       siteSearchPrefixCurrent.style.cssText = cssText([
         ['all', 'unset'],
-        ['display', modeMenuOpen && !modeMenu.hidden ? 'inline-flex' : 'none'],
+        ['display', currentLabelVisible ? 'inline-flex' : 'none'],
         ['align-items', 'center'],
-        ['font-size', '10px'],
+        ['font-size', '13px'],
         ['font-weight', '600'],
         ['line-height', '18px'],
         ['letter-spacing', '0.04em'],
@@ -1065,9 +1236,7 @@
       setStyle(siteSearchPrefixChevron, 'display', 'inline-flex', useImportantStyles);
       setStyle(siteSearchPrefixChevron, 'flex', '0 0 auto', useImportantStyles);
       if (!preserveIconAnimation) {
-        playInputModePrefixIconFade(Boolean(
-          contentOptions && contentOptions.animateIcon
-        ));
+        playInputModePrefixIconSwap(animateIcon, outgoingIcon);
       }
     }
 
@@ -1096,6 +1265,13 @@
         } else {
           siteSearchPrefix.style.width = '';
         }
+      }
+      if ((!cancelOptions || cancelOptions.preserveCurrentOverlay !== true) &&
+          siteSearchPrefix.getAttribute('data-current-overlay') === 'true') {
+        setInputModePrefixCurrentOverlay(false);
+        setInputModePrefixCurrentVisible(
+          siteSearchPrefix.getAttribute('data-menu-open') === 'true'
+        );
       }
     }
 
@@ -1128,6 +1304,9 @@
 
     function playInputModePrefixResizeAnimation(fromWidth, toWidth, resizeOptions) {
       const options = resizeOptions || {};
+      const onStart = typeof options.onStart === 'function'
+        ? options.onStart
+        : null;
       const onFinish = typeof options.onFinish === 'function'
         ? options.onFinish
         : null;
@@ -1148,6 +1327,9 @@
         { width: `${startWidth}px` },
         { width: `${endWidth}px` }
       ];
+      if (onStart) {
+        onStart();
+      }
       setStyle(siteSearchPrefix, 'will-change', 'width', useImportantStyles);
       if (typeof siteSearchPrefix.animate === 'function') {
         const animation = siteSearchPrefix.animate(keyframes, {
@@ -1194,16 +1376,72 @@
       });
     }
 
+    function setInputModePrefixCurrentVisible(visible) {
+      const nextVisible = Boolean(visible);
+      siteSearchPrefix.setAttribute(
+        'data-current-visible',
+        nextVisible ? 'true' : 'false'
+      );
+      const measuring = siteSearchPrefix.getAttribute(
+        'data-current-measuring'
+      ) === 'true';
+      setStyle(
+        siteSearchPrefixCurrent,
+        'display',
+        nextVisible || measuring ? 'inline-flex' : 'none',
+        useImportantStyles
+      );
+    }
+
+    function setInputModePrefixCurrentMeasuring(measuring) {
+      const nextMeasuring = Boolean(measuring);
+      siteSearchPrefix.setAttribute(
+        'data-current-measuring',
+        nextMeasuring ? 'true' : 'false'
+      );
+      const visible = siteSearchPrefix.getAttribute(
+        'data-current-visible'
+      ) === 'true';
+      setStyle(
+        siteSearchPrefixCurrent,
+        'display',
+        nextMeasuring || visible ? 'inline-flex' : 'none',
+        useImportantStyles
+      );
+    }
+
+    function setInputModePrefixCurrentOverlay(active, left) {
+      const nextActive = Boolean(active);
+      siteSearchPrefix.setAttribute(
+        'data-current-overlay',
+        nextActive ? 'true' : 'false'
+      );
+      if (nextActive) {
+        const normalizedLeft = Math.max(0, Number(left) || 0);
+        setStyle(
+          siteSearchPrefix,
+          '--x-lumno-search-mode-current-overlay-left',
+          `${normalizedLeft}px`,
+          useImportantStyles
+        );
+        return;
+      }
+      if (siteSearchPrefix.style &&
+          typeof siteSearchPrefix.style.removeProperty === 'function') {
+        siteSearchPrefix.style.removeProperty(
+          '--x-lumno-search-mode-current-overlay-left'
+        );
+      }
+    }
+
     function setInputModePrefixMenuOpen(open) {
       const nextOpen = Boolean(open);
       const wasOpen = siteSearchPrefix.getAttribute('data-menu-open') === 'true';
       if (wasOpen === nextOpen) {
-        setStyle(
-          siteSearchPrefixCurrent,
-          'display',
-          nextOpen ? 'inline-flex' : 'none',
-          useImportantStyles
-        );
+        if (!nextOpen) {
+          setInputModePrefixCurrentOverlay(false);
+          setInputModePrefixCurrentVisible(false);
+        }
         return;
       }
       const shouldAnimate = isElementVisible(siteSearchPrefix);
@@ -1213,19 +1451,47 @@
       const previousWidth = shouldAnimate
         ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
         : 0;
+      const prefixRect = nextOpen && shouldAnimate
+        ? siteSearchPrefix.getBoundingClientRect()
+        : null;
+      const chevronRect = nextOpen && shouldAnimate
+        ? siteSearchPrefixChevron.getBoundingClientRect()
+        : null;
+      const currentOverlayLeft = prefixRect && chevronRect
+        ? Number(chevronRect.left) - Number(prefixRect.left) -
+          (Number(siteSearchPrefix.clientLeft) || 0)
+        : 0;
       siteSearchPrefix.setAttribute('data-menu-open', nextOpen ? 'true' : 'false');
-      setStyle(
-        siteSearchPrefixCurrent,
-        'display',
-        nextOpen ? 'inline-flex' : 'none',
-        useImportantStyles
-      );
+      setInputModePrefixCurrentOverlay(false);
+      setInputModePrefixCurrentVisible(false);
+      setInputModePrefixCurrentMeasuring(nextOpen);
       const nextWidth = shouldAnimate
         ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
         : 0;
+      setInputModePrefixCurrentMeasuring(false);
       updatePrefixLayout();
       if (shouldAnimate) {
-        playInputModePrefixResizeAnimation(previousWidth, nextWidth);
+        playInputModePrefixResizeAnimation(previousWidth, nextWidth, {
+          onStart: nextOpen ? () => {
+            if (siteSearchPrefix.getAttribute('data-menu-open') !== 'true') {
+              return;
+            }
+            setInputModePrefixCurrentOverlay(true, currentOverlayLeft);
+            setInputModePrefixCurrentVisible(true);
+          } : null,
+          onFinish: nextOpen ? () => {
+            if (siteSearchPrefix.getAttribute('data-menu-open') !== 'true') {
+              return;
+            }
+            setInputModePrefixCurrentOverlay(false);
+            setInputModePrefixCurrentVisible(true);
+            updatePrefixLayout();
+          } : null
+        });
+      } else if (nextOpen) {
+        setInputModePrefixCurrentOverlay(false);
+        setInputModePrefixCurrentVisible(true);
+        updatePrefixLayout();
       }
     }
 
@@ -1456,6 +1722,7 @@
       const contentOptions = {
         ...nextOptions,
         animateIcon: shouldAnimate && !isRepeatedMode,
+        animateOutgoingIcon: shouldAnimateResize,
         preserveIconAnimation: !shouldAnimate && isSameMode
       };
       if (shouldAnimateResize) {

@@ -430,6 +430,7 @@
         extensionFavicon: getRuntimeExtensionFaviconUrl(url),
         gstaticFavicon: getRuntimeGstaticFaviconUrl(url),
         previousWorkingSrc,
+        skipPersisted: Boolean(optionsArg && optionsArg.skipPersisted === true),
         isSessionCurrent() {
           return Boolean(img && img._xThemeFaviconSession === session);
         },
@@ -498,10 +499,12 @@
     }
 
     function buildThemeAwareFaviconCandidatePlan(state) {
-      const persistedCandidates = [
-        { kind: 'persisted-data', url: state.persistedDataUrl },
-        { kind: 'primary', url: state.persistedUrl }
-      ];
+      const persistedCandidates = state.skipPersisted
+        ? []
+        : [
+          { kind: 'persisted-data', url: state.persistedDataUrl },
+          { kind: 'primary', url: state.persistedUrl }
+        ];
       const runtimeCandidates = faviconUrlResolver
         ? faviconUrlResolver.buildFaviconCandidatePlan(state)
         : [];

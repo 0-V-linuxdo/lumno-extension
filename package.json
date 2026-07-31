@@ -1,6 +1,6 @@
 {
   "name": "lumno-extension",
-  "version": "0.9.22",
+  "version": "0.9.30",
   "private": true,
   "scripts": {
     "build:react": "vite build --config vite.react.config.mjs && vite build --config vite.overlay-react.config.mjs",

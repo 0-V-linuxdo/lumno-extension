@@ -1,1 +1,9 @@
-<svg role="img" aria-label="Tmall" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>Tmall</title><rect width="24" height="24" rx="5.5" fill="#FF0036"/><g transform="translate(3 3) scale(.264317) translate(-73 0)"><path fill="#FFFFFF" d="M425.57,449.72c-4.19-.15-8.41,3.36-8.26,7.81-.07,20.08,0,40.17-.05,60.25,3.46.05,6.9,0,10.35,0,0-18.34,0-36.66,0-55,3.79,3,7.33,6.5,11.79,8.49a27.47,27.47,0,0,0,22.38.23c4.71-2,8.4-5.62,12.37-8.72q0,27.5,0,55c3.45,0,6.89,0,10.33,0-.06-20.12,0-40.24,0-60.34.15-5.7-6.85-9.68-11.66-6.72-4.36,3-8.13,6.74-12.43,9.8a17.13,17.13,0,0,1-16.78,1.25c-5.6-3-9.75-8.09-15.17-11.33a6.81,6.81,0,0,0-2.84-.72Z" transform="translate(-343.53 -449.72)"/></g></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Tmall">
+  <title>Tmall</title>
+  <rect width="24" height="24" rx="5.5" fill="#FF0036"/>
+  <defs>
+    <clipPath id="tmall-icon-clip"><rect width="24" height="24" rx="5.5"/></clipPath>
+  </defs>
+  <image href="tmall.png" width="24" height="24" preserveAspectRatio="xMidYMid meet" clip-path="url(#tmall-icon-clip)"/>
+</svg>

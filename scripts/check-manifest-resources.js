@@ -49,6 +49,16 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizeManifestResourcePath(value) {
+  return String(value || '').replace(/\\/g, '/');
+}
+
+function manifestResourcePatternMatchesPath(value, candidate) {
+  const normalizedPattern = normalizeManifestResourcePath(value);
+  const pattern = new RegExp(`^${normalizedPattern.split('*').map(escapeRegExp).join('.*')}$`);
+  return pattern.test(normalizeManifestResourcePath(candidate));
+}
+
 function manifestResourcePatternHasMatch(value) {
   if (!value.includes('*')) {
     return false;
@@ -58,7 +68,6 @@ function manifestResourcePatternHasMatch(value) {
   if (!prefixDirectory || !fs.existsSync(prefixDirectory)) {
     return false;
   }
-  const pattern = new RegExp(`^${value.split('*').map(escapeRegExp).join('.*')}$`);
   const candidates = [];
   const visit = (directory) => {
     fs.readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
@@ -71,7 +80,7 @@ function manifestResourcePatternHasMatch(value) {
     });
   };
   visit(prefixDirectory);
-  return candidates.some((candidate) => pattern.test(candidate));
+  return candidates.some((candidate) => manifestResourcePatternMatchesPath(value, candidate));
 }
 
 function checkPath(value) {
@@ -262,28 +271,42 @@ function checkNewtabWallpaperFiles() {
   }
 }
 
-checkPath(manifest.background && manifest.background.service_worker);
-checkPath(manifest.chrome_url_overrides && manifest.chrome_url_overrides.newtab);
-checkPath(manifest.options_ui && manifest.options_ui.page);
+function run() {
+  checkPath(manifest.background && manifest.background.service_worker);
+  checkPath(manifest.chrome_url_overrides && manifest.chrome_url_overrides.newtab);
+  checkPath(manifest.options_ui && manifest.options_ui.page);
 
-Object.values(manifest.icons || {}).forEach(checkPath);
-(manifest.content_scripts || []).forEach((script) => {
-  (script.js || []).forEach(checkPath);
-  (script.css || []).forEach(checkPath);
-});
-(manifest.web_accessible_resources || []).forEach((entry) => {
-  (entry.resources || []).forEach(checkPath);
-});
-injectedScriptFiles.forEach(checkPath);
-checkRuntimeGetUrlReferences();
-checkHtmlReferences();
-checkCssFiles();
-checkNewtabWallpaperFiles();
+  Object.values(manifest.icons || {}).forEach(checkPath);
+  (manifest.content_scripts || []).forEach((script) => {
+    (script.js || []).forEach(checkPath);
+    (script.css || []).forEach(checkPath);
+  });
+  (manifest.web_accessible_resources || []).forEach((entry) => {
+    (entry.resources || []).forEach(checkPath);
+  });
+  injectedScriptFiles.forEach(checkPath);
+  checkRuntimeGetUrlReferences();
+  checkHtmlReferences();
+  checkCssFiles();
+  checkNewtabWallpaperFiles();
 
-if (missing.length > 0) {
-  console.error('Missing manifest resources:');
-  missing.forEach((item) => console.error(`- ${item}`));
-  process.exit(1);
+  if (missing.length > 0) {
+    console.error('Missing manifest resources:');
+    missing.forEach((item) => console.error(`- ${item}`));
+    process.exitCode = 1;
+    return false;
+  }
+
+  console.log('manifest resources ok');
+  return true;
 }
 
-console.log('manifest resources ok');
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  manifestResourcePatternMatchesPath,
+  normalizeManifestResourcePath,
+  run
+};

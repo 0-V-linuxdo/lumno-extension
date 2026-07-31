@@ -182,6 +182,8 @@ async function runSurfaceBridgeTests() {
       <button id="action" aria-label="Run action">Run</button>
       <input id="query" value="before" />
       <input id="secret" type="password" value="do-not-return" />
+      <input id="checkbox" type="checkbox" />
+      <input id="radio" type="radio" checked />
       <img id="wallpaper" src="data:image/png;base64,large" />
       <script>window.fixtureScript = true;</script>
     </body></html>`, {
@@ -242,6 +244,58 @@ async function runSurfaceBridgeTests() {
   assert(!snapshot.markup.includes('<script'), 'snapshot should omit executable scripts');
   assert(!snapshot.markup.includes('do-not-return'), 'snapshot should redact password values');
   assert(snapshot.markup.includes('[omitted-url]'), 'snapshot should omit data and blob resource URLs');
+  assert(!snapshot.text.includes('fixtureScript'), 'snapshot text should come from the sanitized clone');
+
+  const passwordSnapshot = agent.executeRequest('surface.snapshot', { selector: '#secret' });
+  assert(
+    !passwordSnapshot.markup.includes('do-not-return'),
+    'snapshot should redact a password input selected as the root element'
+  );
+  assert(passwordSnapshot.markup.includes('[redacted]'));
+  const imageSnapshot = agent.executeRequest('surface.snapshot', { selector: '#wallpaper' });
+  assert(
+    imageSnapshot.markup.includes('[omitted-url]'),
+    'snapshot should sanitize a data URL on the selected root element'
+  );
+  const scriptSnapshot = agent.executeRequest('surface.snapshot', { selector: 'script' });
+  assert(!scriptSnapshot.markup.includes('<script'), 'snapshot should omit a selected script root');
+  assert(!scriptSnapshot.text.includes('fixtureScript'), 'snapshot should omit selected script text');
+
+  let checkboxInputCount = 0;
+  let checkboxChangeCount = 0;
+  const checkbox = dom.window.document.getElementById('checkbox');
+  checkbox.addEventListener('input', () => {
+    checkboxInputCount += 1;
+  });
+  checkbox.addEventListener('change', () => {
+    checkboxChangeCount += 1;
+  });
+  const checkboxResult = agent.executeRequest('surface.action', {
+    selector: '#checkbox',
+    action: 'setChecked',
+    checked: true
+  });
+  assert.strictEqual(checkboxResult.element.checked, true);
+  assert.strictEqual(checkboxInputCount, 1, 'setChecked should dispatch one input event');
+  assert.strictEqual(checkboxChangeCount, 1, 'setChecked should dispatch one change event');
+
+  let radioInputCount = 0;
+  let radioChangeCount = 0;
+  const radio = dom.window.document.getElementById('radio');
+  radio.addEventListener('input', () => {
+    radioInputCount += 1;
+  });
+  radio.addEventListener('change', () => {
+    radioChangeCount += 1;
+  });
+  const radioResult = agent.executeRequest('surface.action', {
+    selector: '#radio',
+    action: 'setChecked',
+    checked: false
+  });
+  assert.strictEqual(radioResult.element.checked, false, 'setChecked(false) should uncheck a radio');
+  assert.strictEqual(radioInputCount, 1);
+  assert.strictEqual(radioChangeCount, 1);
 
   const waitResult = await agent.executeRequest('surface.waitFor', {
     selector: '#action',
