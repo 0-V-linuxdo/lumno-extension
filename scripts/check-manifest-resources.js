@@ -4,6 +4,7 @@ const path = require('path');
 const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const missing = [];
 const injectedScriptFiles = [
+  'src/background/codex-debug-bridge.js',
   'src/background/extension-pages.js',
   'src/background/message-router.js',
   'src/background/newtab-fallback.js',
@@ -12,6 +13,7 @@ const injectedScriptFiles = [
   'src/background/pip-main-world.js',
   'src/background/recent-tab-switcher.js',
   'src/shared/extension-routes.js',
+  'src/shared/codex-debug-surface.js',
   'src/shared/navigation-disposition.js',
   'src/shared/community-links.js',
   'src/shared/settings.js',

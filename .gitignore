@@ -12,4 +12,5 @@ AGENTS.md
 docs/*
 !docs/
 !docs/telemetry-plan.md
+!docs/codex-debug-bridge.md
 search-rule-changes-*.md

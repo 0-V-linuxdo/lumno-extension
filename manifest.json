@@ -80,6 +80,12 @@
       }
    ],
    "description": "__MSG_ext_description__",
+   "externally_connectable": {
+      "ids": [
+         "hehggadaopoacecdllhhajmbjkdcmajg",
+         "lfkehkpjohcoelkpembgemeipeppanef"
+      ]
+   },
    "chrome_url_overrides": {
       "newtab": "src/newtab/newtab.html"
    },

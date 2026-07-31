@@ -79,6 +79,10 @@ assert(
   !Object.prototype.hasOwnProperty.call(packagedManifest, 'key'),
   'store package should not include the dedicated development key'
 );
+assert(
+  !Object.prototype.hasOwnProperty.call(packagedManifest, 'externally_connectable'),
+  'store package should not expose the development-only Codex debug connection'
+);
 assert.strictEqual(
   packagedManifest.version,
   manifest.version,

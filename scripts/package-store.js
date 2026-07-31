@@ -6,6 +6,7 @@ const { spawnSync } = require('child_process');
 const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const storeManifest = { ...manifest };
 delete storeManifest.key;
+delete storeManifest.externally_connectable;
 const version = manifest.version;
 const distDir = path.join(process.cwd(), 'dist');
 const zipPath = path.join(distDir, `lumno-store-v${version}.zip`);
@@ -19,6 +20,7 @@ const packageExcludePatterns = [
   'assets/images/readme/*'
 ];
 const injectedScriptFiles = [
+  'src/background/codex-debug-bridge.js',
   'src/background/extension-pages.js',
   'src/background/message-router.js',
   'src/background/newtab-fallback.js',
@@ -26,6 +28,7 @@ const injectedScriptFiles = [
   'src/background/pip-ownership.js',
   'src/background/pip-main-world.js',
   'src/shared/extension-routes.js',
+  'src/shared/codex-debug-surface.js',
   'src/shared/navigation-disposition.js',
   'src/shared/community-links.js',
   'src/shared/settings.js',

@@ -132,6 +132,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/background/codex-debug-bridge.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load Codex debug bridge helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('assets/vendor/pinyin-pro.js'));
 } catch (error) {
   console.warn('Lumno: failed to load pinyin support.', error);
@@ -164,6 +170,10 @@ const openNewtabFallbackForUrl = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallbackFo
 const BACKGROUND_SHORTCUT_RULES = globalThis.LumnoShortcutRules || {};
 const RECENT_TAB_SWITCHER = globalThis.LumnoRecentTabSwitcher || {};
 const DEV_EXTENSION_STARTUP = globalThis.LumnoDevExtensionStartup || {};
+const CODEX_DEBUG_BRIDGE = globalThis.LumnoCodexDebugBackground || {};
+const codexDebugBridge = CODEX_DEBUG_BRIDGE && typeof CODEX_DEBUG_BRIDGE.create === 'function'
+  ? CODEX_DEBUG_BRIDGE.create({ chromeApi: chrome })
+  : null;
 const shortcutRules = BACKGROUND_SHORTCUT_RULES && typeof BACKGROUND_SHORTCUT_RULES.create === 'function'
   ? BACKGROUND_SHORTCUT_RULES.create({
     chromeApi: chrome,
@@ -3636,6 +3646,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     return;
   }
   const overlayInjectionFiles = [
+    'src/shared/codex-debug-surface.js',
     'src/shared/settings.js',
     'src/shared/navigation-disposition.js',
     'src/shared/search-utils.js',
@@ -3828,6 +3839,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
       files: [
+        'src/shared/codex-debug-surface.js',
         'src/react/overlay-islands.js',
         'src/overlay/tab-switcher.js'
       ]
@@ -4172,7 +4184,10 @@ function openDocumentPipPickerOnTab(activeTab, source) {
   const injectAndInvoke = (invokeMode) => {
     chrome.scripting.executeScript({
       target: { tabId: activeTab.id },
-      files: ['src/content/document-pip-picker.js']
+      files: [
+        'src/shared/codex-debug-surface.js',
+        'src/content/document-pip-picker.js'
+      ]
     }, () => {
       if (chrome.runtime.lastError) {
         logHotkeyDebug('document-pip-inject-failed', {
@@ -4406,6 +4421,10 @@ chrome.commands.onCommand.addListener(function(command) {
 
 if (chrome && chrome.runtime && chrome.runtime.onConnect) {
   chrome.runtime.onConnect.addListener(registerTabSwitcherExtensionPagePortConnection);
+}
+
+if (codexDebugBridge && typeof codexDebugBridge.attach === 'function') {
+  codexDebugBridge.attach();
 }
 
 chrome.tabs.onCreated.addListener((tab) => {
