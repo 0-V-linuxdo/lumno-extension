@@ -668,6 +668,24 @@
         margin-left: auto;
         flex-shrink: 0;
       }
+      ._x_extension_site_search_category_tabs_2026_unique_ {
+        width: min(100%, 280px);
+        gap: 0;
+      }
+      ._x_extension_site_search_category_tabs_2026_unique_ ._x_extension_theme_indicator_2024_unique_ {
+        pointer-events: none;
+        width: calc((100% - 4px) / 2);
+        transform: translateX(0);
+      }
+      ._x_extension_site_search_category_tabs_2026_unique_ ._x_extension_theme_indicator_2024_unique_[data-category="searchEngine"] {
+        transform: translateX(100%);
+      }
+      ._x_extension_site_search_category_tabs_2026_unique_ ._x_extension_theme_option_2024_unique_ {
+        box-sizing: border-box;
+        flex: 1 1 50%;
+        text-align: center;
+        white-space: nowrap;
+      }
       ._x_extension_shortcuts_actions_2024_unique_ {
         gap: 10px;
         flex-wrap: wrap;
@@ -1357,7 +1375,7 @@
         flex-direction: column;
         align-items: stretch;
         gap: 12px;
-        padding: 12px 14px;
+        padding: 14px;
         border-radius: 14px;
         border: 1px solid rgba(15, 23, 42, 0.1);
         background: rgba(255, 255, 255, 0.65);
@@ -1504,7 +1522,7 @@
         flex-direction: column;
         gap: 10px;
         padding-top: 6px;
-        padding-bottom: 6px;
+        padding-bottom: 0;
         border-top: 1px dashed var(--tab-border);
         max-height: 0;
         opacity: 0;
@@ -1519,6 +1537,9 @@
         transform: translateY(0);
         pointer-events: auto;
         overflow: visible;
+      }
+      ._x_extension_shortcut_item_2024_unique_[data-type="custom"][data-expanded="true"] ._x_extension_shortcut_editor_2024_unique_ {
+        max-height: 560px;
       }
       ._x_extension_shortcut_editor_actions_2024_unique_ {
         display: flex;
@@ -2840,6 +2861,20 @@
               </div>
             </div>
           </div>
+          <div class="_x_extension_setting_row_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_overlay_enter_animation_title">进入动画</p>
+            </div>
+            <div id="_x_extension_overlay_enter_animation_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="group" aria-label="进入动画" data-i18n-aria-label="settings_overlay_enter_animation_title">
+              <span class="_x_extension_theme_indicator_2024_unique_"></span>
+              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="elastic" data-active="true" aria-pressed="true" type="button">
+                <span data-i18n="overlay_enter_animation_elastic">弹性</span>
+              </button>
+              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="fade" data-active="false" aria-pressed="false" type="button">
+                <span data-i18n="overlay_enter_animation_fade">淡入</span>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="_x_extension_settings_content_2024_unique_" data-content="shortcuts" data-active="false">
           <div class="_x_extension_shortcuts_section_2024_unique_">
@@ -2856,7 +2891,7 @@
               <div class="_x_extension_shortcut_form_trigger_2024_unique_">
                 <button id="_x_extension_site_search_expand_2024_unique_" class="_x_extension_shortcut_submit_2024_unique_">
                   <i class="ri-icon ri-size-14 ri-add-line" aria-hidden="true"></i>
-                  <span data-i18n="shortcuts_add">添加站内搜索</span>
+                  <span data-i18n="shortcuts_add">添加自定义搜索</span>
                 </button>
               </div>
               <div class="_x_extension_shortcut_form_fields_2024_unique_">
@@ -2893,9 +2928,21 @@
                   </label>
                   <input id="_x_extension_site_search_alias_2024_unique_" class="_x_extension_shortcut_input_2024_unique_" placeholder="选填，例如 小破站、油管等" data-i18n-placeholder="shortcuts_placeholder_alias" />
                 </div>
+                <div class="_x_extension_shortcut_field_2024_unique_">
+                  <div class="_x_extension_shortcut_label_2024_unique_" data-i18n="shortcuts_label_display_group">显示位置</div>
+                  <div class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_ _x_extension_site_search_category_tabs_2026_unique_" role="group" aria-label="显示位置" data-i18n-aria-label="shortcuts_label_display_group">
+                    <span class="_x_extension_theme_indicator_2024_unique_" data-category="site" aria-hidden="true"></span>
+                    <button class="_x_extension_theme_option_2024_unique_" data-site-search-category="site" data-active="true" aria-pressed="true" type="button">
+                      <span data-i18n="search_scope_group_sites">站内搜索</span>
+                    </button>
+                    <button class="_x_extension_theme_option_2024_unique_" data-site-search-category="searchEngine" data-active="false" aria-pressed="false" type="button">
+                      <span data-i18n="search_scope_group_engines">搜索引擎</span>
+                    </button>
+                  </div>
+                </div>
                 <div class="_x_extension_shortcut_actions_row_2024_unique_">
                   <button id="_x_extension_site_search_cancel_2024_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_" style="display:none;" data-i18n="shortcuts_cancel">取消编辑</button>
-                  <button id="_x_extension_site_search_add_2024_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_" data-i18n="shortcuts_add">添加站内搜索</button>
+                  <button id="_x_extension_site_search_add_2024_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_" data-i18n="shortcuts_add">添加自定义搜索</button>
                 </div>
                 <div id="_x_extension_site_search_error_2024_unique_" class="_x_extension_shortcut_error_2024_unique_" style="display:none;"></div>
               </div>
@@ -2905,7 +2952,7 @@
             </div>
             <div class="_x_extension_shortcut_group_2024_unique_">
               <div class="_x_extension_shortcut_group_header_2024_unique_">
-                <div class="_x_extension_shortcut_group_title_2024_unique_ _x_extension_section_title_2024_unique_" data-i18n="shortcuts_group_builtin">内置</div>
+                <div class="_x_extension_shortcut_group_title_2024_unique_ _x_extension_section_title_2024_unique_" data-i18n="search_scope_group_sites">站内搜索</div>
                 <button id="_x_extension_builtin_reset_2024_unique_" class="_x_extension_shortcut_group_action_2024_unique_" aria-label="重置为初始列表" data-tooltip="重置为初始列表" data-i18n-tooltip="shortcuts_reset_builtin">
                   <i class="ri-icon ri-size-14 ri-refresh-line" aria-hidden="true"></i>
                 </button>
@@ -2918,6 +2965,15 @@
               </div>
               <p class="_x_extension_setting_desc_2024_unique_ _x_extension_setting_desc_compact_2026_unique_" data-i18n="shortcuts_group_ai_desc">输入关键词，按下 Tab 并键入内容（Prompt）后，可跳转至以下 AI 网站并自动填入（需先登录对应网站）</p>
               <div id="_x_extension_site_search_ai_builtin_list_2026_unique_" class="_x_extension_shortcut_list_2024_unique_"></div>
+            </div>
+            <div class="_x_extension_setting_divider_wrap_2024_unique_" role="presentation">
+              <div class="_x_extension_setting_divider_2024_unique_"></div>
+            </div>
+            <div id="_x_extension_search_engine_group_2026_unique_" class="_x_extension_shortcut_group_2024_unique_">
+              <div class="_x_extension_shortcut_group_header_2024_unique_">
+                <div class="_x_extension_shortcut_group_title_2024_unique_ _x_extension_section_title_2024_unique_" data-i18n="search_scope_group_engines">搜索引擎</div>
+              </div>
+              <div id="_x_extension_search_engine_builtin_list_2026_unique_" class="_x_extension_shortcut_list_2024_unique_"></div>
             </div>
           </div>
         </div>

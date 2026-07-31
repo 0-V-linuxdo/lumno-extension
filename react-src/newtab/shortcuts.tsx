@@ -1,7 +1,9 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent
@@ -39,6 +41,8 @@ export interface ShortcutsViewOptions {
   getShortcutTitle?: (shortcut: ShortcutItem) => string;
   getHostFromUrl?: (url: string) => string;
   getShortcutIconDataUrl?: (shortcutId: string) => string;
+  getShortcutFaviconDataUrl?: (pageUrl: string) => string;
+  resolveShortcutFaviconDataUrl?: (pageUrl: string) => Promise<string>;
   getBrowserPageFaviconUrl?: (url: string) => string;
   getImmediateThemeForSuggestion?: (
     suggestion: ThemeSuggestion
@@ -96,6 +100,8 @@ interface NormalizedOptions {
   getShortcutTitle: (shortcut: ShortcutItem) => string;
   getHostFromUrl: (url: string) => string;
   getShortcutIconDataUrl: (shortcutId: string) => string;
+  getShortcutFaviconDataUrl: (pageUrl: string) => string;
+  resolveShortcutFaviconDataUrl: (pageUrl: string) => Promise<string>;
   getBrowserPageFaviconUrl: (url: string) => string;
   getImmediateThemeForSuggestion: (
     suggestion: ThemeSuggestion
@@ -153,6 +159,10 @@ function normalizeOptions(
     getShortcutTitle: options.getShortcutTitle || (() => ''),
     getHostFromUrl: options.getHostFromUrl || (() => ''),
     getShortcutIconDataUrl: options.getShortcutIconDataUrl || (() => ''),
+    getShortcutFaviconDataUrl:
+      options.getShortcutFaviconDataUrl || (() => ''),
+    resolveShortcutFaviconDataUrl:
+      options.resolveShortcutFaviconDataUrl || (() => Promise.resolve('')),
     getBrowserPageFaviconUrl:
       options.getBrowserPageFaviconUrl || (() => ''),
     getImmediateThemeForSuggestion:
@@ -193,28 +203,59 @@ function ShortcutFavicon({
   const shortcutId = String(shortcut.id || '');
   const url = String(shortcut.url || '');
   const localIconDataUrl = options.getShortcutIconDataUrl(shortcutId);
+  const cachedFaviconDataUrl = options.getShortcutFaviconDataUrl(url);
+  const [resolvedFaviconDataUrl, setResolvedFaviconDataUrl] = useState(
+    cachedFaviconDataUrl
+  );
+  const displayDataUrl = localIconDataUrl ||
+    resolvedFaviconDataUrl || cachedFaviconDataUrl;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (localIconDataUrl || cachedFaviconDataUrl) {
+      setResolvedFaviconDataUrl(cachedFaviconDataUrl);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setResolvedFaviconDataUrl('');
+    options.resolveShortcutFaviconDataUrl(url).then((dataUrl) => {
+      if (!cancelled && dataUrl) {
+        setResolvedFaviconDataUrl(dataUrl);
+      }
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [cachedFaviconDataUrl, localIconDataUrl, options, url]);
 
   useLayoutEffect(() => {
     const image = imageRef.current;
-    if (!image || localIconDataUrl) {
+    if (!image) {
+      return;
+    }
+    if (displayDataUrl) {
+      image.parentElement
+        ?.querySelectorAll('._x_extension_favicon_fallback_2024_unique_')
+        .forEach((node) => node.remove());
       return;
     }
     options.attachFaviconWithFallbacks(image, url, host, {
       primaryUrl: options.getBrowserPageFaviconUrl(url)
     });
-  }, [host, localIconDataUrl, options, url]);
+  }, [displayDataUrl, host, options, url]);
 
   return (
     <span className="x-nt-shortcut-icon">
       <span className="x-nt-shortcut-favicon-mask">
         <img
-          key={localIconDataUrl || url}
+          key={displayDataUrl || url}
           ref={imageRef}
           className="x-nt-shortcut-favicon"
           alt=""
           loading="lazy"
           draggable={false}
-          src={localIconDataUrl || undefined}
+          src={displayDataUrl || undefined}
         />
       </span>
     </span>

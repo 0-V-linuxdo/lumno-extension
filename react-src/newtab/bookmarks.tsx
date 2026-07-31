@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import { isElementTextTruncated } from '../shared/text-overflow';
 
 type ThemeValue = unknown;
 type VisualOptions = Record<string, unknown> | undefined;
@@ -452,17 +453,7 @@ function shouldOpenUrlInBackground(
 function isBookmarkTitleTruncated(
   titleElement: HTMLSpanElement | null
 ): boolean {
-  if (!titleElement) {
-    return false;
-  }
-  const scrollWidth = Number(titleElement.scrollWidth);
-  const clientWidth = Number(titleElement.clientWidth);
-  return (
-    Number.isFinite(scrollWidth) &&
-    Number.isFinite(clientWidth) &&
-    clientWidth > 0 &&
-    scrollWidth > clientWidth + 1
-  );
+  return isElementTextTruncated(titleElement);
 }
 
 function getBrowserFaviconCandidate(

@@ -9,9 +9,18 @@ import {
 } from '../shared/use-exclusive-async-action';
 import { InlinePopconfirm } from './inline-popconfirm';
 
+export type SiteSearchProviderCategory = 'site' | 'searchEngine';
+
+export interface SiteSearchProviderCategoryCopyModel {
+  categoryLabel: string;
+  searchEngineCategoryLabel: string;
+  siteCategoryLabel: string;
+}
+
 export interface SiteSearchProviderItemModel {
   aliasesText: string;
   badgeText: string;
+  category: SiteSearchProviderCategory;
   duplicateLabel?: string;
   duplicateTemplate?: string;
   duplicateTooltip?: string;
@@ -22,11 +31,13 @@ export interface SiteSearchProviderItemModel {
   meta: string;
   name: string;
   normalizedTemplate: string;
+  secondaryBadgeText?: string;
   template: string;
   templateEditable: boolean;
 }
 
-export interface SiteSearchListCopyModel {
+export interface SiteSearchListCopyModel
+  extends SiteSearchProviderCategoryCopyModel {
   aliasLabel: string;
   aliasPlaceholder: string;
   cancelLabel: string;
@@ -52,9 +63,54 @@ export interface SiteSearchListRenderModel {
 
 export interface SiteSearchProviderDraft {
   aliases: string;
+  category: SiteSearchProviderCategory;
   key: string;
   name: string;
   template: string;
+}
+
+export function SiteSearchProviderCategoryControl({
+  category,
+  copy,
+  onChange
+}: {
+  category: SiteSearchProviderCategory;
+  copy: SiteSearchProviderCategoryCopyModel;
+  onChange(category: SiteSearchProviderCategory): void;
+}) {
+  return (
+    <div
+      aria-label={copy.categoryLabel}
+      className="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_ _x_extension_site_search_category_tabs_2026_unique_"
+      role="group"
+    >
+      <span
+        aria-hidden="true"
+        className="_x_extension_theme_indicator_2024_unique_"
+        data-category={category}
+      />
+      <button
+        aria-pressed={category === 'site'}
+        className="_x_extension_theme_option_2024_unique_"
+        data-active={category === 'site' ? 'true' : 'false'}
+        data-site-search-category="site"
+        onClick={() => onChange('site')}
+        type="button"
+      >
+        {copy.siteCategoryLabel}
+      </button>
+      <button
+        aria-pressed={category === 'searchEngine'}
+        className="_x_extension_theme_option_2024_unique_"
+        data-active={category === 'searchEngine' ? 'true' : 'false'}
+        data-site-search-category="searchEngine"
+        onClick={() => onChange('searchEngine')}
+        type="button"
+      >
+        {copy.searchEngineCategoryLabel}
+      </button>
+    </div>
+  );
 }
 
 export interface SiteSearchSaveResult {
@@ -106,6 +162,7 @@ function ProviderEditor({
 }) {
   const [draft, setDraft] = useState<SiteSearchProviderDraft>({
     aliases: item.aliasesText,
+    category: item.category,
     key: item.key,
     name: item.name,
     template: item.template
@@ -175,6 +232,18 @@ function ProviderEditor({
           value={draft.aliases}
         />
       </div>
+      {!item.isBuiltin ? (
+        <div className="_x_extension_shortcut_field_2024_unique_">
+          <div className="_x_extension_shortcut_label_2024_unique_">
+            {copy.categoryLabel}
+          </div>
+          <SiteSearchProviderCategoryControl
+            category={draft.category}
+            copy={copy}
+            onChange={(category) => updateDraft('category', category)}
+          />
+        </div>
+      ) : null}
       <div className="_x_extension_shortcut_editor_actions_2024_unique_">
         <button
           className="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_"
@@ -249,6 +318,7 @@ function SiteSearchList({
             className="_x_extension_shortcut_item_2024_unique_"
             data-expanded={expanded ? 'true' : 'false'}
             data-key={item.key}
+            data-provider-category={item.category}
             data-provider-id={item.id}
             data-template={item.normalizedTemplate}
             data-type={item.isBuiltin ? 'builtin' : 'custom'}
@@ -260,6 +330,14 @@ function SiteSearchList({
                   <div className="_x_extension_shortcut_badge_2024_unique_">
                     {item.badgeText}
                   </div>
+                  {item.secondaryBadgeText ? (
+                    <div
+                      className="_x_extension_shortcut_badge_2024_unique_"
+                      data-badge-kind="secondary"
+                    >
+                      {item.secondaryBadgeText}
+                    </div>
+                  ) : null}
                   {item.iconUrl ? (
                     <img
                       alt=""

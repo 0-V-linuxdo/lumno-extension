@@ -407,6 +407,15 @@
   "overlay_size_large": {
     "message": "大"
   },
+  "settings_overlay_enter_animation_title": {
+    "message": "表示時のアニメーション"
+  },
+  "overlay_enter_animation_elastic": {
+    "message": "スプリング"
+  },
+  "overlay_enter_animation_fade": {
+    "message": "フェード"
+  },
   "recent_mode_latest": {
     "message": "最近のアクセス"
   },
@@ -986,6 +995,9 @@
   "shortcuts_label_alias": {
     "message": "別名"
   },
+  "shortcuts_label_display_group": {
+    "message": "表示先"
+  },
   "shortcuts_placeholder_required": {
     "message": "必須。複数は半角カンマで区切ります。例：jd,bili"
   },
@@ -1002,7 +1014,7 @@
     "message": "検索変数を挿入"
   },
   "shortcuts_add": {
-    "message": "サイト内検索を追加"
+    "message": "カスタム検索を追加"
   },
   "shortcuts_save": {
     "message": "変更を保存"
@@ -1017,10 +1029,13 @@
     "message": "削除"
   },
   "shortcuts_empty_custom": {
-    "message": "追加したサイト内検索はまだありません"
+    "message": "カスタム検索はまだありません"
   },
   "shortcuts_empty_builtin": {
     "message": "内蔵サイト内検索はありません"
+  },
+  "shortcuts_empty_engines": {
+    "message": "内蔵検索エンジンはありません"
   },
   "shortcuts_empty_ai": {
     "message": "内蔵AIはありません"
@@ -1078,6 +1093,9 @@
   },
   "shortcuts_error_key_space": {
     "message": "起動ワードにスペースは使えません。"
+  },
+  "shortcuts_error_key_duplicate": {
+    "message": "この起動ワードはすでに使用されています。別のものを入力してください。"
   },
   "search_placeholder": {
     "message": "検索またはURLを入力..."
@@ -1420,6 +1438,24 @@
   },
   "local_search_tab_hint": {
     "message": "{source}のみ検索"
+  },
+  "search_scope_switcher_label": {
+    "message": "検索範囲：{scope}。選択すると切り替わります"
+  },
+  "search_scope_current": {
+    "message": "現在"
+  },
+  "search_scope_group_engines": {
+    "message": "検索エンジン"
+  },
+  "search_scope_group_local": {
+    "message": "ブラウザ内検索"
+  },
+  "search_scope_group_ai": {
+    "message": "AI検索"
+  },
+  "search_scope_group_sites": {
+    "message": "サイト内検索"
   },
   "overlay_empty_open_tabs": {
     "message": "タブはありません"

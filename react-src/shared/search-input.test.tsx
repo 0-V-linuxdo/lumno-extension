@@ -54,8 +54,16 @@ describe('Shared search input React island', () => {
     expect(parts.rightIcon.getAttribute('aria-label')).toBe('Settings');
     expect(parts.divider.style.display).toBe('none');
     expect(parts.modePrefix.parentElement).toBe(parts.container);
+    expect(parts.modePrefix.tagName).toBe('BUTTON');
     expect(parts.modePrefixIcon.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixGlyph.parentElement).toBe(parts.modePrefix);
     expect(parts.modePrefixText.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixChevron.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixChevron.classList.contains('ri-arrow-down-s-line')).toBe(
+      true
+    );
+    expect(parts.modeMenu.parentElement).toBe(parts.container);
+    expect(parts.modeMenu.hidden).toBe(true);
     expect(parts.modeTabHint.parentElement).toBe(parts.container);
     expect(parts.modeTabHintKey.parentElement).toBe(parts.modeTabHint);
     expect(parts.modeTabHintText.parentElement).toBe(parts.modeTabHint);

@@ -83,6 +83,7 @@
         --x-nt-search-shell-radius: 32px;
         --x-nt-search-shell-top-radius: 28px;
         --x-nt-panel-bg: rgba(255, 255, 255, 0.9);
+        --x-nt-mode-menu-bg: #ffffff;
         --x-nt-panel-border: rgba(0, 0, 0, 0.08);
         --x-nt-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.01);
         --x-nt-panel-shadow-focus: 0 4px 24px 0 rgba(0, 0, 0, 0.01),
@@ -236,6 +237,7 @@
         --x-nt-suggestions-border: rgba(255, 255, 255, 0.12);
         --x-nt-suggestions-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
         --x-nt-panel-bg: rgba(20, 20, 20, 0.82);
+        --x-nt-mode-menu-bg: #141414;
         --x-nt-panel-border: rgba(255, 255, 255, 0.08);
         --x-nt-panel-shadow: 0 8px 20px rgba(0, 0, 0, 0.01);
         --x-nt-panel-shadow-focus: 0 4px 24px 0 rgba(0, 0, 0, 0.08),
@@ -388,6 +390,33 @@
         .x-nt-wallpaper-effect-canvas,
         body::after {
           transition: none;
+        }
+      }
+      body:not([data-nt-ready="1"]) .x-nt-wallpaper-effect-canvas,
+      body:not([data-nt-ready="1"])::after {
+        transition: none;
+      }
+      .x-nt-initial-background-veil {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background: var(--x-nt-bg);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateZ(0);
+        contain: strict;
+      }
+      body[data-nt-enter="run"] .x-nt-initial-background-veil {
+        visibility: visible;
+        animation: _x_nt_background_reveal_2026_unique_ 260ms ease-out both;
+      }
+      @keyframes _x_nt_background_reveal_2026_unique_ {
+        0% {
+          opacity: 0.1;
+        }
+        100% {
+          opacity: 0;
         }
       }
       #_x_extension_newtab_root_2024_unique_ {
@@ -712,6 +741,11 @@
         color: inherit;
         padding: 0;
       }
+      .x-nt-shortcut-icon:has(.x-nt-shortcut-favicon[data-fallback-icon="true"]),
+      .x-nt-shortcut-icon:has(.x-nt-shortcut-favicon[data-favicon-placeholder="true"]),
+      .x-nt-shortcut-icon:has(.x-nt-favicon-fallback[data-visible="true"]) {
+        background: transparent;
+      }
       .x-nt-shortcut-context-menu {
         position: fixed;
         left: 0;
@@ -752,8 +786,8 @@
         justify-content: center;
         pointer-events: auto;
         opacity: 0;
-        filter: blur(6px);
-        transform: translate3d(0, 14px, 0);
+        filter: blur(4px);
+        transform: translate3d(0, 10px, 0);
         transform-origin: 50% 60%;
         backface-visibility: hidden;
       }
@@ -767,7 +801,7 @@
         pointer-events: none;
       }
       body[data-nt-ready="1"] #_x_extension_newtab_wordmark_2026_unique_[data-enter="run"] > .x-nt-wordmark-content {
-        animation: _x_nt_wordmark_enter_2026_unique_ 560ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+        animation: _x_nt_wordmark_enter_2026_unique_ 300ms cubic-bezier(0.16, 1, 0.3, 1) 20ms both;
         will-change: transform, opacity, filter;
       }
       body[data-nt-ready="1"] #_x_extension_newtab_wordmark_2026_unique_[data-enter="done"] > .x-nt-wordmark-content {
@@ -778,8 +812,8 @@
       @keyframes _x_nt_wordmark_enter_2026_unique_ {
         0% {
           opacity: 0;
-          filter: blur(6px);
-          transform: translate3d(0, 16px, 0) scale(0.985);
+          filter: blur(4px);
+          transform: translate3d(0, 10px, 0) scale(0.99);
         }
         34% {
           filter: blur(2px);
@@ -996,6 +1030,97 @@
       }
       body:not([data-nt-ready="1"]) #_x_extension_newtab_bottom_dock_2024_unique_ {
         visibility: hidden;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcuts-section[data-visible="true"] .x-nt-shortcut-tile {
+        --x-nt-shortcut-enter-index: 0;
+        animation: _x_nt_shortcut_entry_2026_unique_ 220ms cubic-bezier(0.16, 1, 0.3, 1)
+          calc(80ms + (var(--x-nt-shortcut-enter-index) * 18ms)) both;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(2) {
+        --x-nt-shortcut-enter-index: 1;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(3) {
+        --x-nt-shortcut-enter-index: 2;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(4) {
+        --x-nt-shortcut-enter-index: 3;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(5) {
+        --x-nt-shortcut-enter-index: 4;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(6) {
+        --x-nt-shortcut-enter-index: 5;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(7) {
+        --x-nt-shortcut-enter-index: 6;
+      }
+      body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(n + 8) {
+        --x-nt-shortcut-enter-index: 7;
+      }
+      body[data-nt-enter="run"] #_x_extension_newtab_bookmarks_2024_unique_[data-visible="true"] {
+        animation: _x_nt_content_section_entry_2026_unique_ 240ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+      }
+      body[data-nt-enter="run"] #_x_extension_newtab_recent_sites_2024_unique_[data-visible="true"] {
+        animation: _x_nt_content_section_entry_2026_unique_ 240ms cubic-bezier(0.16, 1, 0.3, 1) 190ms both;
+      }
+      body[data-nt-enter="run"] .x-nt-wallpaper-control,
+      body[data-nt-enter="run"] .x-nt-feedback-control,
+      body[data-nt-enter="run"] .x-nt-bookmark-cascade-debug-control {
+        animation: _x_nt_corner_control_entry_2026_unique_ 200ms cubic-bezier(0.16, 1, 0.3, 1) 230ms both;
+      }
+      @keyframes _x_nt_shortcut_entry_2026_unique_ {
+        0% {
+          opacity: 0;
+          translate: 0 6px;
+        }
+        100% {
+          opacity: 1;
+          translate: 0 0;
+        }
+      }
+      @keyframes _x_nt_content_section_entry_2026_unique_ {
+        0% {
+          opacity: 0;
+          translate: 0 7px;
+        }
+        100% {
+          opacity: 1;
+          translate: 0 0;
+        }
+      }
+      @keyframes _x_nt_corner_control_entry_2026_unique_ {
+        0% {
+          opacity: 0;
+          scale: 0.96;
+          translate: 0 4px;
+        }
+        100% {
+          opacity: 1;
+          scale: 1;
+          translate: 0 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .x-nt-initial-background-veil {
+          display: none;
+          animation: none;
+        }
+        body[data-nt-enter="run"][data-nt-ready="1"] .x-nt-bookmarks-topbar[data-visible="true"] {
+          animation: none !important;
+          opacity: 1;
+        }
+        body[data-nt-enter] .x-nt-shortcut-tile,
+        body[data-nt-enter] #_x_extension_newtab_bookmarks_2024_unique_,
+        body[data-nt-enter] #_x_extension_newtab_recent_sites_2024_unique_,
+        body[data-nt-enter] .x-nt-wallpaper-control,
+        body[data-nt-enter] .x-nt-feedback-control,
+        body[data-nt-enter] .x-nt-bookmark-cascade-debug-control {
+          animation: none;
+          filter: none;
+          opacity: 1;
+          scale: 1;
+          translate: 0 0;
+        }
       }
       .x-nt-bookmarks-heading {
         font-size: var(--x-nt-dock-heading-size, 14px);
@@ -1688,6 +1813,17 @@
       }
       .x-nt-bookmarks-topbar[data-visible="true"] {
         display: flex;
+      }
+      body[data-nt-enter="run"][data-nt-ready="1"] .x-nt-bookmarks-topbar[data-visible="true"] {
+        animation: _x_nt_topbar_entry_2026_unique_ 200ms ease-out 20ms both;
+      }
+      @keyframes _x_nt_topbar_entry_2026_unique_ {
+        0% {
+          opacity: 0.88;
+        }
+        100% {
+          opacity: 1;
+        }
       }
       body:not([data-nt-ready="1"]) .x-nt-bookmarks-topbar {
         visibility: hidden;
@@ -5365,7 +5501,7 @@
         border: 1px solid transparent;
         border-radius: 16px;
         cursor: pointer;
-        transition: background-color 0.2s ease, border-color 0.2s ease;
+        transition: background-color 0.2s ease;
         box-sizing: border-box;
         margin: 0 0 var(--x-nt-suggestion-row-gap, 6px) 0;
         line-height: 1.5;
@@ -5382,11 +5518,9 @@
       }
       .x-nt-suggestion-item[data-row-state="active"] {
         background: var(--x-nt-suggestion-active-bg, var(--x-nt-hover-bg, #F3F4F6));
-        border-color: var(--x-nt-suggestion-active-border, transparent);
       }
       .x-nt-suggestion-item[data-row-state="hover"] {
         background: var(--x-nt-suggestion-hover-bg, var(--x-nt-hover-bg, #F3F4F6));
-        border-color: var(--x-nt-suggestion-hover-border, transparent);
       }
       .x-nt-suggestion-left {
         all: unset;
@@ -6361,7 +6495,8 @@
     </style>
   </head>
   <body class="notranslate" translate="no" notranslate data-no-translate="true" data-lumno-page="newtab">
-    <div id="_x_extension_newtab_root_2024_unique_"></div>
+    <div class="x-nt-initial-background-veil" aria-hidden="true"></div>
+    <div id="_x_extension_newtab_root_2024_unique_" class="x-lumno-search-entry"></div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_" data-show="false"></div>
     <script src="../shared/ime-key-guard.js"></script>
     <script src="../shared/search-input-history.js"></script>
@@ -6386,6 +6521,7 @@
     <script src="../shared/favicon-utils.js"></script>
     <script src="../shared/favicon-cache.js"></script>
     <script src="../shared/favicon-view-core.js"></script>
+    <script src="../shared/shortcut-favicon.js"></script>
     <script src="favicon-theme.js"></script>
     <script src="favicon-view.js"></script>
     <script src="recent-sites-store.js"></script>

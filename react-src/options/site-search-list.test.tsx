@@ -14,6 +14,7 @@ const model: SiteSearchListRenderModel = {
     aliasLabel: '别名',
     aliasPlaceholder: '例如 小破站、油管等',
     cancelLabel: '取消',
+    categoryLabel: '显示位置',
     confirmLabel: '确认',
     confirmMessage: '确认移除该项？',
     confirmMessageKey: 'confirm_remove_item',
@@ -24,6 +25,8 @@ const model: SiteSearchListRenderModel = {
     namePlaceholder: '选填，默认使用触发词',
     removeLabel: '移除',
     saveLabel: '保存修改',
+    searchEngineCategoryLabel: '搜索引擎',
+    siteCategoryLabel: '站内搜索',
     templateHelp: '搜索模板需要包含 {query}',
     templateLabel: '搜索模板'
   },
@@ -31,6 +34,7 @@ const model: SiteSearchListRenderModel = {
     {
       aliasesText: '视频',
       badgeText: '自定义',
+      category: 'site',
       duplicateLabel: '与内置重复',
       duplicateTemplate: 'https://example.com/?q={query}',
       duplicateTooltip: '定位内置项',
@@ -41,6 +45,7 @@ const model: SiteSearchListRenderModel = {
       meta: 'ex · https://example.com/?q={query}',
       name: 'Example',
       normalizedTemplate: 'https://example.com/?q={query}',
+      secondaryBadgeText: '站内搜索',
       template: 'https://example.com/?q={query}',
       templateEditable: true
     }
@@ -81,6 +86,35 @@ describe('Options site-search list React island', () => {
     expect(host.querySelector('[data-provider-id="custom:ex"]')).not.toBeNull();
     expect(host.querySelector('._x_extension_shortcut_item_meta_2024_unique_')
       ?.textContent).toContain('{query}');
+    expect(host.querySelector('[data-badge-kind="secondary"]')?.textContent)
+      .toBe('站内搜索');
+  });
+
+  it('renders both category and built-in badges for search-engine cards', () => {
+    const { controller, host } = createFixture();
+    act(() => controller.render({
+      ...model,
+      items: [{
+        ...model.items[0],
+        badgeText: '搜索引擎',
+        category: 'searchEngine',
+        duplicateLabel: '',
+        duplicateTemplate: '',
+        duplicateTooltip: '',
+        id: 'builtin:gg',
+        isBuiltin: true,
+        key: 'gg',
+        name: 'Google',
+        secondaryBadgeText: '内置',
+        templateEditable: false
+      }]
+    }));
+
+    const badges = host.querySelectorAll('._x_extension_shortcut_badge_2024_unique_');
+    expect(Array.from(badges).map((badge) => badge.textContent)).toEqual([
+      '搜索引擎',
+      '内置'
+    ]);
   });
 
   it('edits a provider draft and routes save through the adapter', async () => {
@@ -100,6 +134,8 @@ describe('Options site-search list React island', () => {
         valueSetter?.call(nameInput, 'Updated');
         nameInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
+      host.querySelector<HTMLButtonElement>('[data-site-search-category="searchEngine"]')
+        ?.click();
     });
     await act(async () => {
       host.querySelector<HTMLButtonElement>(
@@ -111,7 +147,7 @@ describe('Options site-search list React island', () => {
     expect(options.onSave).toHaveBeenCalledWith(
       'ex',
       false,
-      expect.objectContaining({ name: 'Updated' })
+      expect.objectContaining({ category: 'searchEngine', name: 'Updated' })
     );
   });
 

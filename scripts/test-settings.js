@@ -92,6 +92,15 @@ assert.strictEqual(settings.normalizeOverlaySizeMode('large'), 'large');
 assert.strictEqual(settings.normalizeOverlaySizeMode('standard'), 'standard');
 assert.strictEqual(settings.normalizeOverlaySizeMode('other'), 'standard');
 
+assert.strictEqual(settings.normalizeOverlayEnterAnimation('elastic'), 'elastic');
+assert.strictEqual(settings.normalizeOverlayEnterAnimation('fade'), 'fade');
+assert.strictEqual(settings.normalizeOverlayEnterAnimation(undefined), 'elastic');
+assert.strictEqual(settings.normalizeOverlayEnterAnimation('other'), 'elastic');
+assert.strictEqual(
+  settings.OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
+  '_x_extension_overlay_enter_animation_2026_unique_'
+);
+
 assert.strictEqual(settings.normalizeOverlayTabPriorityMode('switchTabFirst'), true);
 assert.strictEqual(settings.normalizeOverlayTabPriorityMode('newtabFirst'), false);
 assert.strictEqual(settings.normalizeOverlayTabPriorityMode(false), false);

@@ -9,6 +9,7 @@ import {
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { useExclusiveAsyncAction } from '../shared/use-exclusive-async-action';
+import { isElementTextTruncated } from '../shared/text-overflow';
 
 type Translate = (key: string, fallback: string) => string;
 type ThemeValue = unknown;
@@ -277,24 +278,7 @@ function shouldOpenUrlInBackground(event: ActivationEvent | null): boolean {
 function isRecentTitleTruncated(
   titleElement: HTMLDivElement | null
 ): boolean {
-  if (!titleElement) {
-    return false;
-  }
-  const scrollWidth = Number(titleElement.scrollWidth);
-  const clientWidth = Number(titleElement.clientWidth);
-  const scrollHeight = Number(titleElement.scrollHeight);
-  const clientHeight = Number(titleElement.clientHeight);
-  const hasHorizontalOverflow =
-    Number.isFinite(scrollWidth) &&
-    Number.isFinite(clientWidth) &&
-    clientWidth > 0 &&
-    scrollWidth > clientWidth + 1;
-  const hasVerticalOverflow =
-    Number.isFinite(scrollHeight) &&
-    Number.isFinite(clientHeight) &&
-    clientHeight > 0 &&
-    scrollHeight > clientHeight + 1;
-  return hasHorizontalOverflow || hasVerticalOverflow;
+  return isElementTextTruncated(titleElement, { vertical: true });
 }
 
 function normalizeOptions(

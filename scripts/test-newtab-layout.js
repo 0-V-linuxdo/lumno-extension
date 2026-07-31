@@ -8,6 +8,10 @@ const layoutRuntime = globalThis.LumnoNewtabLayout;
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const sharedSearchInputCss = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/search-input.css'),
+  'utf8'
+);
 const dockReactSource = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/dock.tsx'), 'utf8');
 
 class FakeStyle {
@@ -341,6 +345,39 @@ function testOccupiedTopSurfaceUpshiftsDesktopSearchPosition() {
 
 testOccupiedTopSurfaceUpshiftsDesktopSearchPosition();
 
+function testNarrowTopInsetTransitionsWithoutBreakpointJump() {
+  function getSearchTop(viewportWidth) {
+    const { body, controller } = createFixture({
+      innerWidth: viewportWidth,
+      innerHeight: 900,
+      constants: {
+        narrowViewportMinWidthPx: 520,
+        narrowViewportMaxWidthPx: 1440,
+        narrowTopInsetPx: 16,
+        narrowTopInsetTransitionPx: 64
+      }
+    });
+    controller.updateSearchEntryLayout();
+    return Number.parseFloat(body.style.getPropertyValue('padding-top'));
+  }
+
+  const boundaryTops = [1441, 1440, 1439, 1438, 1437, 1436]
+    .map(getSearchTop);
+  for (let index = 1; index < boundaryTops.length; index += 1) {
+    assert.ok(
+      Math.abs(boundaryTops[index] - boundaryTops[index - 1]) <= 1,
+      'narrow desktop entry should move by at most one pixel per viewport pixel near the breakpoint'
+    );
+  }
+  assert.strictEqual(
+    getSearchTop(1376) - getSearchTop(1441),
+    16,
+    'narrow desktop entry should still receive the full inset after the transition band'
+  );
+}
+
+testNarrowTopInsetTransitionsWithoutBreakpointJump();
+
 function testSuggestionAppendAnimatesContainerAndSurfaceFrame() {
   const {
     controller,
@@ -396,10 +433,73 @@ function testSuggestionAppendAnimatesContainerAndSurfaceFrame() {
 
 testSuggestionAppendAnimatesContainerAndSurfaceFrame();
 
+function testTypingSessionKeepsSuggestionHeightStable() {
+  const {
+    controller,
+    suggestionsContainer,
+    flushAnimationFrames
+  } = createFixture({
+    deferAnimationFrame: true
+  });
+  suggestionsContainer.setAttribute('data-visible', 'true');
+  suggestionsContainer.setRect({ top: 254, height: 236, bottom: 490 });
+  suggestionsContainer.scrollHeight = 236;
+
+  controller.beginSuggestionsInputSession();
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '236px',
+    'typing should lock the currently rendered suggestions height'
+  );
+
+  suggestionsContainer.setRect({ top: 254, height: 64, bottom: 318 });
+  suggestionsContainer.scrollHeight = 64;
+  controller.holdSuggestionsInputHeight();
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '236px',
+    'matching fewer URL results should not shrink the panel during the input burst'
+  );
+
+  assert.strictEqual(
+    controller.finishSuggestionsInputSession(),
+    true,
+    'settling a shorter result list should start one atomic height transition'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '236px',
+    'the transition should restore the old height before the browser can paint the shorter list'
+  );
+  assert.ok(
+    Number.parseFloat(suggestionsContainer.style.getPropertyValue('max-height')) > 236,
+    'the viewport cap should not clamp the old animation height to the smaller content height'
+  );
+
+  flushAnimationFrames();
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '64px',
+    'the next animation frame should move directly from the old height to the measured target'
+  );
+}
+
+testTypingSessionKeepsSuggestionHeightStable();
+
 assert.match(
   newtabSource,
   /const previousSuggestionsResizeState = shouldAnimateSuggestionsResize[\s\S]*?captureSuggestionsResizeState\(\)[\s\S]*?suggestionsView\.render\([\s\S]*?setSuggestionsVisible\(true\);[\s\S]*?animateSuggestionsResize\(previousSuggestionsResizeState\)/,
   'new-tab search should capture the existing result height before appending and animate after layout'
+);
+assert.match(
+  newtabSource,
+  /onInput: function\(event\)[\s\S]*?beginSuggestionsInputSession\(\)[\s\S]*?requestSuggestions\(query\)/,
+  'new-tab input should begin a stable-height session before requesting each query'
+);
+assert.match(
+  newtabSource,
+  /suggestionsView\.render\(\{[\s\S]*?setSuggestionsVisible\(true\);[\s\S]*?holdSuggestionsInputHeight\(\)/,
+  'new-tab result renders should retain the input-session height lock'
 );
 
 
@@ -618,6 +718,19 @@ function testWrappedShortcutsDoNotOscillateDockDensity() {
     'routine layout refreshes should retain the stabilized density for the same shortcut layout'
   );
 
+  const settledDensities = [];
+  controller.updateBottomDockLayout({ releaseDockDensityLock: true });
+  settledDensities.push(bottomDock.getAttribute('data-density'));
+  flushAnimationFrames();
+  settledDensities.push(bottomDock.getAttribute('data-density'));
+  flushAnimationFrames();
+  settledDensities.push(bottomDock.getAttribute('data-density'));
+  assert.deepStrictEqual(
+    settledDensities,
+    ['compact', 'compact', 'compact'],
+    'resize settle should not briefly promote and then compact the dock across painted frames'
+  );
+
   windowObj.innerHeight = 760;
   controller.updateBottomDockLayout();
   flushAnimationFrames();
@@ -702,15 +815,124 @@ function testContinuousResizeKeepsDockDensityStableUntilSettle() {
 
   assert.match(
     newtabSource,
-    /function handleNewtabResize\(\)[\s\S]*?updateBookmarkSectionPosition\(\{\s*stabilizeDockDensity:\s*true\s*\}\)/,
-    'live new-tab resize frames should stabilize density promotions'
+    /function handleNewtabResize\(\)[\s\S]*?updateBookmarkSectionPosition\(\{[\s\S]*?preserveSearchEntryLayout:\s*true,[\s\S]*?stabilizeDockDensity:\s*true[\s\S]*?\}\)/,
+    'live new-tab resize frames should preserve the search anchor while stabilizing density promotions'
   );
   assert.match(
     newtabSource,
-    /newtabResizeSettleTimer\s*=\s*window\.setTimeout\([\s\S]*?releaseDockDensityLock:\s*true[\s\S]*?NEWTAB_RESIZE_DENSITY_SETTLE_MS/,
-    'new-tab resize should release density stabilization after resize events settle'
+    /preserveSearchEntryLayout:\s*Boolean\(layoutOptions\.preserveSearchEntryLayout\)\s*\|\|\s*newtabResizeLayoutLocked\s*\|\|\s*shouldPreserveSearchEntryLayout\(\)/,
+    'all layout refreshes during resize should inherit the search-entry position lock'
+  );
+  assert.match(
+    newtabSource,
+    /newtabResizeLayoutLocked\s*=\s*true;[\s\S]*?newtabResizeSettleTimer\s*=\s*window\.setTimeout\([\s\S]*?newtabResizeLayoutLocked\s*=\s*false;[\s\S]*?releaseDockDensityLock:\s*true[\s\S]*?NEWTAB_RESIZE_DENSITY_SETTLE_MS/,
+    'new-tab resize should release the search anchor and density stabilization only after resize events settle'
+  );
+  assert.match(
+    newtabSource,
+    /const NEWTAB_INITIAL_VIEWPORT_SETTLE_MS = 32;[\s\S]*?function scheduleNewtabReadyAfterViewportSettle\(\)[\s\S]*?window\.setTimeout\([\s\S]*?updateBookmarkSectionPosition\(\{ releaseDockDensityLock: true \}\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?setAttribute\('data-nt-ready', '1'\)[\s\S]*?NEWTAB_INITIAL_VIEWPORT_SETTLE_MS/,
+    'new-tab content should become visible after one short viewport settle window and one paint frame'
+  );
+  assert.match(
+    newtabSource,
+    /window\.addEventListener\('resize',[\s\S]*?newtabReadyViewportRevision\s*\+=\s*1;[\s\S]*?newtabReadyRequested[\s\S]*?scheduleNewtabReadyAfterViewportSettle\(\)/,
+    'a browser-chrome resize before first paint should restart the new-tab readiness gate'
   );
 }
+
+function testInitialEntryMotionIsStaggeredAndTransient() {
+  assert.match(
+    newtabSource,
+    /const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*bootstrapInitialWallpaper\(\),\s*bootstrapInitialWallpaperOverlay\(\),\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);\s*const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
+    'critical appearance state should settle before entry while language loading continues in parallel'
+  );
+  assert.match(
+    newtabHtml,
+    /body:not\(\[data-nt-ready="1"\]\) \.x-nt-wallpaper-effect-canvas,\s*body:not\(\[data-nt-ready="1"\]\)::after\s*\{\s*transition:\s*none;/,
+    'wallpaper effect layers should not transition while the initial appearance is settling'
+  );
+  assert.match(
+    newtabHtml,
+    /body\[data-nt-enter="run"\] \.x-nt-initial-background-veil\s*\{[\s\S]*?_x_nt_background_reveal_2026_unique_ 260ms ease-out both;[\s\S]*?@keyframes _x_nt_background_reveal_2026_unique_[\s\S]*?opacity:\s*0\.1;[\s\S]*?opacity:\s*0;/,
+    'the wallpaper should enter through a subtle non-blocking background veil'
+  );
+  assert.match(
+    newtabHtml,
+    /<div class="x-nt-initial-background-veil" aria-hidden="true"><\/div>/,
+    'the new-tab page should mount a dedicated background entrance veil'
+  );
+  assert.match(
+    newtabHtml,
+    /body\[data-nt-enter="run"\]\[data-nt-ready="1"\] \.x-nt-bookmarks-topbar\[data-visible="true"\]\s*\{\s*animation:\s*_x_nt_topbar_entry_2026_unique_ 200ms ease-out 20ms both;[\s\S]*?@keyframes _x_nt_topbar_entry_2026_unique_[\s\S]*?opacity:\s*0\.88;[\s\S]*?opacity:\s*1;/,
+    'the in-page bookmarks top bar should enter with a restrained opacity transition'
+  );
+  assert.match(
+    newtabSource,
+    /function finishNewtabEntryAnimation\(\)[\s\S]*?setAttribute\('data-nt-enter', 'done'\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', 'done'\)[\s\S]*?function startNewtabEntryAnimation\(\)[\s\S]*?const entryState = prefersReducedMotion \? 'done' : 'run';[\s\S]*?setAttribute\('data-nt-enter', entryState\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', entryState\)[\s\S]*?window\.setTimeout\(\s*finishNewtabEntryAnimation,[\s\S]*?NEWTAB_ENTRY_ANIMATION_TOTAL_MS/,
+    'new-tab entrance motion should drive the shared search-entry state and release it after the sequence'
+  );
+  assert.match(
+    newtabSource,
+    /setAttribute\('data-nt-ready', '1'\);\s*startNewtabEntryAnimation\(\);/,
+    'the entrance sequence should start only after the viewport-stable ready frame'
+  );
+  assert.match(
+    newtabSource,
+    /window\.addEventListener\('keydown', finishNewtabEntryAnimation, true\);\s*window\.addEventListener\('pointerdown', finishNewtabEntryAnimation, true\);/,
+    'the initial entrance sequence should yield immediately to keyboard or pointer interaction'
+  );
+  assert.match(
+    newtabHtml,
+    /<div id="_x_extension_newtab_root_2024_unique_" class="x-lumno-search-entry"><\/div>/,
+    'the new-tab search surface should opt into the shared entry motion'
+  );
+  assert.match(
+    sharedSearchInputCss,
+    /\.x-lumno-search-entry\[data-lumno-search-entry="run"\]\s*\{[\s\S]*?animation:\s*_x_lumno_search_entry_2026_unique_[\s\S]*?var\(--x-lumno-search-entry-duration, 240ms\)[\s\S]*?var\(--x-lumno-search-entry-delay, 20ms\) both;[\s\S]*?transform-origin:\s*center center;/,
+    'the shared search entry should lead with the new-tab timing and ease-out motion'
+  );
+  const searchEntryKeyframes = sharedSearchInputCss.match(
+    /@keyframes _x_lumno_search_entry_2026_unique_ \{([\s\S]*?)\n\}\n\n@media \(prefers-reduced-motion: reduce\)/
+  );
+  assert.ok(searchEntryKeyframes, 'the shared search entry keyframes should be present');
+  assert.match(
+    searchEntryKeyframes[1],
+    /0%[\s\S]*?scale:\s*var\(--x-lumno-search-entry-scale-start, 0\.97\) 1;[\s\S]*?100%[\s\S]*?scale:\s*1;/,
+    'the search field should expand subtly from the center'
+  );
+  assert.doesNotMatch(
+    newtabHtml,
+    /@keyframes _x_(?:nt|lumno)_search_entry_2026_unique_/,
+    'the new-tab page should not duplicate the shared search entry keyframes'
+  );
+  assert.doesNotMatch(
+    searchEntryKeyframes[1],
+    /translate:/,
+    'the search field should not move upward during entry'
+  );
+  assert.match(
+    newtabHtml,
+    /body\[data-nt-enter="run"\] \.x-nt-shortcuts-section\[data-visible="true"\] \.x-nt-shortcut-tile\s*\{[\s\S]*?calc\(80ms \+ \(var\(--x-nt-shortcut-enter-index\) \* 18ms\)\) both;/,
+    'shortcut tiles should enter with a tight 18ms stagger'
+  );
+  assert.match(
+    newtabHtml,
+    /#_x_extension_newtab_bookmarks_2024_unique_\[data-visible="true"\][\s\S]*?150ms both;[\s\S]*?#_x_extension_newtab_recent_sites_2024_unique_\[data-visible="true"\][\s\S]*?190ms both;/,
+    'bottom content sections should follow the search and shortcut sequence'
+  );
+  assert.match(
+    newtabSource,
+    /const NEWTAB_ENTRY_ANIMATION_TOTAL_MS = 460;[\s\S]*?const WORDMARK_ENTRY_ANIMATION_TOTAL_MS = 380;/,
+    'the initial entrance choreography should complete within a compact motion budget'
+  );
+  assert.match(
+    sharedSearchInputCss,
+    /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.x-lumno-search-entry\[data-lumno-search-entry\]\s*\{[\s\S]*?animation:\s*none;[\s\S]*?filter:\s*none;[\s\S]*?opacity:\s*1;[\s\S]*?scale:\s*1;/,
+    'the shared search entrance should be disabled for reduced-motion users'
+  );
+}
+
+testInitialEntryMotionIsStaggeredAndTransient();
 
 function testMobileViewportReleasesFixedDockLayout() {
   const { body, bottomDock, controller } = createFixture({

@@ -17,6 +17,7 @@ async function run() {
   assert.strictEqual(merged[0].key, 'gm');
   assert.strictEqual(merged[0].action, 'openAndSubmit');
   assert.strictEqual(merged[0].submitStrategy, 'geminiPrompt');
+  assert.strictEqual(merged[0]._xIsCustom, true);
 
   const runtimeItems = [{ key: 'rd', name: 'Reddit', template: 'https://reddit.com/search?q={query}' }];
   const runtimeLoaded = await store.loadSiteSearchProviders({
@@ -67,6 +68,7 @@ async function run() {
     assert.strictEqual(fallbackLoaded[0].key, 'gm');
     assert.strictEqual(fallbackLoaded[0].action, 'openAndSubmit');
     assert.strictEqual(fallbackLoaded[0].submitStrategy, 'geminiPrompt');
+    assert.strictEqual(fallbackLoaded[0]._xIsCustom, true);
     assert.strictEqual(
       requestedResourceUrl,
       'https://example.test/assets/data/site-search.json',

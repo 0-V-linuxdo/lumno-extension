@@ -60,9 +60,14 @@ assertMatches(
   /function scheduleBookmarkReloadIfVisible\(\) \{[\s\S]*?clearTimeout\(bookmarkExternalChangeTimer\)[\s\S]*?setTimeout\([\s\S]*?NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS/,
   'bookmark external changes should be debounced'
 );
+const initialAppearanceBootstrapIndex = newtabJs.indexOf(
+  'const initialAppearanceReadyTask = Promise.all(['
+);
 assert.ok(
-  newtabJs.indexOf("let latestQuery = '';") < newtabJs.indexOf('bootstrapInitialThemeMode();'),
-  'new tab query state should initialize before synchronous theme bootstrapping'
+  initialAppearanceBootstrapIndex >= 0 &&
+    newtabJs.indexOf("let latestQuery = '';") < initialAppearanceBootstrapIndex &&
+    newtabJs.slice(initialAppearanceBootstrapIndex).includes('bootstrapInitialThemeMode()'),
+  'new tab query state should initialize before appearance bootstrapping starts'
 );
 assertMatches(
   newtabJs,
@@ -86,8 +91,8 @@ assertMatches(
 );
 assertMatches(
   newtabJs,
-  /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderSuggestions\(\[\], requestQuery\)/,
-  'new tab suggestions should fall back locally when the extension runtime is unavailable'
+  /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderPendingSuggestions\(requestQuery\)/,
+  'new tab suggestions should preserve pending local results when the extension runtime is unavailable'
 );
 
 htmlFiles.forEach((relativePath) => {

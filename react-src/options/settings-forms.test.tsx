@@ -18,11 +18,14 @@ const siteModel: SiteSearchFormRenderModel = {
     aliasLabel: '别名',
     aliasPlaceholder: '例如 油管',
     cancelLabel: '取消',
+    categoryLabel: '显示位置',
     keyLabel: '触发词',
     keyPlaceholder: '例如 yt',
     nameLabel: '显示名称',
     namePlaceholder: '选填',
     queryInsertLabel: '插入查询变量',
+    searchEngineCategoryLabel: '搜索引擎',
+    siteCategoryLabel: '站内搜索',
     templateHelp: '模板必须包含 {query}',
     templateLabel: '搜索模板',
     templatePlaceholder: 'https://example.com?q={query}'
@@ -100,14 +103,55 @@ describe('Options settings form React islands', () => {
       buttons[1]?.click();
     });
     await act(async () => {
-      buttons[3]?.click();
+      host.querySelector<HTMLButtonElement>(
+        '#_x_extension_site_search_add_2024_unique_'
+      )?.click();
       await Promise.resolve();
     });
 
     expect(createSettingsFormsApi().implementation).toBe('react');
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       key: 'yt',
+      category: 'site',
       template: '{query}'
+    }));
+  });
+
+  it('stores the selected search-engine placement in the custom draft', async () => {
+    const host = document.createElement('div');
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+    document.body.appendChild(host);
+    const controller = createSiteSearchFormController(host, { onSave });
+    controllers.push(controller);
+    act(() => controller.render(siteModel));
+
+    const categoryControl = host.querySelector<HTMLElement>(
+      '._x_extension_site_search_category_tabs_2026_unique_'
+    );
+    expect(categoryControl?.getAttribute('role')).toBe('group');
+    expect(
+      categoryControl?.querySelector('[data-site-search-category="site"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+
+    act(() => {
+      host.querySelector<HTMLButtonElement>('button')?.click();
+      host.querySelector<HTMLButtonElement>('[data-site-search-category="searchEngine"]')
+        ?.click();
+    });
+    expect(
+      categoryControl?.querySelector('[data-site-search-category="searchEngine"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(
+        '#_x_extension_site_search_add_2024_unique_'
+      )?.click();
+      await Promise.resolve();
+    });
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'searchEngine'
     }));
   });
 
@@ -121,7 +165,9 @@ describe('Options settings form React islands', () => {
     const buttons = host.querySelectorAll<HTMLButtonElement>('button');
     act(() => buttons[0]?.click());
     await act(async () => {
-      buttons[3]?.click();
+      host.querySelector<HTMLButtonElement>(
+        '#_x_extension_site_search_add_2024_unique_'
+      )?.click();
       await Promise.resolve();
     });
 
@@ -141,12 +187,16 @@ describe('Options settings form React islands', () => {
     act(() => buttons[0]?.click());
 
     await act(async () => {
-      buttons[3]?.click();
+      host.querySelector<HTMLButtonElement>(
+        '#_x_extension_site_search_add_2024_unique_'
+      )?.click();
       await Promise.resolve();
     });
 
     expect(host.dataset.expanded).toBe('true');
-    expect(buttons[3]?.disabled).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>(
+      '#_x_extension_site_search_add_2024_unique_'
+    )?.disabled).toBe(false);
     expect(host.querySelector('._x_extension_shortcut_error_2024_unique_')?.textContent)
       .toBe('Storage unavailable');
   });

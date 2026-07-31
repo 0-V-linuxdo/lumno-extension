@@ -40,26 +40,26 @@ const newtabDarkActiveFaviconBlock = getCssRuleBlock(
 
 assert.match(
   newtabActiveSuggestionBlock,
-  /background:\s*var\(--x-nt-suggestion-active-bg[\s\S]*?border-color:\s*var\(--x-nt-suggestion-active-border/,
-  'newtab active suggestion rows should keep the existing background and border highlight'
+  /background:\s*var\(--x-nt-suggestion-active-bg/,
+  'newtab active suggestion rows should keep the existing background highlight'
 );
 
 assert.doesNotMatch(
   newtabActiveSuggestionBlock,
-  /box-shadow:/,
-  'newtab active suggestion rows should not add inner highlight or shadow'
+  /border(?:-color)?:|box-shadow:/,
+  'newtab active suggestion rows should not add an outline or shadow'
 );
 
 assert.match(
   newtabSuggestionBlock,
-  /transition:\s*background-color 0\.2s ease,\s*border-color 0\.2s ease;/,
-  'newtab suggestion row transitions should not animate a removed shadow'
+  /border:\s*1px solid transparent;[\s\S]*?transition:\s*background-color 0\.2s ease;/,
+  'newtab suggestion rows should reserve transparent border space and animate only the background'
 );
 
 assert.match(
   overlaySuggestionBlock,
-  /background:\s*var\(--x-ov-suggestion-row-bg[\s\S]*?border:\s*1px solid var\(--x-ov-suggestion-row-border/,
-  'overlay suggestion rows should keep the existing background and border highlight'
+  /background:\s*var\(--x-ov-suggestion-row-bg[\s\S]*?border:\s*1px solid transparent;/,
+  'overlay suggestion rows should keep the background highlight without an outline'
 );
 
 assert.doesNotMatch(
@@ -70,8 +70,8 @@ assert.doesNotMatch(
 
 assert.match(
   overlaySuggestionBlock,
-  /transition:\s*background-color 0\.2s ease,\s*border-color 0\.2s ease;/,
-  'overlay suggestion row transitions should not animate a removed shadow'
+  /transition:\s*background-color 0\.2s ease;/,
+  'overlay suggestion rows should animate only the background highlight'
 );
 
 assert.match(
@@ -100,14 +100,20 @@ assert.match(
 
 assert.match(
   suggestionsReact,
-  /'--x-nt-suggestion-active-bg':\s*'--x-ov-suggestion-row-bg'[\s\S]*?'--x-nt-suggestion-active-border':\s*'--x-ov-suggestion-row-border'/,
-  'the shared React view should map active background and border variables to Overlay tokens'
+  /'--x-nt-suggestion-active-bg':\s*'--x-ov-suggestion-row-bg'/,
+  'the shared React view should map the active background to the Overlay token'
 );
 
 assert.match(
   suggestionsReact,
-  /const highlight = options\.getHighlightColors\(theme\);[\s\S]*?'--x-nt-suggestion-active-bg'[\s\S]*?highlight\.bg[\s\S]*?'--x-nt-suggestion-active-border'[\s\S]*?highlight\.border/,
-  'React Overlay active suggestions should apply only the shared background and border tokens'
+  /const highlight = options\.getHighlightColors\(theme\);[\s\S]*?'--x-nt-suggestion-active-bg'[\s\S]*?highlight\.bg/,
+  'React Overlay active suggestions should apply the shared background token'
+);
+
+assert.doesNotMatch(
+  newtabHtml + newtabJs + overlayCss + suggestionsReact,
+  /--x-(?:nt-suggestion-(?:active|hover)-border|ov-suggestion-row-border)/,
+  'search result rows should not expose active or hover outline variables'
 );
 
 assert.match(

@@ -3081,6 +3081,7 @@
       updateWallpaperSelectionUi();
       if (isInitialWallpaperApply) {
         applyWallpaperVisualState(wallpaper);
+        refreshWallpaperAdaptiveSampler();
         scheduleWallpaperVisualRefresh(visualSeq);
         finalizeInitialWallpaper();
         return;

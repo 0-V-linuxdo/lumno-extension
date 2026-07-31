@@ -24,7 +24,7 @@
       "aliases": ["chatgpt", "openai"],
       "name": "ChatGPT",
       "template": "https://chatgpt.com/?hints=search&ref=ext&q={query}",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "chatgptPrompt"
     },
@@ -33,7 +33,7 @@
       "aliases": ["gemini"],
       "name": "Gemini",
       "template": "https://gemini.google.com/app",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=gemini.google.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "geminiPrompt"
     },
@@ -42,7 +42,7 @@
       "aliases": ["doubao", "豆包"],
       "name": "豆包",
       "template": "https://www.doubao.com/chat/",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=www.doubao.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=www.doubao.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "doubaoPrompt"
     },
@@ -51,7 +51,7 @@
       "aliases": ["qianwen", "qwen", "千问"],
       "name": "千问",
       "template": "https://www.qianwen.com/?q={query}",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=www.qianwen.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=www.qianwen.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "qianwenQuery"
     },
@@ -60,7 +60,7 @@
       "aliases": ["yuanbao", "tencent", "腾讯元宝", "元宝"],
       "name": "元宝",
       "template": "https://yuanbao.tencent.com/chat/",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "yuanbaoPrompt"
     },
@@ -69,7 +69,7 @@
       "aliases": ["minimax", "mini max"],
       "name": "MiniMax",
       "template": "https://chat.minimax.io/",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=chat.minimax.io&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=chat.minimax.io&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "minimaxPrompt"
     },
@@ -78,7 +78,7 @@
       "aliases": ["deepseek", "deep seek", "深度求索"],
       "name": "DeepSeek",
       "template": "https://chat.deepseek.com/",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "deepseekPrompt"
     },
@@ -87,7 +87,7 @@
       "aliases": ["moonshot", "月之暗面"],
       "name": "Kimi",
       "template": "https://www.kimi.com/",
-      "iconUrl": "https://www.google.com/s2/favicons?domain=www.kimi.com&sz=64",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=www.kimi.com&sz=128",
       "action": "openAndSubmit",
       "submitStrategy": "kimiPrompt"
     },
@@ -95,19 +95,49 @@
       "key": "so",
       "aliases": ["baidu", "bd"],
       "name": "Baidu",
-      "template": "https://www.baidu.com/s?wd={query}"
+      "template": "https://www.baidu.com/s?wd={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://www.baidu.com/favicon.ico"
     },
     {
       "key": "bi",
       "aliases": ["bing"],
       "name": "Bing",
-      "template": "https://www.bing.com/search?q={query}"
+      "template": "https://www.bing.com/search?q={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://www.bing.com/favicon.ico"
     },
     {
       "key": "gg",
       "aliases": ["google"],
       "name": "Google",
-      "template": "https://www.google.com/search?q={query}"
+      "template": "https://www.google.com/search?q={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png"
+    },
+    {
+      "key": "ddg",
+      "aliases": ["duckduckgo", "duck"],
+      "name": "DuckDuckGo",
+      "template": "https://duckduckgo.com/?q={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://duckduckgo.com/favicon.ico"
+    },
+    {
+      "key": "br",
+      "aliases": ["brave", "brave search"],
+      "name": "Brave Search",
+      "template": "https://search.brave.com/search?q={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://brave.com/favicon.ico"
+    },
+    {
+      "key": "eco",
+      "aliases": ["ecosia"],
+      "name": "Ecosia",
+      "template": "https://www.ecosia.org/search?q={query}",
+      "category": "searchEngine",
+      "iconUrl": "https://www.ecosia.org/favicon.ico"
     },
     {
       "key": "zh",
@@ -131,13 +161,15 @@
       "key": "tb",
       "aliases": ["taobao"],
       "name": "Taobao",
-      "template": "https://s.taobao.com/search?q={query}"
+      "template": "https://s.taobao.com/search?q={query}",
+      "iconUrl": "https://www.taobao.com/favicon.ico"
     },
     {
       "key": "tm",
       "aliases": ["tmall"],
       "name": "Tmall",
-      "template": "https://list.tmall.com/search_product.htm?q={query}"
+      "template": "https://list.tmall.com/search_product.htm?q={query}",
+      "iconUrl": "https://www.tmall.com/favicon.ico"
     },
     {
       "key": "wx",

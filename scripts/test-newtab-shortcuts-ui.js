@@ -538,6 +538,12 @@ assert.ok(
   'shortcut icon processing should load before the bootstrap starts the React dialog'
 );
 
+assertContains(
+  newtabHtml,
+  '<script src="../shared/shortcut-favicon.js"></script>',
+  'new tab page should load the dedicated high-resolution shortcut favicon cache'
+);
+
 [
   '.x-nt-shortcuts-section',
   '.x-nt-shortcut-tile',
@@ -1065,9 +1071,43 @@ assertContains(
 );
 
 assertContains(
+  newtabHtml,
+  '.x-nt-shortcut-icon:has(.x-nt-shortcut-favicon[data-fallback-icon="true"])',
+  'shortcut fallback icons should explicitly control the outer icon surface'
+);
+
+assertContains(
+  newtabHtml,
+  '.x-nt-shortcut-icon:has(.x-nt-favicon-fallback[data-visible="true"])',
+  'visible shortcut fallback nodes should not stack with the themed icon card'
+);
+
+const shortcutFallbackSurfaceRule = getCssRuleBlock(
+  newtabHtml,
+  '.x-nt-shortcut-icon:has(.x-nt-shortcut-favicon[data-fallback-icon="true"]),\n      .x-nt-shortcut-icon:has(.x-nt-shortcut-favicon[data-favicon-placeholder="true"]),\n      .x-nt-shortcut-icon:has(.x-nt-favicon-fallback[data-visible="true"])'
+);
+assertContains(
+  shortcutFallbackSurfaceRule,
+  'background: transparent;',
+  'shortcut fallback state should replace rather than stack with the icon card surface'
+);
+
+assertContains(
   newtabJs,
   'const NEWTAB_SHORTCUTS_STORE = globalThis.LumnoNewtabShortcutsStore || {};',
   'newtab runtime should read the shortcuts store'
+);
+
+assertContains(
+  newtabJs,
+  'onUnavailable: context && context.onIconUnavailable',
+  'search-scope provider favicons should hand terminal failures back to the menu glyph'
+);
+
+assertContains(
+  newtabJs,
+  'const primaryUrl = isFaviconProxyUrl(iconUrl)',
+  'explicit provider favicons should be tried before generic browser proxy placeholders'
 );
 
 assertContains(
@@ -2129,8 +2169,20 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'return Promise.all([loadShortcuts(), loadShortcutIcons()]).then(() => {',
-  'newtab runtime should load shortcut metadata and local icons together'
+  'return Promise.all([loadShortcuts(), loadShortcutIcons(), loadShortcutFavicons()]).then(() => {',
+  'newtab runtime should load shortcut metadata, local icons, and cached high-resolution favicons together'
+);
+
+assertContains(
+  newtabJs,
+  "action: 'getShortcutFaviconData'",
+  'shortcut tiles should request their dedicated high-resolution favicon upgrade'
+);
+
+assertContains(
+  newtabJs,
+  'SHORTCUT_FAVICON.setCachedIcon(',
+  'resolved high-resolution shortcut favicons should be cached locally'
 );
 
 assert.match(
@@ -2198,8 +2250,12 @@ assertContains(
   'React shortcut input affixes should use the no-prefix options mode'
 );
 
-const themeBootstrapIndex = newtabJs.indexOf('bootstrapInitialThemeMode();');
-assert.ok(themeBootstrapIndex > -1, 'newtab runtime should bootstrap the initial theme');
+const themeBootstrapIndex = newtabJs.indexOf('const initialAppearanceReadyTask = Promise.all([');
+assert.ok(themeBootstrapIndex > -1, 'newtab runtime should bootstrap the initial appearance');
+assert.ok(
+  newtabJs.indexOf('bootstrapInitialThemeMode(),', themeBootstrapIndex) > themeBootstrapIndex,
+  'the initial appearance task should resolve the theme before first paint'
+);
 [
   'const suggestionItems = [];',
   'let selectedIndex = -1;',

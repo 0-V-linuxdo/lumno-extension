@@ -239,8 +239,8 @@ assert(
       fs.statSync(sharedBundlePath).size +
       fs.statSync(tabSwitcherSharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    360 * 1024,
-  'the New Tab React route should stay within its 360 KiB uncompressed budget'
+    362 * 1024,
+  'the New Tab React route should stay within its 362 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +

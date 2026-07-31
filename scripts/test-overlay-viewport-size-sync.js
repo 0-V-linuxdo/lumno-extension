@@ -8,6 +8,10 @@ const lifecycle = globalThis.LumnoOverlayLifecycle;
 const lifecycleSource = fs.readFileSync('src/overlay/lifecycle.js', 'utf8');
 const shellSource = fs.readFileSync('react-src/overlay/shell.tsx', 'utf8');
 const searchPanelSource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
+const sharedSearchInputSource = fs.readFileSync(
+  'src/shared/search-input.css',
+  'utf8'
+);
 const suggestionsViewSource = fs.readFileSync(
   'src/overlay/suggestions-view.css',
   'utf8'
@@ -118,48 +122,88 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /translateX\(-50%\) translateY\(0\) scale\(var\(--x-ov-visible-scale,\s*1\)\)/,
-  'overlay reveal state should preserve the transform scale token'
+  /translateX\(-50%\) translateY\(0\) scale\(var\(--x-ov-visible-scale,\s*1\)\) scaleX\(1\)/,
+  'overlay reveal state should preserve viewport scale while completing the centered horizontal stretch'
+);
+assert.match(
+  searchPanelSource,
+  /function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?overlayEnterAnimation === 'fade'[\s\S]*?--x-lumno-search-entry-scale-start', '0\.92'[\s\S]*?--x-lumno-search-entry-duration', '270ms'[\s\S]*?--x-lumno-search-entry-delay', '40ms'/,
+  'the whole overlay panel should use a pronounced horizontal stretch after its initial blur starts clearing'
+);
+assert.match(
+  searchPanelSource,
+  /const revealTransform = getOverlayEnterAnimationRevealTransform\(\);\s*if \(reduceMotion\) \{[\s\S]*?setProperty\('transform', revealTransform, 'important'\)[\s\S]*?runEnterAnimation\(overlay, \(\) => \{[\s\S]*?setProperty\('transform', revealTransform, 'important'\)/,
+  'overlay reveal should stretch the entire panel in the visible frame and skip transitions for reduced motion'
+);
+assert.match(
+  searchPanelSource,
+  /if \(overlayEnterAnimation === 'fade'\) \{[\s\S]*?translateY\(10px\)[\s\S]*?scale\(0\.985\)[\s\S]*?blur\(6px\)[\s\S]*?transform 340ms cubic-bezier\(0\.2, 1, 0\.36, 1\), opacity 220ms ease, filter 300ms ease/,
+  'fade mode should restore the former overlay entrance motion'
+);
+assert.match(
+  searchPanelSource,
+  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*revealOverlay\(\);/,
+  'overlay reveal should wait for the stored animation preference before exposing the mount'
 );
 assert.match(
   shellSource,
-  /--x-ov-panel-radius:\s*32px;[\s\S]*?--x-ov-panel-top-radius:\s*28px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
-  'overlay shell should expose separate 32px outer and 28px expanded-top corner radii'
+  /const OVERLAY_PANEL_ENTRY_TRANSFORM =\s*'translateX\(-50%\) translateY\(4px\) scale\(var\(--x-ov-visible-scale, 1\)\) scaleX\(var\(--x-lumno-search-entry-scale-start, 0\.97\)\)';[\s\S]*?const OVERLAY_PANEL_TRANSITION =\s*'transform var\(--x-lumno-search-entry-duration, 240ms\) var\(--x-lumno-search-entry-easing,[\s\S]*?var\(--x-lumno-search-entry-delay, 40ms\)[\s\S]*?opacity 180ms ease, filter 240ms ease'[\s\S]*?transform: \$\{OVERLAY_PANEL_ENTRY_TRANSFORM\} !important;[\s\S]*?filter: blur\(10px\) !important;[\s\S]*?transition: \$\{OVERLAY_PANEL_TRANSITION\} !important;/,
+  'the overlay shell should keep centering and horizontal stretch in one transform chain'
+);
+assert.match(
+  sharedSearchInputSource,
+  /--x-lumno-search-entry-scale-start:\s*0\.97;[\s\S]*?--x-lumno-search-entry-easing:\s*cubic-bezier\(0\.16, 1, 0\.3, 1\);/,
+  'overlay and new-tab should retain a shared fallback token definition'
+);
+assert.match(
+  shellSource,
+  /--x-ov-panel-radius:\s*28px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
+  'overlay shell should use the smaller 28px radius on every outer corner'
 );
 assert.doesNotMatch(
-  searchPanelSource,
-  /var\(--x-ov-panel-radius,\s*16px\)/,
-  'overlay input and collapsed-state fallbacks should not shrink the panel radius'
+  shellSource,
+  /--x-ov-panel-top-radius/,
+  'overlay shell should expose one shared outer-corner radius token'
 );
 assert.match(
   searchPanelSource,
-  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 32px\)'\s*:\s*'var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-radius, 32px\) var\(--x-ov-panel-radius, 32px\)'/,
-  'collapsed overlays should keep the 32px shell radius while expanded overlays use 28px top and 32px bottom corners'
+  /setOverlayPanelScopedStyle\([\s\S]*?'border-radius',[\s\S]*?'var\(--x-ov-panel-radius, 28px\)'[\s\S]*?\);/,
+  'collapsed and expanded overlays should keep the same 28px radius on all four outer corners'
 );
 assert.match(
   searchPanelSource,
-  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 32px\)'\s*:\s*'var\(--x-ov-panel-top-radius, 28px\) var\(--x-ov-panel-top-radius, 28px\) 0 0'/,
-  'the input should switch from the collapsed shell radius to the expanded 28px top-corner radius'
+  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 28px\)'\s*:\s*'var\(--x-ov-panel-radius, 28px\) var\(--x-ov-panel-radius, 28px\) 0 0'/,
+  'the input should retain 28px top corners while its internal expanded seam stays square'
 );
 assert.match(
   suggestionsViewSource,
-  /border-radius:\s*0 0 var\(--x-ov-panel-radius,\s*32px\) var\(--x-ov-panel-radius,\s*32px\);/,
-  'overlay results should share the shell radius at the lower corners'
+  /border-radius:\s*0 0 var\(--x-ov-panel-radius,\s*28px\) var\(--x-ov-panel-radius,\s*28px\);/,
+  'overlay results should share the 28px shell radius at the lower corners'
 );
 assert.match(
   searchPanelSource,
   /function captureSuggestionsHeightState\(container\)[\s\S]*?suggestionsHeightAnimationTargetIsCapped[\s\S]*?state\.heldHeight[\s\S]*?suggestionsHeightAnimationTarget[\s\S]*?cancelSuggestionsHeightAnimation\(container\)/,
-  'overlay suggestion rerenders should preserve a capped animation target instead of treating its intermediate height as stable'
+  'overlay suggestion rerenders should preserve the intended animation target instead of treating its intermediate height as stable'
 );
 assert.match(
   searchPanelSource,
-  /const previousHeightState = captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?reactView\.render\(\{[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\([\s\S]*?suggestionsContainer,[\s\S]*?previousHeightState\.height/,
-  'overlay suggestion replacements should animate from the existing container height instead of restarting at zero'
+  /const previousHeightState =[\s\S]*?updateKind === 'highlight' \|\| updateKind === 'content'[\s\S]*?\? null[\s\S]*?: captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?reactView\.render\(\{[\s\S]*?if \(previousHeightState\) \{[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\([\s\S]*?suggestionsContainer,[\s\S]*?previousHeightState\.height/,
+  'overlay structural replacements should animate from the existing height while local content and highlight updates bypass the height pipeline'
 );
 assert.match(
   searchPanelSource,
-  /function holdSuggestionsHeightForRemoteMix\(container, previousState, query, enabled\)[\s\S]*?targetMetrics\.atMaxHeight[\s\S]*?return true;[\s\S]*?previousState\.heldHeight[\s\S]*?height.*heldHeight[\s\S]*?transition', 'none'/,
-  'capped-to-capped updates should skip animation and an intermediate local result should keep the prior capped target while mixing'
+  /function holdSuggestionsHeightForRemoteMix\(container, previousState, query, enabled\)[\s\S]*?shouldHold[\s\S]*?suggestionsHeightInputLockedHeight[\s\S]*?previousState\.heldHeight[\s\S]*?height.*heldHeight[\s\S]*?transition', 'none'/,
+  'intermediate URL and remote result renders should keep the prior input-session height while mixing'
+);
+assert.match(
+  searchPanelSource,
+  /function beginSuggestionsHeightInputSession\(query\)[\s\S]*?suggestionsHeightInputLockedHeight[\s\S]*?setTimeout\([\s\S]*?finishSuggestionsHeightInputSession\(\)/,
+  'overlay typing should lock suggestion height until the input burst settles'
+);
+assert.match(
+  searchPanelSource,
+  /handleSearchInputEvent\(event\)[\s\S]*?beginSuggestionsHeightInputSession\(query\)[\s\S]*?requestOverlaySearchSuggestions\(query\)/,
+  'overlay input should start the stable-height session before matching each query'
 );
 assert.match(
   searchPanelSource,
@@ -183,8 +227,8 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /if \(isPaste \|\| getDirectUrlSuggestion\(query\)\) \{[\s\S]*?updateSearchSuggestions\(\[\], query, \{[\s\S]*?deferCappedShrink: true[\s\S]*?\}\);/,
-  'an immediate URL preview should keep the existing capped height until its full local and remote results arrive'
+  /if \(isPaste \|\| getDirectUrlSuggestion\(query\)\) \{[\s\S]*?updatePendingSearchSuggestions\(query, \{[\s\S]*?deferCappedShrink: true[\s\S]*?\}\);/,
+  'an immediate URL preview should retain existing rows and height until its full local and remote results arrive'
 );
 assert.match(
   searchPanelSource,

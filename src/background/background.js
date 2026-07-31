@@ -18,6 +18,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/shared/shortcut-favicon.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load shortcut favicon helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('src/shared/favicon-cache.js'));
 } catch (error) {
   console.warn('Lumno: failed to load favicon cache runtime.', error);
@@ -146,6 +152,7 @@ const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
 const COMMAND_TARGET_POLICY = globalThis.LumnoCommandTargetPolicy || {};
 const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
 const FAVICON_CACHE = globalThis.LumnoFaviconCache || {};
+const SHORTCUT_FAVICON = globalThis.LumnoShortcutFavicon || {};
 const NEWTAB_FAVICON_THEME = globalThis.LumnoNewtabFaviconTheme || {};
 const BACKGROUND_NEWTAB_FALLBACK = globalThis.LumnoBackgroundNewtabFallback || {};
 const BACKGROUND_TAB_GROUPS = globalThis.LumnoBackgroundTabGroups || {};
@@ -1244,6 +1251,7 @@ const NEWTAB_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_
 const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
 const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
 const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_unique_';
+const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
 const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
 const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
 const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
@@ -3636,8 +3644,10 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/suggestion-navigation.js',
     'src/shared/ime-key-guard.js',
     'src/shared/search-input-history.js',
+    'src/shared/menu-surface.js',
     'src/shared/search-input-mode.js',
     'src/shared/shortcut-display.js',
+    'src/shared/shortcut-favicon.js',
     'src/shared/community-links.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
@@ -3676,6 +3686,9 @@ function openOverlayOnTab(activeTab, tabs, source) {
       loadSiteSearchProviders()
         .catch(() => [])
         .then((siteSearchProviders) => {
+          // Keep overlay startup independent from network I/O. The persisted high-resolution
+          // provider icons are warmed in the background and picked up through local storage.
+          scheduleSiteSearchProviderIconWarmup(siteSearchProviders, '');
           chrome.scripting.executeScript({
             target: {tabId: activeTab.id},
             func: (overlayTabs, overlayPanelContext) => {
@@ -4803,6 +4816,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
     actions: [
       'resolveFaviconCandidates',
       'getFaviconData',
+      'getShortcutFaviconData',
       'resolveSiteThemeColor'
     ],
     handler: handleFaviconMessage
@@ -5461,6 +5475,28 @@ function handleFaviconMessage(request, sender, sendResponse) {
       });
       return true;
     }
+    case 'getShortcutFaviconData': {
+      const pageUrl = request.pageUrl || '';
+      const preferredTheme = request.preferredTheme || '';
+      fetchShortcutFaviconData(pageUrl, preferredTheme).then((result) => {
+        sendResponse(result || {
+          data: '',
+          sourceUrl: '',
+          width: 0,
+          height: 0,
+          vector: false
+        });
+      }).catch(() => {
+        sendResponse({
+          data: '',
+          sourceUrl: '',
+          width: 0,
+          height: 0,
+          vector: false
+        });
+      });
+      return true;
+    }
     case 'resolveSiteThemeColor': {
       const targetUrl = request.url || '';
       const hostOverride = request.host || '';
@@ -5541,6 +5577,7 @@ migrateStorageIfNeeded([
   NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
   NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
   OVERLAY_SIZE_MODE_STORAGE_KEY,
+  OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
   BOOKMARK_COUNT_STORAGE_KEY,
   BOOKMARK_COLUMNS_STORAGE_KEY,
   BOOKMARK_VIEW_MODE_STORAGE_KEY,
@@ -5570,14 +5607,40 @@ const FAVICON_PROXY_SIZE = 128;
 let backgroundFaviconUrlResolver = null;
 const faviconDataCache = new Map();
 const faviconPending = new Map();
+const shortcutFaviconDataCache = new Map();
+const shortcutFaviconPending = new Map();
 const titlePinyinCache = new Map();
 const siteThemeColorCache = new Map();
 const siteThemeColorPending = new Map();
 const switcherThemeColorWarmups = new Set();
 const BACKGROUND_FAVICON_DATA_CACHE_MAX_ENTRIES = 256;
+const BACKGROUND_SHORTCUT_FAVICON_CACHE_MAX_ENTRIES = 64;
+const SHORTCUT_FAVICON_FETCH_TIMEOUT_MS = 6500;
+const SHORTCUT_FAVICON_PAGE_MAX_LENGTH = 768 * 1024;
+const SHORTCUT_FAVICON_MANIFEST_MAX_BYTES = 512 * 1024;
+const SHORTCUT_FAVICON_RESOURCE_MAX_BYTES = 256 * 1024;
+const SITE_SEARCH_ICON_STORAGE_KEY = SHORTCUT_FAVICON.SITE_SEARCH_STORAGE_KEY ||
+  '_x_extension_site_search_icon_cache_canonical_2026_unique_';
+const SITE_SEARCH_ICON_CACHE_OPTIONS = SHORTCUT_FAVICON.SITE_SEARCH_CACHE_OPTIONS || Object.freeze({
+  cacheTtlMs: 1000 * 60 * 60 * 24 * 180,
+  cacheMaxEntries: 40,
+  maxDataUrlLength: 192 * 1024
+});
+const SITE_SEARCH_ICON_WARM_CONCURRENCY = 2;
+const SITE_SEARCH_PINNED_ICON_KEYS = new Set(Object.keys(
+  SHORTCUT_FAVICON.SITE_SEARCH_PINNED_ICON_ASSETS || {}
+));
 const BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES = 512;
 const BACKGROUND_TITLE_PINYIN_CACHE_MAX_ENTRIES = 2048;
 let backgroundFaviconCacheRuntime = null;
+let siteSearchIconStore = null;
+let siteSearchIconCache = null;
+let siteSearchIconCacheLoadPromise = null;
+let siteSearchIconCacheWriteTimer = null;
+let siteSearchIconCacheRevision = 0;
+let siteSearchIconWarmActiveCount = 0;
+const siteSearchIconWarmQueue = [];
+const siteSearchIconWarmPending = new Set();
 const logBackgroundFaviconDecision = typeof FAVICON_UTILS.createFaviconDecisionLogger === 'function'
   ? FAVICON_UTILS.createFaviconDecisionLogger({ surface: 'background' })
   : (() => false);
@@ -5957,6 +6020,9 @@ function getDefaultSearchEngineThemeUrl() {
 }
 
 function getDefaultSearchEngineFaviconUrl() {
+  if (defaultSearchEngineState.id === 'google') {
+    return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
+  }
   if (defaultSearchEngineState.host) {
     return `https://${defaultSearchEngineState.host}/favicon.ico`;
   }
@@ -5969,7 +6035,7 @@ function getDefaultSearchEngineFaviconUrl() {
       return '';
     }
   }
-  return 'https://www.google.com/favicon.ico';
+  return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
 }
 
 function parseJsonpPayload(text) {
@@ -6543,6 +6609,514 @@ function resolveFaviconCandidates(targetUrl, hostOverride, fallbackUrl) {
   });
 }
 
+function getShortcutFaviconPreferredTheme(value) {
+  const theme = String(value || '').trim().toLowerCase();
+  return theme === 'dark' || theme === 'light' ? theme : '';
+}
+
+function readShortcutFaviconResponsePrefix(response, maxLength) {
+  const limit = Math.max(1, Number(maxLength) || SHORTCUT_FAVICON_PAGE_MAX_LENGTH);
+  if (!response || !response.body || typeof response.body.getReader !== 'function' ||
+      typeof TextDecoder !== 'function') {
+    return response.text().then((text) => String(text || '').slice(0, limit));
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  const readNext = () => reader.read().then((result) => {
+    if (!result || result.done) {
+      text += decoder.decode();
+      return text.slice(0, limit);
+    }
+    text += decoder.decode(result.value, { stream: true });
+    if (text.length >= limit) {
+      return Promise.resolve(reader.cancel()).catch(() => {}).then(() => text.slice(0, limit));
+    }
+    return readNext();
+  });
+  return readNext().catch(() => text.slice(0, limit));
+}
+
+function canFetchShortcutFaviconUrl(url) {
+  const policy = getFaviconTargetPolicy(url, '');
+  return Boolean(
+    policy.ok &&
+    !policy.directFetchBlocked &&
+    canFetchPageForFavicon(url)
+  );
+}
+
+function fetchShortcutFaviconDocument(pageUrl, signal) {
+  if (!canFetchShortcutFaviconUrl(pageUrl)) {
+    return Promise.resolve(null);
+  }
+  return fetch(pageUrl, {
+    cache: 'force-cache',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+    redirect: 'follow',
+    signal
+  }).then((response) => {
+    if (!response || !response.ok) {
+      return null;
+    }
+    const resolvedPageUrl = typeof response.url === 'string' && response.url
+      ? response.url
+      : pageUrl;
+    if (!canFetchShortcutFaviconUrl(resolvedPageUrl)) {
+      return null;
+    }
+    const contentType = String(response.headers && response.headers.get
+      ? response.headers.get('content-type') || ''
+      : '').toLowerCase();
+    if (contentType && !contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+      return null;
+    }
+    return readShortcutFaviconResponsePrefix(response, SHORTCUT_FAVICON_PAGE_MAX_LENGTH).then((html) => ({
+      html,
+      pageUrl: resolvedPageUrl
+    }));
+  }).catch(() => null);
+}
+
+function fetchShortcutFaviconManifest(manifestUrl, signal) {
+  if (!canFetchShortcutFaviconUrl(manifestUrl)) {
+    return Promise.resolve([]);
+  }
+  return fetch(manifestUrl, {
+    cache: 'force-cache',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+    redirect: 'follow',
+    signal
+  }).then((response) => {
+    if (!response || !response.ok) {
+      return null;
+    }
+    const resolvedManifestUrl = typeof response.url === 'string' && response.url
+      ? response.url
+      : manifestUrl;
+    if (!canFetchShortcutFaviconUrl(resolvedManifestUrl)) {
+      return null;
+    }
+    const contentLength = Number(response.headers && response.headers.get
+      ? response.headers.get('content-length') || 0
+      : 0);
+    if (Number.isFinite(contentLength) && contentLength > SHORTCUT_FAVICON_MANIFEST_MAX_BYTES) {
+      return null;
+    }
+    return readShortcutFaviconResponsePrefix(
+      response,
+      SHORTCUT_FAVICON_MANIFEST_MAX_BYTES
+    ).then((text) => ({
+      manifest: JSON.parse(text),
+      manifestUrl: resolvedManifestUrl
+    }));
+  }).then((result) => {
+    if (!result || typeof SHORTCUT_FAVICON.parseManifestIconCandidates !== 'function') {
+      return [];
+    }
+    return SHORTCUT_FAVICON.parseManifestIconCandidates(result.manifest, result.manifestUrl);
+  }).catch(() => []);
+}
+
+function fetchShortcutFaviconResource(candidate, pageUrl, signal) {
+  const sourceUrl = candidate && candidate.url ? String(candidate.url) : '';
+  if (!sourceUrl || !canFetchShortcutFaviconUrl(sourceUrl)) {
+    return Promise.resolve(null);
+  }
+  return fetch(sourceUrl, {
+    cache: 'force-cache',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+    redirect: 'follow',
+    signal
+  }).then((response) => {
+    if (!response || !response.ok) {
+      return null;
+    }
+    const resolvedSourceUrl = typeof response.url === 'string' && response.url
+      ? response.url
+      : sourceUrl;
+    if (!canFetchShortcutFaviconUrl(resolvedSourceUrl)) {
+      return null;
+    }
+    const contentLength = Number(response.headers && response.headers.get
+      ? response.headers.get('content-length') || 0
+      : 0);
+    if (Number.isFinite(contentLength) && contentLength > SHORTCUT_FAVICON_RESOURCE_MAX_BYTES) {
+      return null;
+    }
+    return response.blob().then((blob) => ({
+      blob,
+      sourceUrl: resolvedSourceUrl
+    }));
+  }).then((result) => {
+    const blob = result && result.blob;
+    if (!blob || blob.size <= 0 || blob.size > SHORTCUT_FAVICON_RESOURCE_MAX_BYTES) {
+      return null;
+    }
+    return blob.arrayBuffer().then((buffer) => {
+      const inspection = typeof SHORTCUT_FAVICON.inspectIconResource === 'function'
+        ? SHORTCUT_FAVICON.inspectIconResource(buffer, blob.type, result.sourceUrl, candidate)
+        : null;
+      if (!inspection || inspection.usable !== true) {
+        return null;
+      }
+      return {
+        data: `data:${inspection.mimeType || blob.type || 'image/png'};base64,${arrayBufferToBase64(buffer)}`,
+        sourceUrl: result.sourceUrl,
+        width: Number(inspection.width || 0),
+        height: Number(inspection.height || 0),
+        vector: inspection.vector === true,
+        pageUrl
+      };
+    });
+  }).catch(() => null);
+}
+
+function resolveShortcutFaviconData(pageUrl, preferredTheme, signal, explicitIconUrl) {
+  if (typeof SHORTCUT_FAVICON.parseHtmlIconCandidates !== 'function' ||
+      typeof SHORTCUT_FAVICON.mergeCandidates !== 'function') {
+    return Promise.resolve(null);
+  }
+  const resolveFromPage = () => fetchShortcutFaviconDocument(pageUrl, signal).then((documentResult) => {
+    if (!documentResult || !documentResult.html) {
+      return null;
+    }
+    const resolvedPageUrl = documentResult.pageUrl || pageUrl;
+    const pageCandidates = SHORTCUT_FAVICON.parseHtmlIconCandidates(
+      documentResult.html,
+      resolvedPageUrl,
+      preferredTheme
+    );
+    const manifestUrls = typeof SHORTCUT_FAVICON.parseHtmlManifestUrls === 'function'
+      ? SHORTCUT_FAVICON.parseHtmlManifestUrls(documentResult.html, resolvedPageUrl).slice(0, 2)
+      : [];
+    return Promise.all(manifestUrls.map((manifestUrl) =>
+      fetchShortcutFaviconManifest(manifestUrl, signal))).then((manifestCandidateGroups) => {
+      const rootCandidates = typeof SHORTCUT_FAVICON.getRootIconCandidates === 'function'
+        ? SHORTCUT_FAVICON.getRootIconCandidates(resolvedPageUrl)
+        : [];
+      const candidates = SHORTCUT_FAVICON.mergeCandidates([
+        ...pageCandidates,
+        ...manifestCandidateGroups.flat(),
+        ...rootCandidates
+      ]).slice(0, 10);
+      let candidateIndex = 0;
+      const tryNextCandidate = () => {
+        const candidate = candidates[candidateIndex];
+        candidateIndex += 1;
+        if (!candidate) {
+          return Promise.resolve(null);
+        }
+        return fetchShortcutFaviconResource(candidate, resolvedPageUrl, signal)
+          .then((result) => result || tryNextCandidate());
+      };
+      return tryNextCandidate();
+    });
+  });
+  const explicitIcon = String(explicitIconUrl || '').trim();
+  const resolveFromProxy = () => {
+    const proxyUrl = getGstaticFaviconUrl(pageUrl);
+    if (!proxyUrl || proxyUrl === explicitIcon) {
+      return Promise.resolve(null);
+    }
+    return fetchShortcutFaviconResource({
+      url: proxyUrl,
+      source: 'proxy',
+      declaredSize: 128,
+      vector: false
+    }, pageUrl, signal);
+  };
+  const resolveFromPageOrProxy = () => resolveFromPage().then((result) =>
+    result || resolveFromProxy());
+  if (!explicitIcon) {
+    return resolveFromPageOrProxy();
+  }
+  return fetchShortcutFaviconResource({
+    url: explicitIcon,
+    source: 'explicit',
+    declaredSize: 0,
+    vector: /\.svg(?:[?#]|$)/i.test(explicitIcon)
+  }, pageUrl, signal).then((result) => result || resolveFromPageOrProxy());
+}
+
+function fetchShortcutFaviconData(pageUrl, preferredTheme, explicitIconUrl) {
+  const normalizedPageUrl = typeof SHORTCUT_FAVICON.normalizePageUrl === 'function'
+    ? SHORTCUT_FAVICON.normalizePageUrl(pageUrl)
+    : String(pageUrl || '').trim();
+  const theme = getShortcutFaviconPreferredTheme(preferredTheme);
+  if (!normalizedPageUrl) {
+    return Promise.resolve(null);
+  }
+  const explicitIcon = String(explicitIconUrl || '').trim();
+  const cacheKey = `${normalizedPageUrl}::${theme || 'auto'}::${explicitIcon}`;
+  if (shortcutFaviconDataCache.has(cacheKey)) {
+    return Promise.resolve(shortcutFaviconDataCache.get(cacheKey));
+  }
+  if (shortcutFaviconPending.has(cacheKey)) {
+    return shortcutFaviconPending.get(cacheKey);
+  }
+  const promise = Promise.all([
+    loadFaviconRequestBlacklistItems(),
+    loadFaviconEnhancedFetchEnabled()
+  ]).then(([, enhancedFetchEnabled]) => {
+    const targetPolicy = getFaviconTargetPolicy(normalizedPageUrl, '');
+    if (!enhancedFetchEnabled || !targetPolicy.ok || targetPolicy.directFetchBlocked ||
+        !canFetchPageForFavicon(normalizedPageUrl)) {
+      return null;
+    }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeoutId = setTimeout(() => {
+      if (controller) {
+        controller.abort();
+      }
+    }, SHORTCUT_FAVICON_FETCH_TIMEOUT_MS);
+    return resolveShortcutFaviconData(
+      normalizedPageUrl,
+      theme,
+      controller ? controller.signal : undefined,
+      explicitIcon
+    ).finally(() => clearTimeout(timeoutId));
+  }).then((result) => {
+    setBoundedBackgroundCacheEntry(
+      shortcutFaviconDataCache,
+      cacheKey,
+      result || null,
+      BACKGROUND_SHORTCUT_FAVICON_CACHE_MAX_ENTRIES
+    );
+    shortcutFaviconPending.delete(cacheKey);
+    return result || null;
+  }).catch(() => {
+    shortcutFaviconPending.delete(cacheKey);
+    return null;
+  });
+  shortcutFaviconPending.set(cacheKey, promise);
+  return promise;
+}
+
+function getSiteSearchIconStore() {
+  if (siteSearchIconStore || typeof SHORTCUT_FAVICON.createShortcutFaviconStore !== 'function') {
+    return siteSearchIconStore;
+  }
+  siteSearchIconStore = SHORTCUT_FAVICON.createShortcutFaviconStore({
+    chromeApi: chrome,
+    storageArea: (chrome && chrome.storage && chrome.storage.local) ? chrome.storage.local : null,
+    storageKey: SITE_SEARCH_ICON_STORAGE_KEY,
+    ...SITE_SEARCH_ICON_CACHE_OPTIONS
+  });
+  return siteSearchIconStore;
+}
+
+function removeLegacySiteSearchIconCaches() {
+  const legacyKeys = Array.isArray(SHORTCUT_FAVICON.SITE_SEARCH_LEGACY_STORAGE_KEYS)
+    ? SHORTCUT_FAVICON.SITE_SEARCH_LEGACY_STORAGE_KEYS
+    : [];
+  const localArea = chrome && chrome.storage ? chrome.storage.local : null;
+  if (legacyKeys.length === 0 || !localArea || typeof localArea.remove !== 'function') {
+    return;
+  }
+  localArea.remove(legacyKeys, () => {
+    void (chrome.runtime && chrome.runtime.lastError);
+  });
+}
+
+function loadSiteSearchIconCache() {
+  if (siteSearchIconCache) {
+    return Promise.resolve(siteSearchIconCache);
+  }
+  if (siteSearchIconCacheLoadPromise) {
+    return siteSearchIconCacheLoadPromise;
+  }
+  const store = getSiteSearchIconStore();
+  if (!store || typeof store.readAll !== 'function') {
+    siteSearchIconCache = {};
+    return Promise.resolve(siteSearchIconCache);
+  }
+  siteSearchIconCacheLoadPromise = store.readAll()
+    .then((cache) => {
+      siteSearchIconCache = cache && typeof cache === 'object' ? cache : {};
+      return siteSearchIconCache;
+    })
+    .catch(() => {
+      siteSearchIconCache = {};
+      return siteSearchIconCache;
+    });
+  return siteSearchIconCacheLoadPromise;
+}
+
+function getSiteSearchProviderIconPageUrl(provider) {
+  if (typeof SHORTCUT_FAVICON.getSiteSearchProviderPageUrl === 'function') {
+    return SHORTCUT_FAVICON.getSiteSearchProviderPageUrl(provider);
+  }
+  const template = provider && provider.template ? String(provider.template).trim() : '';
+  if (!template) {
+    return '';
+  }
+  try {
+    const parsed = new URL(template.replace(/\{query\}/g, 'test'));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return `${parsed.origin}/`;
+  } catch (error) {
+    return '';
+  }
+}
+
+function getCachedSiteSearchIconDataUrl(pageUrl) {
+  if (!siteSearchIconCache || typeof SHORTCUT_FAVICON.getCacheKey !== 'function') {
+    return '';
+  }
+  const key = SHORTCUT_FAVICON.getCacheKey(pageUrl);
+  const entry = key ? siteSearchIconCache[key] : null;
+  return entry && entry.dataUrl ? String(entry.dataUrl) : '';
+}
+
+function hasUsableCachedSiteSearchProviderIcon(provider) {
+  if (typeof SHORTCUT_FAVICON.getSiteSearchProviderIcon !== 'function') {
+    return Boolean(getCachedSiteSearchIconDataUrl(getSiteSearchProviderIconPageUrl(provider)));
+  }
+  const icon = SHORTCUT_FAVICON.getSiteSearchProviderIcon(
+    siteSearchIconCache || {},
+    provider,
+    Date.now(),
+    SITE_SEARCH_ICON_CACHE_OPTIONS
+  );
+  return String(icon || '').startsWith('data:');
+}
+
+function scheduleSiteSearchIconCacheWrite() {
+  if (siteSearchIconCacheWriteTimer !== null) {
+    return;
+  }
+  siteSearchIconCacheWriteTimer = setTimeout(() => {
+    siteSearchIconCacheWriteTimer = null;
+    const store = getSiteSearchIconStore();
+    if (!store || typeof store.writeAll !== 'function' || !siteSearchIconCache) {
+      return;
+    }
+    const writeRevision = siteSearchIconCacheRevision;
+    const writeSnapshot = siteSearchIconCache;
+    store.writeAll(writeSnapshot).then((savedCache) => {
+      if (siteSearchIconCacheRevision === writeRevision) {
+        siteSearchIconCache = savedCache;
+        return;
+      }
+      scheduleSiteSearchIconCacheWrite();
+    }).catch(() => {});
+  }, 700);
+}
+
+function pruneSiteSearchProviderIconCache(providers) {
+  if (!siteSearchIconCache || typeof SHORTCUT_FAVICON.retainCachedIcons !== 'function') {
+    return false;
+  }
+  const pageUrls = (Array.isArray(providers) ? providers : []).flatMap((provider) => {
+    const providerKey = String(provider && provider.key || '').trim().toLowerCase();
+    if (SITE_SEARCH_PINNED_ICON_KEYS.has(providerKey)) {
+      return [];
+    }
+    const pageUrl = getSiteSearchProviderIconPageUrl(provider);
+    return pageUrl ? [pageUrl] : [];
+  });
+  const nextCache = SHORTCUT_FAVICON.retainCachedIcons(
+    siteSearchIconCache,
+    pageUrls,
+    Date.now(),
+    SITE_SEARCH_ICON_CACHE_OPTIONS
+  );
+  if (JSON.stringify(nextCache) === JSON.stringify(siteSearchIconCache)) {
+    return false;
+  }
+  siteSearchIconCache = nextCache;
+  siteSearchIconCacheRevision += 1;
+  scheduleSiteSearchIconCacheWrite();
+  return true;
+}
+
+function cacheSiteSearchProviderIcon(pageUrl, result) {
+  if (!result || !result.data || typeof SHORTCUT_FAVICON.setCachedIcon !== 'function') {
+    return false;
+  }
+  const nextCache = SHORTCUT_FAVICON.setCachedIcon(
+    siteSearchIconCache || {},
+    pageUrl,
+    result.data,
+    result.sourceUrl,
+    Date.now(),
+    SITE_SEARCH_ICON_CACHE_OPTIONS
+  );
+  const cacheKey = typeof SHORTCUT_FAVICON.getCacheKey === 'function'
+    ? SHORTCUT_FAVICON.getCacheKey(pageUrl)
+    : pageUrl;
+  const nextEntry = cacheKey && nextCache ? nextCache[cacheKey] : null;
+  if (!nextEntry || nextEntry.dataUrl !== result.data) {
+    return false;
+  }
+  siteSearchIconCache = nextCache;
+  siteSearchIconCacheRevision += 1;
+  scheduleSiteSearchIconCacheWrite();
+  return true;
+}
+
+function drainSiteSearchIconWarmQueue() {
+  while (siteSearchIconWarmActiveCount < SITE_SEARCH_ICON_WARM_CONCURRENCY &&
+      siteSearchIconWarmQueue.length > 0) {
+    const item = siteSearchIconWarmQueue.shift();
+    if (!item || !item.pageUrl) {
+      continue;
+    }
+    if (hasUsableCachedSiteSearchProviderIcon(item.provider)) {
+      siteSearchIconWarmPending.delete(item.pageUrl);
+      continue;
+    }
+    siteSearchIconWarmActiveCount += 1;
+    fetchShortcutFaviconData(item.pageUrl, item.preferredTheme, item.explicitIcon)
+      .then((result) => {
+        cacheSiteSearchProviderIcon(item.pageUrl, result);
+      })
+      .catch(() => {})
+      .finally(() => {
+        siteSearchIconWarmActiveCount = Math.max(0, siteSearchIconWarmActiveCount - 1);
+        siteSearchIconWarmPending.delete(item.pageUrl);
+        drainSiteSearchIconWarmQueue();
+      });
+  }
+}
+
+function scheduleSiteSearchProviderIconWarmup(providers, preferredTheme) {
+  const items = Array.isArray(providers) ? providers : [];
+  if (items.length === 0) {
+    return;
+  }
+  loadSiteSearchIconCache().then(() => {
+    pruneSiteSearchProviderIconCache(items);
+    items.forEach((provider) => {
+      const explicitIcon = typeof SHORTCUT_FAVICON.getSiteSearchProviderExplicitIcon === 'function'
+        ? SHORTCUT_FAVICON.getSiteSearchProviderExplicitIcon(provider)
+        : String(provider && (provider.icon || provider.iconUrl) || '').trim();
+      const pageUrl = getSiteSearchProviderIconPageUrl(provider);
+      const providerKey = String(provider && provider.key || '').trim().toLowerCase();
+      if (SITE_SEARCH_PINNED_ICON_KEYS.has(providerKey)) {
+        return;
+      }
+      if (!pageUrl || hasUsableCachedSiteSearchProviderIcon(provider) || siteSearchIconWarmPending.has(pageUrl)) {
+        return;
+      }
+      siteSearchIconWarmPending.add(pageUrl);
+      siteSearchIconWarmQueue.push({
+        provider,
+        pageUrl,
+        explicitIcon,
+        preferredTheme: String(preferredTheme || '')
+      });
+    });
+    drainSiteSearchIconWarmQueue();
+  }).catch(() => {});
+}
+
 function escapeRegExp(text) {
   return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -7091,7 +7665,8 @@ function mergeCustomProviders(baseItems, customItems) {
     merged.push({
       ...item,
       action: String(item.action || (baseMap.get(key) && baseMap.get(key).action) || '').trim(),
-      submitStrategy: String(item.submitStrategy || (baseMap.get(key) && baseMap.get(key).submitStrategy) || '').trim()
+      submitStrategy: String(item.submitStrategy || (baseMap.get(key) && baseMap.get(key).submitStrategy) || '').trim(),
+      _xIsCustom: true
     });
   });
   baseItems.forEach((item) => {
@@ -7212,6 +7787,16 @@ function loadSiteSearchProviders() {
   return siteSearchPromise;
 }
 
+function warmSiteSearchProviderIcons() {
+  return loadSiteSearchProviders().then((providers) => {
+    scheduleSiteSearchProviderIconWarmup(providers, '');
+    return providers;
+  }).catch(() => []);
+}
+
+removeLegacySiteSearchIconCaches();
+warmSiteSearchProviderIcons();
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (!storageAreaName || areaName !== storageAreaName) {
     return;
@@ -7253,6 +7838,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes[SITE_SEARCH_STORAGE_KEY] || changes[SITE_SEARCH_DISABLED_STORAGE_KEY]) {
     siteSearchCache = null;
     siteSearchPromise = null;
+    warmSiteSearchProviderIcons();
   }
   if (changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
     searchBlacklistCache = null;

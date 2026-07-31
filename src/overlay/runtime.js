@@ -12,6 +12,7 @@
     defaultSearchEngine: '_x_extension_default_search_engine_2024_unique_',
     siteSearchCustom: '_x_extension_site_search_custom_2024_unique_',
     siteSearchDisabled: '_x_extension_site_search_disabled_2024_unique_',
+    siteSearchIconCache: '_x_extension_site_search_icon_cache_canonical_2026_unique_',
     documentPipEnabled: '_x_extension_document_pip_enabled_2026_unique_',
     searchResultPriority: '_x_extension_search_result_priority_2026_unique_',
     searchResultSourceTypes: '_x_extension_search_result_source_types_2026_unique_',
@@ -20,6 +21,7 @@
     faviconEnhancedFetchEnabled: '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_',
     overlayOpenTabsDefaultVisible: '_x_extension_overlay_open_tabs_default_visible_2026_unique_',
     overlaySizeMode: '_x_extension_overlay_size_mode_2026_unique_',
+    overlayEnterAnimation: '_x_extension_overlay_enter_animation_2026_unique_',
     overlayTabPriority: '_x_extension_overlay_tab_priority_2024_unique_',
     tabRankScoreDebug: '_x_extension_tab_rank_score_debug_2026_unique_'
   });

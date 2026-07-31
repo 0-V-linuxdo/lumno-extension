@@ -1,17 +1,25 @@
 import {
+  memo,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import { isElementTextTruncated } from '../shared/text-overflow';
 
 type ThemeValue = Record<string, unknown> | null;
 type Translate = (key: string, fallback: string) => string;
 export type SuggestionsSurface = 'newtab' | 'overlay';
+export type SuggestionUpdateKind =
+  | 'highlight'
+  | 'content'
+  | 'append'
+  | 'structure';
 
 export interface Suggestion {
   type?: string;
@@ -64,6 +72,11 @@ interface SuggestionActionModel {
     model: SuggestionActionModelResult,
     active: boolean
   ) => boolean;
+  getSuggestionPresentationFingerprint?: (
+    suggestion: Suggestion,
+    options?: { includeDebugReasons?: boolean }
+  ) => string;
+  getSuggestionStructureIdentity?: (suggestion: Suggestion) => string;
 }
 
 interface CursorTooltipOptions {
@@ -141,6 +154,7 @@ export interface SuggestionElement extends HTMLDivElement {
 export interface SuggestionsRenderPayload {
   suggestions?: Suggestion[];
   query?: string;
+  updateKind?: SuggestionUpdateKind;
   canAppend?: boolean;
   startIndex?: number;
   primaryHighlightIndex?: number;
@@ -421,7 +435,37 @@ interface ModifierState {
 interface SuggestionsRuntime {
   options: NormalizedOptions;
   modifiers: ModifierState;
+  queryStore: QueryStore;
   updateSelection: (selectedIndex?: number) => void;
+}
+
+interface QueryStore {
+  getSnapshot: () => string;
+  subscribe: (listener: () => void) => () => void;
+  set: (query: string) => void;
+}
+
+interface SuggestionValueRef {
+  current: Suggestion;
+}
+
+function createQueryStore(): QueryStore {
+  let query = '';
+  const listeners = new Set<() => void>();
+  return {
+    getSnapshot: () => query,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    set(nextQuery) {
+      if (nextQuery === query) {
+        return;
+      }
+      query = nextQuery;
+      listeners.forEach((listener) => listener());
+    }
+  };
 }
 
 function noop(): void {}
@@ -439,9 +483,7 @@ const OVERLAY_CLASS_OVERRIDES: Record<string, string> = {
 
 const OVERLAY_VARIABLE_OVERRIDES: Record<string, string> = {
   '--x-nt-suggestion-active-bg': '--x-ov-suggestion-row-bg',
-  '--x-nt-suggestion-active-border': '--x-ov-suggestion-row-border',
   '--x-nt-suggestion-hover-bg': '--x-ov-suggestion-row-bg',
-  '--x-nt-suggestion-hover-border': '--x-ov-suggestion-row-border',
   '--x-nt-suggestion-tag-bg': '--x-ov-suggestion-source-tag-bg',
   '--x-nt-suggestion-tag-text': '--x-ov-suggestion-source-tag-text',
   '--x-nt-suggestion-tag-border': '--x-ov-suggestion-source-tag-border',
@@ -690,16 +732,21 @@ function getHighlightedParts(
 function HighlightedText({
   options,
   text,
-  query
+  queryStore
 }: {
   options: NormalizedOptions;
   text: unknown;
-  query: string;
+  queryStore: QueryStore;
 }) {
+  const query = useSyncExternalStore(
+    queryStore.subscribe,
+    queryStore.getSnapshot,
+    queryStore.getSnapshot
+  );
   return getHighlightedParts(options, text, query).map((part, index) =>
     part.highlighted ? (
       <mark
-        key={`${index}:${part.text}`}
+        key={`highlight:${index}`}
         className={surfaceClass(options, 'x-nt-suggestion-mark')}
       >
         {part.text}
@@ -711,19 +758,13 @@ function HighlightedText({
 }
 
 function isOverflowing(target: HTMLElement): boolean {
-  const clientWidth = Number(target.clientWidth);
-  const scrollWidth = Number(target.scrollWidth);
-  return Number.isFinite(clientWidth) &&
-    Number.isFinite(scrollWidth) &&
-    clientWidth > 0 &&
-    scrollWidth > clientWidth + 1;
+  return isElementTextTruncated(target);
 }
 
 function bindTextTooltip(
   options: NormalizedOptions,
   target: HTMLElement | null,
-  text: unknown,
-  _query?: string
+  text: unknown
 ): void {
   const safeText = options.sanitizeDisplayText(text);
   if (!options.bindCursorTooltip || !target || !safeText) {
@@ -1096,12 +1137,6 @@ function updateSelectionForRuntime(
           '--x-nt-suggestion-active-bg',
           highlight.bg || 'transparent'
         );
-        setSurfaceStyle(
-          options,
-          item,
-          '--x-nt-suggestion-active-border',
-          highlight.border || 'transparent'
-        );
       }
     } else {
       item.removeAttribute('data-row-state');
@@ -1113,12 +1148,6 @@ function updateSelectionForRuntime(
           item._xIsHovering
             ? 'var(--x-ov-hover-bg, #F3F4F6)'
             : 'transparent'
-        );
-        setSurfaceStyle(
-          options,
-          item,
-          '--x-nt-suggestion-active-border',
-          'transparent'
         );
       }
     }
@@ -1155,12 +1184,6 @@ function updateSelectionForRuntime(
           item,
           '--x-nt-suggestion-active-bg',
           hover.bg || ''
-        );
-        setSurfaceStyle(
-          options,
-          item,
-          '--x-nt-suggestion-active-border',
-          hover.border || ''
         );
       }
       if (options.surface === 'overlay') {
@@ -1267,7 +1290,13 @@ function getSuggestionIconSpec(
   const url = String(suggestion.url || '');
   const favicon = String(suggestion.favicon || '');
   const host = url ? options.getHostFromUrl(url) : '';
-  if (type === 'browserPage' || type === 'directUrl') {
+  if (type === 'directUrl') {
+    return {
+      kind: 'inline',
+      iconName: 'ri-link'
+    };
+  }
+  if (type === 'browserPage') {
     const useBrowserFavicon =
       type === 'browserPage' &&
       options.isBrowserInternalUrl(url);
@@ -1279,16 +1308,12 @@ function getSuggestionIconSpec(
         host,
         favicon,
         objectFitContain: true,
-        fallbackIconName:
-          type === 'browserPage'
-            ? getBrowserFallbackIcon(options, url)
-            : ''
+        fallbackIconName: getBrowserFallbackIcon(options, url)
       };
     }
     return {
       kind: 'inline',
-      iconName:
-        type === 'browserPage' ? 'ri-window-2-line' : 'ri-search-line'
+      iconName: 'ri-window-2-line'
     };
   }
   const commandIcons: Record<string, string> = {
@@ -1446,7 +1471,15 @@ function SuggestionIcon({
         )
       );
     }
-  }, [isFavicon, options, spec]);
+  }, [
+    isFavicon,
+    options,
+    spec.attach,
+    spec.favicon,
+    spec.host,
+    spec.objectFitContain,
+    spec.url
+  ]);
 
   return (
     <span
@@ -1512,30 +1545,31 @@ function canDeleteHistory(suggestion: Suggestion): boolean {
   );
 }
 
-function SearchSuggestionRow({
-  runtime,
-  suggestion,
-  index,
-  query,
-  primaryHighlightIndex,
-  primaryHighlightReason,
-  primarySuggestion,
-  onlyKeywordSuggestions,
-  mergedProvider,
-  last
-}: {
+interface SearchSuggestionRowProps {
   runtime: SuggestionsRuntime;
-  suggestion: Suggestion;
+  suggestionRef: SuggestionValueRef;
+  suggestionFingerprint: string;
   index: number;
-  query: string;
-  primaryHighlightIndex: number;
+  isPrimary: boolean;
   primaryHighlightReason: string;
-  primarySuggestion: Suggestion | null;
+  isMergedHighlight: boolean;
   onlyKeywordSuggestions: boolean;
-  mergedProvider: Record<string, unknown> | null;
   last: boolean;
-}) {
-  const { options } = runtime;
+}
+
+function SearchSuggestionRowComponent({
+  runtime,
+  suggestionRef,
+  suggestionFingerprint,
+  index,
+  isPrimary,
+  primaryHighlightReason,
+  isMergedHighlight,
+  onlyKeywordSuggestions,
+  last
+}: SearchSuggestionRowProps) {
+  const { options, queryStore } = runtime;
+  const suggestion = suggestionRef.current;
   const itemRef = useRef<SuggestionElement>(null);
   const iconSlotRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLSpanElement>(null);
@@ -1549,7 +1583,6 @@ function SearchSuggestionRow({
   const visitLabelRef = useRef<HTMLSpanElement>(null);
   const deleteSlotRef = useRef<HTMLDivElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
-  const isPrimary = index === primaryHighlightIndex;
   const primarySearch =
     isPrimary && suggestion.type === 'googleSuggest';
   const localFallback = isLocalUrlSuggestion(options, suggestion);
@@ -1558,32 +1591,49 @@ function SearchSuggestionRow({
     (onlyKeywordSuggestions &&
       isPrimary &&
       suggestion.type === 'newtab');
-  let immediateTheme =
-    options.getImmediateThemeForSuggestion(suggestion) ||
-    options.defaultTheme;
-  if (
+  const themeHost = options.getThemeHostForSuggestion(suggestion);
+  const usesUrlFallbackTheme =
     suggestion.type === 'directUrl' ||
     suggestion.type === 'browserPage' ||
-    localFallback
-  ) {
-    immediateTheme = options.urlHighlightTheme;
-  }
-  if (searchTheme) {
-    const accent = options.getBrandAccentForUrl(
-      options.getDefaultSearchEngineThemeUrl()
-    );
-    if (accent) {
-      immediateTheme =
-        options.buildThemeFromAccent(accent, 'brand') ||
-        options.defaultTheme;
-      if (immediateTheme) {
-        immediateTheme._xIsBrand = true;
+    localFallback;
+  const defaultSearchEngineThemeUrl =
+    options.getDefaultSearchEngineThemeUrl();
+  const immediateTheme = useMemo(() => {
+    const latestSuggestion = suggestionRef.current;
+    let nextTheme =
+      options.getImmediateThemeForSuggestion(latestSuggestion) ||
+      options.defaultTheme;
+    if (usesUrlFallbackTheme) {
+      nextTheme = options.urlHighlightTheme;
+    }
+    if (searchTheme) {
+      const accent = options.getBrandAccentForUrl(
+        defaultSearchEngineThemeUrl
+      );
+      if (accent) {
+        nextTheme =
+          options.buildThemeFromAccent(accent, 'brand') ||
+          options.defaultTheme;
+        if (nextTheme) {
+          nextTheme._xIsBrand = true;
+        }
       }
     }
-  }
+    return nextTheme;
+  }, [
+    options,
+    searchTheme
+      ? defaultSearchEngineThemeUrl
+      : usesUrlFallbackTheme
+        ? 1
+        : suggestionFingerprint
+  ]);
   const iconSpec = useMemo(
-    () => getSuggestionIconSpec(options, suggestion),
-    [options, suggestion]
+    () => getSuggestionIconSpec(options, suggestionRef.current),
+    [
+      options,
+      suggestion.type === 'directUrl' ? '' : suggestionFingerprint
+    ]
   );
   const command = Boolean(suggestion.commandText);
   const shouldSwitchMatchedTab =
@@ -1603,23 +1653,17 @@ function SearchSuggestionRow({
       isPrimarySearchSuggest: primarySearch,
       primaryHighlightReason,
       onlyKeywordSuggestions,
-      isMergedHighlight: Boolean(
-        mergedProvider &&
-        primarySuggestion === suggestion &&
-        isPrimary
-      ),
+      isMergedHighlight,
       shouldSwitchMatchedTab,
       enterAction: options.enterAction
     }),
     [
-      index,
       isPrimary,
-      mergedProvider,
+      isMergedHighlight,
       onlyKeywordSuggestions,
       options,
       primaryHighlightReason,
       primarySearch,
-      primarySuggestion,
       shouldSwitchMatchedTab,
       suggestion
     ]
@@ -1636,9 +1680,7 @@ function SearchSuggestionRow({
       return;
     }
     item._xIsSearchSuggestion = true;
-    item._xTheme = immediateTheme;
-    item._xThemeHost =
-      options.getThemeHostForSuggestion(suggestion);
+    item._xThemeHost = themeHost;
     item._xIsAutocompleteTop = isPrimary;
     item._xIconWrap = iconSlotRef.current;
     item._xIconIsFavicon =
@@ -1722,41 +1764,50 @@ function SearchSuggestionRow({
         )}`
       );
     });
-    item._xSuggestion = suggestion;
+    item._xSuggestion = suggestionRef.current;
     item._xAlwaysHideVisitButton =
       actionModel.alwaysHideVisitButton;
     item._xHasSwitchAction = actionModel.hasSwitchAction;
     item._xHistoryDeleteButton = deleteButtonRef.current;
     item._xHistoryDeleteSlot = deleteSlotRef.current;
     item._xHasHistoryDeleteButton = removable;
+  }, [
+    actionModel,
+    command,
+    iconSpec.kind,
+    isPrimary,
+    options,
+    removable,
+    suggestion.type,
+    suggestionRef,
+    themeHost
+  ]);
+
+  const shouldLoadTheme =
+    !searchTheme &&
+    (!onlyKeywordSuggestions || suggestion.type !== 'newtab') &&
+    !usesUrlFallbackTheme;
+
+  useLayoutEffect(() => {
+    const item = itemRef.current;
+    if (!item) {
+      return;
+    }
+    item._xTheme = immediateTheme;
     options.applyThemeVariables(item, immediateTheme);
-    bindTextTooltip(
-      options,
-      titleRef.current,
-      suggestion.title || '',
-      query
-    );
-    const urlLine = item.querySelector<HTMLElement>(
-      `.${surfaceClass(options, 'x-nt-suggestion-url-line')}`
-    );
-    bindTextTooltip(options, urlLine, suggestion.url || '');
 
     let active = true;
-    const shouldLoadTheme =
-      !searchTheme &&
-      !(
-        onlyKeywordSuggestions &&
-        suggestion.type === 'newtab'
-      ) &&
-      suggestion.type !== 'directUrl' &&
-      suggestion.type !== 'browserPage' &&
-      !localFallback;
     if (shouldLoadTheme) {
-      void options.getThemeForSuggestion(suggestion).then((theme) => {
+      const latestSuggestion = suggestionRef.current;
+      void options.getThemeForSuggestion(latestSuggestion).then((theme) => {
         if (!active || !item.isConnected) {
           return;
         }
-        const nextTheme = resolveTheme(options, suggestion, theme);
+        const nextTheme = resolveTheme(
+          options,
+          latestSuggestion,
+          theme
+        );
         item._xTheme = nextTheme;
         options.applyThemeVariables(item, nextTheme);
         runtime.updateSelection(options.getSelectedIndex());
@@ -1766,18 +1817,30 @@ function SearchSuggestionRow({
       active = false;
     };
   }, [
-    actionModel,
-    command,
-    iconSpec.kind,
     immediateTheme,
-    isPrimary,
-    localFallback,
     options,
-    query,
-    removable,
     runtime,
-    searchTheme,
-    suggestion
+    shouldLoadTheme
+  ]);
+
+  useLayoutEffect(() => {
+    const item = itemRef.current;
+    if (!item) {
+      return;
+    }
+    bindTextTooltip(
+      options,
+      titleRef.current,
+      suggestion.title || ''
+    );
+    const urlLine = item.querySelector<HTMLElement>(
+      `.${surfaceClass(options, 'x-nt-suggestion-url-line')}`
+    );
+    bindTextTooltip(options, urlLine, suggestion.url || '');
+  }, [
+    options,
+    suggestion.title,
+    suggestion.url
   ]);
 
   const handleRowMouseEnter = (): void => {
@@ -1805,8 +1868,8 @@ function SearchSuggestionRow({
     const item = itemRef.current;
     if (item) {
       options.onActivateSuggestion(
-        suggestion,
-        query,
+        suggestionRef.current,
+        queryStore.getSnapshot(),
         event.nativeEvent,
         index,
         item
@@ -1950,7 +2013,7 @@ function SearchSuggestionRow({
               <HighlightedText
                 options={options}
                 text={suggestion.commandText || ''}
-                query={query}
+                queryStore={queryStore}
               />
             </span>
           )}
@@ -1969,7 +2032,7 @@ function SearchSuggestionRow({
               <HighlightedText
                 options={options}
                 text={suggestion.title || ''}
-                query={query}
+                queryStore={queryStore}
               />
             )}
           </span>
@@ -2096,7 +2159,7 @@ function SearchSuggestionRow({
                     node as SuggestionActionTagElement;
                   actionTagRefs.current[tagIndex] = actionTag;
                   actionTag._xAction = tag.action;
-                  actionTag._xSuggestion = suggestion;
+                  actionTag._xSuggestion = suggestionRef.current;
                   actionTag._xDefaultBg =
                     surfaceCssValue(
                       options,
@@ -2253,7 +2316,10 @@ function SearchSuggestionRow({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                options.onDeleteHistory(suggestion, query);
+                options.onDeleteHistory(
+                  suggestionRef.current,
+                  queryStore.getSnapshot()
+                );
               }}
             />
           </div>
@@ -2262,6 +2328,8 @@ function SearchSuggestionRow({
     </div>
   );
 }
+
+const SearchSuggestionRow = memo(SearchSuggestionRowComponent);
 
 function OpenTabRow({
   runtime,
@@ -2455,24 +2523,12 @@ function OpenTabRow({
             '--x-nt-suggestion-hover-bg',
             hover.bg || ''
           );
-          setSurfaceStyle(
-            options,
-            item,
-            '--x-nt-suggestion-hover-border',
-            hover.border || ''
-          );
         } else if (options.surface === 'overlay') {
           setSurfaceStyle(
             options,
             item,
             '--x-nt-suggestion-hover-bg',
             'var(--x-ov-hover-bg, #F3F4F6)'
-          );
-          setSurfaceStyle(
-            options,
-            item,
-            '--x-nt-suggestion-hover-border',
-            'transparent'
           );
         }
         item.setAttribute('data-row-state', 'hover');
@@ -2697,43 +2753,6 @@ function createNoopController(
   };
 }
 
-function getSuggestionRenderIdentity(
-  suggestion: Suggestion
-): string {
-  const matchedTabId = suggestion._xMatchedTabId;
-  if (
-    typeof matchedTabId === 'number' ||
-    (typeof matchedTabId === 'string' && matchedTabId)
-  ) {
-    return `matched-tab:${String(matchedTabId)}`;
-  }
-  const type = String(suggestion.type || 'suggestion');
-  const url = String(suggestion.url || '');
-  if (url) {
-    return `${type}:url:${url}`;
-  }
-  const commandText = String(suggestion.commandText || '');
-  if (commandText) {
-    return `${type}:command:${commandText}`;
-  }
-  const provider = suggestion.provider;
-  const providerKey =
-    provider && typeof provider === 'object'
-      ? String(
-          provider.key ||
-          provider.id ||
-          provider.template ||
-          provider.name ||
-          ''
-        )
-      : '';
-  const searchQuery = String(suggestion.searchQuery || '');
-  if (providerKey || searchQuery) {
-    return `${type}:provider:${providerKey}:query:${searchQuery}`;
-  }
-  return `${type}:title:${String(suggestion.title || '')}`;
-}
-
 function getStableRenderKeys<T>(
   values: T[],
   getIdentity: (value: T) => string
@@ -2747,6 +2766,42 @@ function getStableRenderKeys<T>(
   });
 }
 
+function updateSuggestionValueRefs(
+  previous: Map<string, SuggestionValueRef>,
+  renderKeys: string[],
+  suggestions: Suggestion[]
+): {
+  refs: SuggestionValueRef[];
+  byKey: Map<string, SuggestionValueRef>;
+} {
+  const byKey = new Map<string, SuggestionValueRef>();
+  const refs = renderKeys.map((key, index) => {
+    const valueRef = previous.get(key) || {
+      current: suggestions[index]
+    };
+    valueRef.current = suggestions[index];
+    byKey.set(key, valueRef);
+    return valueRef;
+  });
+  return { refs, byKey };
+}
+
+function syncLatestSuggestionMetadata(
+  options: NormalizedOptions,
+  suggestions: Suggestion[]
+): void {
+  options.items.forEach((item, index) => {
+    const suggestion = suggestions[index];
+    if (!suggestion) {
+      return;
+    }
+    item._xSuggestion = suggestion;
+    item._xActionTags?.forEach((tag) => {
+      tag._xSuggestion = suggestion;
+    });
+  });
+}
+
 export function createSuggestionsView(
   rawOptions: SuggestionsViewOptions = {}
 ): SuggestionsViewController {
@@ -2755,14 +2810,28 @@ export function createSuggestionsView(
     return createNoopController(rawOptions);
   }
   const options: NormalizedOptions = normalizedOptions;
+  if (
+    typeof options.actionModel.getSuggestionStructureIdentity !== 'function' ||
+    typeof options.actionModel.getSuggestionPresentationFingerprint !== 'function'
+  ) {
+    return createNoopController(rawOptions);
+  }
+  const getSuggestionStructureIdentity =
+    options.actionModel.getSuggestionStructureIdentity;
+  const getSuggestionPresentationFingerprint =
+    options.actionModel.getSuggestionPresentationFingerprint;
   const root: Root = createRoot(options.container);
+  const queryStore = createQueryStore();
   options.container.setAttribute(
     'data-react-island',
     'suggestions'
   );
   let destroyed = false;
+  let lastRenderWasSuggestions = false;
+  let suggestionValueRefs = new Map<string, SuggestionValueRef>();
   const runtime: SuggestionsRuntime = {
     options,
+    queryStore,
     modifiers: {
       openInCurrentTab: false,
       openSwitchInNewTab: false,
@@ -2779,6 +2848,8 @@ export function createSuggestionsView(
     }
     options.hideTopActionTooltip();
     flushSync(() => root.render(null));
+    lastRenderWasSuggestions = false;
+    suggestionValueRefs.clear();
     options.items.length = 0;
     options.onSetSelectedIndex(-1);
     options.setSuggestionsVisible(false);
@@ -2793,12 +2864,34 @@ export function createSuggestionsView(
     const suggestions = Array.isArray(payload.suggestions)
       ? payload.suggestions
       : [];
-    const query = String(payload.query || '');
+    const query = payload.query || '';
+    const renderKeys = getStableRenderKeys(
+      suggestions,
+      getSuggestionStructureIdentity
+    );
+    const nextValueRefs = updateSuggestionValueRefs(
+      suggestionValueRefs,
+      renderKeys,
+      suggestions
+    );
+    suggestionValueRefs = nextValueRefs.byKey;
+    if (
+      payload.updateKind === 'highlight' &&
+      lastRenderWasSuggestions
+    ) {
+      flushSync(() => queryStore.set(query));
+      syncLatestSuggestionMetadata(options, suggestions);
+      return;
+    }
+    queryStore.set(query);
     const primaryHighlightIndex =
       Number.isInteger(payload.primaryHighlightIndex)
         ? Number(payload.primaryHighlightIndex)
         : -1;
-    if (!payload.canAppend) {
+    const preserveSelection = payload.updateKind
+      ? payload.updateKind !== 'structure'
+      : Boolean(payload.canAppend);
+    if (!preserveSelection) {
       options.onSetSelectedIndex(-1);
     }
     if (suggestions.length === 0 && payload.emptyMessage) {
@@ -2812,38 +2905,45 @@ export function createSuggestionsView(
         );
       });
       options.items.length = 0;
+      lastRenderWasSuggestions = false;
       options.onSetSelectedIndex(-1);
       options.setSuggestionsVisible(true);
       return;
     }
-    const renderKeys = getStableRenderKeys(
-      suggestions,
-      getSuggestionRenderIdentity
-    );
     flushSync(() => {
       root.render(
         suggestions.map((suggestion, index) => (
           <SearchSuggestionRow
             key={renderKeys[index]}
             runtime={runtime}
-            suggestion={suggestion}
-            index={index}
-            query={query}
-            primaryHighlightIndex={primaryHighlightIndex}
-            primaryHighlightReason={String(
-              payload.primaryHighlightReason || 'none'
+            suggestionRef={nextValueRefs.refs[index]}
+            suggestionFingerprint={getSuggestionPresentationFingerprint(
+              suggestion,
+              {
+                includeDebugReasons: options.isTabRankScoreDebugEnabled()
+              }
             )}
-            primarySuggestion={payload.primarySuggestion || null}
+            index={index}
+            isPrimary={index === primaryHighlightIndex}
+            primaryHighlightReason={
+              payload.primaryHighlightReason || 'none'
+            }
+            isMergedHighlight={Boolean(
+              payload.mergedProvider &&
+              payload.primarySuggestion === suggestion &&
+              index === primaryHighlightIndex
+            )}
             onlyKeywordSuggestions={Boolean(
               payload.onlyKeywordSuggestions
             )}
-            mergedProvider={payload.mergedProvider || null}
             last={index === suggestions.length - 1}
           />
         ))
       );
     });
     syncItems(options);
+    syncLatestSuggestionMetadata(options, suggestions);
+    lastRenderWasSuggestions = true;
     runtime.updateSelection(options.getSelectedIndex());
   }
 
@@ -2853,6 +2953,7 @@ export function createSuggestionsView(
     if (destroyed) {
       return;
     }
+    suggestionValueRefs.clear();
     const tabs = Array.isArray(tabList)
       ? tabList.slice(
           0,
@@ -2889,6 +2990,7 @@ export function createSuggestionsView(
         ))
       );
     });
+    lastRenderWasSuggestions = false;
     syncItems(options);
     options.onSetSelectedIndex(-1);
     runtime.updateSelection(-1);
@@ -2930,6 +3032,7 @@ export function createSuggestionsView(
       options.hideTopActionTooltip();
       flushSync(() => root.unmount());
       destroyed = true;
+      lastRenderWasSuggestions = false;
       options.items.length = 0;
       options.onSetSelectedIndex(-1);
       options.setSuggestionsVisible(false);

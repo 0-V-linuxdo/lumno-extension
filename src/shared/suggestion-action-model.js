@@ -189,6 +189,134 @@
     ].join('|');
   }
 
+  function getSuggestionProviderIdentity(suggestion) {
+    const provider = suggestion && suggestion.provider;
+    if (!provider || typeof provider !== 'object') {
+      return '';
+    }
+    return String(
+      provider.key ||
+      provider.id ||
+      provider.template ||
+      provider.name ||
+      ''
+    );
+  }
+
+  function getSuggestionPresentationFingerprint(suggestion, options) {
+    if (!suggestion || typeof suggestion !== 'object') {
+      return '';
+    }
+    const config = options || {};
+    const provider = suggestion.provider && typeof suggestion.provider === 'object'
+      ? suggestion.provider
+      : null;
+    return JSON.stringify([
+      String(suggestion.type || ''),
+      String(suggestion.title || ''),
+      String(suggestion.url || ''),
+      String(suggestion.favicon || ''),
+      String(suggestion.path || ''),
+      String(suggestion.commandText || ''),
+      suggestion.isTopSite === true,
+      getSuggestionProviderIdentity(suggestion),
+      provider ? String(provider.name || '') : '',
+      provider ? String(provider.label || '') : '',
+      provider ? String(provider.displayName || '') : '',
+      provider ? String(provider.action || '') : '',
+      provider ? String(provider.template || '') : '',
+      provider ? String(provider.icon || provider.favicon || '') : '',
+      String(suggestion.searchQuery || ''),
+      suggestion.forceSearch === true,
+      String(suggestion._xMatchedTabId ?? ''),
+      String(suggestion.nextMode || ''),
+      String(suggestion.nextEnabled ?? ''),
+      config.includeDebugReasons === true && Array.isArray(suggestion.reasons)
+        ? suggestion.reasons
+            .map((reason) => String(reason || '').trim())
+            .filter(Boolean)
+        : []
+    ]);
+  }
+
+  function getSuggestionStructureIdentity(suggestion) {
+    if (!suggestion || typeof suggestion !== 'object') {
+      return '';
+    }
+    const matchedTabId = suggestion._xMatchedTabId;
+    if (typeof matchedTabId === 'number' ||
+        (typeof matchedTabId === 'string' && matchedTabId)) {
+      return `matched-tab:${String(matchedTabId)}`;
+    }
+    const type = String(suggestion.type || 'suggestion');
+    if (type === 'directUrl' || type === 'newtab') {
+      return `${type}:query-action`;
+    }
+    const providerIdentity = getSuggestionProviderIdentity(suggestion);
+    if (SITE_SEARCH_TYPES.has(type)) {
+      return `${type}:provider:${providerIdentity || 'default'}`;
+    }
+    const url = String(suggestion.url || '');
+    if (url) {
+      return `${type}:url:${url}`;
+    }
+    const commandText = String(suggestion.commandText || '');
+    if (commandText) {
+      return `${type}:command:${commandText}`;
+    }
+    const searchQuery = String(suggestion.searchQuery || '');
+    if (providerIdentity || searchQuery) {
+      return `${type}:provider:${providerIdentity}:query:${searchQuery}`;
+    }
+    return `${type}:title:${String(suggestion.title || '')}`;
+  }
+
+  function hasSameSuggestionSequence(previous, next, compare) {
+    if (!Array.isArray(previous) || !Array.isArray(next) ||
+        previous.length !== next.length) {
+      return false;
+    }
+    return previous.every((item, index) => compare(item, next[index]));
+  }
+
+  function getSuggestionUpdateKind(options) {
+    const config = options || {};
+    if (config.forceFullRerender === true) {
+      return 'structure';
+    }
+    const sameStructure = hasSameSuggestionSequence(
+      config.currentSuggestions,
+      config.allSuggestions,
+      (previous, next) => {
+        const identity = getSuggestionStructureIdentity(previous);
+        return Boolean(identity && identity === getSuggestionStructureIdentity(next));
+      }
+    );
+    const sameActionContext =
+      config.actionContextKey === config.lastRenderedActionContextKey;
+    if (sameStructure) {
+      const sameContent = hasSameSuggestionSequence(
+        config.currentSuggestions,
+        config.allSuggestions,
+        (previous, next) => getSuggestionPresentationFingerprint(previous, config) ===
+          getSuggestionPresentationFingerprint(next, config)
+      );
+      return sameContent && sameActionContext ? 'highlight' : 'content';
+    }
+    const previous = config.currentSuggestions;
+    const next = config.allSuggestions;
+    const isStablePrefix = sameActionContext &&
+      Array.isArray(previous) &&
+      Array.isArray(next) &&
+      previous.length > 0 &&
+      previous.length < next.length &&
+      previous.every((item, index) => {
+        const identity = getSuggestionStructureIdentity(item);
+        return Boolean(identity && identity === getSuggestionStructureIdentity(next[index]));
+      });
+    return isStablePrefix ? 'append' : 'structure';
+  }
+
   return {
     createSearchActionModel,
     getVisitButtonAction,
@@ -197,6 +325,9 @@
     shouldOpenSwitchActionInNewTab,
     shouldOpenNewTabActionInCurrentTab,
     shouldShowVisitButton,
-    getActionContextKey
+    getActionContextKey,
+    getSuggestionPresentationFingerprint,
+    getSuggestionStructureIdentity,
+    getSuggestionUpdateKind
   };
 });

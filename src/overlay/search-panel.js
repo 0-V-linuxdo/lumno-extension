@@ -18,6 +18,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayPageThemeObserver = null;
   let overlayPageThemeSyncRaf = null;
   let siteSearchStorageListener = null;
+  let siteSearchIconStorageListener = null;
   let keydownHandler = null;
   let keyupHandler = null;
   let overlayKeyCaptureHandler = null;
@@ -55,6 +56,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const NAVIGATION_DISPOSITION = window.LumnoNavigationDisposition || {};
   const SEARCH_UTILS = window.LumnoSearchUtils || {};
   const SITE_SEARCH_STORE = window.LumnoSiteSearchStore || {};
+  const SHORTCUT_FAVICON = window.LumnoShortcutFavicon || {};
   const SUGGESTION_ACTION_MODEL = window.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = window.LumnoSuggestionNavigation || {};
   const SEARCH_INPUT_HISTORY = window.LumnoSearchInputHistory || {};
@@ -85,6 +87,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   }
   if (typeof SUGGESTION_NAVIGATION.scrollItemIntoView !== 'function') {
     console.warn('Lumno: suggestion navigation helper not available.');
+    return;
+  }
+  if (typeof SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity !== 'function' ||
+      typeof SUGGESTION_ACTION_MODEL.getSuggestionPresentationFingerprint !== 'function' ||
+      typeof SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind !== 'function') {
+    console.warn('Lumno: suggestion action model helper not available.');
     return;
   }
   if (typeof SEARCH_INPUT_MODE.createInputModeController !== 'function') {
@@ -201,6 +209,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = overlayStorageKeys.defaultSearchEngine;
   const SITE_SEARCH_STORAGE_KEY = overlayStorageKeys.siteSearchCustom;
   const SITE_SEARCH_DISABLED_STORAGE_KEY = overlayStorageKeys.siteSearchDisabled;
+  const SITE_SEARCH_ICON_CACHE_STORAGE_KEY = overlayStorageKeys.siteSearchIconCache ||
+    SHORTCUT_FAVICON.SITE_SEARCH_STORAGE_KEY ||
+    '_x_extension_site_search_icon_cache_canonical_2026_unique_';
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = overlayStorageKeys.documentPipEnabled;
   const SEARCH_RESULT_PRIORITY_STORAGE_KEY = overlayStorageKeys.searchResultPriority;
   const SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY = overlayStorageKeys.searchResultSourceTypes;
@@ -209,11 +220,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = overlayStorageKeys.faviconEnhancedFetchEnabled;
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = overlayStorageKeys.overlayOpenTabsDefaultVisible;
   const OVERLAY_SIZE_MODE_STORAGE_KEY = overlayStorageKeys.overlaySizeMode;
+  const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = overlayStorageKeys.overlayEnterAnimation ||
+    '_x_extension_overlay_enter_animation_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = overlayStorageKeys.overlayTabPriority;
   const TAB_RANK_SCORE_DEBUG_STORAGE_KEY = overlayStorageKeys.tabRankScoreDebug;
   const storageRuntime = overlayRuntime.getStorageArea(chrome);
   const storageArea = storageRuntime.area;
   const storageAreaName = storageRuntime.name;
+  const localStorageArea = chrome && chrome.storage && chrome.storage.local
+    ? chrome.storage.local
+    : storageArea;
   const RI_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'assets/remixicon/fonts/remixicon.css');
   const OPEN_SANS_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'assets/fonts/open-sans/open-sans.css');
   const SEARCH_INPUT_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/shared/search-input.css');
@@ -225,6 +241,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayThemeMode = 'system';
   let overlaySearchResultPriorityMode = 'autocomplete';
   let overlaySizeMode = 'standard';
+  let overlayEnterAnimation = 'elastic';
   let overlaySearchBlacklistItems = [];
   let overlayFaviconRequestBlacklistItems = [];
   let faviconEnhancedFetchEnabled = false;
@@ -234,6 +251,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let initialOverlayOpenTabsDefaultVisibleReady = Promise.resolve();
   let documentPipEnabled = Boolean(normalizedOverlayContext.documentPipEnabled);
   let overlayThemeListenerAttached = false;
+  const initialOverlayEnterAnimationReady = overlayRuntime.getStorageValues(
+    storageArea,
+    [OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
+  ).then((result) => {
+    overlayEnterAnimation = normalizeOverlayEnterAnimation(
+      result[OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
+    );
+    return overlayEnterAnimation;
+  });
 
   function normalizeOverlaySearchBlacklistItems(items) {
     if (globalThis.LumnoBlacklistUtils && typeof globalThis.LumnoBlacklistUtils.normalizeItems === 'function') {
@@ -551,6 +577,54 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       : ((mode === 'compact' || mode === 'large') ? mode : 'standard');
   }
 
+  function normalizeOverlayEnterAnimation(mode) {
+    return typeof SETTINGS.normalizeOverlayEnterAnimation === 'function'
+      ? SETTINGS.normalizeOverlayEnterAnimation(mode)
+      : (mode === 'fade' ? 'fade' : 'elastic');
+  }
+
+  function getOverlayEnterAnimationRevealTransform() {
+    if (overlayEnterAnimation === 'fade') {
+      return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1))';
+    }
+    return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1)) scaleX(1)';
+  }
+
+  function applyOverlayEnterAnimationInitialState(overlayElement) {
+    if (!overlayElement) {
+      return;
+    }
+    overlayElement.style.setProperty('opacity', '0', 'important');
+    if (overlayEnterAnimation === 'fade') {
+      overlayElement.style.setProperty(
+        'transform',
+        'translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)',
+        'important'
+      );
+      overlayElement.style.setProperty('filter', 'blur(6px)', 'important');
+      overlayElement.style.setProperty(
+        'transition',
+        'transform 340ms cubic-bezier(0.2, 1, 0.36, 1), opacity 220ms ease, filter 300ms ease',
+        'important'
+      );
+      return;
+    }
+    overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.92');
+    overlayElement.style.setProperty('--x-lumno-search-entry-duration', '270ms');
+    overlayElement.style.setProperty('--x-lumno-search-entry-delay', '40ms');
+    overlayElement.style.setProperty(
+      'transform',
+      'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.97))',
+      'important'
+    );
+    overlayElement.style.setProperty('filter', 'blur(10px)', 'important');
+    overlayElement.style.setProperty(
+      'transition',
+      'transform var(--x-lumno-search-entry-duration, 240ms) var(--x-lumno-search-entry-easing, cubic-bezier(0.16, 1, 0.3, 1)) var(--x-lumno-search-entry-delay, 40ms), opacity 180ms ease, filter 240ms ease',
+      'important'
+    );
+  }
+
   function getOverlaySizePreset(mode) {
     const normalizedMode = normalizeOverlaySizeMode(mode);
     if (normalizedMode === 'compact') {
@@ -610,6 +684,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return '';
     }
     const state = getOverlaySearchEngineState();
+    if (state.id === 'google') {
+      return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
+    }
     if (state.host) {
       return `https://${state.host}/favicon.ico`;
     }
@@ -622,7 +699,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return '';
       }
     }
-    return 'https://www.google.com/favicon.ico';
+    return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
   }
 
   function getDefaultSearchEngineThemeUrlForOverlay() {
@@ -1022,6 +1099,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   function removeOverlay(overlayElement) {
     clearOverlayEnterAnimationFrames();
     cancelPendingOverlaySuggestionRequests();
+    const suggestionsHeightSettleTimer = overlayElement &&
+      overlayElement._lumnoSuggestionsHeightSettleTimer;
+    if (suggestionsHeightSettleTimer) {
+      clearTimeout(suggestionsHeightSettleTimer);
+      overlayElement._lumnoSuggestionsHeightSettleTimer = 0;
+    }
     if (overlayRevealGate && typeof overlayRevealGate.cancel === 'function') {
       overlayRevealGate.cancel();
       overlayRevealGate = null;
@@ -1152,6 +1235,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       chrome.storage.onChanged.removeListener(siteSearchStorageListener);
       siteSearchStorageListener = null;
     }
+    if (siteSearchIconStorageListener) {
+      chrome.storage.onChanged.removeListener(siteSearchIconStorageListener);
+      siteSearchIconStorageListener = null;
+    }
     if (inputModeController) {
       inputModeController.destroy();
       inputModeController = null;
@@ -1269,6 +1356,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return;
     }
     setOverlayStoredContextToken(overlay);
+    overlay.classList.add('x-lumno-search-entry');
     setOverlayMountVisibility(overlayHost, true);
     applyNoTranslate(overlay);
 
@@ -1377,7 +1465,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         height: '56px',
         'min-height': '56px',
         'max-height': '56px',
-        'border-radius': 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) 0 0',
+        'border-radius': 'var(--x-ov-panel-radius, 28px) var(--x-ov-panel-radius, 28px) 0 0',
         overflow: 'visible'
       },
       inputStyleOverrides: {
@@ -1598,12 +1686,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         decorateElement: applyNoTranslate
       })
       : null;
-    const suggestionTitleCursorTooltipController = window.LumnoCursorTooltip &&
+    const overlayCursorTooltipController = window.LumnoCursorTooltip &&
         typeof window.LumnoCursorTooltip.createController === 'function'
       ? window.LumnoCursorTooltip.createController({
         documentObj: document,
         windowObj: window,
-        id: '_x_extension_suggestion_title_cursor_tooltip_2026_unique_',
+        id: '_x_extension_overlay_cursor_tooltip_2026_unique_',
         appendTo: overlay,
         boundaryElement: overlay,
         positionMode: 'absolute',
@@ -1629,16 +1717,33 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       topActionTooltipController.hide();
     };
-    function isSuggestionTitleOverflowing(title) {
-      if (!title) {
-        return false;
+    const bindInputActionCursorTooltip = (button, getText) => {
+      if (!overlayCursorTooltipController || !button) {
+        return;
       }
-      const scrollWidth = Number(title.scrollWidth);
-      const clientWidth = Number(title.clientWidth);
-      return Number.isFinite(scrollWidth) &&
-        Number.isFinite(clientWidth) &&
-        clientWidth > 0 &&
-        scrollWidth > clientWidth + 1;
+      overlayCursorTooltipController.bind(button, getText, {
+        boundaryElement: overlay,
+        positionMode: 'absolute',
+        maxWidth: 420,
+        deferHideVisibility: true,
+        preserveVisibleOnTargetSwitch: true,
+        handoffRoot: inputContainer
+      });
+    };
+    const hideInputActionCursorTooltip = () => {
+      if (!overlayCursorTooltipController) {
+        return;
+      }
+      overlayCursorTooltipController.hide();
+    };
+    function isSuggestionTitleOverflowing(title) {
+      const overflowApi = window.LumnoCursorTooltip || {};
+      if (typeof overflowApi.isElementTextTruncated === 'function') {
+        return overflowApi.isElementTextTruncated(title);
+      }
+      return Boolean(title) &&
+        Number(title.clientWidth) > 0 &&
+        Number(title.scrollWidth) > Number(title.clientWidth);
     }
     function getSuggestionTextCursorTooltipOptions(extraOptions) {
       return Object.assign({
@@ -1651,28 +1756,28 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }, extraOptions || {});
     }
     function bindSuggestionTitleCursorTooltip(title, suggestion, query) {
-      if (!suggestionTitleCursorTooltipController || !title || !suggestion) {
+      if (!overlayCursorTooltipController || !title || !suggestion) {
         return;
       }
       const titleText = sanitizeDisplayText(suggestion.title || '');
       if (!titleText) {
         return;
       }
-      suggestionTitleCursorTooltipController.bind(
+      overlayCursorTooltipController.bind(
         title,
         () => titleText,
         getSuggestionTextCursorTooltipOptions()
       );
     }
     function bindSuggestionUrlCursorTooltip(urlLine, url) {
-      if (!suggestionTitleCursorTooltipController || !urlLine || !url) {
+      if (!overlayCursorTooltipController || !urlLine || !url) {
         return;
       }
       const urlText = sanitizeDisplayText(url);
       if (!urlText) {
         return;
       }
-      suggestionTitleCursorTooltipController.bind(
+      overlayCursorTooltipController.bind(
         urlLine,
         () => urlText,
         getSuggestionTextCursorTooltipOptions()
@@ -1701,6 +1806,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let suggestionsHeightTransitionEndHandler = null;
     let suggestionsHeightAnimationTarget = 0;
     let suggestionsHeightAnimationTargetIsCapped = false;
+    const suggestionsHeightInputSettleMs = 280;
+    let suggestionsHeightInputSettleTimer = 0;
+    let suggestionsHeightInputLockedHeight = 0;
     let deferredSuggestionsHeightQuery = '';
     const inputDivider = inputParts.divider;
     overlayWheelIsolationHandler = createOverlayWheelIsolationHandler(overlay);
@@ -1723,18 +1831,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       setOverlayPanelScopedStyle(
         overlay,
         'border-radius',
-        shouldCollapse
-          ? 'var(--x-ov-panel-radius, 32px)'
-          : 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-radius, 32px) var(--x-ov-panel-radius, 32px)'
+        'var(--x-ov-panel-radius, 28px)'
       );
       setInputScopedStyle(
         inputContainer,
         'border-radius',
         shouldCollapse
-          ? 'var(--x-ov-panel-radius, 32px)'
-          : 'var(--x-ov-panel-top-radius, 28px) var(--x-ov-panel-top-radius, 28px) 0 0'
+          ? 'var(--x-ov-panel-radius, 28px)'
+          : 'var(--x-ov-panel-radius, 28px) var(--x-ov-panel-radius, 28px) 0 0'
       );
       if (shouldCollapse) {
+        finishSuggestionsHeightInputSession({ animate: false });
         deferredSuggestionsHeightQuery = '';
         cancelSuggestionsHeightAnimation(suggestionsContainer);
         suggestionsContainer.style.setProperty('max-height', '0px', inputUsesIsolatedStyles ? '' : 'important');
@@ -2085,18 +2192,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     if (rightIcon) {
       const settingsTooltipText = () => formatMessage('command_settings', '打开 Lumno 设置', { name: 'Lumno' });
-      rightIcon.addEventListener('mouseenter', function() {
-        showTopActionTooltip(rightIcon, settingsTooltipText());
-      });
-      rightIcon.addEventListener('focus', function() {
-        showTopActionTooltip(rightIcon, settingsTooltipText());
-      });
-      rightIcon.addEventListener('mouseleave', hideTopActionTooltip);
-      rightIcon.addEventListener('blur', hideTopActionTooltip);
+      bindInputActionCursorTooltip(rightIcon, settingsTooltipText);
       rightIcon.addEventListener('click', function(event) {
         event.preventDefault();
         event.stopPropagation();
-        hideTopActionTooltip();
+        hideInputActionCursorTooltip();
         chrome.runtime.sendMessage({ action: 'openOptionsPage' });
         removeOverlay(overlay);
         if (clickOutsideHandler) {
@@ -2112,18 +2212,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
     if (closeOtherTabsButton) {
       const closeOtherTooltipText = () => t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）');
-      closeOtherTabsButton.addEventListener('mouseenter', function() {
-        showTopActionTooltip(closeOtherTabsButton, closeOtherTooltipText());
-      });
-      closeOtherTabsButton.addEventListener('focus', function() {
-        showTopActionTooltip(closeOtherTabsButton, closeOtherTooltipText());
-      });
-      closeOtherTabsButton.addEventListener('mouseleave', hideTopActionTooltip);
-      closeOtherTabsButton.addEventListener('blur', hideTopActionTooltip);
+      bindInputActionCursorTooltip(closeOtherTabsButton, closeOtherTooltipText);
       closeOtherTabsButton.addEventListener('click', function(event) {
         event.preventDefault();
         event.stopPropagation();
-        hideTopActionTooltip();
+        hideInputActionCursorTooltip();
         chrome.runtime.sendMessage({ action: 'closeOtherTabsForOverlay' }, (response) => {
           resetCloseOtherTabsButtonVisualState();
           if (typeof closeOtherTabsButton.blur === 'function') {
@@ -2162,6 +2255,56 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       ? initialSiteSearchProviders
       : null;
     let pendingProviderReload = false;
+    const siteSearchIconCacheOptions = SHORTCUT_FAVICON.SITE_SEARCH_CACHE_OPTIONS || {
+      cacheTtlMs: 1000 * 60 * 60 * 24 * 180,
+      cacheMaxEntries: 40,
+      maxDataUrlLength: 192 * 1024
+    };
+    const siteSearchIconStore = typeof SHORTCUT_FAVICON.createShortcutFaviconStore === 'function'
+      ? SHORTCUT_FAVICON.createShortcutFaviconStore({
+        chromeApi: chrome,
+        storageArea: localStorageArea,
+        storageKey: SITE_SEARCH_ICON_CACHE_STORAGE_KEY,
+        ...siteSearchIconCacheOptions
+      })
+      : null;
+    let siteSearchIconCache = {};
+    let siteSearchIconCacheLoaded = false;
+    let siteSearchIconCacheLoadPromise = null;
+    let siteSearchIconCacheRevision = 0;
+
+    function loadSiteSearchIconCache() {
+      if (siteSearchIconCacheLoaded) {
+        return Promise.resolve(siteSearchIconCache);
+      }
+      if (siteSearchIconCacheLoadPromise) {
+        return siteSearchIconCacheLoadPromise;
+      }
+      if (!siteSearchIconStore || typeof siteSearchIconStore.readAll !== 'function') {
+        siteSearchIconCacheLoaded = true;
+        return Promise.resolve(siteSearchIconCache);
+      }
+      const loadRevision = siteSearchIconCacheRevision;
+      siteSearchIconCacheLoadPromise = siteSearchIconStore.readAll()
+        .then((cache) => {
+          if (siteSearchIconCacheRevision === loadRevision) {
+            siteSearchIconCache = cache && typeof cache === 'object' ? cache : {};
+          }
+          siteSearchIconCacheLoaded = true;
+          return siteSearchIconCache;
+        })
+        .catch(() => {
+          if (siteSearchIconCacheRevision === loadRevision) {
+            siteSearchIconCache = {};
+          }
+          siteSearchIconCacheLoaded = true;
+          return siteSearchIconCache;
+        });
+      return siteSearchIconCacheLoadPromise;
+    }
+
+    // Warm local icon lookup immediately, but never put it on the overlay reveal path.
+    loadSiteSearchIconCache();
     const defaultSiteSearchProviders = typeof SEARCH_UTILS.getDefaultSiteSearchProviders === 'function'
       ? SEARCH_UTILS.getDefaultSiteSearchProviders()
       : initialSiteSearchProviders;
@@ -2255,7 +2398,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const preloadIcon = overlayFaviconRuntime.preloadIcon;
     const warmIconCache = overlayFaviconRuntime.warmIconCache;
     const defaultCaretColor = searchInput.style.caretColor || 'var(--x-ext-input-caret, #7DB7FF)';
-    const inputModePrefixTransition = 'opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 300ms cubic-bezier(0.22, 1, 0.36, 1), filter 260ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, box-shadow 180ms ease';
+    const inputModePrefixTransition = 'opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease';
 
     function mixColor(color, target, amount) {
       return [
@@ -2412,6 +2555,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const overlayThemeTokens = {
       light: {
         bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.95) 100%)',
+        modeMenuBg: '#FFFFFF',
         border: 'rgba(0, 0, 0, 0.14)',
         shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 16px 40px rgba(15, 23, 42, 0.12), 0 40px 90px rgba(15, 23, 42, 0.12)',
         text: '#111827',
@@ -2431,6 +2575,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       },
       dark: {
         bg: 'rgba(20, 20, 20, 0.62)',
+        modeMenuBg: '#141414',
         border: 'rgba(255, 255, 255, 0.16)',
         shadow: '0 24px 90px rgba(0, 0, 0, 0.65)',
         text: '#E5E7EB',
@@ -2850,6 +2995,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const tokens = overlayThemeTokens[resolved] || overlayThemeTokens.light;
       target.setAttribute('data-theme', resolved);
       target.style.setProperty('--x-ov-bg', tokens.bg);
+      target.style.setProperty('--x-ov-mode-menu-bg', tokens.modeMenuBg);
       target.style.setProperty('--x-ov-border', tokens.border);
       target.style.setProperty('--x-ov-shadow', tokens.shadow);
       target.style.setProperty('--x-ov-text', tokens.text);
@@ -2931,6 +3077,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     };
     chrome.storage.onChanged.addListener(overlaySearchEngineStorageListener);
+
+    function updatePendingSearchSuggestions(query, options) {
+      updateSearchSuggestions(lastSuggestionResponse, query, options);
+    }
+
     function requestOverlaySearchSuggestions(query) {
       const requestQuery = String(query || '').trim();
       const requestLocalSearchScope = localSearchScopeState;
@@ -2966,7 +3117,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           return;
         }
         if (chrome.runtime && chrome.runtime.lastError) {
-          updateSearchSuggestions([], requestQuery);
+          updatePendingSearchSuggestions(requestQuery);
           return;
         }
         const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
@@ -3968,17 +4119,34 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       isDarkMode: isOverlayDarkMode,
       getProviderIcon,
       getProviderThemeHost,
+      getThemeForProvider,
       getSiteSearchPrefixText,
       getSiteSearchDisplayName,
       isAiSiteSearchProvider,
       attachFaviconData,
       attachProviderIcon: attachInputModeProviderIcon,
+      preferDirectProviderIcons: true,
       formatMessage,
+      modeMenuTooltipController: overlayCursorTooltipController,
+      getModeMenuItems: getSearchModeMenuItems,
+      onModeMenuSelect: selectSearchModeMenuItem,
       isTabHintSuppressed: () => Boolean(
         siteSearchState ||
         localSearchScopeState ||
         openTabsSearchModeActive
       )
+    });
+    loadSiteSearchIconCache().then(() => {
+      if (!siteSearchState || !inputModeController) {
+        return;
+      }
+      const activeProvider = siteSearchState;
+      setSiteSearchPrefix(activeProvider, defaultTheme);
+      getThemeForProvider(activeProvider).then((theme) => {
+        if (siteSearchState === activeProvider) {
+          setSiteSearchPrefix(activeProvider, theme);
+        }
+      }).catch(() => {});
     });
 
     function updateSiteSearchPrefixLayout() {
@@ -3999,9 +4167,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           t('search_open_tabs_only_entry', '搜索已打开标签页'),
           theme,
           {
-            iconUrl: chrome.runtime.getURL('assets/images/lumno.png'),
-            iconHost: 'lumno.kubai.design',
-            isAi: true
+            animate: true,
+            iconClass: 'ri-window-line',
+            menuIconName: 'browser',
+            modeId: 'openTabs'
           }
         );
       }
@@ -4483,6 +4652,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       );
     }
 
+    function isSearchEngineSiteSearchProvider(provider) {
+      if (typeof SEARCH_UTILS.isSearchEngineSiteSearchProvider === 'function') {
+        return SEARCH_UTILS.isSearchEngineSiteSearchProvider(provider);
+      }
+      return Boolean(provider && String(provider.category || '').trim() === 'searchEngine');
+    }
+
     function isInteractiveSiteSearchProvider(provider) {
       if (typeof SEARCH_UTILS.isInteractiveSiteSearchProvider === 'function') {
         return SEARCH_UTILS.isInteractiveSiteSearchProvider(provider);
@@ -4520,6 +4696,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getProviderFaviconPageUrl(provider) {
+      if (typeof SHORTCUT_FAVICON.getSiteSearchProviderPageUrl === 'function') {
+        return SHORTCUT_FAVICON.getSiteSearchProviderPageUrl(provider);
+      }
       const template = provider && provider.template ? provider.template : '';
       if (!template) {
         return '';
@@ -4555,6 +4734,21 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getProviderIcon(provider) {
+      if (typeof SHORTCUT_FAVICON.getSiteSearchProviderIcon === 'function') {
+        const resolvedIcon = SHORTCUT_FAVICON.getSiteSearchProviderIcon(
+          siteSearchIconCacheLoaded ? siteSearchIconCache : {},
+          provider,
+          Date.now(),
+          {
+            ...siteSearchIconCacheOptions,
+            resolveAssetUrl: (path) => chrome.runtime.getURL(path)
+          }
+        );
+        const safeResolvedIcon = getSafeOverlayFaviconUrl(resolvedIcon);
+        if (safeResolvedIcon) {
+          return safeResolvedIcon;
+        }
+      }
       const explicitIcon = provider && (provider.icon || provider.iconUrl) ? (provider.icon || provider.iconUrl) : '';
       const safeExplicitIcon = getSafeOverlayFaviconUrl(explicitIcon);
       const providerIconPageUrl = explicitIcon ? getCanonicalPageUrlForFavicon(explicitIcon) : '';
@@ -4588,7 +4782,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function attachInputModeProviderIcon(icon, context) {
       const iconUrl = context && context.iconUrl ? String(context.iconUrl).trim() : '';
-      if (!icon || !iconUrl || iconUrl.startsWith('data:')) {
+      if (!icon || !iconUrl || iconUrl.startsWith('data:') || iconUrl.startsWith('chrome-extension:')) {
         return false;
       }
       const iconHost = context && context.iconHost ? String(context.iconHost).trim() : '';
@@ -4660,6 +4854,41 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     };
     chrome.storage.onChanged.addListener(siteSearchStorageListener);
+
+    siteSearchIconStorageListener = (changes, areaName) => {
+      const iconChange = changes && changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY];
+      if (areaName !== 'local' || !iconChange) {
+        return;
+      }
+      siteSearchIconCache = typeof SHORTCUT_FAVICON.normalizeCacheMap === 'function'
+        ? SHORTCUT_FAVICON.normalizeCacheMap(
+          iconChange.newValue,
+          Date.now(),
+          siteSearchIconCacheOptions
+        )
+        : (iconChange.newValue && typeof iconChange.newValue === 'object'
+          ? iconChange.newValue
+          : {});
+      siteSearchIconCacheLoaded = true;
+      siteSearchIconCacheRevision += 1;
+      siteSearchIconCacheLoadPromise = Promise.resolve(siteSearchIconCache);
+      if (siteSearchState && inputModeController) {
+        const activeProvider = siteSearchState;
+        setSiteSearchPrefix(activeProvider, defaultTheme);
+        getThemeForProvider(activeProvider).then((theme) => {
+          if (siteSearchState === activeProvider) {
+            setSiteSearchPrefix(activeProvider, theme);
+          }
+        }).catch(() => {});
+      }
+      if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+        inputModeController.refreshModeMenu();
+      }
+      if (latestOverlayQuery) {
+        requestOverlaySearchSuggestions(latestOverlayQuery);
+      }
+    };
+    chrome.storage.onChanged.addListener(siteSearchIconStorageListener);
 
     function getSiteSearchDisplayName(provider) {
       if (!provider) {
@@ -4829,6 +5058,113 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return '';
     }
 
+    function getLocalSearchScopeIconClass(sourceType) {
+      if (sourceType === 'bookmark') {
+        return 'ri-bookmark-3-line';
+      }
+      if (sourceType === 'history') {
+        return 'ri-history-line';
+      }
+      return 'ri-star-line';
+    }
+
+    function getSearchModeProviderId(provider) {
+      return `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`;
+    }
+
+    function buildSearchModeMenuItems() {
+      const engineGroup = t('search_scope_group_engines', '搜索引擎');
+      const localGroup = t('search_scope_group_local', '浏览器内容');
+      const aiGroup = t('search_scope_group_ai', 'AI 搜索');
+      const siteGroup = t('search_scope_group_sites', '站内搜索');
+      const items = [];
+      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+        ? siteSearchProvidersCache
+        : defaultSiteSearchProviders;
+      providers
+        .filter((provider) => isSearchEngineSiteSearchProvider(provider))
+        .concat(providers.filter((provider) => (
+          !isSearchEngineSiteSearchProvider(provider) && !isAiSiteSearchProvider(provider)
+        )))
+        .concat(providers.filter((provider) => isAiSiteSearchProvider(provider)))
+        .forEach((provider) => {
+          const isAi = isAiSiteSearchProvider(provider);
+          const isSearchEngine = isSearchEngineSiteSearchProvider(provider);
+          items.push({
+            id: getSearchModeProviderId(provider),
+            kind: 'provider',
+            provider,
+            label: getSiteSearchDisplayName(provider),
+            group: isSearchEngine ? engineGroup : (isAi ? aiGroup : siteGroup),
+            iconUrl: getProviderIcon(provider),
+            iconClass: isAi ? 'ri-search-ai-line' : 'ri-global-line',
+            isAi,
+            active: Boolean(siteSearchState && getSearchModeProviderId(siteSearchState) === getSearchModeProviderId(provider))
+          });
+        });
+      items.push({
+        id: 'openTabs',
+        kind: 'openTabs',
+        label: t('search_open_tabs_only_entry', '搜索已打开标签页'),
+        group: localGroup,
+        iconClass: 'ri-window-line',
+        menuIconName: 'browser',
+        active: openTabsSearchModeActive
+      });
+      ['topSite', 'bookmark', 'history'].forEach((sourceType) => {
+        if (!enabledSearchResultSourceTypes.includes(sourceType)) {
+          return;
+        }
+        items.push({
+          id: `local:${sourceType}`,
+          kind: 'local',
+          sourceType,
+          label: getLocalSearchScopeLabel({ sourceType }),
+          group: localGroup,
+          iconClass: getLocalSearchScopeIconClass(sourceType),
+          menuIconName: sourceType === 'topSite' ? 'star' : sourceType,
+          active: Boolean(localSearchScopeState && localSearchScopeState.sourceType === sourceType)
+        });
+      });
+      return items;
+    }
+
+    function getSearchModeMenuItems() {
+      if (siteSearchIconCacheLoaded) {
+        return buildSearchModeMenuItems();
+      }
+      return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+    }
+
+    function restoreSearchModeQuery(rawQuery) {
+      const value = String(rawQuery || '');
+      searchInput.value = value;
+      latestRawInputValue = value;
+      latestOverlayQuery = value.trim();
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function selectSearchModeMenuItem(item) {
+      if (!item || !item.kind) {
+        return;
+      }
+      const rawQuery = searchInput.value || '';
+      if (item.kind === 'openTabs') {
+        activateOpenTabsSearchMode();
+        restoreSearchModeQuery(rawQuery);
+        return;
+      }
+      if (item.kind === 'local') {
+        activateLocalSearchScope({ sourceType: item.sourceType });
+        restoreSearchModeQuery(rawQuery);
+        return;
+      }
+      if (item.kind === 'provider' && item.provider) {
+        activateSiteSearch(item.provider);
+        restoreSearchModeQuery(rawQuery);
+      }
+    }
+
     function getLocalSearchScopeTabHintProvider(scope) {
       const source = getLocalSearchScopeLabel(scope);
       return {
@@ -4848,7 +5184,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inputModeController.setPrefixText(
         getLocalSearchScopeLabel(scope),
         defaultTheme,
-        { animate: true }
+        {
+          animate: true,
+          iconClass: getLocalSearchScopeIconClass(scope.sourceType),
+          menuIconName: scope.sourceType === 'topSite' ? 'star' : scope.sourceType,
+          modeId: `local:${scope.sourceType}`
+        }
       );
     }
 
@@ -4998,6 +5339,54 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       handler(event);
     }
 
+    function clearPendingSearchTriggerHint() {
+      siteSearchTriggerState = null;
+      localSearchScopeTriggerState = null;
+      clearSiteSearchTabHint();
+    }
+
+    function syncSearchTriggerHintFromInput(rawValue) {
+      const triggerInput = String(rawValue || '').trim();
+      if (!triggerInput ||
+          siteSearchState ||
+          localSearchScopeState ||
+          openTabsSearchModeActive ||
+          isSlashCommandInput(triggerInput)) {
+        clearPendingSearchTriggerHint();
+        return;
+      }
+
+      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+        ? siteSearchProvidersCache
+        : defaultSiteSearchProviders;
+      if (getInlineSiteSearchCandidate(triggerInput, providers)) {
+        clearPendingSearchTriggerHint();
+        return;
+      }
+
+      // Resolve every exact configured key, name, alias, domain, or local-scope
+      // trigger synchronously so its matching Tab hint does not wait for the
+      // asynchronous suggestion request to finish.
+      const provider = getSiteSearchTriggerCandidate(triggerInput, providers, null);
+      if (provider) {
+        siteSearchTriggerState = { provider, rawInput: triggerInput };
+        localSearchScopeTriggerState = null;
+        setSiteSearchTabHint(provider);
+        return;
+      }
+
+      const shortcutRules = window._x_extension_shortcut_rules_2024_unique_;
+      const localScope = getLocalSearchScopeCandidate(triggerInput, shortcutRules);
+      if (localScope) {
+        siteSearchTriggerState = null;
+        localSearchScopeTriggerState = { scope: localScope, rawInput: triggerInput };
+        setSiteSearchTabHint(getLocalSearchScopeTabHintProvider(localScope));
+        return;
+      }
+
+      clearPendingSearchTriggerHint();
+    }
+
     // Add input event for search suggestions
     function handleSearchInputCompositionStart(event) {
       runSearchInputEventOnce(event, () => {
@@ -5005,6 +5394,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         syncLiveSearchInputFromEvent(event);
         imeKeyGuard.markCompositionStart(event);
         clearAutocomplete();
+        clearPendingSearchTriggerHint();
       });
     }
 
@@ -5022,7 +5412,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         latestOverlayQuery = query;
         latestRawInputValue = rawValue;
         clearAutocomplete();
+        syncSearchTriggerHintFromInput(rawValue);
         if (query.length > 0) {
+          beginSuggestionsHeightInputSession(query);
           if (!localSearchScopeState && isSlashCommandInput(query)) {
             updateSearchSuggestions([], query);
             return;
@@ -5030,6 +5422,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           if (openTabsSearchModeActive) {
             requestTabsAndRender(query);
             return;
+          }
+          if (getDirectUrlSuggestion(query)) {
+            updatePendingSearchSuggestions(query, {
+              deferCappedShrink: true
+            });
           }
           requestOverlaySearchSuggestions(query);
         } else {
@@ -5081,7 +5478,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         latestOverlayQuery = query;
         latestRawInputValue = rawValue;
         clearAutocomplete();
+        syncSearchTriggerHintFromInput(rawValue);
         if (query.length > 0) {
+          beginSuggestionsHeightInputSession(query);
           if (!localSearchScopeState && isSlashCommandInput(query)) {
             updateSearchSuggestions([], query);
             return;
@@ -5091,7 +5490,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             return;
           }
           if (isPaste || getDirectUrlSuggestion(query)) {
-            updateSearchSuggestions([], query, {
+            updatePendingSearchSuggestions(query, {
               deferCappedShrink: true
             });
           }
@@ -5201,14 +5600,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       }
-      if (!triggerInput && suggestionItems.length > 0) {
-        const firstItem = suggestionItems[0];
-        const autoIndex = getAutoHighlightIndex();
-        if (firstItem && !firstItem._xIsSearchSuggestion && autoIndex === 0) {
-          e.preventDefault();
-          activateOpenTabsSearchMode();
-          return true;
-        }
+      if (!triggerInput) {
+        e.preventDefault();
+        activateOpenTabsSearchMode();
+        return true;
       }
       return false;
     }
@@ -5748,6 +6143,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       suggestionsHeightAnimationTargetIsCapped = false;
       container.style.removeProperty('height');
       container.style.removeProperty('overflow');
+      container.style.removeProperty('overflow-x');
+      container.style.removeProperty('overflow-y');
       container.style.removeProperty('transition');
     }
 
@@ -5791,7 +6188,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         state.atMaxHeight = hasTrackedAnimationTarget
           ? suggestionsHeightAnimationTargetIsCapped
           : metrics.atMaxHeight;
-        state.heldHeight = state.atMaxHeight && hasTrackedAnimationTarget
+        state.heldHeight = hasTrackedAnimationTarget
           ? suggestionsHeightAnimationTarget
           : metrics.height;
       }
@@ -5800,34 +6197,85 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function holdSuggestionsHeightForRemoteMix(container, previousState, query, enabled) {
-      if (!container || !previousState || !previousState.atMaxHeight || !previousState.height) {
+      if (!container || !previousState || !previousState.height) {
         return false;
       }
-      const targetMetrics = readSuggestionsHeightMetrics(container);
-      if (targetMetrics.atMaxHeight) {
-        cancelSuggestionsHeightAnimation(container);
-        if (deferredSuggestionsHeightQuery === query) {
-          deferredSuggestionsHeightQuery = '';
-        }
-        return true;
-      }
-      if (!enabled) {
+      const shouldHold = Boolean(enabled || suggestionsHeightInputLockedHeight > 0);
+      if (!shouldHold) {
         return false;
       }
-      const heldHeight = Math.max(0, Number(previousState.heldHeight) || previousState.height);
-      if (targetMetrics.height >= heldHeight - 1) {
-        return false;
+      const heldHeight = Math.max(
+        0,
+        Number(suggestionsHeightInputLockedHeight) ||
+          Number(previousState.heldHeight) ||
+          previousState.height
+      );
+      if (suggestionsHeightInputSettleTimer && !suggestionsHeightInputLockedHeight) {
+        suggestionsHeightInputLockedHeight = heldHeight;
       }
       cancelSuggestionsHeightAnimation(container);
       container.style.setProperty('height', `${heldHeight}px`, 'important');
-      container.style.setProperty('overflow', 'hidden', 'important');
+      container.style.setProperty('overflow-x', 'hidden', 'important');
+      container.style.setProperty('overflow-y', 'auto', 'important');
       container.style.setProperty('transition', 'none', 'important');
       deferredSuggestionsHeightQuery = query;
       return true;
     }
 
+    function clearSuggestionsHeightInputSettleTimer() {
+      if (!suggestionsHeightInputSettleTimer) {
+        return;
+      }
+      clearTimeout(suggestionsHeightInputSettleTimer);
+      suggestionsHeightInputSettleTimer = 0;
+      overlay._lumnoSuggestionsHeightSettleTimer = 0;
+    }
+
+    function finishSuggestionsHeightInputSession(options) {
+      const finishOptions = options || {};
+      clearSuggestionsHeightInputSettleTimer();
+      suggestionsHeightInputLockedHeight = 0;
+      deferredSuggestionsHeightQuery = '';
+      const previousState = captureSuggestionsHeightState(suggestionsContainer);
+      if (finishOptions.animate !== false && latestOverlayQuery) {
+        animateSuggestionsHeight(suggestionsContainer, previousState.height);
+      }
+    }
+
+    function beginSuggestionsHeightInputSession(query) {
+      clearSuggestionsHeightInputSettleTimer();
+      if (!suggestionsHeightInputLockedHeight) {
+        const previousState = captureSuggestionsHeightState(suggestionsContainer);
+        suggestionsHeightInputLockedHeight = Math.max(
+          0,
+          Number(previousState.heldHeight) || previousState.height
+        );
+      }
+      if (suggestionsHeightInputLockedHeight > 0) {
+        cancelSuggestionsHeightAnimation(suggestionsContainer);
+        suggestionsContainer.style.setProperty(
+          'height',
+          `${suggestionsHeightInputLockedHeight}px`,
+          'important'
+        );
+        suggestionsContainer.style.setProperty('overflow-x', 'hidden', 'important');
+        suggestionsContainer.style.setProperty('overflow-y', 'auto', 'important');
+        suggestionsContainer.style.setProperty('transition', 'none', 'important');
+        deferredSuggestionsHeightQuery = query;
+      }
+      suggestionsHeightInputSettleTimer = setTimeout(() => {
+        suggestionsHeightInputSettleTimer = 0;
+        overlay._lumnoSuggestionsHeightSettleTimer = 0;
+        finishSuggestionsHeightInputSession();
+      }, suggestionsHeightInputSettleMs);
+      overlay._lumnoSuggestionsHeightSettleTimer = suggestionsHeightInputSettleTimer;
+    }
+
     function finalizeDeferredSuggestionsHeight(query) {
       if (!query || deferredSuggestionsHeightQuery !== query) {
+        return;
+      }
+      if (suggestionsHeightInputLockedHeight > 0) {
         return;
       }
       deferredSuggestionsHeightQuery = '';
@@ -6070,8 +6518,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         showTopActionTooltip,
         hideTopActionTooltip,
         bindCursorTooltip: (target, getText, options) => (
-          suggestionTitleCursorTooltipController &&
-          suggestionTitleCursorTooltipController.bind(
+          overlayCursorTooltipController &&
+          overlayCursorTooltipController.bind(
             target,
             getText,
             Object.assign(
@@ -6351,48 +6799,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
 
-    function isSameSuggestion(a, b) {
-      if (!a || !b) {
-        return false;
-      }
-      if (a.type !== b.type) {
-        return false;
-      }
-      if ((a.url || '') !== (b.url || '')) {
-        return false;
-      }
-      if ((a.title || '') !== (b.title || '')) {
-        return false;
-      }
-      const providerA = a.provider && a.provider.key ? a.provider.key : '';
-      const providerB = b.provider && b.provider.key ? b.provider.key : '';
-      return providerA === providerB;
-    }
-
     function getSuggestionVisualIdentity(suggestion) {
-      if (!suggestion || typeof suggestion !== 'object') {
+      if (typeof SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity !== 'function') {
         return '';
       }
-      const type = String(suggestion.type || '');
-      const providerKey = suggestion.provider && suggestion.provider.key
-        ? String(suggestion.provider.key)
-        : '';
-      const matchedTabId = typeof suggestion._xMatchedTabId === 'number'
-        ? String(suggestion._xMatchedTabId)
-        : '';
-      const url = String(suggestion.url || '');
-      const commandText = String(suggestion.commandText || '');
-      const searchQuery = String(suggestion.searchQuery || '');
-      const fallbackTitle = (!url && !commandText) ? String(suggestion.title || '') : '';
-      return [
-        type,
-        matchedTabId ? `tab:${matchedTabId}` : '',
-        url ? `url:${url}` : '',
-        providerKey ? `provider:${providerKey}` : '',
-        commandText ? `command:${commandText}` : '',
-        searchQuery ? `query:${searchQuery}` : '',
-        fallbackTitle ? `title:${fallbackTitle}` : ''
-      ].join('\u001f');
+      return SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity(suggestion);
     }
 
     function captureSuggestionVisualStateByIdentity(suggestions, items) {
@@ -6442,27 +6853,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return visualState;
     }
 
-    function isSuggestionPrefix(previous, next) {
-      if (!Array.isArray(previous) || !Array.isArray(next)) {
-        return false;
+    function getSuggestionUpdateKind(options) {
+      if (typeof SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind !== 'function') {
+        return 'structure';
       }
-      if (previous.length === 0 || previous.length > next.length) {
-        return false;
-      }
-      for (let i = 0; i < previous.length; i += 1) {
-        if (!isSameSuggestion(previous[i], next[i])) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    function shouldAppendSearchSuggestionRows(options) {
-      const renderState = options && typeof options === 'object' ? options : {};
-      return renderState.forceFullRerender !== true &&
-        renderState.query === renderState.lastRenderedQuery &&
-        renderState.actionContextKey === renderState.lastRenderedActionContextKey &&
-        isSuggestionPrefix(renderState.currentSuggestions, renderState.allSuggestions);
+      return SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind({
+        ...(options || {}),
+        includeDebugReasons: Boolean(overlayTabScoreDebugEnabled)
+      });
     }
 
     function getSuggestionActionContextKey(options) {
@@ -6803,7 +7201,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           primarySuggestion,
           mergedProvider
         });
-        const canAppend = shouldAppendSearchSuggestionRows({
+        const updateKind = getSuggestionUpdateKind({
           forceFullRerender,
           query,
           lastRenderedQuery,
@@ -6812,9 +7210,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           currentSuggestions,
           allSuggestions
         });
-        const shouldPreserveVisualState = !canAppend &&
-          !forceFullRerender &&
-          query === lastRenderedQuery;
+        const canAppend = updateKind === 'append';
+        const shouldPreserveVisualState =
+          updateKind === 'content' || updateKind === 'append';
         const previousVisualStateByIdentity = shouldPreserveVisualState
           ? captureSuggestionVisualStateByIdentity(currentSuggestions, suggestionItems)
           : new Map();
@@ -6822,12 +7220,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           ? Math.max(0, Number(suggestionsContainer.scrollTop) || 0)
           : 0;
         const startIndex = canAppend ? currentSuggestions.length : 0;
-        const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
+        const previousHeightState =
+          updateKind === 'highlight' || updateKind === 'content'
+            ? null
+            : captureSuggestionsHeightState(suggestionsContainer);
         const reactView = ensureOverlaySuggestionsView();
         currentSuggestions = allSuggestions;
         lastRenderedQuery = query;
         lastRenderedActionContextKey = actionContextKey;
-        warmIconCache(allSuggestions);
+        if (updateKind !== 'highlight') {
+          warmIconCache(allSuggestions.filter((item) => (
+            item && item.type !== 'directUrl'
+          )));
+        }
         const emptyMessage = slashCommandModeActive && allSuggestions.length === 0
           ? t('slash_command_empty', '无匹配命令')
           : (localSearchQueryModeActive && allSuggestions.length === 0
@@ -6836,6 +7241,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         reactView.render({
           suggestions: allSuggestions,
           query,
+          updateKind,
           canAppend,
           startIndex,
           primaryHighlightIndex,
@@ -6845,27 +7251,31 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           mergedProvider,
           emptyMessage
         });
-        if (shouldPreserveVisualState) {
-          suggestionsContainer.scrollTop = previousScrollTop;
-        }
-        syncSuggestionLastState();
-        updateSelection();
-        const heightHeldForRemoteMix = holdSuggestionsHeightForRemoteMix(
-          suggestionsContainer,
-          previousHeightState,
-          query,
-          shouldDeferCappedShrink
-        );
-        if (!heightHeldForRemoteMix) {
-          if (deferredSuggestionsHeightQuery === query) {
-            deferredSuggestionsHeightQuery = '';
+        if (updateKind !== 'highlight') {
+          if (shouldPreserveVisualState) {
+            suggestionsContainer.scrollTop = previousScrollTop;
           }
-          animateSuggestionsHeight(
-            suggestionsContainer,
-            previousHeightState.height
-          );
+          syncSuggestionLastState();
+          updateSelection();
         }
-        if (!canAppend) {
+        if (previousHeightState) {
+          const heightHeldForRemoteMix = holdSuggestionsHeightForRemoteMix(
+            suggestionsContainer,
+            previousHeightState,
+            query,
+            shouldDeferCappedShrink
+          );
+          if (!heightHeldForRemoteMix) {
+            if (deferredSuggestionsHeightQuery === query) {
+              deferredSuggestionsHeightQuery = '';
+            }
+            animateSuggestionsHeight(
+              suggestionsContainer,
+              previousHeightState.height
+            );
+          }
+        }
+        if (updateKind === 'structure') {
           selectedIndex = -1;
         }
       });
@@ -6927,16 +7337,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayRevealGate.release();
       }
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const revealTransform = getOverlayEnterAnimationRevealTransform();
       if (reduceMotion) {
+        overlay.style.setProperty('transition', 'none', 'important');
         overlay.style.setProperty('opacity', '1', 'important');
-        overlay.style.setProperty('transform', 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1))', 'important');
+        overlay.style.setProperty('transform', revealTransform, 'important');
         overlay.style.setProperty('filter', 'blur(0)', 'important');
         scheduleOverlayUpdateNoticeMount(0);
       } else {
         clearOverlayEnterAnimationFrames();
         overlayFrameTracker.runEnterAnimation(overlay, () => {
           overlay.style.setProperty('opacity', '1', 'important');
-          overlay.style.setProperty('transform', 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1))', 'important');
+          overlay.style.setProperty('transform', revealTransform, 'important');
           overlay.style.setProperty('filter', 'blur(0)', 'important');
           scheduleOverlayUpdateNoticeMount(360);
         });
@@ -6945,7 +7357,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const revealReady = overlayRevealGate && typeof overlayRevealGate.waitUntilReady === 'function'
       ? overlayRevealGate.waitUntilReady()
       : Promise.resolve({ ok: true, reason: 'no-site-fix' });
-    Promise.resolve(revealReady).then(revealOverlay).catch(revealOverlay);
+    Promise.all([
+      Promise.resolve(revealReady).catch(() => null),
+      initialOverlayEnterAnimationReady.catch(() => {
+        overlayEnterAnimation = 'elastic';
+      })
+    ]).then(() => {
+      applyOverlayEnterAnimationInitialState(overlay);
+      revealOverlay();
+    });
     // Let the container paint first so the enter transition is visible on busy pages.
     const queueInitialOverlayRender = () => {
       Promise.all([initialOverlayOpenTabsDefaultVisibleReady, initialFaviconEnhancedFetchReady]).then(() => {

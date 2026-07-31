@@ -216,6 +216,11 @@ function supportsCornerShape(doc: Document): boolean {
   );
 }
 
+const OVERLAY_PANEL_ENTRY_TRANSFORM =
+  'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.97))';
+const OVERLAY_PANEL_TRANSITION =
+  'transform var(--x-lumno-search-entry-duration, 240ms) var(--x-lumno-search-entry-easing, cubic-bezier(0.16, 1, 0.3, 1)) var(--x-lumno-search-entry-delay, 40ms), opacity 180ms ease, filter 240ms ease';
+
 function getPanelStyle(options: OverlayShellOptions): string {
   const width = Number(options.width) || 760;
   const maxHeightVh = Number(options.maxHeightVh) || 75;
@@ -224,13 +229,12 @@ function getPanelStyle(options: OverlayShellOptions): string {
     position: fixed !important;
     top: 20vh !important;
     left: 50% !important;
-    transform: translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985) !important;
+    transform: ${OVERLAY_PANEL_ENTRY_TRANSFORM} !important;
     transform-origin: top center !important;
     width: ${width}px !important;
     max-width: calc(100vw - 24px) !important;
     max-height: ${maxHeightVh}vh !important;
-    --x-ov-panel-radius: 32px;
-    --x-ov-panel-top-radius: 28px;
+    --x-ov-panel-radius: 28px;
     background: var(--x-ov-bg, rgba(255, 255, 255, 0.95)) !important;
     backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
     -webkit-backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
@@ -262,9 +266,9 @@ function getPanelStyle(options: OverlayShellOptions): string {
     text-shadow: none !important;
     vertical-align: baseline !important;
     opacity: 0 !important;
-    filter: blur(6px) !important;
+    filter: blur(10px) !important;
     will-change: transform, opacity, filter !important;
-    transition: transform 340ms cubic-bezier(0.2, 1, 0.36, 1), opacity 220ms ease, filter 300ms ease !important;
+    transition: ${OVERLAY_PANEL_TRANSITION} !important;
   `;
 }
 
@@ -347,6 +351,16 @@ function OverlayPanel({
     panel.style.setProperty('position', 'fixed', 'important');
     panel.style.setProperty('width', `${width}px`, 'important');
     panel.style.setProperty('max-height', `${maxHeightVh}vh`, 'important');
+    panel.style.setProperty(
+      'transform',
+      OVERLAY_PANEL_ENTRY_TRANSFORM,
+      'important'
+    );
+    panel.style.setProperty(
+      'transition',
+      OVERLAY_PANEL_TRANSITION,
+      'important'
+    );
     if (supportsSuperellipse) {
       panel.style.setProperty(
         'corner-shape',
