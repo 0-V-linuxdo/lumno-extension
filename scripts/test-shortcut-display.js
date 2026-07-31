@@ -56,6 +56,20 @@ assert.strictEqual(
   'Windows release instructions should retain the Alt label'
 );
 assert.strictEqual(
+  shortcutDisplay.formatShortcutReference('Tab Tab', {
+    navigatorLike: macNavigator
+  }),
+  '⇥ ⇥',
+  'macOS should render the double-Tab sequence as two distinct Tab presses'
+);
+assert.strictEqual(
+  shortcutDisplay.formatShortcutReference('Tab Tab', {
+    navigatorLike: windowsNavigator
+  }),
+  'Tab Tab',
+  'Windows should keep the double-Tab sequence readable without chord punctuation'
+);
+assert.strictEqual(
   shortcutDisplay.formatShortcutChord('Alt+Q', { navigatorLike: macNavigator }),
   '⌥Q',
   'macOS Alt shortcuts should render with the Option symbol'
@@ -76,6 +90,20 @@ assert.strictEqual(
 const shortcutDefinitions = shortcutReference
   .getBrowserShortcutDefinitions()
   .concat(shortcutReference.getFixedShortcutDefinitions());
+const doubleTabDefinition = shortcutDefinitions.find((definition) => (
+  definition.id === 'search-open-scope-menu'
+));
+assert.ok(doubleTabDefinition, 'Options should list the double-Tab search scope shortcut');
+assert.strictEqual(doubleTabDefinition.shortcut, 'Tab Tab');
+const searchShortcutGroup = shortcutReference
+  .getShortcutReferenceGroups({ platform: 'mac' })
+  .find((group) => group.id === 'search');
+assert.ok(
+  searchShortcutGroup && searchShortcutGroup.items.some((item) => (
+    item.id === 'search-open-scope-menu'
+  )),
+  'the double-Tab shortcut should appear in the global Options shortcut reference'
+);
 shortcutDefinitions.forEach((definition) => {
   const macSource = definition.shortcut ||
     (definition.defaultShortcut && definition.defaultShortcut.mac) ||

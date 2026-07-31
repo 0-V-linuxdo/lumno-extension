@@ -1,17 +1,65 @@
 (function(root) {
-  if (root.LumnoSearchInputMode && typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-07-31-scope-filter-v9';
+  if (root.LumnoSearchInputMode &&
+      root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
+      typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
     return;
   }
 
   const INPUT_FONT_STACK = "'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
   const DEFAULT_ACCENT_RGB = [59, 130, 246];
   const DEFAULT_PREFIX_GAP = 8;
-  const DEFAULT_PREFIX_TRANSITION = 'opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease';
+  const DEFAULT_MODE_MENU_DOUBLE_TAB_DURATION = 700;
+  const DEFAULT_MODE_TAG_REMOVAL_CONFIRMATION_DURATION = 2200;
+  const DEFAULT_MODE_MENU_VIEWPORT_BOTTOM_INSET = 24;
+  const DEFAULT_PREFIX_ICON_FADE_DURATION = 100;
+  const DEFAULT_PREFIX_RESIZE_DURATION = 160;
+  const DEFAULT_PREFIX_RESIZE_EASING = 'linear';
+  const DEFAULT_PREFIX_TRANSITION = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease';
   const MODE_MENU_LINE_ICON_PATHS = Object.freeze({
     bookmark: ['M18 7v14l-6-4l-6 4V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4'],
     browser: ['M4 8h16M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm4-2v4'],
     history: ['M12 8v4l2 2', 'M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5'],
     star: ['m12 17.75l-6.172 3.245l1.179-6.873l-5-4.867l6.9-1l3.086-6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z']
+  });
+  const MODE_MENU_PINYIN_FALLBACKS = Object.freeze({
+    书: 'shu',
+    信: 'xin',
+    元: 'yuan',
+    众: 'zhong',
+    包: 'bao',
+    千: 'qian',
+    历: 'li',
+    号: 'hao',
+    天: 'tian',
+    常: 'chang',
+    已: 'yi',
+    开: 'kai',
+    微: 'wei',
+    打: 'da',
+    搜: 'sou',
+    掘: 'jue',
+    标: 'biao',
+    淘: 'tao',
+    猫: 'mao',
+    用: 'yong',
+    百: 'bai',
+    知: 'zhi',
+    签: 'qian',
+    索: 'suo',
+    维: 'wei',
+    翻: 'fan',
+    豆: 'dou',
+    金: 'jin',
+    问: 'wen',
+    页: 'ye',
+    度: 'du',
+    乎: 'hu',
+    瓣: 'ban',
+    公: 'gong',
+    基: 'ji',
+    科: 'ke',
+    史: 'shi'
   });
 
   function getModeMenuLineIconPaths(iconName) {
@@ -208,6 +256,9 @@
     const cursorTooltipApi = root.LumnoCursorTooltip || (
       typeof globalThis !== 'undefined' ? globalThis.LumnoCursorTooltip : null
     ) || {};
+    const shortcutDisplayApi = root.LumnoShortcutDisplay || (
+      typeof globalThis !== 'undefined' ? globalThis.LumnoShortcutDisplay : null
+    ) || {};
     const defaultAccentColor = Array.isArray(config.defaultAccentColor)
       ? config.defaultAccentColor
       : DEFAULT_ACCENT_RGB;
@@ -266,11 +317,80 @@
     let inputModePrefixAnimationFrame = null;
     let inputModePrefixAnimationTimer = 0;
     let inputModePrefixContentRevision = 0;
+    let inputModePrefixIconAnimation = null;
+    let inputModePrefixIconAnimationElement = null;
+    let inputModePrefixPendingText = '';
     let layoutResizeObserver = null;
     let modeMenuOpen = false;
     let modeMenuPending = false;
     let modeMenuRequestId = 0;
+    let modeMenuFilterQuery = '';
+    let renderedModeMenuEntries = [];
+    let renderedModeMenuGroups = [];
+    let modeMenuEmptyState = null;
+    let modeMenuDoubleTabPending = false;
+    let modeMenuDoubleTabTimer = 0;
+    let modeTagRemovalConfirmationPending = false;
+    let modeTagRemovalConfirmationTimer = 0;
     let destroyed = false;
+
+    function getModeMenuPlaceholder() {
+      return formatMessage(
+        'search_scope_panel_placeholder',
+        'Search specific site content...'
+      );
+    }
+
+    function getModeActivePlaceholder() {
+      return formatMessage(
+        'search_scope_active_placeholder',
+        'Search within this scope; press Tab again to open the scope panel...'
+      );
+    }
+
+    function hasVisibleModePrefix() {
+      return siteSearchPrefix.style.getPropertyValue('display') !== 'none';
+    }
+
+    function syncInputPlaceholder() {
+      if (modeMenuOpen && !modeMenu.hidden) {
+        input.placeholder = getModeMenuPlaceholder();
+        return;
+      }
+      input.placeholder = hasVisibleModePrefix()
+        ? getModeActivePlaceholder()
+        : getDefaultPlaceholder();
+    }
+
+    function getModeMenuPinyinApi() {
+      return root.pinyinPro || (
+        typeof globalThis !== 'undefined' ? globalThis.pinyinPro : null
+      );
+    }
+    function ensureModeMenuPinyinRuntime() {
+      const existingApi = getModeMenuPinyinApi();
+      if (existingApi && typeof existingApi.pinyin === 'function') {
+        return null;
+      }
+      if (typeof config.loadPinyinRuntime === 'function') {
+        return Promise.resolve(config.loadPinyinRuntime()).catch(() => null);
+      }
+      const chromeApi = root.chrome || (
+        typeof globalThis !== 'undefined' ? globalThis.chrome : null
+      );
+      if (!chromeApi || !chromeApi.runtime ||
+          typeof chromeApi.runtime.getURL !== 'function') {
+        return null;
+      }
+      try {
+        return import(chromeApi.runtime.getURL('assets/vendor/pinyin-pro.js'))
+          .then(() => getModeMenuPinyinApi())
+          .catch(() => null);
+      } catch (error) {
+        return null;
+      }
+    }
+    const modeMenuPinyinRuntimeReady = ensureModeMenuPinyinRuntime();
     const providedModeMenuCursorTooltipController =
       config.modeMenuCursorTooltipController || config.modeMenuTooltipController || null;
     const modeMenuCursorTooltipController = providedModeMenuCursorTooltipController || (
@@ -365,7 +485,7 @@
       ['left', '50px'],
       ['display', 'none'],
       ['align-items', 'center'],
-      ['justify-content', 'center'],
+      ['justify-content', 'flex-start'],
       ['gap', '6px'],
       ['max-width', 'min(220px, 48%)'],
       ['min-width', '0'],
@@ -393,14 +513,18 @@
       ['z-index', '1'],
       ['user-select', 'none']
     ], useImportantStyles);
+    setStyle(siteSearchPrefix, 'justify-content', 'flex-start', useImportantStyles);
     modeMenu.id = `${prefixId}-menu`;
     modeMenu.className = `x-lumno-search-input-mode__menu ${menuSurfaceClass}`;
     if (typeof menuSurface.apply === 'function') {
       menuSurface.apply(modeMenu);
     }
     modeMenu.setAttribute('data-surface', surface);
+    modeMenu.setAttribute('data-filtered', 'false');
+    modeMenu.setAttribute('data-search-active', 'false');
     modeMenu.setAttribute('role', 'menu');
     modeMenu.setAttribute('aria-labelledby', prefixId);
+    modeMenu.tabIndex = -1;
     modeMenu.hidden = true;
     const modeMenuEdgeOffset = surface === 'newtab' ? '-6px' : '-1px';
     const modeMenuStyles = [
@@ -409,10 +533,9 @@
       ['right', modeMenuEdgeOffset],
       ['top', `calc(100% + ${vars.panelGap})`],
       ['width', 'auto'],
-      ['max-height', 'min(360px, 62vh)'],
-      ['overflow-x', 'hidden'],
-      ['overflow-y', 'auto'],
-      ['padding', '16px'],
+      ['max-height', 'min(360px, 62vh, var(--x-lumno-search-mode-menu-viewport-max-height, 360px))'],
+      ['overflow', 'hidden'],
+      ['padding', '0'],
       ['border', `1px solid ${vars.panelBorder}`],
       ['border-radius', vars.panelRadius],
       ['background', vars.panelBg],
@@ -423,8 +546,9 @@
       ['color', vars.panelText],
       ['z-index', '40'],
       ['--x-lumno-search-mode-menu-lift', '0px'],
-      ['--x-extension-menu-surface-closed-transform', 'translateY(calc(var(--x-lumno-search-mode-menu-lift, 0px) - 6px)) scale(0.96, 0.86)'],
-      ['--x-extension-menu-surface-open-transform', 'translateY(var(--x-lumno-search-mode-menu-lift, 0px)) scale(1, 1)'],
+      ['--x-lumno-search-mode-menu-result-offset', '0px'],
+      ['--x-extension-menu-surface-closed-transform', 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px) - 6px)) scale(0.96, 0.86)'],
+      ['--x-extension-menu-surface-open-transform', 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px))) scale(1, 1)'],
       ['overscroll-behavior', 'contain']
     ];
     modeMenu.style.cssText = '';
@@ -434,6 +558,133 @@
     if (!modeMenu.parentNode) {
       container.appendChild(modeMenu);
     }
+    let modeMenuContent = typeof modeMenu.querySelector === 'function'
+      ? modeMenu.querySelector('[data-search-input-mode-menu-content]')
+      : null;
+    let modeMenuFooter = typeof modeMenu.querySelector === 'function'
+      ? modeMenu.querySelector('[data-search-input-mode-menu-footer]')
+      : null;
+    if (!modeMenuContent || !modeMenuFooter) {
+      while (modeMenu.firstChild) {
+        modeMenu.removeChild(modeMenu.firstChild);
+      }
+      modeMenuContent = applyNoTranslate(doc.createElement('div'));
+      modeMenuContent.className = 'x-lumno-search-input-mode__menu-content';
+      modeMenuContent.setAttribute('data-search-input-mode-menu-content', '');
+      modeMenuContent.setAttribute('role', 'presentation');
+      modeMenuFooter = applyNoTranslate(doc.createElement('div'));
+      modeMenuFooter.className = 'x-lumno-search-input-mode__menu-footer';
+      modeMenuFooter.setAttribute('data-search-input-mode-menu-footer', '');
+      modeMenuFooter.setAttribute('role', 'presentation');
+      modeMenuFooter.setAttribute('aria-hidden', 'true');
+      modeMenu.appendChild(modeMenuContent);
+      modeMenu.appendChild(modeMenuFooter);
+    }
+    let modeMenuFooterKey = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-key]')
+      : null;
+    let modeMenuFooterText = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-text]')
+      : null;
+    let modeMenuFooterFilterText = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-filter-text]')
+      : null;
+    if (!modeMenuFooterKey || !modeMenuFooterText || !modeMenuFooterFilterText) {
+      while (modeMenuFooter.firstChild) {
+        modeMenuFooter.removeChild(modeMenuFooter.firstChild);
+      }
+      modeMenuFooterFilterText = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterFilterText.className =
+        'x-lumno-search-input-mode__menu-footer-filter-text';
+      modeMenuFooterFilterText.setAttribute(
+        'data-search-input-mode-menu-footer-filter-text',
+        ''
+      );
+      modeMenuFooterKey = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterKey.className = 'x-lumno-search-input-mode__menu-footer-key';
+      modeMenuFooterKey.setAttribute(
+        'data-search-input-mode-menu-footer-key',
+        ''
+      );
+      modeMenuFooterText = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterText.className = 'x-lumno-search-input-mode__menu-footer-text';
+      modeMenuFooterText.setAttribute(
+        'data-search-input-mode-menu-footer-text',
+        ''
+      );
+      modeMenuFooter.appendChild(modeMenuFooterFilterText);
+      modeMenuFooter.appendChild(modeMenuFooterKey);
+      modeMenuFooter.appendChild(modeMenuFooterText);
+    }
+    const legacyModeMenuFooterDivider = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('.x-lumno-search-input-mode__menu-footer-divider')
+      : null;
+    if (legacyModeMenuFooterDivider) {
+      legacyModeMenuFooterDivider.remove();
+    }
+    modeMenuFooter.appendChild(modeMenuFooterFilterText);
+    modeMenuFooter.appendChild(modeMenuFooterKey);
+    modeMenuFooter.appendChild(modeMenuFooterText);
+    function renderModeMenuFilterQuery(query) {
+      const queryToken = '\uF8FFLUMNO_MODE_MENU_QUERY\uF8FF';
+      const localizedQuery = formatMessage(
+        'search_scope_menu_filter_query',
+        'Search: {query}',
+        { query: queryToken }
+      );
+      const queryIndex = localizedQuery.indexOf(queryToken);
+      if (queryIndex < 0) {
+        modeMenuFooterFilterText.textContent = formatMessage(
+          'search_scope_menu_filter_query',
+          'Search: {query}',
+          { query }
+        );
+        return;
+      }
+      while (modeMenuFooterFilterText.firstChild) {
+        modeMenuFooterFilterText.removeChild(modeMenuFooterFilterText.firstChild);
+      }
+      if (queryIndex > 0) {
+        modeMenuFooterFilterText.appendChild(
+          doc.createTextNode(localizedQuery.slice(0, queryIndex))
+        );
+      }
+      const queryMark = doc.createElement('mark');
+      queryMark.className = 'x-lumno-search-input-mode__menu-match';
+      queryMark.textContent = query;
+      modeMenuFooterFilterText.appendChild(queryMark);
+      const queryEnd = queryIndex + queryToken.length;
+      if (queryEnd < localizedQuery.length) {
+        modeMenuFooterFilterText.appendChild(
+          doc.createTextNode(localizedQuery.slice(queryEnd))
+        );
+      }
+    }
+    function refreshModeMenuFilterText() {
+      if (modeMenuFilterQuery) {
+        renderModeMenuFilterQuery(modeMenuFilterQuery);
+      } else {
+        modeMenuFooterFilterText.textContent = formatMessage(
+          'search_scope_menu_filter_hint',
+          'Click the panel, then type English or pinyin to filter'
+        );
+      }
+    }
+    function refreshModeMenuLanguage() {
+      modeMenuFooterKey.textContent =
+        typeof shortcutDisplayApi.formatShortcutReference === 'function'
+          ? shortcutDisplayApi.formatShortcutReference('Tab Tab', {
+            navigatorLike: config.navigatorLike || (win && win.navigator)
+          })
+          : 'Tab Tab';
+      modeMenuFooterText.textContent = formatMessage(
+        'search_scope_menu_shortcut_hint',
+        'Quickly open this panel'
+      );
+      refreshModeMenuFilterText();
+      syncInputPlaceholder();
+    }
+    refreshModeMenuLanguage();
     siteSearchTabHint.id = tabHintId;
     siteSearchTabHint.className = 'x-lumno-search-input-mode__tab-hint';
     siteSearchTabHint.setAttribute('aria-hidden', 'true');
@@ -578,15 +829,130 @@
       setInputStyle(input, 'padding-left', `${paddedLeft}px`);
     }
 
+    function updateModeMenuFooterAlignment() {
+      if (modeMenu.hidden || !modeMenuFooter || !modeMenuContent) {
+        return;
+      }
+      const firstIcon = modeMenuContent.querySelector(
+        '.x-lumno-search-input-mode__menu-icon'
+      );
+      if (!firstIcon || Number(firstIcon.offsetWidth) <= 0) {
+        return;
+      }
+      const menuRect = modeMenu.getBoundingClientRect();
+      const iconRect = firstIcon.getBoundingClientRect();
+      const footerRect = modeMenuFooter.getBoundingClientRect();
+      const menuLayoutWidth = Number(modeMenu.offsetWidth) || menuRect.width;
+      const scaleX = menuLayoutWidth > 0 ? menuRect.width / menuLayoutWidth : 1;
+      if (!Number.isFinite(scaleX) || scaleX <= 0) {
+        return;
+      }
+      const inlineStart = Math.max(0, (iconRect.left - footerRect.left) / scaleX);
+      setStyle(
+        modeMenuFooter,
+        '--x-lumno-search-mode-footer-inline-start',
+        `${Math.round(inlineStart * 100) / 100}px`,
+        useImportantStyles
+      );
+    }
+
     function updateLayout() {
       if (destroyed) {
         return;
       }
       updateInputRightPadding();
       updatePrefixLayout();
+      updateModeMenuFooterAlignment();
+      if (modeMenuOpen && !modeMenu.hidden) {
+        notifyModeMenuLayoutChange();
+      }
+    }
+
+    function setInputModePrefixIdentity(prefixText, contentOptions) {
+      siteSearchPrefix.setAttribute(
+        'data-mode-id',
+        contentOptions && contentOptions.modeId ? String(contentOptions.modeId) : ''
+      );
+      siteSearchPrefix.setAttribute('aria-label', formatMessage(
+        'search_scope_switcher_label',
+        '搜索范围：{scope}。选择即可切换',
+        { scope: prefixText }
+      ));
+    }
+
+    function cancelInputModePrefixIconAnimation() {
+      if (inputModePrefixIconAnimation &&
+          typeof inputModePrefixIconAnimation.cancel === 'function') {
+        inputModePrefixIconAnimation.cancel();
+      }
+      inputModePrefixIconAnimation = null;
+      if (inputModePrefixIconAnimationElement) {
+        setStyle(
+          inputModePrefixIconAnimationElement,
+          'opacity',
+          '1',
+          useImportantStyles
+        );
+      }
+      inputModePrefixIconAnimationElement = null;
+    }
+
+    function playInputModePrefixIconFade(animateIcon) {
+      cancelInputModePrefixIconAnimation();
+      const activeIcon = [
+        siteSearchPrefixLineIcon,
+        siteSearchPrefixIcon,
+        siteSearchPrefixGlyph
+      ].find((element) => isElementVisible(element));
+      if (!activeIcon) {
+        return;
+      }
+      setStyle(activeIcon, 'opacity', '1', useImportantStyles);
+      setStyle(activeIcon, 'transform', 'none', useImportantStyles);
+      if (!animateIcon || shouldReduceInputModeMotion() ||
+          typeof activeIcon.animate !== 'function') {
+        return;
+      }
+      const animation = activeIcon.animate([
+        { opacity: 0 },
+        { opacity: 1 }
+      ], {
+        duration: DEFAULT_PREFIX_ICON_FADE_DURATION,
+        easing: 'ease-out'
+      });
+      inputModePrefixIconAnimation = animation;
+      inputModePrefixIconAnimationElement = activeIcon;
+      animation.onfinish = () => {
+        if (inputModePrefixIconAnimation !== animation) {
+          return;
+        }
+        inputModePrefixIconAnimation = null;
+        inputModePrefixIconAnimationElement = null;
+        setStyle(activeIcon, 'opacity', '1', useImportantStyles);
+      };
+      animation.oncancel = () => {
+        if (inputModePrefixIconAnimation === animation) {
+          inputModePrefixIconAnimation = null;
+          inputModePrefixIconAnimationElement = null;
+        }
+      };
+    }
+
+    function measureInputModePrefixWidthForText(prefixText) {
+      const previousText = String(siteSearchPrefixText.textContent || '');
+      siteSearchPrefixText.textContent = String(prefixText || '');
+      const width = Number(siteSearchPrefix.getBoundingClientRect().width) || 0;
+      siteSearchPrefixText.textContent = previousText;
+      return width;
     }
 
     function setInputModePrefixContent(prefixText, contentOptions) {
+      const preserveIconAnimation = Boolean(
+        contentOptions && contentOptions.preserveIconAnimation
+      );
+      if (!preserveIconAnimation) {
+        cancelInputModePrefixIconAnimation();
+      }
       const contentRevision = ++inputModePrefixContentRevision;
       const iconUrl = contentOptions && contentOptions.iconUrl ? String(contentOptions.iconUrl || '').trim() : '';
       const iconClass = contentOptions && contentOptions.iconClass
@@ -618,8 +984,8 @@
         icon.referrerPolicy = 'no-referrer';
         icon.style.cssText = cssText([
           ['all', 'unset'],
-          ['width', '15px'],
-          ['height', '15px'],
+          ['width', '16px'],
+          ['height', '16px'],
           ['border-radius', '2px'],
           ['clip-path', 'inset(0 round 2px)'],
           ['overflow', 'hidden'],
@@ -664,11 +1030,15 @@
         setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
         siteSearchPrefixIcon.removeAttribute('src');
       }
+      setStyle(siteSearchPrefixIcon, 'transition', 'none', useImportantStyles);
+      setStyle(siteSearchPrefixGlyph, 'transition', 'none', useImportantStyles);
+      setStyle(siteSearchPrefixLineIcon, 'transition', 'none', useImportantStyles);
       const text = siteSearchPrefixText;
       text.textContent = prefixText;
       text.style.cssText = cssText([
         ['all', 'unset'],
         ['display', 'block'],
+        ['flex', '1 1 auto'],
         ['min-width', '0'],
         ['overflow', 'hidden'],
         ['text-overflow', 'ellipsis'],
@@ -681,7 +1051,7 @@
       );
       siteSearchPrefixCurrent.style.cssText = cssText([
         ['all', 'unset'],
-        ['display', 'inline-flex'],
+        ['display', modeMenuOpen && !modeMenu.hidden ? 'inline-flex' : 'none'],
         ['align-items', 'center'],
         ['font-size', '10px'],
         ['font-weight', '600'],
@@ -691,20 +1061,20 @@
         ['overflow', 'visible'],
         ['flex', '0 0 auto']
       ], useImportantStyles);
-      siteSearchPrefix.setAttribute(
-        'data-mode-id',
-        contentOptions && contentOptions.modeId ? String(contentOptions.modeId) : ''
-      );
-      siteSearchPrefix.setAttribute('aria-label', formatMessage(
-        'search_scope_switcher_label',
-        '搜索范围：{scope}。选择即可切换',
-        { scope: prefixText }
-      ));
+      setInputModePrefixIdentity(prefixText, contentOptions);
       setStyle(siteSearchPrefixChevron, 'display', 'inline-flex', useImportantStyles);
       setStyle(siteSearchPrefixChevron, 'flex', '0 0 auto', useImportantStyles);
+      if (!preserveIconAnimation) {
+        playInputModePrefixIconFade(Boolean(
+          contentOptions && contentOptions.animateIcon
+        ));
+      }
     }
 
-    function cancelInputModePrefixAnimation() {
+    function cancelInputModePrefixAnimation(cancelOptions) {
+      if (!cancelOptions || cancelOptions.preservePendingText !== true) {
+        inputModePrefixPendingText = '';
+      }
       if (inputModePrefixAnimation) {
         const animation = inputModePrefixAnimation;
         inputModePrefixAnimation = null;
@@ -753,70 +1123,24 @@
     }
 
     function playInputModePrefixEnterAnimation() {
-      cancelInputModePrefixAnimation();
-      if (shouldReduceInputModeMotion()) {
-        setInputModePrefixRestState();
-        return;
-      }
-      const keyframes = [
-        {
-          opacity: 0.42,
-          transform: 'translateY(-50%) translateX(0) scale(0.86)'
-        },
-        {
-          offset: 0.72,
-          opacity: 1,
-          transform: 'translateY(-50%) translateX(0) scale(1.045)'
-        },
-        {
-          opacity: 1,
-          transform: 'translateY(-50%) translateX(0) scale(1)'
-        }
-      ];
-      setStyle(siteSearchPrefix, 'will-change', 'transform, opacity', useImportantStyles);
-      if (typeof siteSearchPrefix.animate === 'function') {
-        const animation = siteSearchPrefix.animate(keyframes, {
-          duration: 290,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
-        });
-        inputModePrefixAnimation = animation;
-        animation.onfinish = () => {
-          if (inputModePrefixAnimation !== animation) {
-            return;
-          }
-          inputModePrefixAnimation = null;
-          restoreInputModePrefixAnimatedState();
-        };
-        animation.oncancel = () => {
-          if (inputModePrefixAnimation === animation) {
-            inputModePrefixAnimation = null;
-          }
-        };
-        return;
-      }
-      setStyle(siteSearchPrefix, 'transition', 'none', useImportantStyles);
-      setStyle(siteSearchPrefix, 'opacity', '0', useImportantStyles);
-      setStyle(siteSearchPrefix, 'transform', keyframes[0].transform, useImportantStyles);
-      inputModePrefixAnimationFrame = win.requestAnimationFrame(() => {
-        inputModePrefixAnimationFrame = win.requestAnimationFrame(() => {
-          inputModePrefixAnimationFrame = null;
-          setStyle(siteSearchPrefix, 'transition', prefixTransition, useImportantStyles);
-          setStyle(siteSearchPrefix, 'opacity', '1', useImportantStyles);
-          setStyle(siteSearchPrefix, 'transform', keyframes[2].transform, useImportantStyles);
-          inputModePrefixAnimationTimer = win.setTimeout(() => {
-            inputModePrefixAnimationTimer = 0;
-            restoreInputModePrefixAnimatedState();
-          }, 300);
-        });
-      });
+      setInputModePrefixRestState();
     }
 
-    function playInputModePrefixResizeAnimation(fromWidth, toWidth) {
-      cancelInputModePrefixAnimation();
+    function playInputModePrefixResizeAnimation(fromWidth, toWidth, resizeOptions) {
+      const options = resizeOptions || {};
+      const onFinish = typeof options.onFinish === 'function'
+        ? options.onFinish
+        : null;
+      cancelInputModePrefixAnimation({
+        preservePendingText: options.preservePendingText === true
+      });
       const startWidth = Math.max(0, Number(fromWidth) || 0);
       const endWidth = Math.max(0, Number(toWidth) || 0);
       if (shouldReduceInputModeMotion() || startWidth <= 0 || endWidth <= 0 ||
-          Math.abs(startWidth - endWidth) < 1 || endWidth > startWidth) {
+          Math.abs(startWidth - endWidth) < 1) {
+        if (onFinish) {
+          onFinish();
+        }
         setInputModePrefixRestState();
         return;
       }
@@ -827,8 +1151,8 @@
       setStyle(siteSearchPrefix, 'will-change', 'width', useImportantStyles);
       if (typeof siteSearchPrefix.animate === 'function') {
         const animation = siteSearchPrefix.animate(keyframes, {
-          duration: 220,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+          duration: DEFAULT_PREFIX_RESIZE_DURATION,
+          easing: DEFAULT_PREFIX_RESIZE_EASING
         });
         inputModePrefixAnimation = animation;
         animation.onfinish = () => {
@@ -836,6 +1160,10 @@
             return;
           }
           inputModePrefixAnimation = null;
+          setStyle(siteSearchPrefix, 'width', `${endWidth}px`, useImportantStyles);
+          if (onFinish) {
+            onFinish();
+          }
           restoreInputModePrefixAnimatedState();
         };
         animation.oncancel = () => {
@@ -845,29 +1173,244 @@
         };
         return;
       }
-      setStyle(siteSearchPrefix, 'transition', 'none', useImportantStyles);
+      setStyle(siteSearchPrefix, 'transition', prefixTransition, useImportantStyles);
       setStyle(siteSearchPrefix, 'width', `${startWidth}px`, useImportantStyles);
       inputModePrefixAnimationFrame = win.requestAnimationFrame(() => {
         inputModePrefixAnimationFrame = null;
         setStyle(
           siteSearchPrefix,
           'transition',
-          'width 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+          `width ${DEFAULT_PREFIX_RESIZE_DURATION}ms ${DEFAULT_PREFIX_RESIZE_EASING}, ${prefixTransition}`,
           useImportantStyles
         );
         setStyle(siteSearchPrefix, 'width', `${endWidth}px`, useImportantStyles);
         inputModePrefixAnimationTimer = win.setTimeout(() => {
           inputModePrefixAnimationTimer = 0;
+          if (onFinish) {
+            onFinish();
+          }
           restoreInputModePrefixAnimatedState();
-        }, 230);
+        }, DEFAULT_PREFIX_RESIZE_DURATION + 10);
       });
+    }
+
+    function setInputModePrefixMenuOpen(open) {
+      const nextOpen = Boolean(open);
+      const wasOpen = siteSearchPrefix.getAttribute('data-menu-open') === 'true';
+      if (wasOpen === nextOpen) {
+        setStyle(
+          siteSearchPrefixCurrent,
+          'display',
+          nextOpen ? 'inline-flex' : 'none',
+          useImportantStyles
+        );
+        return;
+      }
+      const shouldAnimate = isElementVisible(siteSearchPrefix);
+      if (shouldAnimate) {
+        cancelInputModePrefixAnimation();
+      }
+      const previousWidth = shouldAnimate
+        ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
+        : 0;
+      siteSearchPrefix.setAttribute('data-menu-open', nextOpen ? 'true' : 'false');
+      setStyle(
+        siteSearchPrefixCurrent,
+        'display',
+        nextOpen ? 'inline-flex' : 'none',
+        useImportantStyles
+      );
+      const nextWidth = shouldAnimate
+        ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
+        : 0;
+      updatePrefixLayout();
+      if (shouldAnimate) {
+        playInputModePrefixResizeAnimation(previousWidth, nextWidth);
+      }
+    }
+
+    function resetModeTagRemovalConfirmation() {
+      const wasPending = modeTagRemovalConfirmationPending;
+      if (modeTagRemovalConfirmationTimer && win &&
+          typeof win.clearTimeout === 'function') {
+        win.clearTimeout(modeTagRemovalConfirmationTimer);
+      }
+      modeTagRemovalConfirmationTimer = 0;
+      modeTagRemovalConfirmationPending = false;
+      if (wasPending &&
+          typeof config.onModeTagRemovalConfirmationReset === 'function') {
+        config.onModeTagRemovalConfirmationReset();
+      }
+      return wasPending;
+    }
+
+    function resetModeMenuDoubleTab() {
+      const wasPending = modeMenuDoubleTabPending;
+      if (modeMenuDoubleTabTimer && win &&
+          typeof win.clearTimeout === 'function') {
+        win.clearTimeout(modeMenuDoubleTabTimer);
+      }
+      modeMenuDoubleTabTimer = 0;
+      modeMenuDoubleTabPending = false;
+      return wasPending;
+    }
+
+    function shouldOpenModeMenuOnDoubleTab(event) {
+      if (destroyed || !event || event.key !== 'Tab' || event.defaultPrevented) {
+        return false;
+      }
+      const hasModifier = Boolean(
+        event.shiftKey || event.metaKey || event.ctrlKey || event.altKey
+      );
+      const hasInput = String(input.value || '') !== '';
+      const hasModeTag = Boolean(
+        String(siteSearchPrefix.getAttribute('data-mode-id') || '')
+      );
+      if (hasModifier || hasInput || hasModeTag || modeMenuOpen || modeMenuPending) {
+        resetModeMenuDoubleTab();
+        return false;
+      }
+      if (event.repeat) {
+        if (modeMenuDoubleTabPending && typeof event.preventDefault === 'function') {
+          event.preventDefault();
+        }
+        return false;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      if (modeMenuDoubleTabPending) {
+        resetModeMenuDoubleTab();
+        return true;
+      }
+      modeMenuDoubleTabPending = true;
+      const configuredDuration = Number(config.modeMenuDoubleTabDuration);
+      const duration = Number.isFinite(configuredDuration)
+        ? Math.max(0, configuredDuration)
+        : DEFAULT_MODE_MENU_DOUBLE_TAB_DURATION;
+      if (win && typeof win.setTimeout === 'function' && duration > 0) {
+        modeMenuDoubleTabTimer = win.setTimeout(() => {
+          modeMenuDoubleTabTimer = 0;
+          resetModeMenuDoubleTab();
+        }, duration);
+      }
+      return false;
+    }
+
+    function shouldCompleteModeMenuDoubleTab(event) {
+      if (destroyed || !modeMenuDoubleTabPending || !event ||
+          event.key !== 'Tab' || event.defaultPrevented) {
+        return false;
+      }
+      const hasModifier = Boolean(
+        event.shiftKey || event.metaKey || event.ctrlKey || event.altKey
+      );
+      const hasInput = String(input.value || '') !== '';
+      if (hasModifier || hasInput || modeMenuOpen || modeMenuPending) {
+        resetModeMenuDoubleTab();
+        return false;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      if (event.repeat) {
+        return false;
+      }
+      resetModeMenuDoubleTab();
+      return true;
+    }
+
+    function shouldContainModeMenuTab(event) {
+      if (destroyed || !event || event.key !== 'Tab' || event.defaultPrevented ||
+          (!modeMenuOpen && !modeMenuPending)) {
+        return false;
+      }
+      const hasModifier = Boolean(
+        event.shiftKey || event.metaKey || event.ctrlKey || event.altKey
+      );
+      if (hasModifier) {
+        return false;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      resetModeMenuDoubleTab();
+      return true;
+    }
+
+    function shouldOpenModeMenuForActiveModeOnTab(event) {
+      if (destroyed || !event || event.key !== 'Tab' || event.defaultPrevented) {
+        return false;
+      }
+      const hasModifier = Boolean(
+        event.shiftKey || event.metaKey || event.ctrlKey || event.altKey
+      );
+      const hasModeTag = Boolean(
+        String(siteSearchPrefix.getAttribute('data-mode-id') || '')
+      );
+      if (hasModifier || event.repeat ||
+          modeMenuOpen || modeMenuPending) {
+        resetModeMenuDoubleTab();
+        return false;
+      }
+      if (!hasModeTag) {
+        return false;
+      }
+      if (typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      resetModeMenuDoubleTab();
+      return true;
+    }
+
+    function shouldRemoveModeTagOnBackspace(event) {
+      if (destroyed || String(input.value || '') !== '') {
+        resetModeTagRemovalConfirmation();
+        return false;
+      }
+      if (!modeMenuOpen || modeMenu.hidden) {
+        resetModeTagRemovalConfirmation();
+        return true;
+      }
+      if (event && event.repeat) {
+        return false;
+      }
+      if (modeTagRemovalConfirmationPending) {
+        resetModeTagRemovalConfirmation();
+        return true;
+      }
+      modeTagRemovalConfirmationPending = true;
+      const configuredDuration = Number(
+        config.modeTagRemovalConfirmationDuration
+      );
+      const duration = Number.isFinite(configuredDuration)
+        ? Math.max(0, configuredDuration)
+        : DEFAULT_MODE_TAG_REMOVAL_CONFIRMATION_DURATION;
+      if (win && typeof win.setTimeout === 'function' && duration > 0) {
+        modeTagRemovalConfirmationTimer = win.setTimeout(() => {
+          modeTagRemovalConfirmationTimer = 0;
+          resetModeTagRemovalConfirmation();
+        }, duration);
+      }
+      if (typeof config.onModeTagRemovalConfirmation === 'function') {
+        config.onModeTagRemovalConfirmation({ duration });
+      }
+      return false;
     }
 
     function setPrefixText(prefixText, theme, prefixOptions) {
       const nextOptions = prefixOptions || {};
+      const nextPrefixText = String(prefixText || '');
       const shouldAnimate = Boolean(nextOptions.animate);
       const nextModeId = nextOptions.modeId ? String(nextOptions.modeId) : '';
       const previousModeId = String(siteSearchPrefix.getAttribute('data-mode-id') || '');
+      const previousPrefixText = String(siteSearchPrefixText.textContent || '');
+      if (previousModeId !== nextModeId || previousPrefixText !== nextPrefixText) {
+        if (!nextOptions.preserveModeMenuDoubleTab) {
+          resetModeMenuDoubleTab();
+        }
+        resetModeTagRemovalConfirmation();
+      }
       const isSameMode = previousModeId === nextModeId;
       const isRepeatedMode = Boolean(previousModeId && isSameMode);
       const shouldAnimateResize = Boolean(
@@ -876,6 +1419,17 @@
         !isSameMode &&
         isElementVisible(siteSearchPrefix)
       );
+      const hasActivePrefixAnimation = Boolean(
+        inputModePrefixAnimation ||
+        inputModePrefixAnimationFrame !== null ||
+        inputModePrefixAnimationTimer
+      );
+      const shouldWaitForPendingText = Boolean(
+        !shouldAnimate &&
+        isSameMode &&
+        hasActivePrefixAnimation &&
+        inputModePrefixPendingText === nextPrefixText
+      );
       if (shouldAnimateResize) {
         cancelInputModePrefixAnimation();
       }
@@ -883,23 +1437,56 @@
         ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
         : 0;
       const shouldPreserveAnimation = !shouldAnimate && isSameMode && Boolean(
-        inputModePrefixAnimation ||
-        inputModePrefixAnimationFrame !== null ||
-        inputModePrefixAnimationTimer
+        hasActivePrefixAnimation
       );
-      if (!shouldAnimate && !shouldPreserveAnimation) {
+      if (shouldAnimateResize) {
+        setStyle(siteSearchPrefix, 'transition', prefixTransition, useImportantStyles);
+      } else if (!shouldAnimate && !shouldPreserveAnimation) {
         setStyle(siteSearchPrefix, 'transition', 'none', useImportantStyles);
       }
-      setInputModePrefixContent(prefixText, nextOptions);
+      setInputModePrefixIdentity(nextPrefixText, nextOptions);
       const visual = applyInputModePrefixVisual(theme, nextOptions);
       setStyle(siteSearchPrefix, 'display', 'inline-flex', useImportantStyles);
+      if (shouldWaitForPendingText) {
+        syncInputPlaceholder();
+        setInputStyle(input, 'caret-color', visual.caretColor);
+        updatePrefixLayout();
+        return;
+      }
+      const contentOptions = {
+        ...nextOptions,
+        animateIcon: shouldAnimate && !isRepeatedMode,
+        preserveIconAnimation: !shouldAnimate && isSameMode
+      };
+      if (shouldAnimateResize) {
+        const targetWidth = measureInputModePrefixWidthForText(nextPrefixText);
+        if (targetWidth > previousWidth + 0.5) {
+          inputModePrefixPendingText = nextPrefixText;
+          syncInputPlaceholder();
+          setInputStyle(input, 'caret-color', visual.caretColor);
+          updatePrefixLayout();
+          playInputModePrefixResizeAnimation(previousWidth, targetWidth, {
+            preservePendingText: true,
+            onFinish: () => {
+              if (inputModePrefixPendingText !== nextPrefixText) {
+                return;
+              }
+              inputModePrefixPendingText = '';
+              setInputModePrefixContent(nextPrefixText, contentOptions);
+              updatePrefixLayout();
+            }
+          });
+          return;
+        }
+      }
+      setInputModePrefixContent(nextPrefixText, contentOptions);
       const nextWidth = shouldAnimateResize
         ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
         : 0;
       if (!shouldAnimate && !shouldPreserveAnimation) {
         setInputModePrefixRestState({ transition: false });
       }
-      input.placeholder = '';
+      syncInputPlaceholder();
       setInputStyle(input, 'caret-color', visual.caretColor);
       updatePrefixLayout();
       if (shouldAnimate && !isRepeatedMode) {
@@ -926,8 +1513,13 @@
     }
 
     function clearProviderPrefix() {
+      resetModeMenuDoubleTab();
+      resetModeTagRemovalConfirmation();
+      cancelInputModePrefixIconAnimation();
       inputModePrefixContentRevision += 1;
       siteSearchPrefixText.textContent = '';
+      siteSearchPrefix.removeAttribute('data-mode-id');
+      siteSearchPrefix.removeAttribute('aria-label');
       setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
       siteSearchPrefixIcon.removeAttribute('src');
       setStyle(siteSearchPrefixGlyph, 'display', 'none', useImportantStyles);
@@ -1028,23 +1620,25 @@
           typeof modeMenuCursorTooltipController.hide === 'function') {
         modeMenuCursorTooltipController.hide();
       }
-      while (modeMenu.firstChild) {
-        modeMenu.removeChild(modeMenu.firstChild);
+      while (modeMenuContent.firstChild) {
+        modeMenuContent.removeChild(modeMenuContent.firstChild);
       }
     }
 
-    function applyModeMenuIconTheme(wrap, theme) {
+    function applyModeMenuIconTheme(wrap, menuItem, theme) {
       if (!wrap) {
         return;
       }
       const resolvedTheme = theme ? getThemeForMode(theme) : defaultTheme;
-      const accentRgb = resolvedTheme && (
+      const resolvedAccentRgb = resolvedTheme && (
         resolvedTheme.accentRgb || parseCssColor(resolvedTheme.accent)
       ) || defaultAccentColor;
+      const accentRgb = mixRgb(resolvedAccentRgb, resolvedAccentRgb, 0);
+      const darkMode = Boolean(isDarkMode());
       const backgroundRgb = mixRgb(
         accentRgb,
-        isDarkMode() ? [22, 22, 22] : [255, 255, 255],
-        isDarkMode() ? 0.72 : 0.82
+        darkMode ? [22, 22, 22] : [255, 255, 255],
+        darkMode ? 0.72 : 0.82
       );
       setStyle(
         wrap,
@@ -1058,14 +1652,23 @@
         getReadableTextColor(backgroundRgb),
         useImportantStyles
       );
+      if (menuItem) {
+        setStyle(
+          menuItem,
+          '--x-lumno-search-mode-item-theme-bg',
+          `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${darkMode ? 0.14 : 0.075})`,
+          useImportantStyles
+        );
+      }
     }
 
-    function applyModeMenuBuiltInIconTheme(wrap) {
+    function applyModeMenuBuiltInIconTheme(wrap, menuItem) {
       const surfaceColor = getBuiltInSurfaceColor();
+      const background = `color-mix(in srgb, ${surfaceColor} ${isDarkMode() ? 14 : 9}%, transparent)`;
       setStyle(
         wrap,
         '--x-lumno-search-mode-icon-bg',
-        `color-mix(in srgb, ${surfaceColor} ${isDarkMode() ? 14 : 9}%, transparent)`,
+        background,
         useImportantStyles
       );
       setStyle(
@@ -1074,6 +1677,14 @@
         surfaceColor,
         useImportantStyles
       );
+      if (menuItem) {
+        setStyle(
+          menuItem,
+          '--x-lumno-search-mode-item-theme-bg',
+          background,
+          useImportantStyles
+        );
+      }
     }
 
     function renderModeLineIconSvg(svg, lineIconName, strokeWidth) {
@@ -1120,7 +1731,7 @@
       glyph.removeAttribute('hidden');
     }
 
-    function createModeMenuIcon(item) {
+    function createModeMenuIcon(item, menuItem) {
       const lineIconName = item.menuIconName ? String(item.menuIconName).trim() : '';
       const isBuiltInLineIcon = Boolean(getModeMenuLineIconPaths(lineIconName));
       const wrap = doc.createElement('span');
@@ -1136,14 +1747,14 @@
       faviconMask.appendChild(glyph);
       wrap.appendChild(faviconMask);
       if (isBuiltInLineIcon) {
-        applyModeMenuBuiltInIconTheme(wrap);
+        applyModeMenuBuiltInIconTheme(wrap, menuItem);
       } else {
-        applyModeMenuIconTheme(wrap, item.theme || defaultTheme);
+        applyModeMenuIconTheme(wrap, menuItem, item.theme || defaultTheme);
       }
       if (item.provider && getThemeForProvider) {
         Promise.resolve(getThemeForProvider(item.provider)).then((theme) => {
           if (!destroyed && wrap.isConnected && theme) {
-            applyModeMenuIconTheme(wrap, theme);
+            applyModeMenuIconTheme(wrap, menuItem, theme);
           }
         }).catch(() => {});
       }
@@ -1192,6 +1803,187 @@
       return wrap;
     }
 
+    function normalizeModeMenuSearchText(value) {
+      return Array.from(
+        String(value || '').normalize('NFKD').toLowerCase()
+      ).filter((character) => !/[\u0300-\u036f]/.test(character))
+        .filter((character) => /[a-z0-9\u3400-\u9fff]/.test(character))
+        .join('');
+    }
+
+    function appendModeMenuSearchSequence(sequence, characterMap, value, range) {
+      const normalized = normalizeModeMenuSearchText(value);
+      Array.from(normalized).forEach((character) => {
+        sequence.push(character);
+        characterMap.push(range);
+      });
+    }
+
+    function getModeMenuPinyinSyllable(character) {
+      if (!/[\u3400-\u9fff]/.test(character)) {
+        return normalizeModeMenuSearchText(character);
+      }
+      const pinyinApi = getModeMenuPinyinApi();
+      if (!pinyinApi || typeof pinyinApi.pinyin !== 'function') {
+        return MODE_MENU_PINYIN_FALLBACKS[character] || '';
+      }
+      try {
+        const result = pinyinApi.pinyin(character, {
+          toneType: 'none',
+          type: 'array',
+          nonZh: 'removed',
+          v: false
+        });
+        return normalizeModeMenuSearchText(
+          Array.isArray(result) ? result.join('') : result
+        ) || MODE_MENU_PINYIN_FALLBACKS[character] || '';
+      } catch (error) {
+        return MODE_MENU_PINYIN_FALLBACKS[character] || '';
+      }
+    }
+
+    function buildModeMenuSearchIndex(item) {
+      const labelText = String(item && item.label ? item.label : '');
+      const labelSequence = [];
+      const labelMap = [];
+      const pinyinSequence = [];
+      const pinyinMap = [];
+      const initialSequence = [];
+      const initialMap = [];
+      let sourceOffset = 0;
+      Array.from(labelText).forEach((character) => {
+        const start = sourceOffset;
+        sourceOffset += character.length;
+        const range = Object.freeze({ start, end: sourceOffset });
+        appendModeMenuSearchSequence(
+          labelSequence,
+          labelMap,
+          character,
+          range
+        );
+        const syllable = getModeMenuPinyinSyllable(character);
+        appendModeMenuSearchSequence(
+          pinyinSequence,
+          pinyinMap,
+          syllable,
+          range
+        );
+        if (syllable) {
+          appendModeMenuSearchSequence(
+            initialSequence,
+            initialMap,
+            syllable.charAt(0),
+            range
+          );
+        }
+      });
+      const provider = item && item.provider ? item.provider : null;
+      const searchTerms = []
+        .concat(Array.isArray(item && item.searchTerms) ? item.searchTerms : [])
+        .concat(provider ? [provider.key, provider.name] : [])
+        .concat(provider && Array.isArray(provider.aliases) ? provider.aliases : [])
+        .map(normalizeModeMenuSearchText)
+        .filter(Boolean);
+      return Object.freeze({
+        label: labelSequence.join(''),
+        labelMap,
+        pinyin: pinyinSequence.join(''),
+        pinyinMap,
+        initials: initialSequence.join(''),
+        initialMap,
+        searchTerms
+      });
+    }
+
+    function getModeMenuSearchRange(sequence, characterMap, query) {
+      const startIndex = sequence.indexOf(query);
+      if (startIndex < 0 || !characterMap[startIndex]) {
+        return null;
+      }
+      const lastRange = characterMap[startIndex + query.length - 1];
+      if (!lastRange) {
+        return null;
+      }
+      return {
+        start: characterMap[startIndex].start,
+        end: lastRange.end
+      };
+    }
+
+    function getModeMenuItemMatch(entry, normalizedQuery) {
+      if (!normalizedQuery) {
+        return { matched: true, ranges: [] };
+      }
+      const index = entry.searchIndex;
+      const directRange = getModeMenuSearchRange(
+        index.label,
+        index.labelMap,
+        normalizedQuery
+      );
+      if (directRange) {
+        return { matched: true, ranges: [directRange] };
+      }
+      const pinyinRange = getModeMenuSearchRange(
+        index.pinyin,
+        index.pinyinMap,
+        normalizedQuery
+      );
+      if (pinyinRange) {
+        return { matched: true, ranges: [pinyinRange] };
+      }
+      const initialsRange = normalizedQuery.length >= 2
+        ? getModeMenuSearchRange(
+          index.initials,
+          index.initialMap,
+          normalizedQuery
+        )
+        : null;
+      if (initialsRange) {
+        return { matched: true, ranges: [initialsRange] };
+      }
+      const matchedSearchTerm = index.searchTerms.some((term) => (
+        term.includes(normalizedQuery)
+      ));
+      if (matchedSearchTerm) {
+        return {
+          matched: true,
+          ranges: entry.labelText ? [{ start: 0, end: entry.labelText.length }] : []
+        };
+      }
+      return { matched: false, ranges: [] };
+    }
+
+    function renderModeMenuLabelMatch(label, labelText, ranges) {
+      while (label.firstChild) {
+        label.removeChild(label.firstChild);
+      }
+      const normalizedRanges = (Array.isArray(ranges) ? ranges : [])
+        .map((range) => ({
+          start: Math.max(0, Number(range && range.start) || 0),
+          end: Math.min(labelText.length, Number(range && range.end) || 0)
+        }))
+        .filter((range) => range.end > range.start)
+        .sort((left, right) => left.start - right.start);
+      if (normalizedRanges.length === 0) {
+        label.textContent = labelText;
+        return;
+      }
+      let offset = 0;
+      normalizedRanges.forEach((range) => {
+        if (range.start > offset) {
+          label.appendChild(doc.createTextNode(labelText.slice(offset, range.start)));
+        }
+        const mark = doc.createElement('mark');
+        mark.className = 'x-lumno-search-input-mode__menu-match';
+        mark.textContent = labelText.slice(range.start, range.end);
+        label.appendChild(mark);
+        offset = range.end;
+      });
+      if (offset < labelText.length) {
+        label.appendChild(doc.createTextNode(labelText.slice(offset)));
+      }
+    }
+
     function createModeMenuLabel(labelText) {
       const text = String(labelText || '');
       const label = doc.createElement('span');
@@ -1224,7 +2016,54 @@
     }
 
     function getModeMenuButtons() {
-      return Array.from(modeMenu.querySelectorAll('[role="menuitemradio"]'));
+      return Array.from(modeMenu.querySelectorAll('[role="menuitemradio"]'))
+        .filter((button) => !button.hidden);
+    }
+
+    function getModeMenuActiveElement() {
+      const rootNode = typeof modeMenu.getRootNode === 'function'
+        ? modeMenu.getRootNode()
+        : doc;
+      return rootNode && rootNode.activeElement
+        ? rootNode.activeElement
+        : doc.activeElement;
+    }
+
+    function setModeMenuSearchActive(active) {
+      modeMenu.setAttribute('data-search-active', active ? 'true' : 'false');
+    }
+
+    function focusModeMenuSearch() {
+      if (destroyed || !modeMenuOpen || modeMenu.hidden) {
+        return false;
+      }
+      getModeMenuButtons().forEach((button) => {
+        button.tabIndex = -1;
+      });
+      setModeMenuSearchActive(true);
+      modeMenu.focus({ preventScroll: true });
+      return true;
+    }
+
+    function focusModeInput() {
+      if (destroyed || !input || typeof input.focus !== 'function') {
+        return false;
+      }
+      setModeMenuSearchActive(false);
+      input.focus({ preventScroll: true });
+      return true;
+    }
+
+    function shouldHandleModeMenuKeyEvent(event) {
+      if (destroyed || !modeMenuOpen || modeMenu.hidden) {
+        return false;
+      }
+      const activeElement = getModeMenuActiveElement();
+      const eventTarget = event && event.target;
+      return Boolean(
+        activeElement === modeMenu || modeMenu.contains(activeElement) ||
+        eventTarget === modeMenu || modeMenu.contains(eventTarget)
+      );
     }
 
     function focusModeMenuButton(index) {
@@ -1263,6 +2102,7 @@
           if (!syncModeMenuSelection(selectedModeId)) {
             refreshModeMenu(selectedModeId);
           }
+          focusModeInput();
         }
       };
       if (result && typeof result.then === 'function') {
@@ -1274,6 +2114,9 @@
 
     function renderModeMenu(items) {
       clearModeMenuContents();
+      renderedModeMenuEntries = [];
+      renderedModeMenuGroups = [];
+      modeMenuEmptyState = null;
       const normalizedItems = Array.isArray(items)
         ? items.filter((item) => item && item.id && item.label)
         : [];
@@ -1286,7 +2129,12 @@
           groupLabel.setAttribute('aria-hidden', 'true');
           groupLabel.setAttribute('role', 'presentation');
           groupLabel.textContent = group;
-          modeMenu.appendChild(groupLabel);
+          modeMenuContent.appendChild(groupLabel);
+          renderedModeMenuGroups.push({
+            element: groupLabel,
+            group,
+            visibleCount: 0
+          });
           previousGroup = group;
         }
         const button = doc.createElement('button');
@@ -1298,7 +2146,7 @@
         button.setAttribute('aria-label', String(item.label));
         button.setAttribute('data-label-truncated', 'false');
         button.dataset.modeId = String(item.id);
-        button.appendChild(createModeMenuIcon(item));
+        button.appendChild(createModeMenuIcon(item, button));
         const label = createModeMenuLabel(item.label);
         button.appendChild(label);
         bindModeMenuLabelTooltip(button, label, item.label);
@@ -1311,9 +2159,71 @@
           event.stopPropagation();
           selectModeMenuItem(item);
         });
-        modeMenu.appendChild(button);
+        modeMenuContent.appendChild(button);
+        renderedModeMenuEntries.push({
+          button,
+          group,
+          item,
+          label,
+          labelText: String(item.label),
+          searchIndex: buildModeMenuSearchIndex(item)
+        });
       });
+      modeMenuEmptyState = applyNoTranslate(doc.createElement('div'));
+      modeMenuEmptyState.className = 'x-lumno-search-input-mode__menu-empty';
+      modeMenuEmptyState.setAttribute('data-i18n', 'overlay_empty_result');
+      modeMenuEmptyState.setAttribute('role', 'status');
+      modeMenuEmptyState.textContent = formatMessage(
+        'overlay_empty_result',
+        'No matching results'
+      );
+      modeMenuEmptyState.hidden = true;
+      modeMenuContent.appendChild(modeMenuEmptyState);
+      applyModeMenuFilter(modeMenuFilterQuery, { preserveScroll: true });
       return normalizedItems;
+    }
+
+    function applyModeMenuFilter(query, filterOptions) {
+      modeMenuFilterQuery = String(query || '');
+      refreshModeMenuFilterText();
+      const normalizedQuery = normalizeModeMenuSearchText(modeMenuFilterQuery);
+      modeMenu.setAttribute('data-filtered', normalizedQuery ? 'true' : 'false');
+      renderedModeMenuGroups.forEach((group) => {
+        group.visibleCount = 0;
+      });
+      let visibleCount = 0;
+      renderedModeMenuEntries.forEach((entry) => {
+        const match = getModeMenuItemMatch(entry, normalizedQuery);
+        entry.button.hidden = !match.matched;
+        entry.button.tabIndex = -1;
+        renderModeMenuLabelMatch(
+          entry.label,
+          entry.labelText,
+          match.ranges
+        );
+        if (!match.matched) {
+          return;
+        }
+        visibleCount += 1;
+        const groupRecord = renderedModeMenuGroups.find((group) => (
+          group.group === entry.group
+        ));
+        if (groupRecord) {
+          groupRecord.visibleCount += 1;
+        }
+      });
+      renderedModeMenuGroups.forEach((group) => {
+        group.element.hidden = group.visibleCount === 0;
+      });
+      if (modeMenuEmptyState) {
+        modeMenuEmptyState.hidden = visibleCount > 0;
+      }
+      if (!filterOptions || filterOptions.preserveScroll !== true) {
+        modeMenuContent.scrollTop = 0;
+      }
+      updateModeMenuFooterAlignment();
+      notifyModeMenuLayoutChange();
+      return visibleCount;
     }
 
     function syncModeMenuQueryLift() {
@@ -1325,6 +2235,119 @@
         hasQuery ? '-8px' : '0px',
         useImportantStyles
       );
+    }
+
+    function handleModeInput(event) {
+      resetModeMenuDoubleTab();
+      resetModeTagRemovalConfirmation();
+      syncModeMenuQueryLift(event);
+    }
+
+    function handleModeInputKeydown(event) {
+      if (event && event.key !== 'Tab') {
+        resetModeMenuDoubleTab();
+      }
+      if (event && event.key !== 'Backspace' &&
+          !event.metaKey && !event.ctrlKey && !event.altKey) {
+        resetModeTagRemovalConfirmation();
+      }
+    }
+
+    function handleModeInputBlur() {
+      resetModeMenuDoubleTab();
+    }
+
+    function handleModeInputFocus() {
+      setModeMenuSearchActive(false);
+    }
+
+    function setModeMenuResultOffset(offset) {
+      const numericOffset = Number(offset);
+      const nextOffset = Number.isFinite(numericOffset)
+        ? Math.max(0, numericOffset)
+        : 0;
+      setStyle(
+        modeMenu,
+        '--x-lumno-search-mode-menu-result-offset',
+        `${nextOffset}px`,
+        useImportantStyles
+      );
+    }
+
+    function fitModeMenuWithinViewport(options) {
+      const fitOptions = options || {};
+      const viewportMaxHeightProperty =
+        '--x-lumno-search-mode-menu-viewport-max-height';
+      if (destroyed || modeMenu.hidden || !modeMenuOpen) {
+        modeMenu.style.removeProperty(viewportMaxHeightProperty);
+        return null;
+      }
+      const containerRect = container.getBoundingClientRect();
+      const containerLayoutHeight = Math.max(
+        0,
+        Number(container.offsetHeight) || Number(containerRect.height) || 0
+      );
+      const renderedContainerHeight = Math.max(
+        0,
+        Number(containerRect.height) || containerLayoutHeight
+      );
+      const scaleY = containerLayoutHeight > 0
+        ? renderedContainerHeight / containerLayoutHeight
+        : 1;
+      if (!Number.isFinite(scaleY) || scaleY <= 0) {
+        return null;
+      }
+      const visualViewport = win && win.visualViewport;
+      const configuredViewportBottom = Number(fitOptions.viewportBottom);
+      const viewportBottom = Number.isFinite(configuredViewportBottom)
+        ? configuredViewportBottom
+        : (visualViewport && Number.isFinite(Number(visualViewport.height))
+          ? Math.max(0, Number(visualViewport.offsetTop) || 0) +
+            Math.max(0, Number(visualViewport.height) || 0)
+          : Math.max(
+            0,
+            Number(win && win.innerHeight) ||
+              Number(doc && doc.documentElement && doc.documentElement.clientHeight) ||
+              0
+          ));
+      const configuredBottomInset = Number(fitOptions.bottomInset);
+      const bottomInset = Number.isFinite(configuredBottomInset)
+        ? Math.max(0, configuredBottomInset)
+        : DEFAULT_MODE_MENU_VIEWPORT_BOTTOM_INSET;
+      const menuGap = Math.max(
+        0,
+        (Number(modeMenu.offsetTop) || containerLayoutHeight) -
+          containerLayoutHeight
+      );
+      const availableLayoutHeight = Math.max(
+        0,
+        ((viewportBottom - bottomInset - Number(containerRect.bottom || 0)) /
+          scaleY) - menuGap
+      );
+      setStyle(
+        modeMenu,
+        viewportMaxHeightProperty,
+        `${Math.floor(availableLayoutHeight)}px`,
+        useImportantStyles
+      );
+      const menuLayoutHeight = Math.max(
+        0,
+        Number(modeMenu.offsetHeight) ||
+          (Number(modeMenu.getBoundingClientRect().height) || 0) / scaleY
+      );
+      return Math.max(
+        0,
+        Math.floor(availableLayoutHeight - menuLayoutHeight)
+      );
+    }
+
+    function notifyModeMenuLayoutChange() {
+      if (typeof config.onModeMenuLayoutChange === 'function') {
+        config.onModeMenuLayoutChange({
+          menuElement: modeMenu,
+          open: Boolean(modeMenuOpen && !modeMenu.hidden)
+        });
+      }
     }
 
     function requestModeMenuFrame(callback) {
@@ -1364,6 +2387,9 @@
       if (destroyed || typeof config.getModeMenuItems !== 'function') {
         return false;
       }
+      refreshModeMenuLanguage();
+      resetModeMenuDoubleTab();
+      resetModeTagRemovalConfirmation();
       const requestId = ++modeMenuRequestId;
       modeMenuPending = true;
       const finishOpen = (items) => {
@@ -1371,6 +2397,7 @@
           return false;
         }
         modeMenuPending = false;
+        modeMenuFilterQuery = '';
         const normalizedItems = renderModeMenu(items);
         if (normalizedItems.length === 0) {
           return false;
@@ -1378,24 +2405,34 @@
         modeMenuOpen = true;
         syncModeMenuQueryLift();
         modeMenu.hidden = false;
+        syncInputPlaceholder();
+        updateModeMenuFooterAlignment();
         revealModeMenuSurface();
         container.setAttribute('data-mode-menu-open', 'true');
         siteSearchPrefix.setAttribute('aria-expanded', 'true');
         setStyle(siteSearchPrefix, 'z-index', '41', useImportantStyles);
-        siteSearchPrefix.setAttribute('data-menu-open', 'true');
+        setInputModePrefixMenuOpen(true);
+        notifyModeMenuLayoutChange();
         const activeIndex = normalizedItems.findIndex((item) => item.active);
         const targetIndex = focusTarget === 'last'
           ? normalizedItems.length - 1
           : (activeIndex >= 0 ? activeIndex : 0);
-        if (focusTarget !== 'none') {
+        if (focusTarget === 'none') {
+          focusModeMenuSearch();
+        } else {
           focusModeMenuButton(targetIndex);
         }
         return true;
       };
       const items = config.getModeMenuItems();
-      if (items && typeof items.then === 'function') {
+      if ((items && typeof items.then === 'function') ||
+          (modeMenuPinyinRuntimeReady &&
+            typeof modeMenuPinyinRuntimeReady.then === 'function')) {
         modeMenu.setAttribute('aria-busy', 'true');
-        return items.then((resolvedItems) => {
+        return Promise.all([
+          Promise.resolve(items),
+          Promise.resolve(modeMenuPinyinRuntimeReady)
+        ]).then(([resolvedItems]) => {
           if (requestId !== modeMenuRequestId) {
             return false;
           }
@@ -1445,6 +2482,8 @@
           closeModeMenu(false);
           return false;
         }
+        updateModeMenuFooterAlignment();
+        notifyModeMenuLayoutChange();
         if (focusedModeId) {
           const buttons = getModeMenuButtons();
           const nextFocusedIndex = buttons.findIndex((button) => (
@@ -1476,18 +2515,24 @@
       }
       modeMenuRequestId += 1;
       modeMenuPending = false;
+      resetModeMenuDoubleTab();
+      resetModeTagRemovalConfirmation();
       modeMenu.removeAttribute('aria-busy');
       if (modeMenuCursorTooltipController &&
           typeof modeMenuCursorTooltipController.hide === 'function') {
         modeMenuCursorTooltipController.hide();
       }
       modeMenuOpen = false;
+      modeMenuFilterQuery = '';
+      setModeMenuSearchActive(false);
       concealModeMenuSurface();
       modeMenu.hidden = true;
+      syncInputPlaceholder();
       container.removeAttribute('data-mode-menu-open');
       siteSearchPrefix.setAttribute('aria-expanded', 'false');
       setStyle(siteSearchPrefix, 'z-index', '1', useImportantStyles);
-      siteSearchPrefix.setAttribute('data-menu-open', 'false');
+      setInputModePrefixMenuOpen(false);
+      notifyModeMenuLayoutChange();
       if (restoreFocus && typeof siteSearchPrefix.focus === 'function') {
         siteSearchPrefix.focus({ preventScroll: true });
       }
@@ -1516,22 +2561,68 @@
 
     function handleMenuKeydown(event) {
       const buttons = getModeMenuButtons();
-      const currentIndex = buttons.indexOf(doc.activeElement);
+      const currentIndex = buttons.indexOf(getModeMenuActiveElement());
       if (event.key === 'Escape') {
         event.preventDefault();
-        closeModeMenu(true);
+        event.stopPropagation();
+        if (modeMenuFilterQuery) {
+          applyModeMenuFilter('');
+          focusModeMenuSearch();
+        } else {
+          closeModeMenu(true);
+        }
+      } else if (event.key === 'Backspace' && !event.metaKey &&
+          !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        const queryCharacters = Array.from(modeMenuFilterQuery);
+        queryCharacters.pop();
+        applyModeMenuFilter(queryCharacters.join(''));
+        focusModeMenuSearch();
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight' ||
           event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
         event.preventDefault();
-        focusModeMenuButton(currentIndex + (
-          event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1
-        ));
+        event.stopPropagation();
+        const movesForward = event.key === 'ArrowDown' || event.key === 'ArrowRight';
+        const nextIndex = currentIndex < 0
+          ? (movesForward ? 0 : buttons.length - 1)
+          : currentIndex + (movesForward ? 1 : -1);
+        focusModeMenuButton(nextIndex);
       } else if (event.key === 'Home' || event.key === 'End') {
         event.preventDefault();
+        event.stopPropagation();
         focusModeMenuButton(event.key === 'Home' ? 0 : buttons.length - 1);
       } else if (event.key === 'Tab') {
-        closeModeMenu(false);
+        event.preventDefault();
+        event.stopPropagation();
+        focusModeMenuSearch();
+      } else if (!event.isComposing && !event.repeat &&
+          !event.metaKey && !event.ctrlKey && !event.altKey &&
+          typeof event.key === 'string' && event.key.length === 1 &&
+          /[a-z0-9\u3400-\u9fff\s]/i.test(event.key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        applyModeMenuFilter(modeMenuFilterQuery + event.key);
+        focusModeMenuSearch();
       }
+    }
+
+    function handleModeMenuPointerDown(event) {
+      if (!modeMenuOpen || modeMenu.hidden) {
+        return;
+      }
+      setModeMenuSearchActive(true);
+      const target = event && event.target;
+      const button = target && typeof target.closest === 'function'
+        ? target.closest('[role="menuitemradio"]')
+        : null;
+      if (button) {
+        return;
+      }
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      focusModeMenuSearch();
     }
 
     function handleDocumentPointerDown(event) {
@@ -1550,8 +2641,12 @@
 
     siteSearchPrefix.addEventListener('click', handlePrefixClick);
     siteSearchPrefix.addEventListener('keydown', handlePrefixKeydown);
-    input.addEventListener('input', syncModeMenuQueryLift);
+    input.addEventListener('input', handleModeInput);
+    input.addEventListener('keydown', handleModeInputKeydown);
+    input.addEventListener('blur', handleModeInputBlur);
+    input.addEventListener('focus', handleModeInputFocus);
     modeMenu.addEventListener('keydown', handleMenuKeydown);
+    modeMenu.addEventListener('pointerdown', handleModeMenuPointerDown);
     if (doc && typeof doc.addEventListener === 'function') {
       doc.addEventListener('pointerdown', handleDocumentPointerDown, true);
     }
@@ -1564,6 +2659,7 @@
       layoutResizeObserver = new win.ResizeObserver(updateLayout);
       layoutResizeObserver.observe(siteSearchPrefix);
       layoutResizeObserver.observe(siteSearchTabHint);
+      layoutResizeObserver.observe(modeMenuContent);
       const badgeElement = getModeBadgeElement();
       if (badgeElement) {
         layoutResizeObserver.observe(badgeElement);
@@ -1578,7 +2674,10 @@
       destroyed = true;
       modeMenuRequestId += 1;
       modeMenuPending = false;
+      resetModeMenuDoubleTab();
+      resetModeTagRemovalConfirmation();
       cancelInputModePrefixAnimation();
+      cancelInputModePrefixIconAnimation();
       if (win && typeof win.removeEventListener === 'function') {
         win.removeEventListener('resize', onResize);
       }
@@ -1592,9 +2691,13 @@
       }
       if (typeof modeMenu.removeEventListener === 'function') {
         modeMenu.removeEventListener('keydown', handleMenuKeydown);
+        modeMenu.removeEventListener('pointerdown', handleModeMenuPointerDown);
       }
       if (typeof input.removeEventListener === 'function') {
-        input.removeEventListener('input', syncModeMenuQueryLift);
+        input.removeEventListener('input', handleModeInput);
+        input.removeEventListener('keydown', handleModeInputKeydown);
+        input.removeEventListener('blur', handleModeInputBlur);
+        input.removeEventListener('focus', handleModeInputFocus);
       }
       if (doc && typeof doc.removeEventListener === 'function') {
         doc.removeEventListener('pointerdown', handleDocumentPointerDown, true);
@@ -1620,16 +2723,29 @@
       setPrefixText,
       clearProviderPrefix,
       closeModeMenu,
+      fitModeMenuWithinViewport,
       menuElement: modeMenu,
+      getModeMenuFilterQuery: () => modeMenuFilterQuery,
       openModeMenu,
+      refreshModeMenuLanguage,
       refreshModeMenu,
+      resetModeMenuDoubleTab,
+      resetModeTagRemovalConfirmation,
+      setModeMenuResultOffset,
       setTabHintVisible,
+      shouldCompleteModeMenuDoubleTab,
+      shouldContainModeMenuTab,
+      shouldHandleModeMenuKeyEvent,
+      shouldOpenModeMenuForActiveModeOnTab,
+      shouldOpenModeMenuOnDoubleTab,
+      shouldRemoveModeTagOnBackspace,
       updateLayout,
       destroy
     });
   }
 
   root.LumnoSearchInputMode = Object.freeze({
+    runtimeVersion: SEARCH_INPUT_MODE_RUNTIME_VERSION,
     createInputModeController
   });
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

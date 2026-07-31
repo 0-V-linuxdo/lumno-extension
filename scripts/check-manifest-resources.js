@@ -24,9 +24,12 @@ const injectedScriptFiles = [
   'src/shared/ime-key-guard.js',
   'src/react/overlay-islands.js',
   'src/shared/search-input-history.js',
+  'assets/vendor/pinyin-pro.js',
   'src/shared/search-input-mode.js',
+  'src/shared/toast.js',
   'src/shared/shortcut-favicon.js',
   'src/shared/search-input.css',
+  'src/shared/toast.css',
   'src/shared/url-guards.js',
   'src/shared/favicon-utils.js',
   'src/shared/favicon-cache.js',
@@ -42,6 +45,35 @@ const injectedScriptFiles = [
   'src/content/document-pip-picker.js'
 ];
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function manifestResourcePatternHasMatch(value) {
+  if (!value.includes('*')) {
+    return false;
+  }
+  const wildcardIndex = value.indexOf('*');
+  const prefixDirectory = path.dirname(value.slice(0, wildcardIndex));
+  if (!prefixDirectory || !fs.existsSync(prefixDirectory)) {
+    return false;
+  }
+  const pattern = new RegExp(`^${value.split('*').map(escapeRegExp).join('.*')}$`);
+  const candidates = [];
+  const visit = (directory) => {
+    fs.readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(entryPath);
+      } else if (entry.isFile()) {
+        candidates.push(entryPath);
+      }
+    });
+  };
+  visit(prefixDirectory);
+  return candidates.some((candidate) => pattern.test(candidate));
+}
+
 function checkPath(value) {
   if (!value || typeof value !== 'string') {
     return;
@@ -50,6 +82,9 @@ function checkPath(value) {
     return;
   }
   if (value === '_favicon/*') {
+    return;
+  }
+  if (manifestResourcePatternHasMatch(value)) {
     return;
   }
   if (!fs.existsSync(value)) {

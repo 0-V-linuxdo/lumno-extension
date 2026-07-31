@@ -1946,7 +1946,7 @@
   function loadLocaleMessages(locale) {
     const normalized = normalizeLocale(locale);
     const localePath = getExtensionResourceUrl(`_locales/${normalized}/messages.json`);
-    return fetch(localePath)
+    return fetch(localePath, { cache: 'no-store' })
       .then((response) => response.json())
       .catch(() => ({}));
   }
@@ -3650,6 +3650,10 @@
     updateWallpaperAppearanceSelectionUi();
     updateFeedbackLanguageStrings();
     updateShortcutLanguageStrings();
+    if (inputModeController &&
+        typeof inputModeController.refreshModeMenuLanguage === 'function') {
+      inputModeController.refreshModeMenuLanguage();
+    }
     if (updateNoticeController &&
         typeof updateNoticeController.updateLanguage === 'function') {
       updateNoticeController.updateLanguage();
@@ -11223,10 +11227,66 @@
     });
   }
 
+  function copySearchResultUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) {
+      showToast(t('search_copy_url_failed', 'Could not copy result link'), true);
+      return Promise.resolve(false);
+    }
+    return copyTextToClipboard(value).then(() => {
+      showToast(t('search_copy_url_success', 'Result link copied'));
+      return true;
+    }).catch(() => {
+      showToast(t('search_copy_url_failed', 'Could not copy result link'), true);
+      return false;
+    });
+  }
+
+  function getSearchModeMenuResultOffset() {
+    if (!suggestionsContainer ||
+        suggestionsContainer.getAttribute('data-visible') !== 'true') {
+      return 0;
+    }
+    const layoutHeight = Math.max(
+      0,
+      Number(suggestionsContainer.offsetHeight) || 0
+    );
+    if (layoutHeight > 0) {
+      return layoutHeight;
+    }
+    const rect = suggestionsContainer.getBoundingClientRect();
+    return Math.max(0, Number(rect && rect.height) || 0);
+  }
+
+  function syncSearchModeMenuResultOffset() {
+    if (!inputModeController ||
+        typeof inputModeController.setModeMenuResultOffset !== 'function') {
+      return;
+    }
+    const fitMaxHeightProperty =
+      '--x-nt-suggestions-menu-fit-max-height';
+    const resultHeightLimit =
+      typeof inputModeController.fitModeMenuWithinViewport === 'function'
+        ? inputModeController.fitModeMenuWithinViewport({ bottomInset: 24 })
+        : null;
+    if (Number.isFinite(resultHeightLimit)) {
+      suggestionsContainer.style.setProperty(
+        fitMaxHeightProperty,
+        `${resultHeightLimit}px`
+      );
+    } else {
+      suggestionsContainer.style.removeProperty(fitMaxHeightProperty);
+    }
+    inputModeController.setModeMenuResultOffset(
+      getSearchModeMenuResultOffset()
+    );
+  }
+
   function setSuggestionsVisible(visible) {
     if (layoutController && typeof layoutController.setSuggestionsVisible === 'function') {
       layoutController.setSuggestionsVisible(visible);
     }
+    syncSearchModeMenuResultOffset();
   }
 
   function updateSuggestionsFloatingLayout() {
@@ -12714,15 +12774,39 @@
     return `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`;
   }
 
+  function getDefaultSearchModeProvider(providers) {
+    if (typeof SEARCH_UTILS.getSearchEngineSiteSearchProvider === 'function') {
+      return SEARCH_UTILS.getSearchEngineSiteSearchProvider(
+        defaultSearchEngineState,
+        providers
+      );
+    }
+    return SEARCH_UTILS.findSiteSearchProvider(
+      defaultSearchEngineState.id || 'google',
+      providers
+    );
+  }
+
+  function getSearchModeProviders() {
+    const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+      ? siteSearchProvidersCache
+      : defaultSiteSearchProviders;
+    const defaultProvider = getDefaultSearchModeProvider(providers);
+    if (!defaultProvider || providers.some((provider) => (
+      getSearchModeProviderId(provider) === getSearchModeProviderId(defaultProvider)
+    ))) {
+      return providers;
+    }
+    return [defaultProvider].concat(providers);
+  }
+
   function buildSearchModeMenuItems() {
     const engineGroup = t('search_scope_group_engines', '搜索引擎');
     const localGroup = t('search_scope_group_local', '浏览器内容');
     const aiGroup = t('search_scope_group_ai', 'AI 搜索');
     const siteGroup = t('search_scope_group_sites', '站内搜索');
     const items = [];
-    const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
-      ? siteSearchProvidersCache
-      : defaultSiteSearchProviders;
+    const providers = getSearchModeProviders();
     providers
       .filter((provider) => isSearchEngineSiteSearchProvider(provider))
       .concat(providers.filter((provider) => (
@@ -12753,6 +12837,11 @@
         kind: 'local',
         sourceType,
         label: getLocalSearchScopeLabel({ sourceType }),
+        searchTerms: sourceType === 'topSite'
+          ? ['top sites', 'frequent sites', 'favorites']
+          : (sourceType === 'bookmark'
+            ? ['bookmark', 'bookmarks']
+            : ['history', 'browsing history']),
         group: localGroup,
         iconClass: getLocalSearchScopeIconClass(sourceType),
         menuIconName: sourceType === 'topSite' ? 'star' : sourceType,
@@ -12764,6 +12853,29 @@
 
   function getSearchModeMenuItems() {
     return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+  }
+
+  function openSearchModeMenuFromDoubleTab() {
+    const activateDefaultProvider = (providers) => {
+      if (!inputModeController || siteSearchState || localSearchScopeState ||
+          String(inputParts.input.value || '') !== '') {
+        return false;
+      }
+      const provider = getDefaultSearchModeProvider(providers);
+      if (!provider) {
+        return false;
+      }
+      activateSiteSearch(provider);
+      inputModeController.openModeMenu('none');
+      return true;
+    };
+    if (siteSearchProvidersCache) {
+      return activateDefaultProvider(siteSearchProvidersCache);
+    }
+    return getSiteSearchProviders().then(
+      activateDefaultProvider,
+      () => activateDefaultProvider(defaultSiteSearchProviders)
+    );
   }
 
   function restoreSearchModeQuery(rawQuery) {
@@ -13282,6 +13394,7 @@
     },
     onActivateSuggestion: activateRenderedSuggestion,
     onDeleteHistory: deleteRenderedHistorySuggestion,
+    onCopyUrl: copySearchResultUrl,
     showTopActionTooltip,
     hideTopActionTooltip,
     bindCursorTooltip,
@@ -13959,6 +14072,18 @@
     }
   }
 
+  function shouldRemoveSearchModeTagOnBackspace(event) {
+    if (!inputModeController ||
+        typeof inputModeController.shouldRemoveModeTagOnBackspace !== 'function') {
+      return true;
+    }
+    const shouldRemove = inputModeController.shouldRemoveModeTagOnBackspace(event);
+    if (!shouldRemove && event && typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    return shouldRemove;
+  }
+
   inputParts = createSearchInput({
     useImportantStyles: false,
     useInlineBaseStyles: false,
@@ -14090,10 +14215,16 @@
         return;
       }
       if (event.key === 'Backspace' && siteSearchState && !inputParts.input.value) {
+        if (!shouldRemoveSearchModeTagOnBackspace(event)) {
+          return;
+        }
         clearSiteSearch();
         return;
       }
       if (event.key === 'Backspace' && localSearchScopeState && !inputParts.input.value) {
+        if (!shouldRemoveSearchModeTagOnBackspace(event)) {
+          return;
+        }
         clearLocalSearchScope();
         clearSearchSuggestions();
         return;
@@ -14616,6 +14747,11 @@
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
+    if (inputModeController &&
+        typeof inputModeController.shouldHandleModeMenuKeyEvent === 'function' &&
+        inputModeController.shouldHandleModeMenuKeyEvent(event)) {
+      return;
+    }
     const activeElement = document.activeElement;
     if (activeElement === inputParts.input || isEditableElement(activeElement)) {
       return;
@@ -14867,8 +15003,23 @@
     modeMenuCursorTooltipController: bookmarkCursorTooltipController,
     getModeMenuItems: getSearchModeMenuItems,
     onModeMenuSelect: selectSearchModeMenuItem,
+    onModeTagRemovalConfirmation: () => {
+      showToast(t(
+        'search_scope_remove_confirmation',
+        'Press Backspace again to remove the scope'
+      ));
+    },
+    onModeTagRemovalConfirmationReset: hideToast,
+    onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
+  syncSearchModeMenuResultOffset();
+  if (typeof window.ResizeObserver === 'function') {
+    const searchModeMenuResultResizeObserver = new window.ResizeObserver(
+      syncSearchModeMenuResultOffset
+    );
+    searchModeMenuResultResizeObserver.observe(suggestionsContainer);
+  }
   siteSearchTabHint = inputModeController.tabHintElement;
   loadSiteSearchIconCache().then(() => {
     if (!siteSearchState || !inputModeController) {
@@ -14950,12 +15101,34 @@
   }, { passive: true });
 
   handleTabKey = function(event) {
+    if (!event || event.defaultPrevented) {
+      return false;
+    }
+    if (inputModeController &&
+        typeof inputModeController.shouldContainModeMenuTab === 'function' &&
+        inputModeController.shouldContainModeMenuTab(event)) {
+      return true;
+    }
+    if (inputModeController &&
+        typeof inputModeController.shouldOpenModeMenuForActiveModeOnTab === 'function' &&
+        inputModeController.shouldOpenModeMenuForActiveModeOnTab(event)) {
+      inputModeController.openModeMenu('none');
+      return true;
+    }
     if (siteSearchState || localSearchScopeState) {
       return false;
     }
     const rawValue = inputParts.input.value;
     const rawTrigger = latestRawQuery || rawValue;
     const triggerInput = (rawTrigger || rawValue).trim();
+    if (!triggerInput && inputModeController &&
+        typeof inputModeController.shouldOpenModeMenuOnDoubleTab === 'function') {
+      const shouldOpenModeMenu = inputModeController.shouldOpenModeMenuOnDoubleTab(event);
+      if (shouldOpenModeMenu) {
+        openSearchModeMenuFromDoubleTab();
+      }
+      return Boolean(event.defaultPrevented);
+    }
     if (siteSearchTriggerState &&
         siteSearchTriggerState.rawInput === triggerInput &&
         siteSearchTriggerState.provider) {

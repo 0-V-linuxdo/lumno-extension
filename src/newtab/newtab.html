@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="../shared/feature-hints.css" />
     <link rel="stylesheet" href="../shared/tooltip.css" />
     <link rel="stylesheet" href="../shared/cursor-tooltip.css" />
+    <link rel="stylesheet" href="../shared/toast.css" />
     <link rel="stylesheet" href="../shared/menu-surface.css" />
     <link rel="stylesheet" href="../shared/custom-select.css" />
     <link rel="stylesheet" href="shortcut-dialog.css" />
@@ -2918,33 +2919,10 @@
         border-color: color-mix(in srgb, var(--x-nt-recent-accent-border, rgba(255, 255, 255, 0.12)) 82%, transparent);
       }
       ._x_extension_toast_2024_unique_ {
-        position: fixed;
-        top: max(
+        --x-lumno-toast-top: max(
           24px,
           calc(var(--x-nt-top-occupied-inset, 0px) + var(--x-nt-top-floating-gap, 12px))
         );
-        left: 50%;
-        transform: translateX(-50%) translateY(-10px);
-        background: rgba(17, 24, 39, 0.92);
-        color: #f9fafb;
-        padding: 10px 16px;
-        border-radius: 999px;
-        font-size: 12px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 160ms ease, transform 200ms ease, top 180ms ease;
-        z-index: 10080;
-      }
-      ._x_extension_toast_2024_unique_[data-show="true"] {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
-      body[data-theme="dark"] ._x_extension_toast_2024_unique_ {
-        background: rgba(2, 6, 23, 0.97);
-        color: #f8fafc;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
       }
       #_x_extension_newtab_notice_banner_2026_unique_ {
         all: unset;
@@ -3090,7 +3068,11 @@
         padding: 8px 8px 12px;
         box-sizing: border-box;
         display: block;
-        max-height: min(calc(100vh - 220px), var(--x-nt-suggestions-max-height, 594px));
+        max-height: min(
+          calc(100vh - 220px),
+          var(--x-nt-suggestions-max-height, 594px),
+          var(--x-nt-suggestions-menu-fit-max-height, 594px)
+        );
         overflow-y: auto;
         overscroll-behavior: contain;
         overflow-anchor: none;
@@ -5966,7 +5948,7 @@
         background: var(--x-nt-suggestion-tag-bg, var(--x-nt-bookmark-tag-bg, #FEF3C7));
         color: var(--x-nt-suggestion-tag-text, var(--x-nt-bookmark-tag-text, #D97706));
       }
-      .x-nt-history-delete-slot {
+      .x-nt-suggestion-utility-slot {
         all: unset;
         width: 0;
         height: var(--x-nt-suggestion-action-height, 26px);
@@ -5988,13 +5970,13 @@
         pointer-events: none;
         transition: width 180ms ease, margin-left 180ms ease, opacity 160ms ease;
       }
-      .x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-slot {
+      .x-nt-suggestion-utility-slot[data-visible="true"] {
         width: var(--x-nt-suggestion-action-height, 26px);
         margin-left: 0;
         opacity: 1;
         pointer-events: auto;
       }
-      .x-nt-history-delete-button {
+      .x-nt-suggestion-utility-button {
         all: unset;
         width: 24px;
         height: 24px;
@@ -6022,28 +6004,28 @@
         vertical-align: baseline;
         border: 1px solid transparent;
       }
-      .x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-button {
+      .x-nt-suggestion-utility-button[data-visible="true"] {
         visibility: visible;
         pointer-events: auto;
         opacity: 1;
         transform: translateX(0);
-        color: var(--x-nt-history-delete-color, var(--x-nt-subtext, #6B7280));
-        background: var(--x-nt-history-delete-bg, transparent);
-        border-color: var(--x-nt-history-delete-border, transparent);
+        color: var(--x-nt-suggestion-utility-color, var(--x-nt-subtext, #6B7280));
+        background: var(--x-nt-suggestion-utility-bg, transparent);
+        border-color: var(--x-nt-suggestion-utility-border, transparent);
       }
-      .x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-button[data-hover="true"] {
-        color: var(--x-nt-history-delete-hover-color, var(--x-nt-subtext, #6B7280));
-        background: var(--x-nt-history-delete-hover-bg, transparent);
-        border-color: var(--x-nt-history-delete-hover-border, transparent);
+      .x-nt-suggestion-utility-button[data-hover="true"] {
+        color: var(--x-nt-suggestion-utility-hover-color, var(--x-nt-subtext, #6B7280));
+        background: var(--x-nt-suggestion-utility-hover-bg, transparent);
+        border-color: var(--x-nt-suggestion-utility-hover-border, transparent);
         transform: none;
       }
-      .x-nt-history-delete-button .ri-icon {
+      .x-nt-suggestion-utility-button .ri-icon {
         pointer-events: none;
         cursor: inherit;
         transform: none;
         transition: transform 160ms ease;
       }
-      .x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-button[data-hover="true"] .ri-icon {
+      .x-nt-suggestion-utility-button[data-hover="true"] .ri-icon {
         transform: scale(1.06);
       }
       .x-nt-tab-switch-button {
@@ -6497,10 +6479,11 @@
   <body class="notranslate" translate="no" notranslate data-no-translate="true" data-lumno-page="newtab">
     <div class="x-nt-initial-background-veil" aria-hidden="true"></div>
     <div id="_x_extension_newtab_root_2024_unique_" class="x-lumno-search-entry"></div>
-    <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_" data-show="false"></div>
+    <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_ x-lumno-toast" data-show="false" role="status" aria-live="polite"></div>
     <script src="../shared/codex-debug-surface.js"></script>
     <script src="../shared/ime-key-guard.js"></script>
     <script src="../shared/search-input-history.js"></script>
+    <script src="../../assets/vendor/pinyin-pro.js"></script>
     <script src="../shared/search-input-mode.js"></script>
     <script src="../shared/blacklist-utils.js"></script>
     <script src="../shared/url-guards.js"></script>

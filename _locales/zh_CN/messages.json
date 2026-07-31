@@ -1247,6 +1247,15 @@
   "search_remove_top_site_tooltip": {
     "message": "移除该常用"
   },
+  "search_copy_url_tooltip": {
+    "message": "复制链接"
+  },
+  "search_copy_url_success": {
+    "message": "已复制结果链接"
+  },
+  "search_copy_url_failed": {
+    "message": "复制结果链接失败，请重试"
+  },
   "search_tag_top_site": {
     "message": "常用"
   },
@@ -1444,6 +1453,24 @@
   },
   "search_scope_current": {
     "message": "当前"
+  },
+  "search_scope_remove_confirmation": {
+    "message": "再按一次退格键，移除搜索范围"
+  },
+  "search_scope_menu_shortcut_hint": {
+    "message": "快速打开此面板"
+  },
+  "search_scope_menu_filter_hint": {
+    "message": "点击面板，输入拼音或英文快速筛选"
+  },
+  "search_scope_menu_filter_query": {
+    "message": "检索：{query}"
+  },
+  "search_scope_panel_placeholder": {
+    "message": "搜索特定站点内容..."
+  },
+  "search_scope_active_placeholder": {
+    "message": "搜索特定内容，复按 Tab 打开范围面板..."
   },
   "search_scope_group_engines": {
     "message": "搜索引擎"
@@ -1666,6 +1693,12 @@
   },
   "shortcut_reference_search_tab_mode_desc": {
     "message": "补全候选，或进入站内搜索/已打开标签页搜索"
+  },
+  "shortcut_reference_search_open_scope_menu_title": {
+    "message": "打开搜索范围面板"
+  },
+  "shortcut_reference_search_open_scope_menu_desc": {
+    "message": "输入框为空时连续按两次 Tab；已选择搜索范围时按一次 Tab"
   },
   "shortcut_reference_search_close_title": {
     "message": "关闭或退出模式"

@@ -100,6 +100,20 @@ function createChromeStub(options) {
       visitCount: 4,
       typedCount: 0,
       lastVisitTime: now - 5000
+    },
+    {
+      title: 'Codex workspace',
+      url: 'https://example.com/codex-only',
+      visitCount: 2,
+      typedCount: 0,
+      lastVisitTime: now - 6000
+    },
+    {
+      title: 'Codex 最爱 workspace',
+      url: 'https://example.com/codex-favorite',
+      visitCount: 2,
+      typedCount: 0,
+      lastVisitTime: now - 7000
     }
   ].concat(
     Array.from({ length: 260 }, (_, index) => ({
@@ -551,6 +565,16 @@ async function run() {
   assert.ok(
     suggestions.some((item) => item && (item.type === 'bookmark' || item.type === 'history' || item.type === 'topSite')),
     'background search suggestions should include at least one enabled local source type'
+  );
+
+  const multiTermSuggestions = await context.__testGetSearchSuggestions('codex 最爱', {
+    sourceTypes: ['history'],
+    includeOpenTabs: false
+  });
+  assert.deepStrictEqual(
+    Array.from(multiTermSuggestions, (item) => item && item.url),
+    ['https://example.com/codex-favorite'],
+    'background search should require every query term instead of backfilling history that only matches one term'
   );
 
   const noMatchSuggestions = await context.__testGetSearchSuggestions('definitely-no-local-match-xyz');

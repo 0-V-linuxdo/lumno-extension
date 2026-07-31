@@ -1,7 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import '../../src/shared/menu-surface.js';
+import '../../src/shared/shortcut-display.js';
 import '../../src/shared/search-input-mode.js';
+
+Object.assign(globalThis, {
+  pinyinPro: {
+    pinyin(value: string) {
+      const syllables: Record<string, string> = {
+        包: 'bao',
+        书: 'shu',
+        签: 'qian',
+        豆: 'dou'
+      };
+      return Array.from(String(value || '')).map((character) => (
+        syllables[character] || ''
+      )).filter(Boolean);
+    }
+  }
+});
 
 interface ModeMenuItem {
   active?: boolean;
@@ -13,13 +30,24 @@ interface ModeMenuItem {
   label: string;
   menuIconName?: string;
   provider?: Record<string, unknown>;
+  searchTerms?: string[];
 }
 
 interface ModeController {
+  clearProviderPrefix(): void;
   closeModeMenu(restoreFocus?: boolean): boolean;
   destroy(): void;
+  fitModeMenuWithinViewport(options?: {
+    bottomInset?: number;
+    viewportBottom?: number;
+  }): number | null;
+  getModeMenuFilterQuery(): string;
   menuElement: HTMLDivElement;
   openModeMenu(focusTarget?: string): boolean;
+  refreshModeMenuLanguage(): void;
+  resetModeMenuDoubleTab(): boolean;
+  resetModeTagRemovalConfirmation(): boolean;
+  setModeMenuResultOffset(offset: number): void;
   setPrefixText(
     label: string,
     theme?: object,
@@ -34,6 +62,12 @@ interface ModeController {
     visible: boolean,
     provider?: Record<string, unknown>
   ): void;
+  shouldCompleteModeMenuDoubleTab(event: KeyboardEvent): boolean;
+  shouldContainModeMenuTab(event: KeyboardEvent): boolean;
+  shouldHandleModeMenuKeyEvent(event: KeyboardEvent): boolean;
+  shouldOpenModeMenuForActiveModeOnTab(event: KeyboardEvent): boolean;
+  shouldOpenModeMenuOnDoubleTab(event: KeyboardEvent): boolean;
+  shouldRemoveModeTagOnBackspace(event?: { repeat?: boolean }): boolean;
 }
 
 declare global {
@@ -93,6 +127,427 @@ afterEach(() => {
 });
 
 describe('Shared search scope menu', () => {
+  it('opens only after two distinct empty-input Tab presses within the shared window', () => {
+    vi.useFakeTimers();
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+    const createTabEvent = (options: KeyboardEventInit = {}) => new KeyboardEvent(
+      'keydown',
+      { bubbles: true, cancelable: true, key: 'Tab', ...options }
+    );
+
+    const firstTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(firstTab)).toBe(false);
+    expect(controller.shouldOpenModeMenuOnDoubleTab(firstTab)).toBe(false);
+    expect(firstTab.defaultPrevented).toBe(true);
+    expect(controller.shouldOpenModeMenuOnDoubleTab(firstTab)).toBe(false);
+
+    const repeatedTab = createTabEvent({ repeat: true });
+    expect(controller.shouldOpenModeMenuOnDoubleTab(repeatedTab)).toBe(false);
+    expect(repeatedTab.defaultPrevented).toBe(true);
+
+    const secondTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(secondTab)).toBe(false);
+    expect(controller.shouldOpenModeMenuOnDoubleTab(secondTab)).toBe(true);
+    expect(secondTab.defaultPrevented).toBe(true);
+
+    expect(controller.shouldOpenModeMenuOnDoubleTab(createTabEvent())).toBe(false);
+    vi.advanceTimersByTime(700);
+    expect(controller.shouldOpenModeMenuOnDoubleTab(createTabEvent())).toBe(false);
+    parts.input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(controller.shouldOpenModeMenuOnDoubleTab(createTabEvent())).toBe(false);
+    parts.input.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
+    );
+    expect(controller.shouldOpenModeMenuOnDoubleTab(createTabEvent())).toBe(false);
+    parts.input.dispatchEvent(new FocusEvent('blur'));
+    expect(controller.shouldOpenModeMenuOnDoubleTab(createTabEvent())).toBe(false);
+    controller.resetModeMenuDoubleTab();
+
+    const modifiedTab = createTabEvent({ shiftKey: true });
+    expect(controller.shouldOpenModeMenuOnDoubleTab(modifiedTab)).toBe(false);
+    expect(modifiedTab.defaultPrevented).toBe(false);
+
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+    const taggedTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuOnDoubleTab(taggedTab)).toBe(false);
+    expect(taggedTab.defaultPrevented).toBe(false);
+    controller.destroy();
+  });
+
+  it('preserves the first overlay Tab while its automatic open-tabs tag is applied', () => {
+    vi.useFakeTimers();
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(parts);
+    const createTabEvent = () => new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab'
+    });
+
+    const firstTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuOnDoubleTab(firstTab)).toBe(false);
+    expect(firstTab.defaultPrevented).toBe(true);
+    controller.setPrefixText('Open tabs', {}, {
+      modeId: 'openTabs',
+      preserveModeMenuDoubleTab: true
+    });
+    expect(parts.modePrefix.dataset.modeId).toBe('openTabs');
+
+    const secondTab = createTabEvent();
+    expect(controller.shouldCompleteModeMenuDoubleTab(secondTab)).toBe(true);
+    expect(secondTab.defaultPrevented).toBe(true);
+
+    const expiredFirstTab = createTabEvent();
+    controller.setPrefixText('', {}, { modeId: '' });
+    expect(controller.shouldOpenModeMenuOnDoubleTab(expiredFirstTab)).toBe(false);
+    controller.setPrefixText('Open tabs', {}, {
+      modeId: 'openTabs',
+      preserveModeMenuDoubleTab: true
+    });
+    vi.advanceTimersByTime(700);
+    const lateSecondTab = createTabEvent();
+    expect(controller.shouldCompleteModeMenuDoubleTab(lateSecondTab)).toBe(false);
+    expect(lateSecondTab.defaultPrevented).toBe(false);
+    controller.destroy();
+  });
+
+  it('opens on one Tab when a tag is already selected and preserves that tag', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+    const createTabEvent = (options: KeyboardEventInit = {}) => new KeyboardEvent(
+      'keydown',
+      { bubbles: true, cancelable: true, key: 'Tab', ...options }
+    );
+
+    const untaggedTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(untaggedTab)).toBe(
+      false
+    );
+    expect(untaggedTab.defaultPrevented).toBe(false);
+
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+    const repeatedTab = createTabEvent({ repeat: true });
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(repeatedTab)).toBe(
+      false
+    );
+    expect(repeatedTab.defaultPrevented).toBe(false);
+    const modifiedTab = createTabEvent({ shiftKey: true });
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(modifiedTab)).toBe(
+      false
+    );
+    expect(modifiedTab.defaultPrevented).toBe(false);
+
+    parts.input.value = 'query';
+    const queryTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(queryTab)).toBe(
+      true
+    );
+    expect(queryTab.defaultPrevented).toBe(true);
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(parts.input.value).toBe('query');
+    expect(parts.modePrefix.dataset.modeId).toBe('provider:google');
+    expect(
+      controller.menuElement.querySelector('[role="menuitemradio"]')
+        ?.getAttribute('aria-checked')
+    ).toBe('true');
+    controller.closeModeMenu(false);
+    parts.input.value = '';
+
+    const taggedTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(taggedTab)).toBe(
+      true
+    );
+    expect(taggedTab.defaultPrevented).toBe(true);
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(parts.modePrefix.dataset.modeId).toBe('provider:google');
+    expect(
+      controller.menuElement.querySelector('[role="menuitemradio"]')
+        ?.getAttribute('aria-checked')
+    ).toBe('true');
+
+    const activeCheckWhileOpen = createTabEvent();
+    expect(
+      controller.shouldOpenModeMenuForActiveModeOnTab(activeCheckWhileOpen)
+    ).toBe(
+      false
+    );
+    expect(activeCheckWhileOpen.defaultPrevented).toBe(false);
+    const containedOpenTab = createTabEvent();
+    expect(controller.shouldContainModeMenuTab(containedOpenTab)).toBe(true);
+    expect(containedOpenTab.defaultPrevented).toBe(true);
+    const modifiedOpenTab = createTabEvent({ shiftKey: true });
+    expect(controller.shouldContainModeMenuTab(modifiedOpenTab)).toBe(false);
+    expect(modifiedOpenTab.defaultPrevented).toBe(false);
+    controller.destroy();
+  });
+
+  it('returns to a clean double-Tab gesture after the active tag is removed', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+    const createTabEvent = () => new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab'
+    });
+
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+    controller.openModeMenu('none');
+    controller.clearProviderPrefix();
+
+    expect(parts.modePrefix.hasAttribute('data-mode-id')).toBe(false);
+    expect(controller.menuElement.hidden).toBe(true);
+
+    const firstTab = createTabEvent();
+    expect(controller.shouldOpenModeMenuForActiveModeOnTab(firstTab)).toBe(false);
+    expect(controller.shouldOpenModeMenuOnDoubleTab(firstTab)).toBe(false);
+    expect(firstTab.defaultPrevented).toBe(true);
+
+    controller.setPrefixText('Open tabs', {}, {
+      modeId: 'openTabs',
+      preserveModeMenuDoubleTab: true
+    });
+    const secondTab = createTabEvent();
+    expect(controller.shouldCompleteModeMenuDoubleTab(secondTab)).toBe(true);
+    expect(secondTab.defaultPrevented).toBe(true);
+    controller.destroy();
+  });
+
+  it('keeps a platform-aware shortcut hint fixed outside the scrollable menu grid', () => {
+    const macParts = createModeParts();
+    let localizedShortcutHint = '快速打开此面板';
+    let localizedFilterHint = '点击面板，输入拼音或英文快速筛选';
+    let localizedFilterQuery = '检索：{query}';
+    const macController = window.LumnoSearchInputMode.createInputModeController(
+      macParts,
+      {
+        formatMessage: (
+          key: string,
+          fallback: string,
+          values?: Record<string, string>
+        ) => {
+          if (key === 'search_scope_menu_shortcut_hint') {
+            return localizedShortcutHint;
+          }
+          if (key === 'search_scope_menu_filter_hint') {
+            return localizedFilterHint;
+          }
+          if (key === 'search_scope_menu_filter_query') {
+            return localizedFilterQuery.replace(
+              '{query}',
+              String(values?.query || '')
+            );
+          }
+          return fallback;
+        },
+        getModeMenuItems: () => [{
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }],
+        navigatorLike: { platform: 'MacIntel' }
+      }
+    );
+    macController.openModeMenu('none');
+    const macContent = macController.menuElement.querySelector(
+      '[data-search-input-mode-menu-content]'
+    );
+    const macFooter = macController.menuElement.querySelector(
+      '[data-search-input-mode-menu-footer]'
+    );
+    expect(macContent?.parentElement).toBe(macController.menuElement);
+    expect(macFooter?.parentElement).toBe(macController.menuElement);
+    expect(macController.menuElement.lastElementChild).toBe(macFooter);
+    expect(macContent?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(1);
+    expect(macFooter?.querySelector('[role="menuitemradio"]')).toBeNull();
+    expect(
+      macFooter?.querySelector('[data-search-input-mode-menu-footer-key]')
+        ?.textContent
+    ).toBe('⇥ ⇥');
+    expect(
+      macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
+        ?.textContent
+    ).toBe('快速打开此面板');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text]'
+      )?.textContent
+    ).toBe('点击面板，输入拼音或英文快速筛选');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-divider]'
+      )
+    ).toBeNull();
+    expect(macFooter?.firstElementChild).toBe(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text]'
+      )
+    );
+    expect(macFooter?.lastElementChild).toBe(
+      macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
+    );
+    macController.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'g'
+    }));
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text]'
+      )?.textContent
+    ).toBe('检索：g');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text] .x-lumno-search-input-mode__menu-match'
+      )?.textContent
+    ).toBe('g');
+    macController.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Backspace'
+    }));
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text]'
+      )?.textContent
+    ).toBe('点击面板，输入拼音或英文快速筛选');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text] .x-lumno-search-input-mode__menu-match'
+      )
+    ).toBeNull();
+    localizedShortcutHint = '快速開啟此面板';
+    localizedFilterHint = '點擊面板，輸入拼音或英文快速篩選';
+    localizedFilterQuery = '搜尋：{query}';
+    macController.refreshModeMenuLanguage();
+    expect(
+      macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
+        ?.textContent
+    ).toBe('快速開啟此面板');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-filter-text]'
+      )?.textContent
+    ).toBe('點擊面板，輸入拼音或英文快速篩選');
+    macController.destroy();
+
+    const windowsParts = createModeParts();
+    const windowsController = window.LumnoSearchInputMode.createInputModeController(
+      windowsParts,
+      { navigatorLike: { platform: 'Win32' } }
+    );
+    expect(
+      windowsController.menuElement.querySelector(
+        '[data-search-input-mode-menu-footer-key]'
+      )?.textContent
+    ).toBe('Tab Tab');
+    windowsController.destroy();
+  });
+
+  it('requires two distinct Backspace presses only while the scope menu is open', () => {
+    vi.useFakeTimers();
+    const parts = createModeParts();
+    const onConfirmation = vi.fn();
+    const onConfirmationReset = vi.fn();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:duckduckgo',
+          kind: 'provider',
+          label: 'DuckDuckGo'
+        }],
+        onModeTagRemovalConfirmation: onConfirmation,
+        onModeTagRemovalConfirmationReset: onConfirmationReset
+      }
+    );
+    controller.setPrefixText('DuckDuckGo', {}, {
+      modeId: 'provider:duckduckgo'
+    });
+
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      true
+    );
+    expect(onConfirmation).not.toHaveBeenCalled();
+
+    controller.openModeMenu('none');
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      false
+    );
+    expect(onConfirmation).toHaveBeenCalledTimes(1);
+    expect(onConfirmation).toHaveBeenLastCalledWith({ duration: 2200 });
+
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: true })).toBe(
+      false
+    );
+    expect(onConfirmation).toHaveBeenCalledTimes(1);
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      true
+    );
+    expect(onConfirmationReset).toHaveBeenCalledTimes(1);
+
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      false
+    );
+    parts.input.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key: 'a' })
+    );
+    expect(onConfirmationReset).toHaveBeenCalledTimes(2);
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      false
+    );
+    parts.input.value = 'query';
+    parts.input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(onConfirmationReset).toHaveBeenCalledTimes(3);
+
+    parts.input.value = '';
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      false
+    );
+    vi.advanceTimersByTime(2200);
+    expect(onConfirmationReset).toHaveBeenCalledTimes(4);
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      false
+    );
+    controller.closeModeMenu();
+    expect(onConfirmationReset).toHaveBeenCalledTimes(5);
+    expect(controller.shouldRemoveModeTagOnBackspace({ repeat: false })).toBe(
+      true
+    );
+    controller.destroy();
+  });
+
   it('renders and clears the matched search provider Tab hint', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
@@ -189,8 +644,216 @@ describe('Shared search scope menu', () => {
         '.x-lumno-search-input-mode__menu-icon'
       )
     ).toBe(selectedIcon);
-    expect(document.activeElement).toBe(refreshedMenuItems[1]);
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.dataset.searchActive).toBe('false');
     controller.destroy();
+  });
+
+  it('keeps panel typing separate from the main input and filters English or pinyin matches', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [
+          {
+            group: 'Search engines',
+            id: 'provider:google',
+            kind: 'provider',
+            label: 'Google'
+          },
+          {
+            group: 'AI search',
+            id: 'provider:doubao',
+            kind: 'provider',
+            label: '豆包',
+            provider: {
+              aliases: ['doubao'],
+              key: 'dbai',
+              name: '豆包'
+            }
+          },
+          {
+            group: 'Browser content',
+            id: 'local:bookmark',
+            kind: 'local',
+            label: '书签',
+            searchTerms: ['bookmark', 'bookmarks']
+          }
+        ]
+      }
+    );
+    const pressMenuKey = (key: string) => {
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key
+      });
+      controller.menuElement.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      return event;
+    };
+    const getVisibleLabels = () => Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    ).filter((button) => !button.hidden).map((button) => (
+      button.querySelector('.x-lumno-search-input-mode__menu-label')?.textContent
+    ));
+
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(document.activeElement).toBe(controller.menuElement);
+    expect(controller.menuElement.dataset.searchActive).toBe('true');
+
+    pressMenuKey('d');
+    pressMenuKey('o');
+    pressMenuKey('u');
+    expect(controller.getModeMenuFilterQuery()).toBe('dou');
+    expect(parts.input.value).toBe('');
+    expect(getVisibleLabels()).toEqual(['豆包']);
+    expect(
+      controller.menuElement.querySelector(
+        '.x-lumno-search-input-mode__menu-match'
+      )?.textContent
+    ).toBe('豆');
+
+    const filteredItem = Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    ).find((button) => !button.hidden);
+    filteredItem?.click();
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.dataset.searchActive).toBe('false');
+    expect(controller.menuElement.hidden).toBe(false);
+    expect(controller.getModeMenuFilterQuery()).toBe('dou');
+    const inputEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'x'
+    });
+    parts.input.dispatchEvent(inputEvent);
+    expect(controller.shouldHandleModeMenuKeyEvent(inputEvent)).toBe(false);
+    expect(controller.getModeMenuFilterQuery()).toBe('dou');
+
+    controller.menuElement.dispatchEvent(new Event('pointerdown', {
+      bubbles: true,
+      cancelable: true
+    }));
+    expect(document.activeElement).toBe(controller.menuElement);
+    expect(controller.menuElement.dataset.searchActive).toBe('true');
+
+    pressMenuKey('Escape');
+    expect(controller.menuElement.hidden).toBe(false);
+    expect(controller.getModeMenuFilterQuery()).toBe('');
+    'bookmark'.split('').forEach(pressMenuKey);
+    expect(getVisibleLabels()).toEqual(['书签']);
+    expect(
+      controller.menuElement.querySelector(
+        '.x-lumno-search-input-mode__menu-match'
+      )?.textContent
+    ).toBe('书签');
+
+    pressMenuKey('Escape');
+    'zzz'.split('').forEach(pressMenuKey);
+    expect(getVisibleLabels()).toEqual([]);
+    expect(
+      controller.menuElement.querySelector<HTMLElement>(
+        '.x-lumno-search-input-mode__menu-empty'
+      )?.hidden
+    ).toBe(false);
+    controller.destroy();
+  });
+
+  it('switches localized scope placeholders with the panel state', () => {
+    const parts = createModeParts();
+    parts.input.placeholder = 'Search or type a URL...';
+    let language = 'zh-CN';
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        formatMessage: (key: string, fallback: string) => {
+          if (key === 'search_scope_panel_placeholder') {
+            return language === 'zh-CN'
+              ? '搜索特定站点内容...'
+              : 'Search specific site content...';
+          }
+          if (key === 'search_scope_active_placeholder') {
+            return language === 'zh-CN'
+              ? '搜索特定内容，复按 Tab 打开范围面板...'
+              : 'Search within this scope; press Tab again to open the scope panel...';
+          }
+          return fallback;
+        },
+        getModeMenuItems: () => [{
+          active: true,
+          group: 'Search engines',
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+    expect(parts.input.placeholder).toBe(
+      '搜索特定内容，复按 Tab 打开范围面板...'
+    );
+
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(parts.input.placeholder).toBe('搜索特定站点内容...');
+
+    controller.setPrefixText('Bing', {}, { modeId: 'provider:bing' });
+    expect(parts.input.placeholder).toBe('搜索特定站点内容...');
+
+    language = 'en';
+    controller.refreshModeMenuLanguage();
+    expect(parts.input.placeholder).toBe('Search specific site content...');
+
+    controller.closeModeMenu(false);
+    expect(parts.input.placeholder).toBe(
+      'Search within this scope; press Tab again to open the scope panel...'
+    );
+
+    controller.clearProviderPrefix();
+    expect(parts.input.placeholder).toBe('Search or type a URL...');
+    controller.destroy();
+  });
+
+  it('keeps built-in Chinese scopes searchable while the full pinyin runtime is still loading', () => {
+    const pinyinGlobal = globalThis as typeof globalThis & {
+      pinyinPro?: unknown;
+    };
+    const existingPinyinApi = pinyinGlobal.pinyinPro;
+    delete pinyinGlobal.pinyinPro;
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          group: 'Browser content',
+          id: 'local:bookmark',
+          kind: 'local',
+          label: '书签'
+        }]
+      }
+    );
+    expect(controller.openModeMenu('none')).toBe(true);
+    ['s', 'h', 'u'].forEach((key) => {
+      controller.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key
+      }));
+    });
+    const item = controller.menuElement.querySelector<HTMLButtonElement>(
+      '[role="menuitemradio"]'
+    );
+    expect(item?.hidden).toBe(false);
+    expect(
+      item?.querySelector('.x-lumno-search-input-mode__menu-match')?.textContent
+    ).toBe('书');
+    controller.destroy();
+    pinyinGlobal.pinyinPro = existingPinyinApi;
   });
 
   it('reuses lighter vector glyphs in browser-content cards and the active tag', () => {
@@ -285,12 +948,18 @@ describe('Shared search scope menu', () => {
     const card = controller.menuElement.querySelector<HTMLElement>(
       '.x-lumno-search-input-mode__menu-icon[data-icon-kind="builtin"]'
     );
+    const menuItem = controller.menuElement.querySelector<HTMLElement>(
+      '.x-lumno-search-input-mode__menu-item'
+    );
     expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')).toContain(
       'var(--x-ov-text, #111827) 14%'
     );
     expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-color')).toBe(
       'var(--x-ov-text, #111827)'
     );
+    expect(
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
+    ).toContain('var(--x-ov-text, #111827) 14%');
     expect(parts.modePrefix.style.background).toContain(
       'var(--x-ov-text, #111827) 14%'
     );
@@ -339,7 +1008,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('does not treat a menu selection inside a shadow root as an outside click', async () => {
+  it('keeps a shadow-root menu open while returning selection focus to its input', async () => {
     const parts = createModeParts();
     const shadowHost = document.createElement('div');
     const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
@@ -383,9 +1052,8 @@ describe('Shared search scope menu', () => {
     expect(controller.menuElement.hidden).toBe(false);
     expect(parts.modePrefix.getAttribute('aria-expanded')).toBe('true');
     expect(document.activeElement).toBe(shadowHost);
-    expect(
-      shadowRoot.activeElement?.getAttribute('data-mode-id')
-    ).toBe('provider:ddg');
+    expect(shadowRoot.activeElement).toBe(parts.input);
+    expect(controller.menuElement.dataset.searchActive).toBe('false');
     controller.destroy();
   });
 
@@ -419,12 +1087,16 @@ describe('Shared search scope menu', () => {
       '0 5px 14px rgba(15, 23, 42, 0.075)'
     );
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
+    expect(parts.modePrefix.style.justifyContent).toBe('flex-start');
     expect(parts.modePrefixText.style.display).toBe('block');
+    expect(parts.modePrefixText.style.flex).toBe('1 1 auto');
     expect(parts.modePrefixText.style.lineHeight).toBe('18px');
     expect(parts.modePrefixCurrent.style.fontSize).toBe('10px');
     expect(parts.modePrefixCurrent.style.lineHeight).toBe('18px');
-    expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
+    expect(parts.modePrefixCurrent.style.display).toBe('none');
     expect(parts.modePrefixCurrent.style.overflow).toBe('visible');
+    expect(parts.modePrefixCurrent.style.flex).toBe('0 0 auto');
+    expect(parts.modePrefixChevron.style.flex).toBe('0 0 auto');
     expect(parts.modePrefix.getAttribute('data-menu-open')).toBe('false');
     expect(parts.modePrefixCurrent.style.background).toBe('');
     controller.destroy();
@@ -459,9 +1131,7 @@ describe('Shared search scope menu', () => {
       modeId: 'provider:youtube'
     });
 
-    const prefixKeyframes = animatePrefix.mock.calls[0][0] as Keyframe[];
-    expect(prefixKeyframes[0].transform).toContain('scale(0.86)');
-    expect(prefixKeyframes[1].transform).toContain('scale(1.045)');
+    expect(animatePrefix).not.toHaveBeenCalled();
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefixCurrent.style.opacity).toBe('');
     expect(parts.modePrefix.getAttribute('data-menu-open')).toBe('false');
@@ -470,7 +1140,7 @@ describe('Shared search scope menu', () => {
     parts.modePrefix.click();
 
     expect(controller.menuElement.hidden).toBe(false);
-    expect(document.activeElement).toBe(parts.modePrefix);
+    expect(document.activeElement).toBe(controller.menuElement);
     expect(parts.modePrefix.style.zIndex).toBe('41');
     expect(parts.modePrefix.getAttribute('data-menu-open')).toBe('true');
 
@@ -539,7 +1209,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('animates chip entry on the compositor without blur or layout reads', () => {
+  it('shows a new chip directly without scale or opacity animation', () => {
     const parts = createModeParts();
     const animation = {
       cancel: vi.fn(),
@@ -563,20 +1233,79 @@ describe('Shared search scope menu', () => {
       modeId: 'local:bookmark'
     });
 
-    expect(animate).toHaveBeenCalledTimes(1);
-    const keyframes = animate.mock.calls[0][0] as Keyframe[];
-    expect(keyframes).toHaveLength(3);
-    expect(keyframes.every((frame) => !('filter' in frame))).toBe(true);
-    expect(
-      keyframes.every((frame) =>
-        Object.keys(frame).every((key) =>
-          ['offset', 'opacity', 'transform'].includes(key)
-        )
-      )
-    ).toBe(true);
-    expect(parts.modePrefix.style.willChange).toBe('transform, opacity');
-    animation.onfinish?.();
+    expect(animate).not.toHaveBeenCalled();
+    expect(parts.modePrefix.style.opacity).toBe('1');
+    expect(parts.modePrefix.style.transform).toBe(
+      'translateY(-50%) translateX(0) scale(1)'
+    );
     expect(parts.modePrefix.style.willChange).toBe('auto');
+    controller.destroy();
+  });
+
+  it('shows the current label only while the menu is open and resizes the chip', () => {
+    const parts = createModeParts();
+    const resizeAnimation = {
+      cancel: vi.fn(),
+      oncancel: null as null | (() => void),
+      onfinish: null as null | (() => void)
+    };
+    const animate = vi.fn(
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+        resizeAnimation as unknown as Animation
+    );
+    Object.defineProperty(parts.modePrefix, 'animate', {
+      configurable: true,
+      value: animate
+    });
+    Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 0,
+        height: 26,
+        left: 0,
+        right: parts.modePrefix.dataset.menuOpen === 'true' ? 162 : 132,
+        toJSON: () => ({}),
+        top: 0,
+        width: parts.modePrefix.dataset.menuOpen === 'true' ? 162 : 132,
+        x: 0,
+        y: 0
+      })
+    });
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+    controller.setPrefixText('Google', {}, {
+      iconClass: 'ri-google-fill',
+      modeId: 'provider:google'
+    });
+
+    expect(parts.modePrefixCurrent.textContent).toBe('当前');
+    expect(parts.modePrefixCurrent.style.display).toBe('none');
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
+    expect(animate.mock.calls[0][0]).toEqual([
+      { width: '132px' },
+      { width: '162px' }
+    ]);
+    expect(animate.mock.calls[0][1]).toEqual({
+      duration: 160,
+      easing: 'linear'
+    });
+
+    expect(controller.closeModeMenu(false)).toBe(true);
+    expect(parts.modePrefixCurrent.style.display).toBe('none');
+    expect(animate.mock.calls[1][0]).toEqual([
+      { width: '162px' },
+      { width: '132px' }
+    ]);
     controller.destroy();
   });
 
@@ -606,7 +1335,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('expands an existing mode immediately so the new label never ellipsizes', () => {
+  it('stretches before revealing a longer label and fades the fixed icon in place', () => {
     const parts = createModeParts();
     const resizeAnimation = {
       cancel: vi.fn(),
@@ -620,6 +1349,19 @@ describe('Shared search scope menu', () => {
     Object.defineProperty(parts.modePrefix, 'animate', {
       configurable: true,
       value: animate
+    });
+    const iconAnimation = {
+      cancel: vi.fn(),
+      oncancel: null as null | (() => void),
+      onfinish: null as null | (() => void)
+    };
+    const animateIcon = vi.fn(
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+        iconAnimation as unknown as Animation
+    );
+    Object.defineProperty(parts.modePrefixGlyph, 'animate', {
+      configurable: true,
+      value: animateIcon
     });
     Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
       configurable: true,
@@ -647,9 +1389,43 @@ describe('Shared search scope menu', () => {
       modeId: 'provider:brave'
     });
 
-    expect(animate).not.toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animate.mock.calls[0][0]).toEqual([
+      { width: '132px' },
+      { width: '176px' }
+    ]);
+    expect(animate.mock.calls[0][1]).toEqual({
+      duration: 160,
+      easing: 'linear'
+    });
+    expect(
+      (animate.mock.calls[0][0] as Keyframe[]).every((frame) =>
+        !('opacity' in frame) && !('transform' in frame)
+      )
+    ).toBe(true);
+    expect(parts.modePrefixText.textContent).toBe('Open tabs');
+    expect(parts.modePrefixGlyph.className).toContain('ri-window-line');
+    expect(animateIcon).not.toHaveBeenCalled();
+    expect(parts.modePrefixGlyph.style.transition).toBe('none');
+    expect(parts.modePrefix.style.transition).toContain('background-color 180ms ease');
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
-    expect(parts.modePrefix.style.width).toBe('');
+    expect(parts.modePrefix.style.willChange).toBe('width');
+    resizeAnimation.onfinish?.();
+    expect(parts.modePrefixText.textContent).toBe('Brave Search');
+    expect(parts.modePrefixGlyph.className).toContain('ri-global-line');
+    expect(animateIcon).toHaveBeenCalledWith([
+      { opacity: 0 },
+      { opacity: 1 }
+    ], {
+      duration: 100,
+      easing: 'ease-out'
+    });
+    expect(
+      (animateIcon.mock.calls[0][0] as Keyframe[]).every((frame) =>
+        !('transform' in frame)
+      )
+    ).toBe(true);
+    expect(parts.modePrefixGlyph.style.transform).toBe('none');
     expect(parts.modePrefix.style.willChange).toBe('auto');
     controller.destroy();
   });
@@ -668,6 +1444,15 @@ describe('Shared search scope menu', () => {
     Object.defineProperty(parts.modePrefix, 'animate', {
       configurable: true,
       value: animate
+    });
+    const animateIcon = vi.fn(() => ({
+      cancel: vi.fn(),
+      oncancel: null,
+      onfinish: null
+    }) as unknown as Animation);
+    Object.defineProperty(parts.modePrefixGlyph, 'animate', {
+      configurable: true,
+      value: animateIcon
     });
     Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
       configurable: true,
@@ -700,6 +1485,9 @@ describe('Shared search scope menu', () => {
       { width: '176px' },
       { width: '132px' }
     ]);
+    expect(parts.modePrefixText.textContent).toBe('Open tabs');
+    expect(parts.modePrefixGlyph.className).toContain('ri-window-line');
+    expect(animateIcon).toHaveBeenCalledTimes(1);
     expect(
       (animate.mock.calls[0][0] as Keyframe[]).every((frame) =>
         !('opacity' in frame) && !('transform' in frame)
@@ -752,7 +1540,7 @@ describe('Shared search scope menu', () => {
     expect(controller.menuElement.style.left).toBe('-6px');
     expect(controller.menuElement.style.right).toBe('-6px');
     expect(controller.menuElement.style.width).toBe('auto');
-    expect(controller.menuElement.style.padding).toBe('16px');
+    expect(controller.menuElement.style.padding).toBe('0px');
     expect(
       controller.menuElement.classList.contains(
         '_x_extension_menu_surface_2024_unique_'
@@ -765,6 +1553,105 @@ describe('Shared search scope menu', () => {
     expect(document.activeElement).toBe(menuItems[1]);
     controller.closeModeMenu();
     expect(parts.container.hasAttribute('data-mode-menu-open')).toBe(false);
+    controller.destroy();
+  });
+
+  it('reserves viewport room for the full scope menu before sizing results', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:google',
+          kind: 'provider',
+          label: 'Google'
+        }]
+      }
+    );
+    Object.defineProperty(parts.container, 'offsetHeight', {
+      configurable: true,
+      value: 56
+    });
+    vi.spyOn(parts.container, 'getBoundingClientRect').mockReturnValue({
+      bottom: 300,
+      height: 56,
+      left: 0,
+      right: 760,
+      top: 244,
+      width: 760
+    } as DOMRect);
+    Object.defineProperty(controller.menuElement, 'offsetTop', {
+      configurable: true,
+      value: 70
+    });
+    let renderedMenuContentHeight = 360;
+    Object.defineProperty(controller.menuElement, 'offsetHeight', {
+      configurable: true,
+      get: () => Math.min(
+        renderedMenuContentHeight,
+        Number.parseFloat(
+          controller.menuElement.style.getPropertyValue(
+            '--x-lumno-search-mode-menu-viewport-max-height'
+          )
+        ) || 360
+      )
+    });
+    controller.openModeMenu('none');
+
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 1209
+    })).toBe(511);
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-viewport-max-height'
+      )
+    ).toBe('871px');
+    controller.setModeMenuResultOffset(511);
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 1209
+    })).toBe(511);
+
+    renderedMenuContentHeight = 200;
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 1209
+    })).toBe(671);
+    renderedMenuContentHeight = 360;
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 1209
+    })).toBe(511);
+
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 600
+    })).toBe(0);
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-viewport-max-height'
+      )
+    ).toBe('262px');
+
+    expect(controller.fitModeMenuWithinViewport({
+      bottomInset: 24,
+      viewportBottom: 1209
+    })).toBe(511);
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-viewport-max-height'
+      )
+    ).toBe('871px');
+
+    controller.closeModeMenu();
+    expect(controller.fitModeMenuWithinViewport()).toBeNull();
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-viewport-max-height'
+      )
+    ).toBe('');
     controller.destroy();
   });
 
@@ -800,6 +1687,19 @@ describe('Shared search scope menu', () => {
         '--x-lumno-search-mode-menu-lift'
       )
     ).toBe('-8px');
+    controller.setModeMenuResultOffset(72);
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-result-offset'
+      )
+    ).toBe('72px');
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-extension-menu-surface-open-transform'
+      )
+    ).toContain(
+      'var(--x-lumno-search-mode-menu-result-offset, 0px)'
+    );
     controller.destroy();
   });
 
@@ -1032,15 +1932,15 @@ describe('Shared search scope menu', () => {
       modeId: 'siteSearch'
     });
 
-    expect(parts.modePrefixIcon.style.width).toBe('15px');
-    expect(parts.modePrefixIcon.style.height).toBe('15px');
+    expect(parts.modePrefixIcon.style.width).toBe('16px');
+    expect(parts.modePrefixIcon.style.height).toBe('16px');
     expect(parts.modePrefixIcon.style.borderRadius).toBe('2px');
     expect(parts.modePrefixIcon.style.clipPath).toBe('inset(0 round 2px)');
     expect(parts.modePrefixIcon.style.overflow).toBe('hidden');
     controller.destroy();
   });
 
-  it('uses the shortcut theme mixing logic for each provider icon container', async () => {
+  it('reuses one provider theme result for the icon and hover card', async () => {
     const parts = createModeParts();
     const getThemeForProvider = vi.fn().mockResolvedValue({
       accent: 'rgb(0, 174, 236)',
@@ -1066,6 +1966,16 @@ describe('Shared search scope menu', () => {
     const icon = controller.menuElement.querySelector<HTMLElement>(
       '.x-lumno-search-input-mode__menu-icon'
     );
+    const menuItem = controller.menuElement.querySelector<HTMLElement>(
+      '.x-lumno-search-input-mode__menu-item'
+    );
+    const label = menuItem?.querySelector<HTMLElement>(
+      '.x-lumno-search-input-mode__menu-label'
+    );
+    menuItem?.dispatchEvent(new MouseEvent('mouseenter'));
+    menuItem?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    expect(getThemeForProvider).toHaveBeenCalledTimes(1);
     expect(getThemeForProvider).toHaveBeenCalledWith({ key: 'bilibili' });
     expect(
       icon?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')
@@ -1073,6 +1983,13 @@ describe('Shared search scope menu', () => {
     expect(
       icon?.style.getPropertyValue('--x-lumno-search-mode-icon-color')
     ).toBe('#111827');
+    expect(
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
+    ).toBe('rgba(0, 174, 236, 0.075)');
+    expect(menuItem?.getAttribute('aria-label')).toBe('Bilibili');
+    expect(label?.textContent).toBe('Bilibili');
+    expect(label?.isConnected).toBe(true);
+    expect(getThemeForProvider).toHaveBeenCalledTimes(1);
     controller.destroy();
   });
 

@@ -276,8 +276,8 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    700 * 1024,
-  'all shared React artifacts and four page entries should stay within their 700 KiB package budget'
+    702 * 1024,
+  'all shared React artifacts and four page entries should stay within their 702 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=

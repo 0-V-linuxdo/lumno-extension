@@ -2536,7 +2536,7 @@
         resolve(response && response.messages ? response.messages : {});
       });
     });
-    return fetch(localePath)
+    return fetch(localePath, { cache: 'no-store' })
       .then((response) => {
         if (!response || !response.ok) {
           throw new Error('locale fetch failed');

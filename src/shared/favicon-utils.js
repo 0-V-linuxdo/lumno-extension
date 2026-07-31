@@ -96,7 +96,9 @@
         return false;
       }
       const pathname = String(parsed.pathname || '').toLowerCase();
-      return pathname.startsWith('/_favicon/') || pathname === `/${LUMNO_EXTENSION_ICON_PATH.toLowerCase()}`;
+      return pathname.startsWith('/_favicon/') ||
+        pathname === `/${LUMNO_EXTENSION_ICON_PATH.toLowerCase()}` ||
+        /^\/assets\/images\/site-search\/[^/]+\.svg$/.test(pathname);
     } catch (e) {
       return enhancedFetchEnabled === true;
     }

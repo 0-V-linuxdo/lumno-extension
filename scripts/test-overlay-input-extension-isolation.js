@@ -38,6 +38,11 @@ assert.ok(
   handlerSource.includes('e.stopImmediatePropagation();'),
   'captured text keys should not reach document-level extension shortcuts'
 );
+assert.match(
+  searchPanelSource,
+  /if \(e\.key === 'Tab'\) \{\s*handleTabKey\(e\);\s*return;\s*\}/,
+  'the double-Tab scope shortcut should run inside the isolated input key handler'
+);
 
 ['keydown', 'keypress', 'keyup'].forEach((eventName) => {
   assert.ok(
@@ -65,6 +70,7 @@ shadowRoot.appendChild(searchInput);
 
 const handledInputKeys = [];
 const hostPageKeys = [];
+const hostPageKeyups = [];
 const createHandler = new Function(
   'overlay',
   'searchInput',
@@ -79,13 +85,22 @@ const overlayKeyCaptureHandler = createHandler(
   searchInput,
   document,
   (event) => Boolean(event && event.isComposing),
-  (event) => handledInputKeys.push(event.key),
+  (event) => {
+    handledInputKeys.push(event.key);
+    if (event.key === 'Tab') {
+      event.preventDefault();
+    }
+  },
   () => {}
 );
 
 window.addEventListener('keydown', overlayKeyCaptureHandler, true);
+window.addEventListener('keyup', overlayKeyCaptureHandler, true);
 document.addEventListener('keydown', (event) => {
   hostPageKeys.push({ key: event.key, targetTag: event.target.tagName });
+});
+document.addEventListener('keyup', (event) => {
+  hostPageKeyups.push({ key: event.key, targetTag: event.target.tagName });
 });
 searchInput.focus();
 
@@ -131,6 +146,43 @@ assert.deepStrictEqual(
   hostPageKeys,
   [],
   'regular text keys should remain isolated from host-page shortcuts'
+);
+
+const doubleTabEvents = [0, 1].map(() => new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: 'Tab',
+  code: 'Tab'
+}));
+doubleTabEvents.forEach((event) => {
+  searchInput.dispatchEvent(event);
+  searchInput.dispatchEvent(new window.KeyboardEvent('keyup', {
+    bubbles: true,
+    composed: true,
+    key: 'Tab',
+    code: 'Tab'
+  }));
+});
+
+assert.deepStrictEqual(
+  handledInputKeys,
+  ['x', 'Tab', 'Tab'],
+  'both presses of the double-Tab shortcut should stay in Lumno input handling'
+);
+assert.ok(
+  doubleTabEvents.every((event) => event.defaultPrevented),
+  'both Tab presses should keep focus inside the Lumno input'
+);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'double-Tab keydown events should not reach host-page shortcuts'
+);
+assert.deepStrictEqual(
+  hostPageKeyups,
+  [],
+  'double-Tab keyup events should not reach host-page shortcuts'
 );
 
 console.log('overlay input extension isolation tests passed');

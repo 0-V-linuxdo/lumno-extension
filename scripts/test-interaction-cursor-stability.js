@@ -185,11 +185,11 @@ assert.match(
 );
 assertStableHoverTarget(
   overlaySuggestionsCss,
-  ':is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-history-delete-button[data-hover-active="true"]'
+  ':is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-utility-button[data-hover="true"]'
 );
 assertStableHoverTarget(
   newtabHtml,
-  '.x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-button[data-hover="true"]'
+  '.x-nt-suggestion-utility-button[data-hover="true"]'
 );
 
 assert.doesNotMatch(

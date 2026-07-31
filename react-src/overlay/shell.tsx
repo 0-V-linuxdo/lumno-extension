@@ -12,6 +12,7 @@ type OverlayShellOptions = Record<string, unknown> & {
   remixIconCssUrl?: string;
   root?: Document | DocumentFragment | HTMLElement | ShadowRoot | null;
   searchInputCssUrl?: string;
+  toastCssUrl?: string;
   tooltipCssUrl?: string;
   width?: number;
 };
@@ -99,6 +100,12 @@ function appendOverlayStyleNodes(
     styleRoot,
     '_x_extension_cursor_tooltip_component_style_2026_unique_',
     options.cursorTooltipCssUrl
+  );
+  appendStylesheet(
+    doc,
+    styleRoot,
+    '_x_extension_toast_style_2026_unique_',
+    options.toastCssUrl
   );
   appendStylesheet(
     doc,

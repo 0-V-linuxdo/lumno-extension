@@ -10,6 +10,7 @@ const backgroundSource = readSource('src/background/background.js');
 const inputModeSource = readSource('src/shared/search-input-mode.js');
 const inputModeCss = readSource('src/shared/search-input.css');
 const newtabHtml = readSource('src/newtab/newtab.html');
+const overlaySuggestionsCss = readSource('src/overlay/suggestions-view.css');
 
 function getFunctionSection(source, functionName, nextFunctionName) {
   const start = source.indexOf(`function ${functionName}(`);
@@ -20,7 +21,7 @@ function getFunctionSection(source, functionName, nextFunctionName) {
 
 assert.match(
   inputModeSource,
-  /function createModeMenuIcon\(item\)[\s\S]*?attachProviderIcon\(image,[\s\S]*?onIconUnavailable: showFallback/,
+  /function createModeMenuIcon\(item, menuItem\)[\s\S]*?attachProviderIcon\(image,[\s\S]*?onIconUnavailable: showFallback/,
   'scope menu provider icons should use the shared favicon fallback and persistence runtime'
 );
 assert.match(
@@ -45,13 +46,13 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function applyModeMenuIconTheme\(wrap, theme\)[\s\S]*?isDarkMode\(\) \? 0\.72 : 0\.82[\s\S]*?--x-lumno-search-mode-icon-bg/,
-  'scope menu icon backgrounds should reuse the shortcut theme mixing ratios'
+  /function applyModeMenuIconTheme\(wrap, menuItem, theme\)[\s\S]*?darkMode \? 0\.72 : 0\.82[\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-item-theme-bg/,
+  'scope menu cards and icon backgrounds should reuse one resolved provider theme'
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?--x-lumno-search-mode-hover-bg[\s\S]*?color-mix\([\s\S]*?--x-nt-hover-bg[\s\S]*?--x-ov-hover-bg[\s\S]*?60%,[\s\S]*?transparent/,
-  'scope menu hover should soften the shared neutral hover surface on both search surfaces'
+  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?--x-lumno-search-mode-item-theme-bg[\s\S]*?--x-lumno-search-mode-selected-bg/,
+  'scope menu hover should use the same themed full-card surface as selection'
 );
 assert.match(
   inputModeCss,
@@ -60,8 +61,63 @@ assert.match(
 );
 assert.match(
   inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?\.x-lumno-search-input-mode__menu-icon,[\s\S]*?\.x-lumno-search-input-mode__menu-item:focus-visible:not\(\[aria-checked="true"\]\)[\s\S]*?\.x-lumno-search-input-mode__menu-icon,[\s\S]*?\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\][\s\S]*?\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?background:\s*transparent !important;[\s\S]*?box-shadow:\s*none !important;/,
+  'hovered, keyboard-focused, and selected scopes should show only the full-card theme surface'
+);
+assert.doesNotMatch(
+  inputModeCss,
+  /x-lumno-search-mode-icon-hover-outline|inset 0 0 0 1px/,
+  'scope menu hover should not retain an icon outline'
+);
+assert.match(
+  inputModeCss,
   /\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\]\s*\{[\s\S]*?--x-lumno-search-mode-selected-bg[\s\S]*?border-color: transparent !important;/,
   'the active search scope should keep its themed background instead of the neutral hover surface'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\][\s\S]*?\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?background:\s*transparent !important;[\s\S]*?box-shadow:\s*none !important;/,
+  'the active search scope should show only the full-card selection surface'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-label\s*\{[\s\S]*?height:\s*16px !important;[\s\S]*?min-height:\s*16px !important;[\s\S]*?flex:\s*0 0 16px !important;[\s\S]*?color:\s*inherit !important;[\s\S]*?opacity:\s*1 !important;[\s\S]*?visibility:\s*visible !important;/,
+  'scope labels should keep a visible non-shrinking text row beside themed hover states'
+);
+assert.match(
+  inputModeSource,
+  /function buildModeMenuSearchIndex\(item\)[\s\S]*?getModeMenuPinyinSyllable\(character\)[\s\S]*?function applyModeMenuFilter\(query, filterOptions\)[\s\S]*?entry\.button\.hidden = !match\.matched/,
+  'the shared scope panel should filter its rendered cards with direct and pinyin indexes'
+);
+assert.match(
+  inputModeSource,
+  /function renderModeMenuLabelMatch\(label, labelText, ranges\)[\s\S]*?x-lumno-search-input-mode__menu-match/,
+  'the shared scope panel should render matched title ranges without replacing the accessible label'
+);
+assert.match(
+  inputModeSource,
+  /function getModeActivePlaceholder\(\)[\s\S]*?search_scope_active_placeholder[\s\S]*?function syncInputPlaceholder\(\)[\s\S]*?getModeMenuPlaceholder\(\)[\s\S]*?hasVisibleModePrefix\(\)[\s\S]*?getModeActivePlaceholder\(\)/,
+  'active scopes should use distinct localized placeholders for closed and open panel states'
+);
+assert.match(
+  inputModeSource,
+  /function handleModeInputFocus\(\)[\s\S]*?setModeMenuSearchActive\(false\)[\s\S]*?function handleModeMenuPointerDown\(event\)[\s\S]*?focusModeMenuSearch\(\)/,
+  'clicking the main input or the scope panel should transfer keyboard ownership explicitly'
+);
+assert.match(
+  inputModeSource,
+  /function focusModeInput\(\)[\s\S]*?setModeMenuSearchActive\(false\)[\s\S]*?input\.focus\(\{ preventScroll: true \}\)[\s\S]*?function selectModeMenuItem\(item\)[\s\S]*?focusModeInput\(\)/,
+  'selecting a filtered scope should return keyboard ownership to the main input'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-match\s*\{[\s\S]*?background:\s*var\(--x-ext-mark-bg,\s*#CFE8FF\) !important;[\s\S]*?color:\s*var\(--x-ext-mark-text,\s*#1E3A8A\) !important;[\s\S]*?padding:\s*0 1px !important;[\s\S]*?border-radius:\s*2px !important;/,
+  'matched scope title text should mirror the shared search-result highlight style'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item\s*\{[\s\S]*?min-height:\s*86px !important;[\s\S]*?padding:\s*6px 4px !important;[\s\S]*?gap:\s*4px !important;/,
+  'scope cards should preserve the original vertical padding around the icon and title stack'
 );
 assert.match(
   inputModeSource,
@@ -77,6 +133,26 @@ assert.match(
   inputModeCss,
   /\.x-lumno-search-input-mode__menu\[data-surface="newtab"\]\s*\{\s*backdrop-filter: none !important;[\s\S]*?-webkit-backdrop-filter: none !important;/,
   'the newtab scope menu should use an opaque surface without wallpaper blur'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu\[data-surface="newtab"\][\s\S]*?\.x-lumno-search-input-mode__menu-content,\s*\.x-lumno-search-input-mode__menu\[data-surface="overlay"\][\s\S]*?\.x-lumno-search-input-mode__menu-content\s*\{[\s\S]*?--x-lumno-search-mode-scrollbar-width:\s*10px;[\s\S]*?overflow-y:\s*scroll !important;[\s\S]*?scrollbar-gutter:\s*stable;[\s\S]*?padding-inline-end:\s*16px !important;/,
+  'newtab and overlay scope content grids should keep equal 16px inline padding around the scrollbar'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu\[data-surface="newtab"\][\s\S]*?\.x-lumno-search-input-mode__menu-content::\-webkit-scrollbar,[\s\S]*?\.x-lumno-search-input-mode__menu\[data-surface="overlay"\][\s\S]*?\.x-lumno-search-input-mode__menu-content::\-webkit-scrollbar\s*\{[\s\S]*?width:\s*var\(--x-lumno-search-mode-scrollbar-width\);[\s\S]*?\}[\s\S]*?::\-webkit-scrollbar-track\s*\{[\s\S]*?margin-block:\s*20px;[\s\S]*?background:\s*transparent;[\s\S]*?\}[\s\S]*?::\-webkit-scrollbar-thumb\s*\{[\s\S]*?min-height:\s*40px;[\s\S]*?border:\s*3px solid transparent;[\s\S]*?background-clip:\s*padding-box;/,
+  'shared scope content scrollbars should stay clear of the rounded panel corners'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-footer\s*\{[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?flex:\s*0 0 auto !important;[\s\S]*?font:\s*400 12px\/18px[\s\S]*?text-align:\s*left !important;[\s\S]*?overflow:\s*hidden !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-key\s*\{[\s\S]*?margin-inline-start:\s*auto !important;[\s\S]*?font:\s*500 11px\/16px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-filter-text\s*\{[\s\S]*?flex:\s*0 1 auto !important;[\s\S]*?text-align:\s*left !important;[\s\S]*?text-overflow:\s*ellipsis !important;/,
+  'the filter hint should stay left while the lighter shortcut hint aligns right in the fixed footer'
+);
+assert.doesNotMatch(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-footer-divider/,
+  'the fixed scope footer should not retain divider styling'
 );
 assert.match(
   inputModeCss,
@@ -148,6 +224,11 @@ assert.match(
     `${surface} browser-content cards should use the lighter menu-only icon set`
   );
   assert.match(
+    menuSource,
+    /searchTerms:\s*sourceType === 'topSite'[\s\S]*?\['bookmark', 'bookmarks'\][\s\S]*?\['history', 'browsing history'\]/,
+    `${surface} localized browser-content scopes should remain searchable by English names`
+  );
+  assert.match(
     source,
     /localSearchScopeTriggerState[\s\S]*?activateLocalSearchScope/,
     `${surface} should expose local-scope activation through its Tab trigger state`
@@ -181,12 +262,27 @@ assert.match(
 
 assert.match(
   overlaySource,
-  /id:\s*'openTabs'[\s\S]*?menuIconName:\s*'browser'/,
+  /id:\s*'openTabs'[\s\S]*?searchTerms:\s*\['open tabs', 'tabs', 'browser'\][\s\S]*?menuIconName:\s*'browser'/,
   'overlay open-tabs card should use the lighter browser menu icon'
 );
 assert.match(
+  newtabSource,
+  /function handleGlobalTypingFocus\(event\)[\s\S]*?shouldHandleModeMenuKeyEvent\(event\)[\s\S]*?const activeElement = document\.activeElement/,
+  'newtab global typing should not steal text while the scope panel owns focus'
+);
+assert.match(
+  newtabHtml,
+  /assets\/vendor\/pinyin-pro\.js[\s\S]*?shared\/search-input-mode\.js/,
+  'newtab should load the local pinyin runtime before the shared scope controller'
+);
+assert.match(
+  backgroundSource,
+  /assets\/vendor\/pinyin-pro\.js'[\s\S]*?src\/shared\/search-input-mode\.js'/,
+  'overlay injection should load the local pinyin runtime before the shared scope controller'
+);
+assert.match(
   overlaySource,
-  /function setOpenTabsSearchPrefix\(theme\)[\s\S]*?menuIconName:\s*'browser'/,
+  /function setOpenTabsSearchPrefix\(theme, options\)[\s\S]*?menuIconName:\s*'browser'/,
   'overlay open-tabs tag should reuse the browser SVG icon'
 );
 assert.match(
@@ -196,7 +292,7 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function applyModeMenuBuiltInIconTheme\(wrap\)[\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-icon-color/,
+  /function applyModeMenuBuiltInIconTheme\(wrap, menuItem\)[\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-icon-color[\s\S]*?--x-lumno-search-mode-item-theme-bg/,
   'built-in browser-content icons should use the active surface theme instead of the default blue brand fallback'
 );
 
@@ -209,6 +305,46 @@ assert.match(
   overlaySource,
   /localSearchQueryModeActive && allSuggestions\.length === 0[\s\S]*?t\('overlay_empty_result', '无匹配结果'\)[\s\S]*?reactView\.render\(\{[\s\S]*?emptyMessage/,
   'overlay local search should pass a visible empty message to the React suggestions view'
+);
+assert.match(
+  inputModeSource,
+  /function setModeMenuResultOffset\(offset\)[\s\S]*?--x-lumno-search-mode-menu-result-offset/,
+  'the shared search scope menu should expose a result-height offset instead of covering result guidance'
+);
+assert.match(
+  inputModeSource,
+  /function fitModeMenuWithinViewport\(options\)[\s\S]*?--x-lumno-search-mode-menu-viewport-max-height[\s\S]*?visualViewport[\s\S]*?availableLayoutHeight - menuLayoutHeight/,
+  'the shared scope menu should reserve stable viewport room before returning room for results'
+);
+assert.match(
+  inputModeSource,
+  /DEFAULT_MODE_MENU_VIEWPORT_BOTTOM_INSET\s*=\s*24/,
+  'the shared scope menu should keep a visible 24px bottom safe area'
+);
+assert.match(
+  inputModeSource,
+  /max-height', 'min\(360px, 62vh, var\(--x-lumno-search-mode-menu-viewport-max-height, 360px\)\)'/,
+  'the scope menu should remain internally scrollable when the viewport itself is short'
+);
+assert.match(
+  newtabSource,
+  /function getSearchModeMenuResultOffset\(\)[\s\S]*?data-visible[\s\S]*?suggestionsContainer\.offsetHeight[\s\S]*?function syncSearchModeMenuResultOffset\(\)[\s\S]*?--x-nt-suggestions-menu-fit-max-height[\s\S]*?fitModeMenuWithinViewport[\s\S]*?setModeMenuResultOffset[\s\S]*?ResizeObserver[\s\S]*?observe\(suggestionsContainer\)/,
+  'newtab should use stable layout height and shrink visible results enough to keep the scope menu inside the viewport'
+);
+assert.match(
+  overlaySource,
+  /function getSearchModeMenuResultOffset\(\)[\s\S]*?data-collapsed[\s\S]*?suggestionsContainer\.offsetHeight[\s\S]*?function syncSearchModeMenuResultOffset\(\)[\s\S]*?--x-ov-suggestions-menu-fit-max-height[\s\S]*?fitModeMenuWithinViewport[\s\S]*?setModeMenuResultOffset[\s\S]*?ResizeObserver[\s\S]*?observe\(suggestionsContainer\)/,
+  'overlay should use unscaled layout height before positioning the scope menu below results'
+);
+assert.match(
+  overlaySuggestionsCss,
+  /max-height:\s*min\([\s\S]*?--x-ov-suggestions-max-height[\s\S]*?--x-ov-suggestions-menu-fit-max-height/,
+  'overlay result scrolling should honor the live scope-menu fit limit'
+);
+assert.match(
+  newtabHtml,
+  /max-height:\s*min\([\s\S]*?100vh - 220px[\s\S]*?--x-nt-suggestions-max-height[\s\S]*?--x-nt-suggestions-menu-fit-max-height/,
+  'newtab result scrolling should honor the same live scope-menu fit limit'
 );
 
 assert.match(
@@ -235,13 +371,13 @@ const overlayTabKeySource = getFunctionSection(
 );
 assert.match(
   overlayTabKeySource,
-  /if \(!triggerInput\) \{\s*e\.preventDefault\(\);\s*activateOpenTabsSearchMode\(\);\s*return true;/,
-  'overlay Tab should enter open-tabs search when the empty-query suggestion list is collapsed or empty'
+  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?openSearchModeMenuFromDoubleTab\(\)/,
+  'overlay empty-input Tab should use the shared two-press scope-menu trigger'
 );
-assert.doesNotMatch(
+assert.match(
   overlayTabKeySource,
-  /suggestionItems\.length/,
-  'overlay Tab activation should not depend on open-tab suggestions already being rendered'
+  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?activateOpenTabsSearchMode\(\{ preserveModeMenuDoubleTab: true \}\)/,
+  'overlay first empty-input Tab should keep its established open-tabs search behavior'
 );
 
 [newtabSource, overlaySource].forEach((source, index) => {

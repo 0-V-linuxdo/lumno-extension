@@ -2278,7 +2278,7 @@
         line-height: 1.35;
       }
 
-      .newtab-preview-viewport .x-nt-history-delete-slot {
+      .newtab-preview-viewport .x-nt-suggestion-utility-slot {
         all: unset;
         width: 0;
         height: var(--x-nt-suggestion-action-height, 26px);
@@ -2289,12 +2289,12 @@
         opacity: 0;
       }
 
-      .newtab-preview-viewport .x-nt-suggestion-item[data-history-delete-visible="true"] .x-nt-history-delete-slot {
+      .newtab-preview-viewport .x-nt-suggestion-utility-slot[data-visible="true"] {
         width: var(--x-nt-suggestion-action-height, 26px);
         opacity: 1;
       }
 
-      .newtab-preview-viewport .x-nt-history-delete-button {
+      .newtab-preview-viewport .x-nt-suggestion-utility-button {
         all: unset;
         width: 24px;
         height: 24px;
@@ -4037,7 +4037,7 @@
         --x-ov-suggestion-action-button-border: #bfdbfe;
       }
 
-      #_x_extension_onboarding_overlay_demo_2026_unique_ .lumno-overlay-result .x-ov-history-delete-slot[data-visible="false"] {
+      #_x_extension_onboarding_overlay_demo_2026_unique_ .lumno-overlay-result .x-ov-suggestion-utility-slot[data-visible="false"] {
         display: none;
       }
 
@@ -4769,6 +4769,7 @@
     <script src="../shared/suggestion-action-model.js"></script>
     <script src="../shared/suggestion-navigation.js"></script>
     <script src="../shared/ime-key-guard.js"></script>
+    <script src="../shared/toast.js"></script>
     <script src="../shared/search-input-mode.js"></script>
     <script src="../shared/tooltip.js"></script>
     <script src="../overlay/runtime.js"></script>

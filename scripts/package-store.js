@@ -38,8 +38,10 @@ const injectedScriptFiles = [
   'src/react/overlay-islands.js',
   'src/shared/search-input-history.js',
   'src/shared/search-input-mode.js',
+  'src/shared/toast.js',
   'src/shared/shortcut-favicon.js',
   'src/shared/search-input.css',
+  'src/shared/toast.css',
   'src/shared/url-guards.js',
   'src/shared/favicon-utils.js',
   'src/shared/favicon-cache.js',
@@ -105,6 +107,19 @@ if (forbidden.length > 0) {
 
 const entrySet = new Set(entries);
 const missing = [];
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function packagedResourcePatternHasMatch(value) {
+  if (!value.includes('*')) {
+    return false;
+  }
+  const pattern = new RegExp(`^${value.split('*').map(escapeRegExp).join('.*')}$`);
+  return entries.some((entry) => pattern.test(entry));
+}
+
 function checkManifestPath(value) {
   if (!value || typeof value !== 'string') {
     return;
@@ -113,6 +128,9 @@ function checkManifestPath(value) {
     return;
   }
   if (value === '_favicon/*') {
+    return;
+  }
+  if (packagedResourcePatternHasMatch(value)) {
     return;
   }
   if (!entrySet.has(value)) {

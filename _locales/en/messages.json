@@ -1247,6 +1247,15 @@
   "search_remove_top_site_tooltip": {
     "message": "Remove this frequent result"
   },
+  "search_copy_url_tooltip": {
+    "message": "Copy link"
+  },
+  "search_copy_url_success": {
+    "message": "Result link copied"
+  },
+  "search_copy_url_failed": {
+    "message": "Could not copy result link"
+  },
   "search_tag_top_site": {
     "message": "Frequent"
   },
@@ -1444,6 +1453,24 @@
   },
   "search_scope_current": {
     "message": "Current"
+  },
+  "search_scope_remove_confirmation": {
+    "message": "Press Backspace again to remove the scope"
+  },
+  "search_scope_menu_shortcut_hint": {
+    "message": "Quickly open this panel"
+  },
+  "search_scope_menu_filter_hint": {
+    "message": "Click the panel, then type English or pinyin to filter"
+  },
+  "search_scope_menu_filter_query": {
+    "message": "Search: {query}"
+  },
+  "search_scope_panel_placeholder": {
+    "message": "Search specific site content..."
+  },
+  "search_scope_active_placeholder": {
+    "message": "Search within this scope; press Tab again to open the scope panel..."
   },
   "search_scope_group_engines": {
     "message": "Search engines"
@@ -1666,6 +1693,12 @@
   },
   "shortcut_reference_search_tab_mode_desc": {
     "message": "Complete a suggestion or enter site/open-tabs search mode"
+  },
+  "shortcut_reference_search_open_scope_menu_title": {
+    "message": "Open search scope panel"
+  },
+  "shortcut_reference_search_open_scope_menu_desc": {
+    "message": "When the input is empty, press Tab twice; with a search scope selected, press Tab once"
   },
   "shortcut_reference_search_close_title": {
     "message": "Close or leave mode"

@@ -345,10 +345,10 @@ function OverlayResult({
           />
         </button>
         {result.historyDeletable ? (
-          <div className="x-ov-history-delete-slot" data-visible="false">
+          <div className="x-ov-suggestion-utility-slot" data-visible="false">
             <button
               aria-label={model.removeHistoryLabel}
-              className="x-ov-history-delete-button"
+              className="x-ov-suggestion-utility-button"
               data-visible="false"
               type="button"
             >

@@ -205,6 +205,24 @@ describe('Suggestions React island', () => {
     ).toBe('x-ov-suggestion-mark');
   });
 
+  it('highlights separate query terms in both the title and URL', () => {
+    const { view, items } = createView();
+
+    render(view, [{
+      type: 'history',
+      title: 'Codex workspace',
+      url: 'https://example.com/最爱'
+    }], {
+      query: 'codex 最爱'
+    });
+
+    expect(
+      Array.from(items[0].querySelectorAll('mark')).map((mark) =>
+        mark.textContent
+      )
+    ).toEqual(['Codex', '最爱']);
+  });
+
   it('keeps existing row nodes during an incremental append', () => {
     const { view, items } = createView();
     const suggestions: Suggestion[] = [
@@ -568,10 +586,12 @@ describe('Suggestions React island', () => {
 
   it('renders open tabs and preserves click and middle-click activation', () => {
     const onSwitchToTab = vi.fn();
+    const onCopyUrl = vi.fn();
     const setSuggestionsVisible = vi.fn();
     const preloadIcon = vi.fn();
     const { view, items } = createView({
       onSwitchToTab,
+      onCopyUrl,
       setSuggestionsVisible,
       preloadIcon
     });
@@ -586,7 +606,13 @@ describe('Suggestions React island', () => {
     });
     const row = items[0];
     const button = row._xSwitchButton as HTMLButtonElement;
+    const copyButton = row.querySelector(
+      '.x-nt-suggestion-utility-button'
+    ) as HTMLButtonElement;
     act(() => {
+      row.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
       button.dispatchEvent(new MouseEvent('click', {
         bubbles: true,
         button: 0
@@ -595,12 +621,17 @@ describe('Suggestions React island', () => {
         bubbles: true,
         button: 1
       }));
+      copyButton.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true
+      }));
     });
 
     expect(items).toHaveLength(1);
     expect(items[0]._xIsSearchSuggestion).toBe(false);
     expect(preloadIcon).toHaveBeenCalledOnce();
     expect(onSwitchToTab).toHaveBeenCalledTimes(2);
+    expect(onCopyUrl).toHaveBeenCalledWith('https://example.com/');
     expect(setSuggestionsVisible).toHaveBeenLastCalledWith(true);
   });
 
@@ -632,6 +663,88 @@ describe('Suggestions React island', () => {
       'exa'
     );
     expect(onActivateSuggestion).not.toHaveBeenCalled();
+  });
+
+  it('copies a result URL without activating or deleting the row', () => {
+    const onActivateSuggestion = vi.fn();
+    const onDeleteHistory = vi.fn();
+    const onCopyUrl = vi.fn();
+    const showTopActionTooltip = vi.fn();
+    const { view, items } = createView({
+      onActivateSuggestion,
+      onDeleteHistory,
+      onCopyUrl,
+      showTopActionTooltip
+    });
+    const suggestion: Suggestion = {
+      type: 'history',
+      title: 'Example',
+      url: 'https://example.com/path'
+    };
+    render(view, [suggestion]);
+    const row = items[0];
+    const utilityButtons = row.querySelectorAll<HTMLButtonElement>(
+      '.x-nt-suggestion-utility-button'
+    );
+    const copyButton = utilityButtons[0];
+    const deleteButton = row._xHistoryDeleteButton as HTMLButtonElement;
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+      copyButton.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+      copyButton.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true
+      }));
+    });
+
+    expect(onCopyUrl).toHaveBeenCalledWith('https://example.com/path');
+    expect(onActivateSuggestion).not.toHaveBeenCalled();
+    expect(onDeleteHistory).not.toHaveBeenCalled();
+    expect(utilityButtons).toHaveLength(2);
+    expect(copyButton.className).toBe(deleteButton.className);
+    expect(copyButton.dataset.visible).toBe('true');
+    expect(deleteButton.dataset.visible).toBe('true');
+    expect(copyButton.getAttribute('aria-label')).toBe('复制链接');
+    expect(showTopActionTooltip).toHaveBeenCalledWith(
+      copyButton,
+      '复制链接'
+    );
+    [
+      '--x-nt-suggestion-utility-color',
+      '--x-nt-suggestion-utility-bg',
+      '--x-nt-suggestion-utility-border'
+    ].forEach((property) => {
+      expect(copyButton.style.getPropertyValue(property)).toBe(
+        deleteButton.style.getPropertyValue(property)
+      );
+    });
+    expect(copyButton.compareDocumentPosition(deleteButton))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('renders copy only for result rows with a URL', () => {
+    const { view, container, items } = createView();
+
+    render(view, [{
+      type: 'commandSettings',
+      title: 'Settings',
+      commandText: '/settings'
+    }]);
+    expect(container.querySelector('.x-nt-suggestion-utility-button'))
+      .toBeNull();
+
+    render(view, [{
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.com/'
+    }]);
+    expect(container.querySelector('.x-nt-suggestion-utility-button'))
+      .toBeInstanceOf(HTMLButtonElement);
   });
 
   it('renders empty state and clears external selection state', () => {
@@ -700,6 +813,9 @@ describe('Suggestions React island', () => {
     ).not.toBeNull();
     expect(
       items[0].querySelector('.x-ov-action-tag__label')
+    ).not.toBeNull();
+    expect(
+      items[0].querySelector('.x-ov-suggestion-utility-button')
     ).not.toBeNull();
 
     act(() => {

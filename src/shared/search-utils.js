@@ -1286,7 +1286,10 @@
     if (matchesTerm(context.queryLower)) {
       return true;
     }
-    return context.queryTerms.some((term) => matchesTerm(term));
+    const coreTerms = Array.isArray(context.coreQueryTerms) && context.coreQueryTerms.length > 0
+      ? context.coreQueryTerms
+      : (Array.isArray(context.queryTerms) ? context.queryTerms : []);
+    return coreTerms.length > 0 && coreTerms.every((term) => matchesTerm(term));
   }
 
   function isShortAsciiSearchTerm(term) {
@@ -2423,6 +2426,60 @@
     return SEARCH_ENGINE_SITE_SEARCH_PROVIDER_KEYS.has(key);
   }
 
+  function getSearchEngineSiteSearchProvider(searchEngineState, providers) {
+    const state = searchEngineState && typeof searchEngineState === 'object'
+      ? searchEngineState
+      : {};
+    const engineProviders = (Array.isArray(providers) ? providers : [])
+      .filter(isSearchEngineSiteSearchProvider);
+    const stateHost = normalizeHost(state.host) || getUrlHost(state.searchTemplate);
+    if (stateHost) {
+      const hostMatch = engineProviders.find((provider) => siteSearchHostsMatch(
+        stateHost,
+        getSiteSearchProviderHost(provider)
+      ));
+      if (hostMatch) {
+        return hostMatch;
+      }
+    }
+    const stateName = String(state.name || '').trim().toLowerCase();
+    if (stateName) {
+      const nameMatch = engineProviders.find((provider) => (
+        String(provider && provider.name || '').trim().toLowerCase() === stateName
+      ));
+      if (nameMatch) {
+        return nameMatch;
+      }
+    }
+    const stateId = String(state.id || '').trim().toLowerCase();
+    if (stateId) {
+      const aliasMatch = engineProviders.find((provider) => (
+        Array.isArray(provider && provider.aliases) &&
+        provider.aliases.some((alias) => String(alias || '').trim().toLowerCase() === stateId)
+      ));
+      if (aliasMatch) {
+        return aliasMatch;
+      }
+    }
+    const fallbackProvider = findSiteSearchProvider('google', engineProviders);
+    const normalizedTemplate = normalizeSiteSearchTemplate(state.searchTemplate);
+    if (!normalizedTemplate || !normalizedTemplate.includes('{query}')) {
+      return fallbackProvider || null;
+    }
+    const keyToken = (stateId || stateHost || stateName || 'detected')
+      .replace(/[^a-z0-9.-]+/gi, '-')
+      .replace(/^-+|-+$/g, '') || 'detected';
+    const displayName = String(state.name || state.host || state.id || '').trim() || 'Search';
+    return {
+      key: `engine-${keyToken}`,
+      aliases: stateId ? [stateId] : [],
+      name: displayName,
+      template: normalizedTemplate,
+      category: 'searchEngine',
+      _xIsDetectedSearchEngine: true
+    };
+  }
+
   function isInteractiveSiteSearchProvider(provider) {
     return Boolean(
       hasOpenAndSubmitSiteSearchAction(provider) &&
@@ -2864,6 +2921,7 @@
     getKeywordSearchSuggestionState,
     getSearchEngineSuggestionScore,
     getSearchEngineSuggestionPolicy,
+    getSearchEngineSiteSearchProvider,
     getSearchNavigationRepresentativeSignal,
     getSearchSuggestionCategoryAdjustment,
     getSearchSuggestionClusterInfo,

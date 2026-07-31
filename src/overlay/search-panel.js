@@ -61,6 +61,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const SUGGESTION_NAVIGATION = window.LumnoSuggestionNavigation || {};
   const SEARCH_INPUT_HISTORY = window.LumnoSearchInputHistory || {};
   const OVERLAY_SUGGESTIONS_VIEW = window.LumnoOverlaySuggestionsView || {};
+  const OVERLAY_TOAST = window.LumnoToast || {};
   const SEARCH_INPUT_MODE = window.LumnoSearchInputMode || {};
   const FEATURE_HINTS = window.LumnoFeatureHints || {};
   const UPDATE_NOTICE = window.LumnoUpdateNotice || {};
@@ -97,6 +98,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   }
   if (typeof SEARCH_INPUT_MODE.createInputModeController !== 'function') {
     console.warn('Lumno: search input mode helper not available.');
+    return;
+  }
+  if (typeof OVERLAY_TOAST.createToastController !== 'function' ||
+      typeof OVERLAY_TOAST.createToastStyleGate !== 'function') {
+    console.warn('Lumno: overlay toast helper not available.');
     return;
   }
   if (!overlayLifecycle ||
@@ -236,6 +242,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const FEATURE_HINTS_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/shared/feature-hints.css');
   const TOOLTIP_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/shared/tooltip.css');
   const CURSOR_TOOLTIP_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/shared/cursor-tooltip.css');
+  const TOAST_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/shared/toast.css');
   const OVERLAY_SUGGESTIONS_CSS_URL = overlayRuntime.getRuntimeUrl(chrome, 'src/overlay/suggestions-view.css');
   const overlayMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let overlayThemeMode = 'system';
@@ -461,6 +468,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     host: '',
     searchTemplate: ''
   };
+  let overlaySearchEngineStateReady = Promise.resolve(overlaySearchEngineState);
 
   function ensureRemixIconStyles() {
     if (document.getElementById('_x_extension_remixicon_css_2024_unique_')) {
@@ -533,6 +541,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     return overlayRuntime.getStorageValues(storageArea, keys);
   }
 
+  function loadPreferredLocaleMessages(locale, fallbackMessages) {
+    return loadLocaleMessages(locale).then((messages) => {
+      if (messages && Object.keys(messages).length > 0) {
+        return messages;
+      }
+      return fallbackMessages || {};
+    }).catch(() => fallbackMessages || {});
+  }
+
   async function bootstrapOverlayLanguageForInitialRender() {
     const result = await getStorageValuesAsync([LANGUAGE_STORAGE_KEY, LANGUAGE_MESSAGES_STORAGE_KEY]);
     overlayLanguageMode = result[LANGUAGE_STORAGE_KEY] || 'system';
@@ -540,11 +557,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       ? getSystemLocale()
       : normalizeLocale(overlayLanguageMode);
     const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
-    if (payload && payload.locale === targetLocale && payload.messages) {
-      currentMessages = payload.messages || {};
-      return;
-    }
-    currentMessages = await loadLocaleMessages(targetLocale).catch(() => ({}));
+    const fallbackMessages = payload && payload.locale === targetLocale
+      ? payload.messages
+      : null;
+    currentMessages = await loadPreferredLocaleMessages(targetLocale, fallbackMessages);
   }
 
   function formatMessage(key, fallback, params) {
@@ -724,16 +740,32 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   }
 
   function loadOverlaySearchEngineState(onReload) {
-    if (!storageArea) {
-      return;
+    if (!storageArea || typeof storageArea.get !== 'function') {
+      return Promise.resolve(overlaySearchEngineState);
     }
-    storageArea.get([DEFAULT_SEARCH_ENGINE_STORAGE_KEY], (result) => {
-      const stored = result ? result[DEFAULT_SEARCH_ENGINE_STORAGE_KEY] : null;
-      if (stored && stored.id) {
-        overlaySearchEngineState = stored;
-        if (typeof onReload === 'function') {
-          onReload();
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result) => {
+        if (settled) {
+          return;
         }
+        settled = true;
+        const stored = result ? result[DEFAULT_SEARCH_ENGINE_STORAGE_KEY] : null;
+        if (stored && stored.id) {
+          overlaySearchEngineState = stored;
+          if (typeof onReload === 'function') {
+            onReload();
+          }
+        }
+        resolve(overlaySearchEngineState);
+      };
+      try {
+        const maybePromise = storageArea.get([DEFAULT_SEARCH_ENGINE_STORAGE_KEY], finish);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(finish, () => finish(null));
+        }
+      } catch (error) {
+        finish(null);
       }
     });
   }
@@ -1129,6 +1161,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (overlaySuggestionsView === mountedSuggestionsView) {
         overlaySuggestionsView = null;
       }
+      const mountedToastController = overlayElement._lumnoToastController;
+      if (mountedToastController &&
+          typeof mountedToastController.destroy === 'function') {
+        mountedToastController.destroy();
+      }
+      overlayElement._lumnoToastController = null;
+      const mountedToastStyleGate = overlayElement._lumnoToastStyleGate;
+      if (mountedToastStyleGate &&
+          typeof mountedToastStyleGate.destroy === 'function') {
+        mountedToastStyleGate.destroy();
+      }
+      overlayElement._lumnoToastStyleGate = null;
       const shellRuntime = window.LumnoOverlayShell || {};
       if (typeof shellRuntime.destroyOverlayMount === 'function') {
         shellRuntime.destroyOverlayMount(mountHost);
@@ -1243,6 +1287,24 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inputModeController.destroy();
       inputModeController = null;
     }
+    const storedModeMenuCursorTooltipController = overlayElement &&
+      overlayElement._lumnoModeMenuCursorTooltipController;
+    if (storedModeMenuCursorTooltipController &&
+        typeof storedModeMenuCursorTooltipController.destroy === 'function') {
+      storedModeMenuCursorTooltipController.destroy();
+    }
+    if (overlayElement) {
+      overlayElement._lumnoModeMenuCursorTooltipController = null;
+    }
+    const storedModeMenuResultResizeObserver = overlayElement &&
+      overlayElement._lumnoModeMenuResultResizeObserver;
+    if (storedModeMenuResultResizeObserver &&
+        typeof storedModeMenuResultResizeObserver.disconnect === 'function') {
+      storedModeMenuResultResizeObserver.disconnect();
+    }
+    if (overlayElement) {
+      overlayElement._lumnoModeMenuResultResizeObserver = null;
+    }
     const storedInputHistoryController =
       overlayElement && overlayElement._lumnoInputHistoryController;
     if (storedInputHistoryController &&
@@ -1346,6 +1408,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       featureHintsCssUrl: FEATURE_HINTS_CSS_URL,
       tooltipCssUrl: TOOLTIP_CSS_URL,
       cursorTooltipCssUrl: CURSOR_TOOLTIP_CSS_URL,
+      toastCssUrl: TOAST_CSS_URL,
       overlaySuggestionsCssUrl: OVERLAY_SUGGESTIONS_CSS_URL
     });
     overlay = overlayMount && overlayMount.panel ? overlayMount.panel : null;
@@ -1402,6 +1465,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (previousResolvedTheme !== nextResolvedTheme) {
         refreshOverlayThemeAwareFavicons();
       }
+      if (overlayToastElement) {
+        overlayToastElement.setAttribute('data-theme', nextResolvedTheme || 'light');
+      }
       if (mode === 'system') {
         startOverlayPageThemeObserver();
         if (!overlayThemeListenerAttached) {
@@ -1434,8 +1500,120 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       featureHintsCssUrl: FEATURE_HINTS_CSS_URL,
       tooltipCssUrl: TOOLTIP_CSS_URL,
       cursorTooltipCssUrl: CURSOR_TOOLTIP_CSS_URL,
+      toastCssUrl: TOAST_CSS_URL,
       overlaySuggestionsCssUrl: OVERLAY_SUGGESTIONS_CSS_URL
     });
+
+    const overlayToastElement = applyNoTranslate(document.createElement('div'));
+    overlayToastElement.id = '_x_extension_overlay_toast_2026_unique_';
+    overlayToastElement.className = '_x_extension_overlay_toast_2026_unique_ x-lumno-toast';
+    overlayToastElement.style.setProperty(
+      '--x-lumno-toast-top',
+      'max(24px, calc(20vh - 48px))'
+    );
+    overlayToastElement.style.setProperty('--x-lumno-toast-z-index', '2147483647');
+    overlayToastElement.setAttribute('data-show', 'false');
+    overlayToastElement.setAttribute('role', 'status');
+    overlayToastElement.setAttribute('aria-live', 'polite');
+    const overlayToastStyleRoot = overlayStyleRoot || document;
+    const overlayToastStylesheet = overlayToastStyleRoot &&
+        typeof overlayToastStyleRoot.getElementById === 'function'
+      ? overlayToastStyleRoot.getElementById('_x_extension_toast_style_2026_unique_')
+      : (overlayToastStyleRoot && typeof overlayToastStyleRoot.querySelector === 'function'
+        ? overlayToastStyleRoot.querySelector('#_x_extension_toast_style_2026_unique_')
+        : null);
+    const overlayToastStyleGate = OVERLAY_TOAST.createToastStyleGate(
+      overlayToastElement,
+      {
+        windowObj: window,
+        stylesheetElement: overlayToastStylesheet
+      }
+    );
+    (overlayStyleRoot || overlayHost).appendChild(overlayToastElement);
+    const overlayToastController = OVERLAY_TOAST.createToastController(
+      overlayToastElement,
+      { windowObj: window }
+    );
+    overlay._lumnoToastController = overlayToastController;
+    overlay._lumnoToastStyleGate = overlayToastStyleGate;
+
+    function hideOverlayToast() {
+      if (overlayToastController && typeof overlayToastController.hide === 'function') {
+        overlayToastController.hide();
+      }
+    }
+
+    function showOverlayToast(message, isError) {
+      if (overlayToastController && typeof overlayToastController.show === 'function') {
+        overlayToastController.show(message, { error: Boolean(isError) });
+      }
+    }
+
+    function fallbackCopyText(text) {
+      if (!document || !document.body || typeof document.execCommand !== 'function') {
+        return false;
+      }
+      const activeElement = document.activeElement;
+      const textarea = document.createElement('textarea');
+      textarea.value = String(text || '');
+      textarea.setAttribute('readonly', '');
+      textarea.style.setProperty('position', 'fixed');
+      textarea.style.setProperty('left', '-9999px');
+      textarea.style.setProperty('top', '0');
+      document.body.appendChild(textarea);
+      textarea.select();
+      let copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch (error) {
+        copied = false;
+      }
+      textarea.remove();
+      if (activeElement && typeof activeElement.focus === 'function') {
+        activeElement.focus({ preventScroll: true });
+      }
+      return copied;
+    }
+
+    function copyTextToClipboard(text) {
+      const value = String(text || '');
+      const clipboard = window.navigator && window.navigator.clipboard;
+      if (clipboard && typeof clipboard.writeText === 'function') {
+        return Promise.resolve(clipboard.writeText(value)).catch((error) => {
+          if (fallbackCopyText(value)) {
+            return true;
+          }
+          throw error;
+        });
+      }
+      return fallbackCopyText(value)
+        ? Promise.resolve(true)
+        : Promise.reject(new Error('clipboard-write-failed'));
+    }
+
+    function copySearchResultUrl(url) {
+      const value = String(url || '').trim();
+      if (!value) {
+        showOverlayToast(t(
+          'search_copy_url_failed',
+          'Could not copy result link'
+        ), true);
+        return Promise.resolve(false);
+      }
+      return copyTextToClipboard(value).then(() => {
+        showOverlayToast(t(
+          'search_copy_url_success',
+          'Result link copied'
+        ));
+        return true;
+      }).catch(() => {
+        showOverlayToast(t(
+          'search_copy_url_failed',
+          'Could not copy result link'
+        ), true);
+        return false;
+      });
+    }
 
     overlayRevealGate = overlaySiteFixes && typeof overlaySiteFixes.createOverlayRevealGate === 'function'
       ? overlaySiteFixes.createOverlayRevealGate(window, {
@@ -1701,6 +1879,25 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         decorateElement: applyNoTranslate
       })
       : null;
+    const overlayModeMenuCursorTooltipController = window.LumnoCursorTooltip &&
+        typeof window.LumnoCursorTooltip.createController === 'function'
+      ? window.LumnoCursorTooltip.createController({
+        documentObj: document,
+        windowObj: window,
+        id: '_x_extension_overlay_mode_menu_cursor_tooltip_2026_unique_',
+        appendTo: overlayStyleRoot || document.body,
+        positionMode: 'fixed',
+        maxWidth: 320,
+        offsetX: 14,
+        offsetY: 16,
+        decorateElement: (element) => {
+          applyNoTranslate(element);
+          element.style.setProperty('--x-extension-tooltip-z-index', '2147483647');
+        }
+      })
+      : null;
+    overlay._lumnoModeMenuCursorTooltipController =
+      overlayModeMenuCursorTooltipController;
     const showTopActionTooltip = (button, text) => {
       if (!topActionTooltipController || !button || !text) {
         return;
@@ -1822,6 +2019,48 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inputDivider.style.setProperty('display', visible ? 'block' : 'none', inputUsesIsolatedStyles ? '' : 'important');
     }
 
+    function getSearchModeMenuResultOffset() {
+      if (!suggestionsContainer ||
+          suggestionsContainer.getAttribute('data-collapsed') === 'true' ||
+          suggestionsContainer.getAttribute('aria-hidden') === 'true') {
+        return 0;
+      }
+      const layoutHeight = Math.max(
+        0,
+        Number(suggestionsContainer.offsetHeight) || 0
+      );
+      if (layoutHeight > 0) {
+        return layoutHeight;
+      }
+      const rect = suggestionsContainer.getBoundingClientRect();
+      return Math.max(0, Number(rect && rect.height) || 0);
+    }
+
+    function syncSearchModeMenuResultOffset() {
+      if (!inputModeController ||
+          typeof inputModeController.setModeMenuResultOffset !== 'function') {
+        return;
+      }
+      const fitMaxHeightProperty =
+        '--x-ov-suggestions-menu-fit-max-height';
+      const resultHeightLimit =
+        typeof inputModeController.fitModeMenuWithinViewport === 'function'
+          ? inputModeController.fitModeMenuWithinViewport({ bottomInset: 24 })
+          : null;
+      if (Number.isFinite(resultHeightLimit)) {
+        suggestionsContainer.style.setProperty(
+          fitMaxHeightProperty,
+          `${resultHeightLimit}px`,
+          inputUsesIsolatedStyles ? '' : 'important'
+        );
+      } else {
+        suggestionsContainer.style.removeProperty(fitMaxHeightProperty);
+      }
+      inputModeController.setModeMenuResultOffset(
+        getSearchModeMenuResultOffset()
+      );
+    }
+
     function setOverlayResultsCollapsed(collapsed) {
       const shouldCollapse = Boolean(collapsed);
       const wasCollapsed = suggestionsContainer.getAttribute('data-collapsed') === 'true';
@@ -1852,10 +2091,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         suggestionsContainer.style.setProperty('pointer-events', 'none', inputUsesIsolatedStyles ? '' : 'important');
         suggestionsContainer.style.setProperty('overflow', 'hidden', inputUsesIsolatedStyles ? '' : 'important');
         setInputDividerVisible(false);
+        syncSearchModeMenuResultOffset();
         return;
       }
       if (!wasCollapsed) {
         setInputDividerVisible(true);
+        syncSearchModeMenuResultOffset();
         return;
       }
       suggestionsContainer.style.removeProperty('max-height');
@@ -1868,6 +2109,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       suggestionsContainer.style.removeProperty('transition');
       suggestionsContainer.removeAttribute('aria-hidden');
       setInputDividerVisible(true);
+      syncSearchModeMenuResultOffset();
     }
 
     function shouldShowOpenTabsForEmptyQuery() {
@@ -1909,6 +2151,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
 
     function applyLanguageStrings() {
+      if (inputModeController &&
+          typeof inputModeController.refreshModeMenuLanguage === 'function') {
+        inputModeController.refreshModeMenuLanguage();
+      }
       if (overlayUpdateNoticeController &&
           typeof overlayUpdateNoticeController.updateLanguage === 'function') {
         overlayUpdateNoticeController.updateLanguage();
@@ -1962,19 +2208,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (storageArea) {
         storageArea.get([LANGUAGE_MESSAGES_STORAGE_KEY], (result) => {
           const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
-          if (payload && payload.locale === targetLocale && payload.messages) {
-            currentMessages = payload.messages || {};
-            applyLanguageStrings();
-            return;
-          }
-          loadLocaleMessages(targetLocale).then((messages) => {
+          const fallbackMessages = payload && payload.locale === targetLocale
+            ? payload.messages
+            : null;
+          loadPreferredLocaleMessages(targetLocale, fallbackMessages).then((messages) => {
             currentMessages = messages || {};
             applyLanguageStrings();
           });
         });
         return;
       }
-      loadLocaleMessages(targetLocale).then((messages) => {
+      loadPreferredLocaleMessages(targetLocale, null).then((messages) => {
         currentMessages = messages || {};
         applyLanguageStrings();
       });
@@ -3056,14 +3300,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           ? getSystemLocale()
           : normalizeLocale(overlayLanguageMode);
         if (payload && payload.locale === targetLocale && payload.messages) {
-          currentMessages = payload.messages || {};
-          applyLanguageStrings();
+          loadPreferredLocaleMessages(targetLocale, payload.messages).then((messages) => {
+            currentMessages = messages || {};
+            applyLanguageStrings();
+          });
         }
       }
     };
     chrome.storage.onChanged.addListener(overlayLanguageStorageListener);
 
-    loadOverlaySearchEngineState(refreshOverlaySuggestionsFromLastResponse);
+    overlaySearchEngineStateReady = loadOverlaySearchEngineState(
+      refreshOverlaySuggestionsFromLastResponse
+    );
     overlaySearchEngineStorageListener = (changes, areaName) => {
       if (!storageAreaName || areaName !== storageAreaName || !changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
         return;
@@ -4127,15 +4375,32 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       attachProviderIcon: attachInputModeProviderIcon,
       preferDirectProviderIcons: true,
       formatMessage,
-      modeMenuCursorTooltipController: overlayCursorTooltipController,
+      modeMenuCursorTooltipController: overlayModeMenuCursorTooltipController,
       getModeMenuItems: getSearchModeMenuItems,
       onModeMenuSelect: selectSearchModeMenuItem,
+      onModeTagRemovalConfirmation: () => {
+        showOverlayToast(t(
+          'search_scope_remove_confirmation',
+          'Press Backspace again to remove the scope'
+        ));
+      },
+      onModeTagRemovalConfirmationReset: hideOverlayToast,
+      onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
       isTabHintSuppressed: () => Boolean(
         siteSearchState ||
         localSearchScopeState ||
         openTabsSearchModeActive
       )
     });
+    syncSearchModeMenuResultOffset();
+    if (typeof window.ResizeObserver === 'function') {
+      const modeMenuResultResizeObserver = new window.ResizeObserver(
+        syncSearchModeMenuResultOffset
+      );
+      modeMenuResultResizeObserver.observe(suggestionsContainer);
+      overlay._lumnoModeMenuResultResizeObserver =
+        modeMenuResultResizeObserver;
+    }
     loadSiteSearchIconCache().then(() => {
       if (!siteSearchState || !inputModeController) {
         return;
@@ -4161,8 +4426,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     }
 
-    function setOpenTabsSearchPrefix(theme) {
+    function setOpenTabsSearchPrefix(theme, options) {
       if (inputModeController) {
+        const prefixOptions = options || {};
         inputModeController.setPrefixText(
           t('search_open_tabs_only_entry', '搜索已打开标签页'),
           theme,
@@ -4170,7 +4436,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             animate: true,
             iconClass: 'ri-window-line',
             menuIconName: 'browser',
-            modeId: 'openTabs'
+            modeId: 'openTabs',
+            preserveModeMenuDoubleTab: Boolean(
+              prefixOptions.preserveModeMenuDoubleTab
+            )
           }
         );
       }
@@ -5072,15 +5341,56 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`;
     }
 
+    function getOverlayDefaultSearchModeProvider(providers) {
+      if (typeof SEARCH_UTILS.getSearchEngineSiteSearchProvider === 'function') {
+        return SEARCH_UTILS.getSearchEngineSiteSearchProvider(
+          overlaySearchEngineState,
+          providers
+        );
+      }
+      return SEARCH_UTILS.findSiteSearchProvider(
+        overlaySearchEngineState.id || 'google',
+        providers
+      );
+    }
+
+    function getCurrentPageSiteSearchModeProvider(providers) {
+      const currentPageHost = typeof SEARCH_UTILS.getUrlHost === 'function'
+        ? SEARCH_UTILS.getUrlHost(initialContextTabUrl)
+        : '';
+      if (!currentPageHost) {
+        return null;
+      }
+      return (providers || []).find((provider) => (
+        !isSearchEngineSiteSearchProvider(provider) &&
+        !isAiSiteSearchProvider(provider) &&
+        SEARCH_UTILS.siteSearchHostsMatch(
+          currentPageHost,
+          getProviderHost(provider)
+        )
+      )) || null;
+    }
+
+    function getSearchModeProviders() {
+      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+        ? siteSearchProvidersCache
+        : defaultSiteSearchProviders;
+      const defaultProvider = getOverlayDefaultSearchModeProvider(providers);
+      if (!defaultProvider || providers.some((provider) => (
+        getSearchModeProviderId(provider) === getSearchModeProviderId(defaultProvider)
+      ))) {
+        return providers;
+      }
+      return [defaultProvider].concat(providers);
+    }
+
     function buildSearchModeMenuItems() {
       const engineGroup = t('search_scope_group_engines', '搜索引擎');
       const localGroup = t('search_scope_group_local', '浏览器内容');
       const aiGroup = t('search_scope_group_ai', 'AI 搜索');
       const siteGroup = t('search_scope_group_sites', '站内搜索');
       const items = [];
-      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
-        ? siteSearchProvidersCache
-        : defaultSiteSearchProviders;
+      const providers = getSearchModeProviders();
       providers
         .filter((provider) => isSearchEngineSiteSearchProvider(provider))
         .concat(providers.filter((provider) => (
@@ -5106,6 +5416,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         id: 'openTabs',
         kind: 'openTabs',
         label: t('search_open_tabs_only_entry', '搜索已打开标签页'),
+        searchTerms: ['open tabs', 'tabs', 'browser'],
         group: localGroup,
         iconClass: 'ri-window-line',
         menuIconName: 'browser',
@@ -5120,6 +5431,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           kind: 'local',
           sourceType,
           label: getLocalSearchScopeLabel({ sourceType }),
+          searchTerms: sourceType === 'topSite'
+            ? ['top sites', 'frequent sites', 'favorites']
+            : (sourceType === 'bookmark'
+              ? ['bookmark', 'bookmarks']
+              : ['history', 'browsing history']),
           group: localGroup,
           iconClass: getLocalSearchScopeIconClass(sourceType),
           menuIconName: sourceType === 'topSite' ? 'star' : sourceType,
@@ -5134,6 +5450,36 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return buildSearchModeMenuItems();
       }
       return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+    }
+
+    function openSearchModeMenuFromDoubleTab() {
+      const expectedSiteSearchState = siteSearchState;
+      const expectedLocalSearchScopeState = localSearchScopeState;
+      const expectedOpenTabsSearchModeActive = openTabsSearchModeActive;
+      const expectedInputValue = String(searchInput.value || '');
+      const activateDefaultProvider = (providers) => {
+        if (!inputModeController ||
+            siteSearchState !== expectedSiteSearchState ||
+            localSearchScopeState !== expectedLocalSearchScopeState ||
+            openTabsSearchModeActive !== expectedOpenTabsSearchModeActive ||
+            String(searchInput.value || '') !== expectedInputValue ||
+            expectedSiteSearchState || expectedLocalSearchScopeState ||
+            expectedInputValue !== '') {
+          return false;
+        }
+        const provider = getCurrentPageSiteSearchModeProvider(providers) ||
+          getOverlayDefaultSearchModeProvider(providers);
+        if (!provider) {
+          return false;
+        }
+        activateSiteSearch(provider);
+        inputModeController.openModeMenu('none');
+        return true;
+      };
+      return Promise.all([
+        overlaySearchEngineStateReady.catch(() => overlaySearchEngineState),
+        getSiteSearchProviders().catch(() => defaultSiteSearchProviders)
+      ]).then(([, providers]) => activateDefaultProvider(providers));
     }
 
     function restoreSearchModeQuery(rawQuery) {
@@ -5230,6 +5576,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!provider) {
         return;
       }
+      finishSuggestionsHeightInputSession({ animate: false });
       openTabsSearchModeActive = false;
       localSearchScopeState = null;
       localSearchScopeTriggerState = null;
@@ -5259,7 +5606,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       clearAutocomplete();
     }
 
-    function activateOpenTabsSearchMode() {
+    function activateOpenTabsSearchMode(options) {
       openTabsSearchModeActive = true;
       siteSearchState = null;
       localSearchScopeState = null;
@@ -5267,7 +5614,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inlineSearchState = null;
       siteSearchTriggerState = null;
       clearAutocomplete();
-      setOpenTabsSearchPrefix(defaultTheme);
+      setOpenTabsSearchPrefix(defaultTheme, options);
       latestRawInputValue = searchInput.value || '';
       latestOverlayQuery = latestRawInputValue.trim();
       requestTabsAndRender(latestOverlayQuery);
@@ -5414,7 +5761,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         clearAutocomplete();
         syncSearchTriggerHintFromInput(rawValue);
         if (query.length > 0) {
-          beginSuggestionsHeightInputSession(query);
+          if (!siteSearchState) {
+            beginSuggestionsHeightInputSession(query);
+          }
           if (!localSearchScopeState && isSlashCommandInput(query)) {
             updateSearchSuggestions([], query);
             return;
@@ -5480,7 +5829,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         clearAutocomplete();
         syncSearchTriggerHintFromInput(rawValue);
         if (query.length > 0) {
-          beginSuggestionsHeightInputSession(query);
+          if (!siteSearchState) {
+            beginSuggestionsHeightInputSession(query);
+          }
           if (!localSearchScopeState && isSlashCommandInput(query)) {
             updateSearchSuggestions([], query);
             return;
@@ -5527,12 +5878,51 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     document.addEventListener('click', clickOutsideHandler);
 
     function handleTabKey(e) {
+      if (!e || e.defaultPrevented) {
+        return false;
+      }
+      if (inputModeController &&
+          typeof inputModeController.shouldContainModeMenuTab === 'function' &&
+          inputModeController.shouldContainModeMenuTab(e)) {
+        return true;
+      }
+      if (inputModeController &&
+          typeof inputModeController.shouldCompleteModeMenuDoubleTab === 'function') {
+        const shouldOpenModeMenu =
+          inputModeController.shouldCompleteModeMenuDoubleTab(e);
+        if (shouldOpenModeMenu) {
+          openSearchModeMenuFromDoubleTab();
+          return true;
+        }
+        if (e.defaultPrevented) {
+          return true;
+        }
+      }
+      if (inputModeController &&
+          typeof inputModeController.shouldOpenModeMenuForActiveModeOnTab === 'function' &&
+          inputModeController.shouldOpenModeMenuForActiveModeOnTab(e)) {
+        inputModeController.openModeMenu('none');
+        return true;
+      }
       if (siteSearchState || localSearchScopeState || openTabsSearchModeActive) {
         return false;
       }
       const rawValue = searchInput.value;
       const rawTrigger = latestRawInputValue || rawValue;
       const triggerInput = (rawTrigger || rawValue).trim();
+      if (!triggerInput && inputModeController &&
+          typeof inputModeController.shouldOpenModeMenuOnDoubleTab === 'function') {
+        const shouldOpenModeMenu = inputModeController.shouldOpenModeMenuOnDoubleTab(e);
+        if (shouldOpenModeMenu) {
+          openSearchModeMenuFromDoubleTab();
+          return true;
+        }
+        if (e.defaultPrevented) {
+          activateOpenTabsSearchMode({ preserveModeMenuDoubleTab: true });
+          return true;
+        }
+        return false;
+      }
       if (siteSearchTriggerState &&
           siteSearchTriggerState.rawInput === triggerInput &&
           siteSearchTriggerState.provider) {
@@ -5600,11 +5990,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       }
-      if (!triggerInput) {
-        e.preventDefault();
-        activateOpenTabsSearchMode();
-        return true;
-      }
       return false;
     }
 
@@ -5622,6 +6007,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       handleTabKey(e);
     };
     document.addEventListener('keydown', captureTabHandler, true);
+
+    function shouldRemoveSearchModeTagOnBackspace(event) {
+      if (!inputModeController ||
+          typeof inputModeController.shouldRemoveModeTagOnBackspace !== 'function') {
+        return true;
+      }
+      const shouldRemove = inputModeController.shouldRemoveModeTagOnBackspace(event);
+      if (!shouldRemove && event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      return shouldRemove;
+    }
 
     function handleSearchInputKeydown(e) {
       syncSuggestionActionModifiersFromEvent(e);
@@ -5653,15 +6050,24 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       if (e.key === 'Backspace' && siteSearchState && !searchInput.value) {
+        if (!shouldRemoveSearchModeTagOnBackspace(e)) {
+          return;
+        }
         clearSiteSearch();
         return;
       }
       if (e.key === 'Backspace' && localSearchScopeState && !searchInput.value) {
+        if (!shouldRemoveSearchModeTagOnBackspace(e)) {
+          return;
+        }
         clearLocalSearchScope();
         clearSearchSuggestions();
         return;
       }
       if (e.key === 'Backspace' && openTabsSearchModeActive && !searchInput.value) {
+        if (!shouldRemoveSearchModeTagOnBackspace(e)) {
+          return;
+        }
         clearOpenTabsSearchMode();
         return;
       }
@@ -6157,15 +6563,21 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!container) {
         return metrics;
       }
-      const currentHeight = Math.max(0, Number(container.getBoundingClientRect().height) || 0);
+      const layoutHeight = Math.max(
+        0,
+        Number(container.offsetHeight) ||
+          Number(container.clientHeight) ||
+          Number(container.getBoundingClientRect().height) ||
+          0
+      );
       const computedStyle = window.getComputedStyle(container);
       const maxHeight = Number.parseFloat(computedStyle && computedStyle.maxHeight) || 0;
-      const clientHeight = Math.max(0, Number(container.clientHeight) || currentHeight);
+      const clientHeight = Math.max(0, Number(container.clientHeight) || layoutHeight);
       const scrollHeight = Math.max(0, Number(container.scrollHeight) || 0);
-      metrics.height = currentHeight;
+      metrics.height = layoutHeight;
       metrics.maxHeight = maxHeight;
       metrics.atMaxHeight = Boolean(
-        (maxHeight > 0 && currentHeight >= maxHeight - 1) ||
+        (maxHeight > 0 && layoutHeight >= maxHeight - 1) ||
         scrollHeight > clientHeight + 1
       );
       return metrics;
@@ -6287,17 +6699,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!container || !fromHeight || container.getAttribute('data-collapsed') === 'true') {
         return;
       }
-      const toHeight = container.getBoundingClientRect().height;
+      const targetMetrics = readSuggestionsHeightMetrics(container);
+      const toHeight = targetMetrics.height;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduceMotion || Math.abs(toHeight - fromHeight) <= 1) {
         return;
       }
-      const targetMetrics = readSuggestionsHeightMetrics(container);
       const isLargeShrink = toHeight < fromHeight - Math.max(104, fromHeight * 0.35);
       const transitionDurationMs = isLargeShrink ? 100 : 180;
-      const transitionEasing = isLargeShrink
-        ? 'cubic-bezier(0.2, 0, 0, 1)'
-        : 'ease';
+      const transitionEasing = 'ease-in-out';
       cancelSuggestionsHeightAnimation(container);
       suggestionsHeightAnimationTarget = toHeight;
       suggestionsHeightAnimationTargetIsCapped = targetMetrics.atMaxHeight;
@@ -6515,6 +6925,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         },
         onActivateSuggestion: activateRenderedOverlaySuggestion,
         onDeleteHistory: deleteRenderedOverlayHistorySuggestion,
+        onCopyUrl: copySearchResultUrl,
         showTopActionTooltip,
         hideTopActionTooltip,
         bindCursorTooltip: (target, getText, options) => (

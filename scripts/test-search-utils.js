@@ -126,6 +126,24 @@ assert.strictEqual(
   'title initials should not match unrelated letter combinations'
 );
 
+const multiTermContext = search.buildSearchQueryContext('codex 最爱');
+assert.strictEqual(
+  search.matchesSearchQueryText(
+    { title: 'Codex workspace', url: 'https://example.com/tools' },
+    multiTermContext
+  ),
+  false,
+  'multi-term queries should not match when only one term is present'
+);
+assert.strictEqual(
+  search.matchesSearchQueryText(
+    { title: 'Codex workspace', url: 'https://example.com/最爱' },
+    multiTermContext
+  ),
+  true,
+  'multi-term queries should allow their terms to match across title and URL'
+);
+
 const releaseContext = search.buildSearchQueryContext('lumno release');
 const releaseCoverage = search.getSearchTermCoverageStats(releaseContext, {
   titleLower: 'lumno',

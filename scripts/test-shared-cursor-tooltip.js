@@ -703,8 +703,30 @@ assert.match(
 );
 assert.match(
   overlayPanel,
-  /modeMenuCursorTooltipController: overlayCursorTooltipController/,
-  'overlay search-scope labels should use the shared cursor tooltip controller'
+  /const overlayModeMenuCursorTooltipController = window\.LumnoCursorTooltip[\s\S]*?id: '_x_extension_overlay_mode_menu_cursor_tooltip_2026_unique_'[\s\S]*?appendTo: overlayStyleRoot \|\| document\.body[\s\S]*?positionMode: 'fixed'/,
+  'overlay search-scope labels should use a viewport-positioned cursor bubble inside the isolated style root'
+);
+const overlayModeMenuControllerSource = overlayPanel.match(
+  /const overlayModeMenuCursorTooltipController = window\.LumnoCursorTooltip[\s\S]*?\n\s*: null;/
+);
+assert.ok(
+  overlayModeMenuControllerSource,
+  'overlay should create a dedicated search-scope cursor bubble controller'
+);
+assert.doesNotMatch(
+  overlayModeMenuControllerSource[0],
+  /boundaryElement:\s*overlay/,
+  'overlay search-scope cursor bubbles should not be clamped to the input panel boundary'
+);
+assert.match(
+  overlayPanel,
+  /modeMenuCursorTooltipController: overlayModeMenuCursorTooltipController/,
+  'overlay search-scope labels should use the dedicated fixed cursor bubble controller'
+);
+assert.match(
+  overlayPanel,
+  /storedModeMenuCursorTooltipController[\s\S]*?storedModeMenuCursorTooltipController\.destroy\(\)/,
+  'overlay teardown should destroy the dedicated search-scope cursor bubble controller'
 );
 assert.match(
   newtabPanel,

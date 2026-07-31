@@ -90,6 +90,14 @@
       shortcut: 'Tab'
     },
     {
+      id: 'search-open-scope-menu',
+      titleKey: 'shortcut_reference_search_open_scope_menu_title',
+      titleFallback: 'Open search scope panel',
+      descKey: 'shortcut_reference_search_open_scope_menu_desc',
+      descFallback: 'When the input is empty, press Tab twice; with a search scope selected, press Tab once',
+      shortcut: 'Tab Tab'
+    },
+    {
       id: 'search-close',
       titleKey: 'shortcut_reference_search_close_title',
       titleFallback: 'Close or leave mode',
@@ -158,6 +166,7 @@
         'search-navigate',
         'search-confirm',
         'search-tab-mode',
+        'search-open-scope-menu',
         'search-close',
         'search-current-tab',
         'search-switch-new-tab'

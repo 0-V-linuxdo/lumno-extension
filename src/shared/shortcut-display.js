@@ -143,6 +143,12 @@
     if (text.toLowerCase() === 'release alt') {
       return resolvePlatform(options) === 'mac' ? '⌥↑' : 'Alt↑';
     }
+    const sequence = text.split(/\s+/).filter(Boolean);
+    if (sequence.length > 1) {
+      return sequence
+        .map((shortcut) => formatShortcutChord(shortcut, options))
+        .join(' ');
+    }
     return formatShortcutChord(text, options);
   }
 

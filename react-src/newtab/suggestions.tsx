@@ -6,7 +6,8 @@ import {
   useState,
   useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent
+  type PointerEvent as ReactPointerEvent,
+  type RefObject
 } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
@@ -115,6 +116,11 @@ export interface SuggestionActionTagElement extends HTMLSpanElement {
   _xDefaultBorder?: string;
 }
 
+interface SuggestionUtilityActionElements {
+  slot: HTMLDivElement;
+  button: HTMLButtonElement;
+}
+
 interface SuggestionIconSlotElement extends HTMLSpanElement {
   _xIsFavicon?: boolean;
 }
@@ -145,8 +151,7 @@ export interface SuggestionElement extends HTMLDivElement {
   _xAlwaysHideVisitButton?: boolean;
   _xHasSwitchAction?: boolean;
   _xHistoryDeleteButton?: HTMLButtonElement | null;
-  _xHistoryDeleteSlot?: HTMLDivElement | null;
-  _xHasHistoryDeleteButton?: boolean;
+  _xUtilityActions?: SuggestionUtilityActionElements[];
   _xIsHovering?: boolean;
   _xTabId?: number | null;
 }
@@ -255,6 +260,7 @@ export interface SuggestionsViewOptions {
     suggestion: Suggestion,
     query: string
   ) => void;
+  onCopyUrl?: (url: string) => boolean | Promise<boolean> | void;
   shouldSwitchMatchedTabSuggestion?: (
     suggestion: Suggestion,
     index: number
@@ -385,6 +391,7 @@ interface NormalizedOptions {
   onDeleteHistory: NonNullable<
     SuggestionsViewOptions['onDeleteHistory']
   >;
+  onCopyUrl: NonNullable<SuggestionsViewOptions['onCopyUrl']>;
   shouldSwitchMatchedTabSuggestion: NonNullable<
     SuggestionsViewOptions['shouldSwitchMatchedTabSuggestion']
   >;
@@ -487,10 +494,6 @@ const OVERLAY_VARIABLE_OVERRIDES: Record<string, string> = {
   '--x-nt-suggestion-tag-bg': '--x-ov-suggestion-source-tag-bg',
   '--x-nt-suggestion-tag-text': '--x-ov-suggestion-source-tag-text',
   '--x-nt-suggestion-tag-border': '--x-ov-suggestion-source-tag-border',
-  '--x-nt-history-delete-color': '--x-ov-history-delete-text',
-  '--x-nt-history-delete-hover-color': '--x-ov-history-delete-text',
-  '--x-nt-history-delete-hover-bg': '--x-ov-history-delete-bg',
-  '--x-nt-history-delete-hover-border': '--x-ov-history-delete-border',
   '--x-nt-suggestion-icon-color': 'color'
 };
 
@@ -673,6 +676,7 @@ function normalizeOptions(
     onSwitchToTab: raw.onSwitchToTab || noop,
     onActivateSuggestion: raw.onActivateSuggestion || noop,
     onDeleteHistory: raw.onDeleteHistory || noop,
+    onCopyUrl: raw.onCopyUrl || noop,
     shouldSwitchMatchedTabSuggestion:
       raw.shouldSwitchMatchedTabSuggestion || (() => false),
     showTopActionTooltip: raw.showTopActionTooltip || noop,
@@ -707,25 +711,49 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function getHighlightNeedles(query: string): string[] {
+  const fullQuery = String(query || '').trim();
+  if (!fullQuery) {
+    return [];
+  }
+  const needles = [
+    fullQuery,
+    ...fullQuery.split(/[^a-z0-9\u4e00-\u9fff]+/i)
+  ];
+  const seen = new Set<string>();
+  return needles
+    .map((needle) => needle.trim())
+    .filter((needle) => {
+      const key = needle.toLowerCase();
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => right.length - left.length);
+}
+
 function getHighlightedParts(
   options: NormalizedOptions,
   text: unknown,
   query: string
 ): Array<{ text: string; highlighted: boolean }> {
   const safeText = options.sanitizeDisplayText(text);
-  const needle = String(query || '').trim();
-  if (!needle) {
+  const needles = getHighlightNeedles(query);
+  if (needles.length === 0) {
     return [{ text: safeText, highlighted: false }];
   }
+  const needleSet = new Set(needles.map((needle) => needle.toLowerCase()));
   const parts = safeText.split(
-    new RegExp(`(${escapeRegExp(needle)})`, 'gi')
+    new RegExp(`(${needles.map(escapeRegExp).join('|')})`, 'gi')
   );
   if (parts.length === 1) {
     return [{ text: safeText, highlighted: false }];
   }
   return parts.filter(Boolean).map((part) => ({
     text: part,
-    highlighted: part.toLowerCase() === needle.toLowerCase()
+    highlighted: needleSet.has(part.toLowerCase())
   }));
 }
 
@@ -1069,47 +1097,42 @@ function applySearchActionStyles(
     'data-visible',
     active && item._xHasActionTags ? 'true' : 'false'
   );
-  if (item._xHistoryDeleteButton) {
-    const visible = Boolean(
-      item._xHasHistoryDeleteButton && item._xIsHovering
-    );
-    item.setAttribute(
-      'data-history-delete-visible',
-      visible ? 'true' : 'false'
-    );
-    item._xHistoryDeleteSlot?.setAttribute(
-      'data-visible',
-      visible ? 'true' : 'false'
-    );
-    item._xHistoryDeleteButton.setAttribute(
-      'data-visible',
-      visible ? 'true' : 'false'
+}
+
+function applyUtilityActionStyles(
+  options: NormalizedOptions,
+  item: SuggestionElement,
+  theme: ThemeValue,
+  active: boolean
+): void {
+  const visible = Boolean(item._xIsHovering);
+  item._xUtilityActions?.forEach(({ slot, button }) => {
+    slot.setAttribute('data-visible', visible ? 'true' : 'false');
+    button.setAttribute('data-visible', visible ? 'true' : 'false');
+    setSurfaceStyle(
+      options,
+      button,
+      '--x-nt-suggestion-utility-color',
+      visible && active
+        ? theme?.buttonText || ''
+        : surfaceCssValue(
+            options,
+            'var(--x-nt-subtext, #6B7280)'
+          )
     );
     setSurfaceStyle(
       options,
-      item._xHistoryDeleteButton,
-      '--x-nt-history-delete-color',
-      (
-        visible && active
-          ? theme.buttonText || ''
-          : 'var(--x-nt-subtext, #6B7280)'
-      )
+      button,
+      '--x-nt-suggestion-utility-bg',
+      visible && active ? theme?.buttonBg || '' : 'transparent'
     );
     setSurfaceStyle(
       options,
-      item._xHistoryDeleteButton,
-      '--x-nt-history-delete-bg',
-      visible && active ? theme.buttonBg || '' : 'transparent'
+      button,
+      '--x-nt-suggestion-utility-border',
+      visible && active ? theme?.buttonBorder || '' : 'transparent'
     );
-    setSurfaceStyle(
-      options,
-      item._xHistoryDeleteButton,
-      '--x-nt-history-delete-border',
-      (
-        visible && active ? theme.buttonBorder || '' : 'transparent'
-      )
-    );
-  }
+  });
 }
 
 function updateSelectionForRuntime(
@@ -1207,6 +1230,12 @@ function updateSelectionForRuntime(
         }
       }
     }
+    applyUtilityActionStyles(
+      options,
+      item,
+      theme,
+      highlighted
+    );
   });
 }
 
@@ -1545,6 +1574,121 @@ function canDeleteHistory(suggestion: Suggestion): boolean {
   );
 }
 
+function SuggestionUtilityAction({
+  options,
+  itemRef,
+  slotRef,
+  buttonRef,
+  tooltip,
+  iconName,
+  onActivate
+}: {
+  options: NormalizedOptions;
+  itemRef: RefObject<SuggestionElement | null>;
+  slotRef: RefObject<HTMLDivElement | null>;
+  buttonRef: RefObject<HTMLButtonElement | null>;
+  tooltip: string;
+  iconName: string;
+  onActivate: () => void;
+}) {
+  const showTooltip = (): void => {
+    if (buttonRef.current) {
+      options.showTopActionTooltip(buttonRef.current, tooltip);
+    }
+  };
+
+  const applyHover = (): void => {
+    const item = itemRef.current;
+    const button = buttonRef.current;
+    if (!item || !button) {
+      return;
+    }
+    const itemIndex = options.items.indexOf(item);
+    const selectedIndex = options.getSelectedIndex();
+    const useTheme =
+      itemIndex === selectedIndex ||
+      (selectedIndex === -1 && item._xIsAutocompleteTop);
+    const theme = item._xTheme || options.defaultTheme;
+    const modeTheme = options.getThemeForMode(theme);
+    const hover = useTheme
+      ? options.getHoverColors(theme)
+      : options.getNeutralHoverActionColors();
+    showTooltip();
+    button.style.removeProperty('transform');
+    setSurfaceStyle(
+      options,
+      button,
+      '--x-nt-suggestion-utility-hover-bg',
+      hover.bg || ''
+    );
+    setSurfaceStyle(
+      options,
+      button,
+      '--x-nt-suggestion-utility-hover-border',
+      hover.border || ''
+    );
+    setSurfaceStyle(
+      options,
+      button,
+      '--x-nt-suggestion-utility-hover-color',
+      useTheme
+        ? modeTheme.buttonText || ''
+        : 'text' in hover
+          ? hover.text || ''
+          : ''
+    );
+    button.setAttribute('data-hover', 'true');
+  };
+
+  const reset = (): void => {
+    options.hideTopActionTooltip();
+    buttonRef.current?.removeAttribute('data-hover');
+    buttonRef.current?.style.removeProperty('transform');
+  };
+
+  return (
+    <div
+      ref={slotRef}
+      className={surfaceClass(options, 'x-nt-suggestion-utility-slot')}
+      data-visible="false"
+    >
+      <button
+        ref={buttonRef}
+        type="button"
+        className={surfaceClass(
+          options,
+          'x-nt-suggestion-utility-button'
+        )}
+        data-visible="false"
+        aria-label={tooltip}
+        dangerouslySetInnerHTML={{
+          __html: options.getRiSvg(iconName, 'ri-size-14')
+        }}
+        onMouseEnter={applyHover}
+        onMouseLeave={reset}
+        onFocus={applyHover}
+        onBlur={reset}
+        onPointerUp={(
+          event: ReactPointerEvent<HTMLButtonElement>
+        ) => {
+          event.currentTarget.style.setProperty('transform', 'none');
+        }}
+        onPointerCancel={(
+          event: ReactPointerEvent<HTMLButtonElement>
+        ) => {
+          event.currentTarget.style.setProperty('transform', 'none');
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          reset();
+          onActivate();
+        }}
+      />
+    </div>
+  );
+}
+
 interface SearchSuggestionRowProps {
   runtime: SuggestionsRuntime;
   suggestionRef: SuggestionValueRef;
@@ -1581,6 +1725,8 @@ function SearchSuggestionRowComponent({
   const actionTagsRef = useRef<HTMLDivElement>(null);
   const visitButtonRef = useRef<HTMLButtonElement>(null);
   const visitLabelRef = useRef<HTMLSpanElement>(null);
+  const copySlotRef = useRef<HTMLDivElement>(null);
+  const copyButtonRef = useRef<HTMLButtonElement>(null);
   const deleteSlotRef = useRef<HTMLDivElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const primarySearch =
@@ -1669,6 +1815,9 @@ function SearchSuggestionRowComponent({
     ]
   );
   const actionTagRefs = useRef<SuggestionActionTagElement[]>([]);
+  const copyableUrl = suggestion.commandText
+    ? ''
+    : String(suggestion.url || '').trim();
   const removable = canDeleteHistory(suggestion);
   const deleteTooltip = isTopSite(suggestion)
     ? options.t('search_remove_top_site_tooltip', '移除该常用')
@@ -1769,11 +1918,26 @@ function SearchSuggestionRowComponent({
       actionModel.alwaysHideVisitButton;
     item._xHasSwitchAction = actionModel.hasSwitchAction;
     item._xHistoryDeleteButton = deleteButtonRef.current;
-    item._xHistoryDeleteSlot = deleteSlotRef.current;
-    item._xHasHistoryDeleteButton = removable;
+    item._xUtilityActions = [
+      copySlotRef.current && copyButtonRef.current
+        ? {
+            slot: copySlotRef.current,
+            button: copyButtonRef.current
+          }
+        : null,
+      deleteSlotRef.current && deleteButtonRef.current
+        ? {
+            slot: deleteSlotRef.current,
+            button: deleteButtonRef.current
+          }
+        : null
+    ].filter((action): action is SuggestionUtilityActionElements =>
+      Boolean(action)
+    );
   }, [
     actionModel,
     command,
+    copyableUrl,
     iconSpec.kind,
     isPrimary,
     options,
@@ -1896,68 +2060,6 @@ function SearchSuggestionRowComponent({
     activate(event);
   };
 
-  const showDeleteTooltip = (): void => {
-    if (deleteButtonRef.current) {
-      options.showTopActionTooltip(
-        deleteButtonRef.current,
-        deleteTooltip
-      );
-    }
-  };
-
-  const applyDeleteHover = (): void => {
-    const item = itemRef.current;
-    const button = deleteButtonRef.current;
-    if (!item || !button) {
-      return;
-    }
-    const itemIndex = options.items.indexOf(item);
-    const selectedIndex = options.getSelectedIndex();
-    const useTheme =
-      itemIndex === selectedIndex ||
-      (selectedIndex === -1 && item._xIsAutocompleteTop);
-    const theme = item._xTheme || options.defaultTheme;
-    const modeTheme = options.getThemeForMode(theme);
-    const hover = useTheme
-      ? options.getHoverColors(theme)
-      : options.getNeutralHoverActionColors();
-    showDeleteTooltip();
-    button.style.removeProperty('transform');
-    setSurfaceStyle(
-      options,
-      button,
-      '--x-nt-history-delete-hover-bg',
-      hover.bg || ''
-    );
-    setSurfaceStyle(
-      options,
-      button,
-      '--x-nt-history-delete-hover-border',
-      hover.border || ''
-    );
-    setSurfaceStyle(
-      options,
-      button,
-      '--x-nt-history-delete-hover-color',
-      (
-        useTheme
-          ? modeTheme.buttonText || ''
-          : 'text' in hover
-            ? hover.text || ''
-            : ''
-      )
-    );
-    button.setAttribute('data-hover', 'true');
-    button.setAttribute('data-hover-active', 'true');
-  };
-
-  const resetDelete = (): void => {
-    options.hideTopActionTooltip();
-    deleteButtonRef.current?.removeAttribute('data-hover');
-    deleteButtonRef.current?.removeAttribute('data-hover-active');
-    deleteButtonRef.current?.style.removeProperty('transform');
-  };
-
   const showUrl =
     (suggestion.type === 'history' && !suggestion.isTopSite) ||
     isTopSite(suggestion);
@@ -2060,7 +2162,11 @@ function SearchSuggestionRowComponent({
                 'x-nt-suggestion-url-line'
               )}
             >
-              {String(suggestion.url || '')}
+              <HighlightedText
+                options={options}
+                text={String(suggestion.url || '')}
+                queryStore={queryStore}
+              />
             </span>
           )}
           {suggestion.type === 'history' &&
@@ -2269,60 +2375,37 @@ function SearchSuggestionRowComponent({
             }}
           />
         </button>
-        {removable && (
-          <div
-            ref={deleteSlotRef}
-            className={surfaceClass(
-              options,
-              'x-nt-history-delete-slot'
+        {copyableUrl && (
+          <SuggestionUtilityAction
+            options={options}
+            itemRef={itemRef}
+            slotRef={copySlotRef}
+            buttonRef={copyButtonRef}
+            tooltip={options.t(
+              'search_copy_url_tooltip',
+              '复制链接'
             )}
-            data-visible="false"
-          >
-            <button
-              ref={deleteButtonRef}
-              type="button"
-              className={surfaceClass(
-                options,
-                'x-nt-history-delete-button'
-              )}
-              data-visible="false"
-              aria-label={deleteTooltip}
-              dangerouslySetInnerHTML={{
-                __html: options.getRiSvg(
-                  'ri-delete-bin-6-line',
-                  'ri-size-14'
-                )
-              }}
-              onMouseEnter={applyDeleteHover}
-              onMouseLeave={resetDelete}
-              onFocus={showDeleteTooltip}
-              onBlur={resetDelete}
-              onPointerUp={(
-                event: ReactPointerEvent<HTMLButtonElement>
-              ) => {
-                event.currentTarget.style.setProperty(
-                  'transform',
-                  'none'
-                );
-              }}
-              onPointerCancel={(
-                event: ReactPointerEvent<HTMLButtonElement>
-              ) => {
-                event.currentTarget.style.setProperty(
-                  'transform',
-                  'none'
-                );
-              }}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                options.onDeleteHistory(
-                  suggestionRef.current,
-                  queryStore.getSnapshot()
-                );
-              }}
-            />
-          </div>
+            iconName="ri-file-copy-line"
+            onActivate={() => {
+              void options.onCopyUrl(copyableUrl);
+            }}
+          />
+        )}
+        {removable && (
+          <SuggestionUtilityAction
+            options={options}
+            itemRef={itemRef}
+            slotRef={deleteSlotRef}
+            buttonRef={deleteButtonRef}
+            tooltip={deleteTooltip}
+            iconName="ri-delete-bin-6-line"
+            onActivate={() => {
+              options.onDeleteHistory(
+                suggestionRef.current,
+                queryStore.getSnapshot()
+              );
+            }}
+          />
         )}
       </div>
     </div>
@@ -2348,6 +2431,8 @@ function OpenTabRow({
   const titleRef = useRef<HTMLSpanElement>(null);
   const switchButtonRef = useRef<HTMLButtonElement>(null);
   const switchButtonLabelRef = useRef<HTMLSpanElement>(null);
+  const copySlotRef = useRef<HTMLDivElement>(null);
+  const copyButtonRef = useRef<HTMLButtonElement>(null);
   const actionTagsRef = useRef<HTMLDivElement>(null);
   const switchActionTagRef =
     useRef<SuggestionActionTagElement>(null);
@@ -2404,6 +2489,7 @@ function OpenTabRow({
     }),
     [tab.favIconUrl, tab.id, tab.url, titleText]
   );
+  const copyableUrl = String(tab.url || '').trim();
 
   useLayoutEffect(() => {
     const item = itemRef.current;
@@ -2425,6 +2511,13 @@ function OpenTabRow({
     item._xVisitButtonAction = 'switch';
     item._xSuggestion = tabSuggestion;
     item._xTabId = typeof tab.id === 'number' ? tab.id : null;
+    item._xUtilityActions =
+      copySlotRef.current && copyButtonRef.current
+        ? [{
+            slot: copySlotRef.current,
+            button: copyButtonRef.current
+          }]
+        : [];
     item._xTagContainer = actionTagsRef.current;
     item._xActionTags = switchActionTagRef.current
       ? [switchActionTagRef.current]
@@ -2500,14 +2593,15 @@ function OpenTabRow({
       data-last={last ? 'true' : 'false'}
       onMouseEnter={() => {
         const item = itemRef.current;
-        if (
-          !item ||
-          options.items.indexOf(item) === options.getSelectedIndex()
-        ) {
+        if (!item) {
           return;
         }
         item._xIsHovering = true;
         setIconEmphasis(item, true);
+        runtime.updateSelection(options.getSelectedIndex());
+        if (options.items.indexOf(item) === options.getSelectedIndex()) {
+          return;
+        }
         if (
           options.getSelectedIndex() === -1 &&
           item._xIsAutocompleteTop
@@ -2535,13 +2629,11 @@ function OpenTabRow({
       }}
       onMouseLeave={() => {
         const item = itemRef.current;
-        if (
-          item &&
-          options.items.indexOf(item) !== options.getSelectedIndex()
-        ) {
-          item._xIsHovering = false;
-          runtime.updateSelection(options.getSelectedIndex());
+        if (!item) {
+          return;
         }
+        item._xIsHovering = false;
+        runtime.updateSelection(options.getSelectedIndex());
       }}
       onClick={activate}
       onAuxClick={handleAuxClick}
@@ -2668,6 +2760,22 @@ function OpenTabRow({
             }}
           />
         </button>
+        {copyableUrl && (
+          <SuggestionUtilityAction
+            options={options}
+            itemRef={itemRef}
+            slotRef={copySlotRef}
+            buttonRef={copyButtonRef}
+            tooltip={options.t(
+              'search_copy_url_tooltip',
+              '复制链接'
+            )}
+            iconName="ri-file-copy-line"
+            onActivate={() => {
+              void options.onCopyUrl(copyableUrl);
+            }}
+          />
+        )}
       </div>
     </div>
   );

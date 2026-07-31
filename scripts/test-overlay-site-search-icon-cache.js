@@ -33,6 +33,11 @@ assert.doesNotMatch(
 
 const webAccessibleResources = (manifest.web_accessible_resources || [])
   .flatMap((entry) => entry && Array.isArray(entry.resources) ? entry.resources : []);
+const bundledProviderIconResourcePattern = 'assets/images/site-search/*.svg';
+assert.ok(
+  webAccessibleResources.includes(bundledProviderIconResourcePattern),
+  'all bundled provider SVGs should remain web-accessible without per-icon manifest maintenance'
+);
 const expectedBundledProviderIcons = Object.freeze({
   yt: 'assets/images/site-search/youtube.svg',
   bb: 'assets/images/site-search/bilibili.svg',
@@ -83,13 +88,37 @@ searchUtils.getDefaultSiteSearchProviders().forEach((provider) => {
 });
 new Set(Object.values(expectedBundledProviderIcons)).forEach((resourcePath) => {
   assert.ok(fs.existsSync(resourcePath), `${resourcePath} should be bundled`);
-  assert.ok(webAccessibleResources.includes(resourcePath), `${resourcePath} should be web-accessible`);
+  assert.ok(
+    webAccessibleResources.includes(resourcePath) ||
+      webAccessibleResources.includes(bundledProviderIconResourcePattern),
+    `${resourcePath} should be web-accessible`
+  );
   const vectorSource = fs.readFileSync(resourcePath, 'utf8');
   assert.match(vectorSource, /<svg[\s\S]*<path/);
   assert.match(
     vectorSource,
     /<svg[^>]*viewBox="-?(?:\d+\.?\d*|\.\d+) -?(?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+)"/,
     `${resourcePath} should expose a valid vector canvas`
+  );
+});
+
+const framedProviderIcons = Object.freeze({
+  kimi: { background: '#000000', foreground: '#FFFFFF' },
+  tm: { background: '#FF0036', foreground: '#FFFFFF' },
+  tw: { background: '#000000', foreground: '#FFFFFF' }
+});
+Object.entries(framedProviderIcons).forEach(([providerKey, colors]) => {
+  const resourcePath = expectedBundledProviderIcons[providerKey];
+  const vectorSource = fs.readFileSync(resourcePath, 'utf8');
+  assert.match(
+    vectorSource,
+    new RegExp(`<rect[^>]+fill="${colors.background}"`),
+    `${providerKey} should carry its own brand background for light-mode contrast`
+  );
+  assert.match(
+    vectorSource,
+    new RegExp(`<(?:path|g)[^>]*[\\s\\S]*fill="${colors.foreground}"`),
+    `${providerKey} should reverse its mark for contrast on the bundled background`
   );
 });
 
@@ -226,8 +255,14 @@ assert.match(
 
 assert.match(
   inputModeSource,
-  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', 'inline-flex'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'visible'\]/,
-  'the current-mode label should keep a full-height inline flex line box'
+  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', modeMenuOpen && !modeMenu\.hidden \? 'inline-flex' : 'none'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'visible'\]/,
+  'the current-mode label should keep its full-height line box only while the panel is open'
+);
+
+assert.match(
+  inputModeCss,
+  /\[data-search-input-mode-current\] \{[\s\S]*?display: none !important;[\s\S]*?\[data-menu-open="true"\][\s\S]*?\[data-search-input-mode-current\] \{[\s\S]*?display: inline-flex !important;/,
+  'the current-mode label should be hidden outside the open scope panel'
 );
 
 console.log('overlay site-search icon cache tests passed');

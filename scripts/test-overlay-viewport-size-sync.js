@@ -156,6 +156,21 @@ assert.match(
   'overlay and new-tab should retain a shared fallback token definition'
 );
 assert.match(
+  sharedSearchInputSource,
+  /\.x-lumno-search-input-mode__menu:not\(\[hidden\]\) \{[\s\S]*?transition: opacity 170ms ease, transform 180ms ease-in-out !important;/,
+  'an open search-mode panel should use ease-in-out when following result-height changes'
+);
+assert.match(
+  sharedSearchInputSource,
+  /\.x-lumno-search-input-mode__menu\[data-open="true"\] \{[\s\S]*?animation: _x_lumno_search_mode_menu_entry_2026_unique_[\s\S]*?360ms cubic-bezier\(0\.2, 1\.45, 0\.35, 1\);[\s\S]*?@keyframes _x_lumno_search_mode_menu_entry_2026_unique_[\s\S]*?--x-extension-menu-surface-closed-transform[\s\S]*?--x-extension-menu-surface-open-transform/,
+  'the search-mode panel should reserve spring motion for its initial closed-to-open entry'
+);
+assert.match(
+  sharedSearchInputSource,
+  /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.x-lumno-search-input-mode__menu \{[\s\S]*?animation: none !important;[\s\S]*?transition: none !important;/,
+  'search-mode panel motion should respect reduced-motion preferences'
+);
+assert.match(
   shellSource,
   /--x-ov-panel-radius:\s*28px;[\s\S]*?border-radius:\s*var\(--x-ov-panel-radius\)\s*!important;/,
   'overlay shell should use the smaller 28px radius on every outer corner'
@@ -202,8 +217,28 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /handleSearchInputEvent\(event\)[\s\S]*?beginSuggestionsHeightInputSession\(query\)[\s\S]*?requestOverlaySearchSuggestions\(query\)/,
-  'overlay input should start the stable-height session before matching each query'
+  /handleSearchInputCompositionEnd\(event\)[\s\S]*?if \(query\.length > 0\) \{\s*if \(!siteSearchState\) \{\s*beginSuggestionsHeightInputSession\(query\);\s*\}[\s\S]*?requestOverlaySearchSuggestions\(query\)/,
+  'overlay composition input should bypass the stable-height session for deterministic site-search results'
+);
+assert.match(
+  searchPanelSource,
+  /handleSearchInputEvent\(event\)[\s\S]*?if \(query\.length > 0\) \{\s*if \(!siteSearchState\) \{\s*beginSuggestionsHeightInputSession\(query\);\s*\}[\s\S]*?requestOverlaySearchSuggestions\(query\)/,
+  'overlay input should bypass the stable-height session for deterministic site-search results'
+);
+assert.match(
+  searchPanelSource,
+  /function activateSiteSearch\(provider\)[\s\S]*?finishSuggestionsHeightInputSession\(\{ animate: false \}\);[\s\S]*?siteSearchState = provider;/,
+  'entering site search should release any stable-height session inherited from the previous search mode'
+);
+assert.match(
+  searchPanelSource,
+  /function readSuggestionsHeightMetrics\(container\)[\s\S]*?const layoutHeight = Math\.max\([\s\S]*?container\.offsetHeight[\s\S]*?container\.clientHeight[\s\S]*?container\.getBoundingClientRect\(\)\.height[\s\S]*?metrics\.height = layoutHeight;/,
+  'overlay result height should prefer untransformed layout measurements before falling back to a visual rect'
+);
+assert.match(
+  searchPanelSource,
+  /function animateSuggestionsHeight\(container, fromHeight\)[\s\S]*?const targetMetrics = readSuggestionsHeightMetrics\(container\);\s*const toHeight = targetMetrics\.height;/,
+  'overlay result animations should use the same layout-space height for both measurement and CSS writes'
 );
 assert.match(
   searchPanelSource,
@@ -224,6 +259,11 @@ assert.match(
   searchPanelSource,
   /const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180/,
   'large result collapses should use the faster height transition'
+);
+assert.match(
+  searchPanelSource,
+  /const transitionEasing = 'ease-in-out';[\s\S]*?`height \$\{transitionDurationMs\}ms \$\{transitionEasing\}`/,
+  'result-height changes should use regular ease-in-out motion instead of spring easing'
 );
 assert.match(
   searchPanelSource,

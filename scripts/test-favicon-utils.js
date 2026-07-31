@@ -88,6 +88,33 @@ assert.strictEqual(
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+    false,
+    { ownExtensionId: 'abc' }
+  ),
+  true,
+  'strict favicon mode should keep bundled site-search SVG artwork'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    'chrome-extension://other/assets/images/site-search/duckduckgo.svg',
+    true,
+    { ownExtensionId: 'abc' }
+  ),
+  false,
+  'enhanced favicon mode should reject another extension\'s site-search artwork'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    'chrome-extension://abc/assets/images/site-search/duckduckgo.html',
+    true,
+    { ownExtensionId: 'abc' }
+  ),
+  false,
+  'enhanced favicon mode should only allow SVG artwork from the bundled provider directory'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
     'chrome-extension://other/assets/images/icon.png',
     false,
     { ownExtensionId: 'abc' }
@@ -210,6 +237,15 @@ assert.strictEqual(
   ),
   'chrome-extension://abc/_favicon/?pageUrl=https%3A%2F%2Ffoo.example.com%2F',
   'strict resolver should retain Lumno-owned _favicon sources'
+);
+assert.strictEqual(
+  strictResolver.getSafeFaviconCandidateUrl(
+    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+    'bundled-provider'
+  ),
+  'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+  'strict resolver should retain bundled site-search artwork'
 );
 assert.strictEqual(
   strictResolver.getSafeFaviconCandidateUrl(

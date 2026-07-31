@@ -117,7 +117,7 @@
     if (isInvalidExtensionResourceUrl(localePath)) {
       return loadViaMessage();
     }
-    return fetch(localePath)
+    return fetch(localePath, { cache: 'no-store' })
       .then((response) => response.json())
       .catch(loadViaMessage);
   }

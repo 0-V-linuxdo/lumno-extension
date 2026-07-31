@@ -1247,6 +1247,15 @@
   "search_remove_top_site_tooltip": {
     "message": "このよく使う候補を削除"
   },
+  "search_copy_url_tooltip": {
+    "message": "リンクをコピー"
+  },
+  "search_copy_url_success": {
+    "message": "検索結果のリンクをコピーしました"
+  },
+  "search_copy_url_failed": {
+    "message": "検索結果のリンクをコピーできませんでした"
+  },
   "search_tag_top_site": {
     "message": "よく使う"
   },
@@ -1444,6 +1453,24 @@
   },
   "search_scope_current": {
     "message": "現在"
+  },
+  "search_scope_remove_confirmation": {
+    "message": "もう一度 Backspace で検索範囲を解除"
+  },
+  "search_scope_menu_shortcut_hint": {
+    "message": "このパネルをすばやく開く"
+  },
+  "search_scope_menu_filter_hint": {
+    "message": "パネルをクリックし、英字またはピンインで絞り込み"
+  },
+  "search_scope_menu_filter_query": {
+    "message": "検索：{query}"
+  },
+  "search_scope_panel_placeholder": {
+    "message": "特定のサイト内を検索..."
+  },
+  "search_scope_active_placeholder": {
+    "message": "対象を絞って検索。もう一度 Tab を押すと検索範囲パネルが開きます..."
   },
   "search_scope_group_engines": {
     "message": "検索エンジン"
@@ -1666,6 +1693,12 @@
   },
   "shortcut_reference_search_tab_mode_desc": {
     "message": "候補を補完、またはサイト内/開いているタブ検索に入ります"
+  },
+  "shortcut_reference_search_open_scope_menu_title": {
+    "message": "検索範囲パネルを開く"
+  },
+  "shortcut_reference_search_open_scope_menu_desc": {
+    "message": "入力欄が空のときは Tab を2回、検索範囲を選択済みのときは Tab を1回押します"
   },
   "shortcut_reference_search_close_title": {
     "message": "閉じる、またはモードを終了"
