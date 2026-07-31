@@ -208,12 +208,6 @@
     const cursorTooltipApi = root.LumnoCursorTooltip || (
       typeof globalThis !== 'undefined' ? globalThis.LumnoCursorTooltip : null
     ) || {};
-    const anchoredTooltipApi = root.LumnoTooltip || (
-      typeof globalThis !== 'undefined' ? globalThis.LumnoTooltip : null
-    ) || {};
-    const tooltipApi = typeof cursorTooltipApi.createController === 'function'
-      ? cursorTooltipApi
-      : anchoredTooltipApi;
     const defaultAccentColor = Array.isArray(config.defaultAccentColor)
       ? config.defaultAccentColor
       : DEFAULT_ACCENT_RGB;
@@ -277,20 +271,23 @@
     let modeMenuPending = false;
     let modeMenuRequestId = 0;
     let destroyed = false;
-    const providedModeMenuTooltipController = config.modeMenuTooltipController || null;
-    const modeMenuTooltipController = providedModeMenuTooltipController || (
-      typeof tooltipApi.createController === 'function'
-        ? tooltipApi.createController({
+    const providedModeMenuCursorTooltipController =
+      config.modeMenuCursorTooltipController || config.modeMenuTooltipController || null;
+    const modeMenuCursorTooltipController = providedModeMenuCursorTooltipController || (
+      typeof cursorTooltipApi.createController === 'function'
+        ? cursorTooltipApi.createController({
           documentObj: doc,
           windowObj: win,
           appendTo: doc && doc.body,
-          id: `${prefixId}-label-tooltip`,
-          maxWidth: 320
+          id: `${prefixId}-label-cursor-tooltip`,
+          maxWidth: 320,
+          offsetX: 14,
+          offsetY: 16
         })
         : null
     );
-    const ownsModeMenuTooltipController = Boolean(
-      modeMenuTooltipController && !providedModeMenuTooltipController
+    const ownsModeMenuCursorTooltipController = Boolean(
+      modeMenuCursorTooltipController && !providedModeMenuCursorTooltipController
     );
 
     const createSvgElement = (tagName) => typeof doc.createElementNS === 'function'
@@ -1027,8 +1024,9 @@
     }
 
     function clearModeMenuContents() {
-      if (modeMenuTooltipController && typeof modeMenuTooltipController.hide === 'function') {
-        modeMenuTooltipController.hide();
+      if (modeMenuCursorTooltipController &&
+          typeof modeMenuCursorTooltipController.hide === 'function') {
+        modeMenuCursorTooltipController.hide();
       }
       while (modeMenu.firstChild) {
         modeMenu.removeChild(modeMenu.firstChild);
@@ -1204,27 +1202,21 @@
     }
 
     function bindModeMenuLabelTooltip(button, label, labelText) {
-      if (!modeMenuTooltipController ||
-          typeof modeMenuTooltipController.bind !== 'function') {
+      if (!modeMenuCursorTooltipController ||
+          typeof modeMenuCursorTooltipController.bind !== 'function') {
         return;
       }
-      modeMenuTooltipController.bind(button, () => {
+      const updateTruncatedState = () => {
         const isTruncated = typeof cursorTooltipApi.isElementTextTruncated === 'function'
           ? cursorTooltipApi.isElementTextTruncated(label)
           : Number(label.clientWidth) > 0 &&
             Number(label.scrollWidth) > Number(label.clientWidth);
         button.setAttribute('data-label-truncated', isTruncated ? 'true' : 'false');
-        if (!isTruncated) {
-          if (typeof modeMenuTooltipController.hide === 'function') {
-            modeMenuTooltipController.hide();
-          }
-          return '';
-        }
-        return String(labelText || '');
-      }, {
+        return isTruncated;
+      };
+      modeMenuCursorTooltipController.bind(button, () => String(labelText || ''), {
         maxWidth: 320,
-        placement: 'top',
-        spacing: 8,
+        shouldShow: updateTruncatedState,
         deferHideVisibility: true,
         preserveVisibleOnTargetSwitch: true,
         handoffRoot: modeMenu
@@ -1485,8 +1477,9 @@
       modeMenuRequestId += 1;
       modeMenuPending = false;
       modeMenu.removeAttribute('aria-busy');
-      if (modeMenuTooltipController && typeof modeMenuTooltipController.hide === 'function') {
-        modeMenuTooltipController.hide();
+      if (modeMenuCursorTooltipController &&
+          typeof modeMenuCursorTooltipController.hide === 'function') {
+        modeMenuCursorTooltipController.hide();
       }
       modeMenuOpen = false;
       concealModeMenuSurface();
@@ -1608,12 +1601,12 @@
       }
       clearProviderPrefix();
       setTabHintVisible(false);
-      if (ownsModeMenuTooltipController &&
-          typeof modeMenuTooltipController.destroy === 'function') {
-        modeMenuTooltipController.destroy();
-      } else if (modeMenuTooltipController &&
-          typeof modeMenuTooltipController.hide === 'function') {
-        modeMenuTooltipController.hide();
+      if (ownsModeMenuCursorTooltipController &&
+          typeof modeMenuCursorTooltipController.destroy === 'function') {
+        modeMenuCursorTooltipController.destroy();
+      } else if (modeMenuCursorTooltipController &&
+          typeof modeMenuCursorTooltipController.hide === 'function') {
+        modeMenuCursorTooltipController.hide();
       }
       if (!modeMenuWasProvided) {
         modeMenu.remove();

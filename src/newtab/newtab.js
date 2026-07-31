@@ -14864,7 +14864,7 @@
     attachProviderIcon: attachInputModeProviderIcon,
     preferDirectProviderIcons: true,
     formatMessage,
-    modeMenuTooltipController: topActionTooltipController,
+    modeMenuCursorTooltipController: bookmarkCursorTooltipController,
     getModeMenuItems: getSearchModeMenuItems,
     onModeMenuSelect: selectSearchModeMenuItem,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)

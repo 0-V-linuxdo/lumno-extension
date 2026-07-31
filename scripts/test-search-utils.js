@@ -633,24 +633,13 @@ assert.strictEqual(
   'WeChat Official Accounts',
   'default wechat provider name should describe WeChat Official Accounts search'
 );
-const taobaoProvider = search.getDefaultSiteSearchProviders().find((provider) => provider.key === 'tb');
-const tmallProvider = search.getDefaultSiteSearchProviders().find((provider) => provider.key === 'tm');
-const googleProvider = search.getDefaultSiteSearchProviders().find((provider) => provider.key === 'gg');
-assert.strictEqual(
-  googleProvider && googleProvider.iconUrl,
-  'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png',
-  'Google should use the stable high-resolution brand mark instead of a page favicon'
-);
-assert.strictEqual(
-  taobaoProvider && taobaoProvider.iconUrl,
-  'https://www.taobao.com/favicon.ico',
-  'Taobao should use its real main-domain favicon instead of a generic proxy placeholder'
-);
-assert.strictEqual(
-  tmallProvider && tmallProvider.iconUrl,
-  'https://www.tmall.com/favicon.ico',
-  'Tmall should use its real main-domain favicon instead of a generic proxy placeholder'
-);
+search.getDefaultSiteSearchProviders().forEach((provider) => {
+  assert.strictEqual(
+    provider.iconUrl,
+    undefined,
+    `${provider.key} should defer to the bundled local SVG map instead of a remote icon URL`
+  );
+});
 assert.strictEqual(
   search.findProviderForSiteSearchSuggestion(
     {

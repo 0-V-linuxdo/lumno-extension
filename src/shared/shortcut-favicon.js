@@ -17,13 +17,32 @@
     'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
   const SITE_SEARCH_PINNED_ICON_ASSETS = Object.freeze({
     yt: 'assets/images/site-search/youtube.svg',
+    bb: 'assets/images/site-search/bilibili.svg',
+    gh: 'assets/images/site-search/github.svg',
+    gpt: 'assets/images/site-search/openai.svg',
+    gm: 'assets/images/site-search/gemini.svg',
+    dbai: 'assets/images/site-search/doubao.svg',
+    qw: 'assets/images/site-search/qwen.svg',
+    yb: 'assets/images/site-search/yuanbao.svg',
+    mx: 'assets/images/site-search/minimax.svg',
+    ds: 'assets/images/site-search/deepseek.svg',
+    kimi: 'assets/images/site-search/kimi.svg',
     so: 'assets/images/site-search/baidu.svg',
     bi: 'assets/images/site-search/bing.svg',
     gg: 'assets/images/site-search/google.svg',
+    ddg: 'assets/images/site-search/duckduckgo.svg',
+    br: 'assets/images/site-search/brave.svg',
+    eco: 'assets/images/site-search/ecosia.svg',
+    zh: 'assets/images/site-search/zhihu.svg',
     db: 'assets/images/site-search/douban.svg',
+    jj: 'assets/images/site-search/juejin.svg',
     wx: 'assets/images/site-search/sogou.svg',
     tb: 'assets/images/site-search/taobao.svg',
-    rd: 'assets/images/site-search/reddit.svg'
+    tm: 'assets/images/site-search/tmall.svg',
+    tw: 'assets/images/site-search/x.svg',
+    rd: 'assets/images/site-search/reddit.svg',
+    wk: 'assets/images/site-search/wikipedia.svg',
+    zw: 'assets/images/site-search/wikipedia.svg'
   });
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
   const CACHE_MAX_ENTRIES = 24;

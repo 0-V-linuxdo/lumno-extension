@@ -1,12 +1,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const shortcutFavicon = require('../src/shared/shortcut-favicon.js');
+const searchUtils = require('../src/shared/search-utils.js');
 
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
 const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
 const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 const overlayRuntimeSource = fs.readFileSync('src/overlay/runtime.js', 'utf8');
-const shortcutFaviconSource = fs.readFileSync('src/shared/shortcut-favicon.js', 'utf8');
 const inputModeSource = fs.readFileSync('src/shared/search-input-mode.js', 'utf8');
 const inputModeCss = fs.readFileSync('src/shared/search-input.css', 'utf8');
 const searchUtilsSource = fs.readFileSync('src/shared/search-utils.js', 'utf8');
@@ -25,45 +25,74 @@ assert.match(
   'the overlay runtime should expose a fresh Retina provider icon cache key'
 );
 
-assert.match(
-  searchUtilsSource,
-  /const iconSize =[^\n]*: 128;/,
-  'provider fallback favicons should request a Retina-sized source by default'
-);
 assert.doesNotMatch(
-  siteSearchSource,
-  /google\.com\/s2\/favicons\?[^"\n]*&sz=64/,
-  'built-in AI provider fallbacks should not request 64px raster artwork'
+  `${siteSearchSource}\n${searchUtilsSource}`,
+  /["']?iconUrl["']?\s*:\s*["']https?:/,
+  'built-in provider catalogs should not retain remote icon fallbacks'
 );
 
 const webAccessibleResources = (manifest.web_accessible_resources || [])
   .flatMap((entry) => entry && Array.isArray(entry.resources) ? entry.resources : []);
-[
-  'assets/images/site-search/youtube.svg',
-  'assets/images/site-search/baidu.svg',
-  'assets/images/site-search/bing.svg',
-  'assets/images/site-search/google.svg',
-  'assets/images/site-search/douban.svg',
-  'assets/images/site-search/sogou.svg',
-  'assets/images/site-search/taobao.svg',
-  'assets/images/site-search/reddit.svg'
-].forEach((resourcePath) => {
+const expectedBundledProviderIcons = Object.freeze({
+  yt: 'assets/images/site-search/youtube.svg',
+  bb: 'assets/images/site-search/bilibili.svg',
+  gh: 'assets/images/site-search/github.svg',
+  gpt: 'assets/images/site-search/openai.svg',
+  gm: 'assets/images/site-search/gemini.svg',
+  dbai: 'assets/images/site-search/doubao.svg',
+  qw: 'assets/images/site-search/qwen.svg',
+  yb: 'assets/images/site-search/yuanbao.svg',
+  mx: 'assets/images/site-search/minimax.svg',
+  ds: 'assets/images/site-search/deepseek.svg',
+  kimi: 'assets/images/site-search/kimi.svg',
+  so: 'assets/images/site-search/baidu.svg',
+  bi: 'assets/images/site-search/bing.svg',
+  gg: 'assets/images/site-search/google.svg',
+  ddg: 'assets/images/site-search/duckduckgo.svg',
+  br: 'assets/images/site-search/brave.svg',
+  eco: 'assets/images/site-search/ecosia.svg',
+  zh: 'assets/images/site-search/zhihu.svg',
+  db: 'assets/images/site-search/douban.svg',
+  jj: 'assets/images/site-search/juejin.svg',
+  tb: 'assets/images/site-search/taobao.svg',
+  tm: 'assets/images/site-search/tmall.svg',
+  wx: 'assets/images/site-search/sogou.svg',
+  tw: 'assets/images/site-search/x.svg',
+  rd: 'assets/images/site-search/reddit.svg',
+  wk: 'assets/images/site-search/wikipedia.svg',
+  zw: 'assets/images/site-search/wikipedia.svg'
+});
+assert.deepStrictEqual(
+  shortcutFavicon.SITE_SEARCH_PINNED_ICON_ASSETS,
+  expectedBundledProviderIcons,
+  'every built-in provider should resolve to an audited local SVG'
+);
+const siteSearchProviders = JSON.parse(siteSearchSource).items;
+assert.deepStrictEqual(
+  siteSearchProviders.map((provider) => provider.key),
+  Object.keys(expectedBundledProviderIcons),
+  'the bundled provider icon map should cover the complete built-in catalog in order'
+);
+siteSearchProviders.forEach((provider) => {
+  assert.ok(!provider.icon && !provider.iconUrl,
+    `${provider.key} should not retain a remote icon fallback`);
+});
+searchUtils.getDefaultSiteSearchProviders().forEach((provider) => {
+  assert.ok(!provider.icon && !provider.iconUrl,
+    `${provider.key} fallback should not retain a remote icon URL`);
+});
+new Set(Object.values(expectedBundledProviderIcons)).forEach((resourcePath) => {
   assert.ok(fs.existsSync(resourcePath), `${resourcePath} should be bundled`);
   assert.ok(webAccessibleResources.includes(resourcePath), `${resourcePath} should be web-accessible`);
   const vectorSource = fs.readFileSync(resourcePath, 'utf8');
   assert.match(vectorSource, /<svg[\s\S]*<path/);
   assert.match(
     vectorSource,
-    /<svg[^>]*viewBox="0 0 [^"]+"/,
-    `${resourcePath} should expose its complete vector canvas without clipping`
+    /<svg[^>]*viewBox="-?(?:\d+\.?\d*|\.\d+) -?(?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+)"/,
+    `${resourcePath} should expose a valid vector canvas`
   );
 });
 
-assert.match(
-  shortcutFaviconSource,
-  /yt: 'assets\/images\/site-search\/youtube\.svg',[\s\S]*?so: 'assets\/images\/site-search\/baidu\.svg',[\s\S]*?bi: 'assets\/images\/site-search\/bing\.svg',[\s\S]*?gg: 'assets\/images\/site-search\/google\.svg',[\s\S]*?db: 'assets\/images\/site-search\/douban\.svg',[\s\S]*?wx: 'assets\/images\/site-search\/sogou\.svg',[\s\S]*?tb: 'assets\/images\/site-search\/taobao\.svg',[\s\S]*?rd: 'assets\/images\/site-search\/reddit\.svg'/,
-  'known undersized providers should use bundled vector artwork'
-);
 assert.match(
   backgroundSource,
   /const SITE_SEARCH_PINNED_ICON_KEYS = new Set\(Object\.keys\(\s*SHORTCUT_FAVICON\.SITE_SEARCH_PINNED_ICON_ASSETS \|\| \{\}\s*\)\);/,

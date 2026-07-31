@@ -674,6 +674,7 @@ assert.strictEqual(
 );
 
 const newtabHtml = fs.readFileSync(newtabHtmlPath, 'utf8');
+const newtabPanel = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const background = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
 const overlayPanel = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
 const searchInputMode = fs.readFileSync(path.join(repoRoot, 'src/shared/search-input-mode.js'), 'utf8');
@@ -702,8 +703,13 @@ assert.match(
 );
 assert.match(
   overlayPanel,
-  /modeMenuTooltipController: overlayCursorTooltipController/,
+  /modeMenuCursorTooltipController: overlayCursorTooltipController/,
   'overlay search-scope labels should use the shared cursor tooltip controller'
+);
+assert.match(
+  newtabPanel,
+  /modeMenuCursorTooltipController: bookmarkCursorTooltipController/,
+  'new-tab search-scope labels should use the shared cursor tooltip controller'
 );
 assert.match(
   searchInputMode,

@@ -812,7 +812,7 @@ describe('Shared search scope menu', () => {
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
       {
-        modeMenuTooltipController: tooltipController,
+        modeMenuCursorTooltipController: tooltipController,
         getModeMenuItems: () => [{
           active: true,
           id: 'provider:wechat',
@@ -838,7 +838,12 @@ describe('Shared search scope menu', () => {
     const resolveTooltipText = tooltipController.bind.mock.calls[0]?.[1] as
       | (() => string)
       | undefined;
+    const tooltipOptions = tooltipController.bind.mock.calls[0]?.[2] as
+      | { shouldShow?: () => boolean; placement?: string }
+      | undefined;
     expect(resolveTooltipText).toBeTypeOf('function');
+    expect(tooltipOptions?.shouldShow).toBeTypeOf('function');
+    expect(tooltipOptions?.placement).toBeUndefined();
     Object.defineProperty(label, 'clientWidth', {
       configurable: true,
       value: 48
@@ -848,6 +853,7 @@ describe('Shared search scope menu', () => {
       value: 76
     });
     expect(resolveTooltipText?.()).toBe('微信公众号');
+    expect(tooltipOptions?.shouldShow?.()).toBe(true);
     expect(item?.getAttribute('data-label-truncated')).toBe('true');
 
     Object.defineProperty(label, 'scrollWidth', {
@@ -855,15 +861,16 @@ describe('Shared search scope menu', () => {
       value: 49
     });
     expect(resolveTooltipText?.()).toBe('微信公众号');
+    expect(tooltipOptions?.shouldShow?.()).toBe(true);
     expect(item?.getAttribute('data-label-truncated')).toBe('true');
 
     Object.defineProperty(label, 'clientWidth', {
       configurable: true,
       value: 80
     });
-    expect(resolveTooltipText?.()).toBe('');
+    expect(resolveTooltipText?.()).toBe('微信公众号');
+    expect(tooltipOptions?.shouldShow?.()).toBe(false);
     expect(item?.getAttribute('data-label-truncated')).toBe('false');
-    expect(tooltipController.hide).toHaveBeenCalled();
     controller.destroy();
   });
 

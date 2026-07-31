@@ -4127,7 +4127,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       attachProviderIcon: attachInputModeProviderIcon,
       preferDirectProviderIcons: true,
       formatMessage,
-      modeMenuTooltipController: overlayCursorTooltipController,
+      modeMenuCursorTooltipController: overlayCursorTooltipController,
       getModeMenuItems: getSearchModeMenuItems,
       onModeMenuSelect: selectSearchModeMenuItem,
       isTabHintSuppressed: () => Boolean(
