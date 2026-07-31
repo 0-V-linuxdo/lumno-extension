@@ -407,6 +407,15 @@
   "overlay_size_large": {
     "message": "Large"
   },
+  "settings_overlay_enter_animation_title": {
+    "message": "Opening animation"
+  },
+  "overlay_enter_animation_elastic": {
+    "message": "Spring"
+  },
+  "overlay_enter_animation_fade": {
+    "message": "Fade"
+  },
   "recent_mode_latest": {
     "message": "Show Recent"
   },
@@ -986,6 +995,9 @@
   "shortcuts_label_alias": {
     "message": "Aliases"
   },
+  "shortcuts_label_display_group": {
+    "message": "Show in"
+  },
   "shortcuts_placeholder_required": {
     "message": "Required — use commas for multiple, e.g. jd,bili"
   },
@@ -1002,7 +1014,7 @@
     "message": "Insert query variable"
   },
   "shortcuts_add": {
-    "message": "Add site search"
+    "message": "Add custom search"
   },
   "shortcuts_save": {
     "message": "Save changes"
@@ -1017,10 +1029,13 @@
     "message": "Remove"
   },
   "shortcuts_empty_custom": {
-    "message": "No custom site searches yet"
+    "message": "No custom searches yet"
   },
   "shortcuts_empty_builtin": {
     "message": "No built-in site searches"
+  },
+  "shortcuts_empty_engines": {
+    "message": "No built-in search engines"
   },
   "shortcuts_empty_ai": {
     "message": "No built-in AI providers"
@@ -1078,6 +1093,9 @@
   },
   "shortcuts_error_key_space": {
     "message": "Trigger cannot contain spaces."
+  },
+  "shortcuts_error_key_duplicate": {
+    "message": "This trigger is already in use. Choose another."
   },
   "search_placeholder": {
     "message": "Search or type a URL..."
@@ -1420,6 +1438,24 @@
   },
   "local_search_tab_hint": {
     "message": "Only search {source}"
+  },
+  "search_scope_switcher_label": {
+    "message": "Search scope: {scope}. Activate to switch"
+  },
+  "search_scope_current": {
+    "message": "Current"
+  },
+  "search_scope_group_engines": {
+    "message": "Search engines"
+  },
+  "search_scope_group_local": {
+    "message": "Browser content"
+  },
+  "search_scope_group_ai": {
+    "message": "AI search"
+  },
+  "search_scope_group_sites": {
+    "message": "Site search"
   },
   "overlay_empty_open_tabs": {
     "message": "No tabs"

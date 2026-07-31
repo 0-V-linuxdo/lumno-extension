@@ -15,6 +15,7 @@
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
+  const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
   // Keep the original key value so existing installations migrate from boolean to mode in place.
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_TOP_CONTENT_BRAND = 'brand';
@@ -119,6 +120,10 @@
     return 'standard';
   }
 
+  function normalizeOverlayEnterAnimation(value) {
+    return value === 'fade' ? 'fade' : 'elastic';
+  }
+
   function normalizeOverlayTabPriorityMode(value) {
     if (value === 'switchTabFirst') {
       return true;
@@ -209,6 +214,7 @@
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
+    OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_BRAND,
     NEWTAB_TOP_CONTENT_TIME,
@@ -227,6 +233,7 @@
     normalizeFaviconEnhancedFetchEnabled,
     normalizeOverlayOpenTabsDefaultVisible,
     normalizeOverlaySizeMode,
+    normalizeOverlayEnterAnimation,
     normalizeOverlayTabPriorityMode,
     normalizeSearchResultPriority,
     normalizeSearchResultSourceTypes,

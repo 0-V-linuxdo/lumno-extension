@@ -90,8 +90,7 @@ function getCaseStyle(
     '--x-ov-suggestion-action-button-bg': rgbToCss(theme.buttonBg),
     '--x-ov-suggestion-action-button-border': rgbToCss(theme.buttonBorder),
     '--x-ov-suggestion-action-button-text': rgbToCss(theme.buttonText),
-    '--x-ov-suggestion-row-bg': rgbToCss(theme.highlightBg),
-    '--x-ov-suggestion-row-border': rgbToCss(theme.highlightBorder)
+    '--x-ov-suggestion-row-bg': rgbToCss(theme.highlightBg)
   } as CSSProperties;
 }
 

@@ -515,6 +515,55 @@ const geminiBase = search.normalizeSiteSearchProvider({
 assert.ok(search.isAiSiteSearchProvider(geminiBase), 'openAndSubmit provider should be AI');
 assert.ok(search.isInteractiveSiteSearchProvider(geminiBase), 'Gemini provider should be interactive');
 
+const defaultSearchEngines = search.getDefaultSiteSearchProviders()
+  .filter(search.isSearchEngineSiteSearchProvider);
+assert.deepStrictEqual(
+  defaultSearchEngines.map((provider) => provider.key),
+  ['so', 'bi', 'gg', 'ddg', 'br', 'eco'],
+  'built-in search engines should be explicitly classified and keep their intended order'
+);
+assert.strictEqual(
+  search.isSearchEngineSiteSearchProvider({
+    key: 'gg',
+    category: 'site',
+    _xIsCustom: true
+  }),
+  false,
+  'a custom provider explicitly placed under site search should not inherit a built-in key category'
+);
+assert.strictEqual(
+  search.normalizeSiteSearchProvider(
+    { key: 'gg', category: 'site', template: 'https://example.com?q={query}' },
+    { key: 'gg', category: 'searchEngine', template: 'https://google.com?q={query}' }
+  ).category,
+  'site',
+  'an explicit custom site placement should survive normalization against a built-in engine'
+);
+assert.strictEqual(
+  search.isSearchEngineSiteSearchProvider({
+    key: 'custom-engine',
+    category: 'searchEngine',
+    _xIsCustom: true
+  }),
+  true,
+  'a custom provider placed under search engines should be classified by its saved category'
+);
+assert.strictEqual(
+  defaultSearchEngines.find((provider) => provider.key === 'ddg').template,
+  'https://duckduckgo.com/?q={query}',
+  'DuckDuckGo should use its official query URL'
+);
+assert.strictEqual(
+  defaultSearchEngines.find((provider) => provider.key === 'br').template,
+  'https://search.brave.com/search?q={query}',
+  'Brave Search should use its public result URL'
+);
+assert.strictEqual(
+  defaultSearchEngines.find((provider) => provider.key === 'eco').template,
+  'https://www.ecosia.org/search?q={query}',
+  'Ecosia should use its documented default-search URL'
+);
+
 const customizedGemini = search.normalizeSiteSearchProvider({
   key: 'gm',
   aliases: ['g'],
@@ -527,6 +576,7 @@ assert.strictEqual(customizedGemini.submitStrategy, 'geminiPrompt', 'customized 
 const merged = search.mergeCustomProviders([geminiBase], [customizedGemini]);
 assert.strictEqual(merged.length, 1, 'custom provider should replace same-key built-in provider');
 assert.strictEqual(merged[0].action, 'openAndSubmit');
+assert.strictEqual(merged[0]._xIsCustom, true, 'merged custom providers should retain their custom identity');
 
 assert.deepStrictEqual(
   search.getSiteSearchProviderDisplayNameMessage({ key: 'dbai' }),
@@ -548,6 +598,34 @@ assert.strictEqual(
   null,
   'unknown provider display names should fall back to caller-owned name'
 );
+assert.strictEqual(
+  search.getSiteSearchProviderDisplayNameMessage({
+    key: 'db',
+    name: 'Dribbble',
+    _xIsCustom: true
+  }),
+  null,
+  'custom providers should keep their user-defined names when a key matches a built-in provider'
+);
+const duplicateDbProvider = search.findSiteSearchProviderKeyConflict(
+  'DB',
+  [{ key: 'db', name: 'Douban' }],
+  ''
+);
+assert.strictEqual(
+  duplicateDbProvider && duplicateDbProvider.name,
+  'Douban',
+  'site-search trigger conflicts should be detected case-insensitively'
+);
+assert.strictEqual(
+  search.findSiteSearchProviderKeyConflict(
+    'db',
+    [{ key: 'db', name: 'Douban' }],
+    'db'
+  ),
+  null,
+  'editing a provider should allow it to retain its current trigger'
+);
 
 const wechatProvider = search.getDefaultSiteSearchProviders().find((provider) => provider.key === 'wx');
 assert.strictEqual(
@@ -555,6 +633,13 @@ assert.strictEqual(
   'WeChat Official Accounts',
   'default wechat provider name should describe WeChat Official Accounts search'
 );
+search.getDefaultSiteSearchProviders().forEach((provider) => {
+  assert.strictEqual(
+    provider.iconUrl,
+    undefined,
+    `${provider.key} should defer to the bundled local SVG map instead of a remote icon URL`
+  );
+});
 assert.strictEqual(
   search.findProviderForSiteSearchSuggestion(
     {
@@ -580,6 +665,17 @@ const githubProvider = {
   name: 'GitHub',
   template: 'https://github.com/search?q={query}'
 };
+const defaultSiteSearchProviders = search.getDefaultSiteSearchProviders();
+defaultSiteSearchProviders.forEach((provider) => {
+  const triggers = [provider.key].concat(provider.aliases || []);
+  triggers.forEach((trigger) => {
+    assert.strictEqual(
+      search.getSiteSearchTriggerCandidate(trigger, defaultSiteSearchProviders, null),
+      provider,
+      `the configured site-search trigger "${trigger}" should expose the matching Tab hint`
+    );
+  });
+});
 assert.strictEqual(
   search.findSiteSearchProvider('github', [githubProvider]),
   githubProvider,

@@ -36,6 +36,11 @@
   const overlaySizeTabsIndicator = overlaySizeTabsWrap
     ? overlaySizeTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
+  const overlayEnterAnimationTabButtons = Array.from(document.querySelectorAll('button[data-overlay-enter-animation]'));
+  const overlayEnterAnimationTabsWrap = document.getElementById('_x_extension_overlay_enter_animation_tabs_wrap_2026_unique_');
+  const overlayEnterAnimationTabsIndicator = overlayEnterAnimationTabsWrap
+    ? overlayEnterAnimationTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
+    : null;
   const bookmarkCountSelect = document.getElementById('_x_extension_bookmark_count_select_2024_unique_');
   const bookmarkColumnsSelect = document.getElementById('_x_extension_bookmark_columns_select_2024_unique_');
   const bookmarkColumnsSelectWrap = bookmarkColumnsSelect
@@ -93,6 +98,7 @@
   const openOnboardingPageButton = document.getElementById('_x_extension_open_onboarding_page_2026_unique_');
   const feedbackSupportHost = document.getElementById('_x_extension_feedback_support_2026_unique_');
   const openShortcutsPageButton = document.getElementById('_x_extension_open_shortcuts_page_2026_unique_');
+  const siteSearchEngineBuiltinList = document.getElementById('_x_extension_search_engine_builtin_list_2026_unique_');
   const siteSearchCustomList = document.getElementById('_x_extension_site_search_custom_list_2024_unique_');
   const siteSearchBuiltinList = document.getElementById('_x_extension_site_search_builtin_list_2024_unique_');
   const siteSearchAiGroup = document.getElementById('_x_extension_site_search_ai_group_2026_unique_');
@@ -102,6 +108,9 @@
   const siteSearchTemplateInput = document.getElementById('_x_extension_site_search_template_2024_unique_');
   const siteSearchInsertQueryButton = document.getElementById('_x_extension_site_search_insert_query_2026_unique_');
   const siteSearchAliasInput = document.getElementById('_x_extension_site_search_alias_2024_unique_');
+  const siteSearchCategoryButtons = Array.from(document.querySelectorAll(
+    'button[data-site-search-category]'
+  ));
   const siteSearchForm = document.querySelector('._x_extension_settings_content_2024_unique_[data-content="shortcuts"] ._x_extension_shortcut_form_2024_unique_');
   const siteSearchFormTrigger = document.getElementById('_x_extension_site_search_expand_2024_unique_');
   const siteSearchAddButton = document.getElementById('_x_extension_site_search_add_2024_unique_');
@@ -185,6 +194,11 @@
     overlaySizeTabsWrap,
     'overlay-size',
     handleOverlaySizeSelection
+  );
+  const overlayEnterAnimationTabsController = createOptionsSegmentedControlController(
+    overlayEnterAnimationTabsWrap,
+    'overlay-enter-animation',
+    handleOverlayEnterAnimationSelection
   );
   const restrictedActionTabsController = createOptionsSegmentedControlController(
     restrictedActionSelectWrap,
@@ -359,6 +373,10 @@
     siteSearchCustomList,
     'custom'
   );
+  const siteSearchEngineBuiltinListController = createSiteSearchListController(
+    siteSearchEngineBuiltinList,
+    'builtin-engine'
+  );
   const siteSearchBuiltinListController = createSiteSearchListController(
     siteSearchBuiltinList,
     'builtin-search'
@@ -426,6 +444,8 @@
   const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
   const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
   const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_unique_';
+  const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = SETTINGS.OVERLAY_ENTER_ANIMATION_STORAGE_KEY ||
+    '_x_extension_overlay_enter_animation_2026_unique_';
   const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
   const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
@@ -480,6 +500,7 @@
     NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
     NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
     OVERLAY_SIZE_MODE_STORAGE_KEY,
+    OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     BOOKMARK_COUNT_STORAGE_KEY,
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
@@ -530,6 +551,7 @@
   let bodyFixedSnapshot = null;
   let languageApplyRequestId = 0;
   let editingSiteSearchKey = null;
+  let siteSearchDraftCategory = 'site';
   let activePopconfirm = null;
   let siteSearchFormExpanded = false;
   let siteSearchRefreshSuppressUntil = 0;
@@ -562,6 +584,7 @@
   let currentRecentMode = 'most';
   let currentNewtabWidthMode = 'wide';
   let currentOverlaySizeMode = 'standard';
+  let currentOverlayEnterAnimation = 'elastic';
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
   let currentNewtabTopContentMode = 'brand';
@@ -840,13 +863,14 @@
   function getSiteSearchFormRenderModel() {
     return {
       copy: {
-        addLabel: getMessage('shortcuts_add', '添加站内搜索'),
+        addLabel: getMessage('shortcuts_add', '添加自定义搜索'),
         aliasLabel: getMessage('shortcuts_label_alias', '别名'),
         aliasPlaceholder: getMessage(
           'shortcuts_placeholder_alias',
           '选填，例如 小破站、油管等'
         ),
         cancelLabel: getMessage('shortcuts_cancel', '取消'),
+        categoryLabel: getMessage('shortcuts_label_display_group', '显示位置'),
         keyLabel: getMessage('shortcuts_label_key', '触发词'),
         keyPlaceholder: getMessage(
           'shortcuts_placeholder_required',
@@ -858,6 +882,11 @@
           '选填，默认使用触发词'
         ),
         queryInsertLabel: getMessage('shortcuts_insert_query', '插入查询变量'),
+        searchEngineCategoryLabel: getMessage(
+          'search_scope_group_engines',
+          '搜索引擎'
+        ),
+        siteCategoryLabel: getMessage('search_scope_group_sites', '站内搜索'),
         templateHelp: getMessage(
           'shortcuts_template_help',
           '1.打开你想添加的网站\n2.输入任一搜索词，触发搜索\n3.将搜索结果页面 url 粘贴在此处\n4.将关键词替换为{query}'
@@ -949,6 +978,9 @@
     const name = String(draft && draft.name ? draft.name : '').trim();
     const templateRaw = String(draft && draft.template ? draft.template : '').trim();
     const aliases = normalizeAliases(draft && draft.aliases ? draft.aliases : '');
+    const category = draft && draft.category === 'searchEngine'
+      ? 'searchEngine'
+      : 'site';
     if (!key) {
       return { ok: false, error: getMessage('shortcuts_error_key', '请填写触发词') };
     }
@@ -956,6 +988,12 @@
       return {
         ok: false,
         error: getMessage('shortcuts_error_key_space', '触发词不能包含空格')
+      };
+    }
+    if (findSiteSearchKeyConflict(key, '')) {
+      return {
+        ok: false,
+        error: getMessage('shortcuts_error_key_duplicate', '该触发词已存在，请更换')
       };
     }
     const template = normalizeSiteSearchTemplate(templateRaw);
@@ -970,7 +1008,8 @@
       aliases,
       key,
       name: name || key,
-      template
+      template,
+      category
     });
     if (!nextItem) {
       return { ok: false, error: getMessage('toast_error', '操作失败，请重试') };
@@ -1221,6 +1260,12 @@
       : ((value === 'compact' || value === 'large') ? value : 'standard');
   }
 
+  function normalizeOverlayEnterAnimation(value) {
+    return typeof SETTINGS.normalizeOverlayEnterAnimation === 'function'
+      ? SETTINGS.normalizeOverlayEnterAnimation(value)
+      : (value === 'fade' ? 'fade' : 'elastic');
+  }
+
   function updateBookmarkColumnsSelectVisibility(countValue) {
     if (!bookmarkColumnsSelectWrap) {
       return;
@@ -1446,6 +1491,14 @@
     );
   }
 
+  function updateOverlayEnterAnimationTabsIndicator() {
+    updateInlineTabsIndicator(
+      overlayEnterAnimationTabsWrap,
+      overlayEnterAnimationTabsIndicator,
+      'button[data-overlay-enter-animation][data-active="true"]'
+    );
+  }
+
   function updateNewtabWidthTabsIndicator() {
     updateInlineTabsIndicator(
       newtabWidthTabsWrap,
@@ -1480,6 +1533,11 @@
         overlaySizeTabsWrap,
         overlaySizeTabsIndicator,
         'button[data-overlay-size][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        overlayEnterAnimationTabsWrap,
+        overlayEnterAnimationTabsIndicator,
+        'button[data-overlay-enter-animation][data-active="true"]'
       ),
       measureInlineTabsIndicator(
         restrictedActionSelectWrap,
@@ -1591,6 +1649,31 @@
       normalizeOverlaySizeMode
     );
     requestAnimationFrame(updateOverlaySizeTabsIndicator);
+  }
+
+  function setOverlayEnterAnimationTabState(mode) {
+    const nextMode = normalizeOverlayEnterAnimation(mode);
+    currentOverlayEnterAnimation = nextMode;
+    renderSegmentedControlState(
+      overlayEnterAnimationTabsController,
+      {
+        activeValue: nextMode,
+        dataAttribute: 'data-overlay-enter-animation',
+        items: [
+          {
+            value: 'elastic',
+            labelKey: 'overlay_enter_animation_elastic',
+            label: getMessage('overlay_enter_animation_elastic', '弹性')
+          },
+          {
+            value: 'fade',
+            labelKey: 'overlay_enter_animation_fade',
+            label: getMessage('overlay_enter_animation_fade', '淡入')
+          }
+        ]
+      }
+    );
+    requestAnimationFrame(updateOverlayEnterAnimationTabsIndicator);
   }
 
   function setNewtabWidthTabState(mode) {
@@ -1761,6 +1844,15 @@
     storageArea.set({ [OVERLAY_SIZE_MODE_STORAGE_KEY]: nextMode });
   }
 
+  function handleOverlayEnterAnimationSelection(value) {
+    const nextMode = normalizeOverlayEnterAnimation(value);
+    setOverlayEnterAnimationTabState(nextMode);
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [OVERLAY_ENTER_ANIMATION_STORAGE_KEY]: nextMode });
+  }
+
   function handleSearchResultPrioritySelection(value) {
     const nextPriority = normalizeSearchResultPriority(value);
     setSearchResultPriorityTabState(nextPriority);
@@ -1809,6 +1901,7 @@
 
   setNewtabWidthTabState(currentNewtabWidthMode);
   setOverlaySizeTabState(currentOverlaySizeMode);
+  setOverlayEnterAnimationTabState(currentOverlayEnterAnimation);
   setSearchResultPriorityTabState(currentSearchResultPriority);
   setRecentModeTabState(currentRecentMode);
   setRestrictedActionTabState(currentRestrictedAction);
@@ -2497,6 +2590,7 @@
       updateThemeButtons(currentThemeMode);
       setNewtabWidthTabState(currentNewtabWidthMode);
       setOverlaySizeTabState(currentOverlaySizeMode);
+      setOverlayEnterAnimationTabState(currentOverlayEnterAnimation);
       setSearchResultPriorityTabState(currentSearchResultPriority);
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
@@ -3118,6 +3212,7 @@
           updateRecentModeTabsIndicator();
           updateNewtabWidthTabsIndicator();
           updateOverlaySizeTabsIndicator();
+          updateOverlayEnterAnimationTabsIndicator();
           updateNewtabTopContentTabsIndicator();
         });
       });
@@ -3480,47 +3575,7 @@
   window.addEventListener('scroll', scheduleOptionsScrollRefresh, { passive: true });
   updateTabsStickyVisualState();
   window.addEventListener('resize', scheduleOptionsViewportLayoutRefresh, { passive: true });
-  migrateStorageIfNeeded([
-    THEME_STORAGE_KEY,
-    LANGUAGE_STORAGE_KEY,
-    LANGUAGE_MESSAGES_STORAGE_KEY,
-    RECENT_MODE_STORAGE_KEY,
-    RECENT_COUNT_STORAGE_KEY,
-    BOOKMARK_COUNT_STORAGE_KEY,
-    BOOKMARK_COLUMNS_STORAGE_KEY,
-    BOOKMARK_VIEW_MODE_STORAGE_KEY,
-    BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
-    NEWTAB_WIDTH_MODE_STORAGE_KEY,
-    NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
-    NEWTAB_THEME_MODE_STORAGE_KEY,
-    NEWTAB_THEME_SCOPE_STORAGE_KEY,
-    NEWTAB_WALLPAPER_STORAGE_KEY,
-    NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
-    NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
-    NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
-    NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
-    NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
-    NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
-    PINNED_RECENT_SITES_STORAGE_KEY,
-    HIDDEN_RECENT_SITES_STORAGE_KEY,
-    NEWTAB_SHORTCUTS_STORAGE_KEY,
-    OVERLAY_SIZE_MODE_STORAGE_KEY,
-    SEARCH_RESULT_PRIORITY_STORAGE_KEY,
-    AUTO_PIP_ENABLED_STORAGE_KEY,
-    TAB_SWITCHER_ENABLED_STORAGE_KEY,
-    DOCUMENT_PIP_ENABLED_STORAGE_KEY,
-    PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY,
-    OVERLAY_TAB_PRIORITY_STORAGE_KEY,
-    FALLBACK_SHORTCUT_STORAGE_KEY,
-    SITE_SEARCH_STORAGE_KEY,
-    SITE_SEARCH_DISABLED_STORAGE_KEY,
-    SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
-    OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
-    SEARCH_BLACKLIST_STORAGE_KEY,
-    FAVICON_REQUEST_BLACKLIST_STORAGE_KEY,
-    FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
-    DEFAULT_SEARCH_ENGINE_STORAGE_KEY
-  ]);
+  migrateStorageIfNeeded(SYNC_KEYS);
   refreshSyncStatus();
 
   function normalizeSiteSearchTemplate(template) {
@@ -3558,6 +3613,13 @@
     return Boolean(template) && !template.includes('{query}');
   }
 
+  function isSearchEngineSiteSearchProvider(item) {
+    if (typeof SEARCH_UTILS.isSearchEngineSiteSearchProvider === 'function') {
+      return SEARCH_UTILS.isSearchEngineSiteSearchProvider(item);
+    }
+    return Boolean(item && String(item.category || '').trim() === 'searchEngine');
+  }
+
   function normalizeSiteSearchProvider(item, baseItem) {
     if (typeof SEARCH_UTILS.normalizeSiteSearchProvider === 'function') {
       return SEARCH_UTILS.normalizeSiteSearchProvider(item, baseItem);
@@ -3592,11 +3654,36 @@
       submitStrategy: String(
         (item && item.submitStrategy) || (baseItem && baseItem.submitStrategy) || ''
       ).trim(),
+      category: String(
+        (item && item.category) || (baseItem && baseItem.category) || ''
+      ).trim(),
       disabled: Boolean(item && item.disabled),
       disabledReason: String((item && item.disabledReason) || '').trim(),
       icon: String((item && item.icon) || (baseItem && baseItem.icon) || '').trim(),
       iconUrl: String((item && item.iconUrl) || (baseItem && baseItem.iconUrl) || '').trim()
     };
+  }
+
+  function findSiteSearchKeyConflict(key, allowedKey) {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    const normalizedAllowedKey = String(allowedKey || '').trim().toLowerCase();
+    if (!normalizedKey || normalizedKey === normalizedAllowedKey) {
+      return null;
+    }
+    const providers = defaultSiteSearchProviders.concat(customSiteSearchProviders);
+    if (typeof SEARCH_UTILS.findSiteSearchProviderKeyConflict === 'function') {
+      return SEARCH_UTILS.findSiteSearchProviderKeyConflict(
+        normalizedKey,
+        providers,
+        normalizedAllowedKey
+      );
+    }
+    if (typeof SEARCH_UTILS.findSiteSearchProviderByKey === 'function') {
+      return SEARCH_UTILS.findSiteSearchProviderByKey(normalizedKey, providers);
+    }
+    return providers.find(
+      (provider) => String(provider && provider.key ? provider.key : '').trim().toLowerCase() === normalizedKey
+    ) || null;
   }
 
   function isDuplicateTemplate(template, defaults) {
@@ -3632,6 +3719,23 @@
     siteSearchError.style.display = 'block';
   }
 
+  function setLegacySiteSearchDraftCategory(category) {
+    siteSearchDraftCategory = category === 'searchEngine' ? 'searchEngine' : 'site';
+    siteSearchCategoryButtons.forEach((button) => {
+      const active = button.dataset.siteSearchCategory === siteSearchDraftCategory;
+      button.dataset.active = active ? 'true' : 'false';
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const indicator = siteSearchCategoryButtons[0]
+      ? siteSearchCategoryButtons[0].parentElement?.querySelector(
+          '._x_extension_theme_indicator_2024_unique_'
+        )
+      : null;
+    if (indicator) {
+      indicator.dataset.category = siteSearchDraftCategory;
+    }
+  }
+
   function setSiteSearchFormExpanded(expanded) {
     siteSearchFormExpanded = Boolean(expanded);
     if (siteSearchForm) {
@@ -3656,7 +3760,7 @@
     if (siteSearchAddButton) {
       siteSearchAddButton.textContent = key
         ? getMessage('shortcuts_save', '保存修改')
-        : getMessage('shortcuts_add', '添加站内搜索');
+        : getMessage('shortcuts_add', '添加自定义搜索');
       siteSearchAddButton.classList.add('_x_extension_shortcut_save_2024_unique_');
     }
   }
@@ -3750,6 +3854,13 @@
     overlaySizeTabButtons.forEach((button) => {
       button.addEventListener('click', () => {
         handleOverlaySizeSelection(button.getAttribute('data-overlay-size'));
+      });
+    });
+  }
+  if (overlayEnterAnimationTabButtons.length > 0) {
+    overlayEnterAnimationTabButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        handleOverlayEnterAnimationSelection(button.getAttribute('data-overlay-enter-animation'));
       });
     });
   }
@@ -4300,6 +4411,14 @@
       }
       refreshCustomSelects();
     });
+    storageArea.get([OVERLAY_ENTER_ANIMATION_STORAGE_KEY], (result) => {
+      const stored = result[OVERLAY_ENTER_ANIMATION_STORAGE_KEY];
+      const mode = normalizeOverlayEnterAnimation(stored);
+      setOverlayEnterAnimationTabState(mode);
+      if (stored !== mode) {
+        storageArea.set({ [OVERLAY_ENTER_ANIMATION_STORAGE_KEY]: mode });
+      }
+    });
     storageArea.get([SEARCH_RESULT_PRIORITY_STORAGE_KEY], (result) => {
       const stored = result[SEARCH_RESULT_PRIORITY_STORAGE_KEY];
       const priority = normalizeSearchResultPriority(stored);
@@ -4540,6 +4659,7 @@
     if (siteSearchTemplateInput) siteSearchTemplateInput.value = '';
     if (siteSearchAliasInput) siteSearchAliasInput.value = '';
     setSiteSearchError('');
+    setLegacySiteSearchDraftCategory('site');
     setEditingState(null);
     setSiteSearchFormExpanded(false);
   }
@@ -4586,6 +4706,7 @@
       aliasLabel: getMessage('shortcuts_label_alias', '别名'),
       aliasPlaceholder: getMessage('shortcuts_placeholder_alias', '选填，例如 小破站、油管等'),
       cancelLabel: getMessage('shortcuts_cancel', '取消'),
+      categoryLabel: getMessage('shortcuts_label_display_group', '显示位置'),
       confirmLabel: getMessage('confirm_ok', '确认'),
       confirmMessage: getMessage('confirm_remove_item', '确认移除该项？'),
       confirmMessageKey: 'confirm_remove_item',
@@ -4602,6 +4723,11 @@
       ),
       removeLabel: getMessage('shortcuts_remove', '移除'),
       saveLabel: getMessage('shortcuts_save', '保存修改'),
+      searchEngineCategoryLabel: getMessage(
+        'search_scope_group_engines',
+        '搜索引擎'
+      ),
+      siteCategoryLabel: getMessage('search_scope_group_sites', '站内搜索'),
       templateHelp: getMessage(
         'shortcuts_template_help',
         '1.打开你想添加的网站\n2.输入任一搜索词，触发搜索\n3.将搜索结果页面 url 粘贴在此处\n4.将关键词替换为{query}'
@@ -4615,14 +4741,18 @@
       String(item && item.template ? item.template : '').trim()
     );
     const isCustom = Boolean(item && item._xIsCustom);
+    const isSearchEngine = isSearchEngineSiteSearchProvider(item);
     const duplicate = isCustom && normalizedTemplate && builtinTemplateSet.has(normalizedTemplate);
     return {
       aliasesText: Array.isArray(item.aliases) ? item.aliases.join(',') : '',
       badgeText: isCustom
         ? getMessage('shortcuts_badge_custom', '自定义')
-        : isAiSiteSearchProvider(item)
-          ? getMessage('shortcuts_badge_ai', 'AI')
-          : getMessage('shortcuts_badge_builtin', '内置'),
+        : isSearchEngine
+          ? getMessage('search_scope_group_engines', '搜索引擎')
+          : isAiSiteSearchProvider(item)
+            ? getMessage('shortcuts_badge_ai', 'AI')
+            : getMessage('shortcuts_badge_builtin', '内置'),
+      category: isSearchEngine ? 'searchEngine' : 'site',
       duplicateLabel: duplicate
         ? getMessage('shortcuts_duplicate_tag', '与内置重复')
         : '',
@@ -4637,6 +4767,13 @@
       meta: `${item.key || ''} · ${item.template || ''}`,
       name: getLocalizedBuiltinProviderName(item),
       normalizedTemplate,
+      secondaryBadgeText: isCustom
+        ? (isSearchEngine
+            ? getMessage('search_scope_group_engines', '搜索引擎')
+            : getMessage('search_scope_group_sites', '站内搜索'))
+        : isSearchEngine
+          ? getMessage('shortcuts_badge_builtin', '内置')
+          : '',
       template: String(item.template || ''),
       templateEditable: isCustom
     };
@@ -4703,6 +4840,13 @@
         error: getMessage('shortcuts_error_key_space', '触发词不能包含空格')
       });
     }
+    const previousKey = String(item.key || '').toLowerCase();
+    if (findSiteSearchKeyConflict(nextKeyRaw, previousKey)) {
+      return Promise.resolve({
+        ok: false,
+        error: getMessage('shortcuts_error_key_duplicate', '该触发词已存在，请更换')
+      });
+    }
     const template = normalizeSiteSearchTemplate(
       String(draft && draft.template ? draft.template : '').trim()
     );
@@ -4718,7 +4862,6 @@
     let next = customSiteSearchProviders.filter(
       (entry) => String(entry.key || '').toLowerCase() !== normalizedKey
     );
-    const previousKey = String(item.key || '').toLowerCase();
     if (previousKey && previousKey !== normalizedKey) {
       next = next.filter(
         (entry) => String(entry.key || '').toLowerCase() !== previousKey
@@ -4732,6 +4875,7 @@
       name: String(draft && draft.name ? draft.name : '').trim() || nextKeyRaw,
       template,
       aliases,
+      category: draft && draft.category === 'searchEngine' ? 'searchEngine' : 'site',
       disabled: shouldDisable,
       disabledReason: shouldDisable ? 'duplicate' : ''
     });
@@ -4761,7 +4905,7 @@
   }
 
   function renderSiteSearchList() {
-    if (!siteSearchCustomList || !siteSearchBuiltinList) {
+    if (!siteSearchEngineBuiltinList || !siteSearchCustomList || !siteSearchBuiltinList) {
       return;
     }
     const customKeys = new Set(
@@ -4773,9 +4917,12 @@
       const key = String(item.key || '').toLowerCase();
       return key && !customKeys.has(key) && !disabledSiteSearchKeys.has(key);
     });
+    const displayEngineDefaults = displayDefaults.filter(isSearchEngineSiteSearchProvider);
     const displayAiDefaults = displayDefaults.filter(isAiSiteSearchProvider);
     const displaySearchDefaults = displayDefaults.filter(
-      (item) => !isAiSiteSearchProvider(item)
+      (item) => (
+        !isSearchEngineSiteSearchProvider(item) && !isAiSiteSearchProvider(item)
+      )
     );
     const builtinTemplateSet = new Set(
       defaultSiteSearchProviders
@@ -4788,6 +4935,10 @@
       ...item,
       _xIsCustom: true
     }));
+    const engineItems = displayEngineDefaults.map((item) => ({
+      ...item,
+      _xIsCustom: false
+    }));
     const searchItems = displaySearchDefaults.map((item) => ({
       ...item,
       _xIsCustom: false
@@ -4797,6 +4948,12 @@
       _xIsCustom: false
     }));
 
+    renderSiteSearchListController(
+      siteSearchEngineBuiltinListController,
+      engineItems,
+      getMessage('shortcuts_empty_engines', '暂无内置搜索引擎'),
+      builtinTemplateSet
+    );
     renderSiteSearchListController(
       siteSearchCustomListController,
       customItems,
@@ -5136,7 +5293,7 @@
   }
 
   function refreshSiteSearchProviders() {
-    if (!siteSearchCustomList || !siteSearchBuiltinList) {
+    if (!siteSearchEngineBuiltinList || !siteSearchCustomList || !siteSearchBuiltinList) {
       return;
     }
     if (defaultSiteSearchProviders.length === 0) {
@@ -5183,7 +5340,7 @@
     });
   }
 
-  if (siteSearchCustomList && siteSearchBuiltinList) {
+  if (siteSearchEngineBuiltinList && siteSearchCustomList && siteSearchBuiltinList) {
     refreshSiteSearchProviders();
   }
   if (blacklistList) {
@@ -5232,6 +5389,9 @@
   if (siteSearchCustomList) {
     siteSearchCustomList.addEventListener('click', handleSiteSearchListClick);
   }
+  if (siteSearchEngineBuiltinList) {
+    siteSearchEngineBuiltinList.addEventListener('click', handleSiteSearchListClick);
+  }
   if (siteSearchBuiltinList) {
     siteSearchBuiltinList.addEventListener('click', handleSiteSearchListClick);
   }
@@ -5258,6 +5418,12 @@
     });
   }
 
+  siteSearchCategoryButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      setLegacySiteSearchDraftCategory(button.dataset.siteSearchCategory);
+    });
+  });
+
   if (siteSearchAddButton) {
     attachSaveButtonAnimation(siteSearchAddButton);
     siteSearchAddButton.addEventListener('click', function() {
@@ -5279,6 +5445,10 @@
         setSiteSearchError(getMessage('shortcuts_error_key_space', '触发词不能包含空格'));
         return;
       }
+      if (findSiteSearchKeyConflict(key, editingSiteSearchKey || '')) {
+        setSiteSearchError(getMessage('shortcuts_error_key_duplicate', '该触发词已存在，请更换'));
+        return;
+      }
       const template = normalizeSiteSearchTemplate(templateRaw);
       if (!template || !template.includes('{query}')) {
         setSiteSearchError(getMessage('toast_error_template', '搜索模板必须包含 {query}'));
@@ -5293,7 +5463,8 @@
         key: key,
         name: name || key,
         template: template,
-        aliases: aliases
+        aliases: aliases,
+        category: siteSearchDraftCategory === 'searchEngine' ? 'searchEngine' : 'site'
       });
       if (!nextItem) {
         setSiteSearchError(getMessage('toast_error', '操作失败，请重试'));
@@ -5427,6 +5598,7 @@
         changes[RECENT_COUNT_STORAGE_KEY] ||
         changes[NEWTAB_WIDTH_MODE_STORAGE_KEY] ||
         changes[OVERLAY_SIZE_MODE_STORAGE_KEY] ||
+        changes[OVERLAY_ENTER_ANIMATION_STORAGE_KEY] ||
         changes[BOOKMARK_COUNT_STORAGE_KEY] ||
         changes[BOOKMARK_COLUMNS_STORAGE_KEY] ||
         changes[BOOKMARK_VIEW_MODE_STORAGE_KEY] ||
@@ -5476,6 +5648,12 @@
       const mode = normalizeOverlaySizeMode(changes[OVERLAY_SIZE_MODE_STORAGE_KEY].newValue);
       setOverlaySizeTabState(mode);
       refreshCustomSelects();
+    }
+    if (changes[OVERLAY_ENTER_ANIMATION_STORAGE_KEY]) {
+      const mode = normalizeOverlayEnterAnimation(
+        changes[OVERLAY_ENTER_ANIMATION_STORAGE_KEY].newValue
+      );
+      setOverlayEnterAnimationTabState(mode);
     }
     if (changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY]) {
       const nextValue = normalizeSearchResultPriority(changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY].newValue);

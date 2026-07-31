@@ -48,7 +48,11 @@ export interface SearchInputParts {
   icon: HTMLDivElement;
   input: HTMLInputElement;
   modeBadge: HTMLDivElement | null;
-  modePrefix: HTMLSpanElement;
+  modeMenu: HTMLDivElement;
+  modePrefix: HTMLButtonElement;
+  modePrefixChevron: HTMLElement;
+  modePrefixCurrent: HTMLSpanElement;
+  modePrefixGlyph: HTMLElement;
   modePrefixIcon: HTMLImageElement;
   modePrefixText: HTMLSpanElement;
   modeTabHint: HTMLSpanElement;
@@ -221,11 +225,12 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
         placeholder={config.placeholder || 'Search or enter URL...'}
         type="text"
       />
-      <span
+      <button
         {...noTranslateProps()}
         className="x-lumno-search-input-mode__prefix"
         data-search-input-mode-prefix=""
         id={modePrefixId}
+        type="button"
       >
         <img
           alt=""
@@ -234,11 +239,31 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
           referrerPolicy="no-referrer"
           style={{ display: 'none' }}
         />
+        <i
+          aria-hidden="true"
+          className="ri-icon ri-size-16 ri-search-line"
+          data-search-input-mode-prefix-glyph=""
+        />
         <span
           {...noTranslateProps()}
           data-search-input-mode-prefix-text=""
         />
-      </span>
+        <span
+          {...noTranslateProps()}
+          aria-hidden="true"
+          data-search-input-mode-current=""
+        />
+        <i
+          aria-hidden="true"
+          className="ri-icon ri-size-16 ri-arrow-down-s-line"
+          data-search-input-mode-prefix-chevron=""
+        />
+      </button>
+      <div
+        {...noTranslateProps()}
+        data-search-input-mode-menu=""
+        hidden
+      />
       <span
         {...noTranslateProps()}
         aria-hidden="true"
@@ -431,8 +456,11 @@ export function createSearchInput(
         `#${config.secondaryAction.id}`
       )
     : null;
-  const modePrefix = container.querySelector<HTMLSpanElement>(
+  const modePrefix = container.querySelector<HTMLButtonElement>(
     '[data-search-input-mode-prefix]'
+  );
+  const modePrefixGlyph = container.querySelector<HTMLElement>(
+    '[data-search-input-mode-prefix-glyph]'
   );
   const modePrefixIcon = container.querySelector<HTMLImageElement>(
     '[data-search-input-mode-prefix-icon]'
@@ -449,10 +477,23 @@ export function createSearchInput(
   const modeTabHintText = container.querySelector<HTMLSpanElement>(
     '[data-search-input-mode-tab-text]'
   );
+  const modePrefixChevron = container.querySelector<HTMLElement>(
+    '[data-search-input-mode-prefix-chevron]'
+  );
+  const modePrefixCurrent = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-current]'
+  );
+  const modeMenu = container.querySelector<HTMLDivElement>(
+    '[data-search-input-mode-menu]'
+  );
   if (
     !modePrefix ||
+    !modePrefixGlyph ||
     !modePrefixIcon ||
     !modePrefixText ||
+    !modePrefixChevron ||
+    !modePrefixCurrent ||
+    !modeMenu ||
     !modeTabHint ||
     !modeTabHintKey ||
     !modeTabHintText
@@ -466,7 +507,11 @@ export function createSearchInput(
     icon,
     input,
     modeBadge,
+    modeMenu,
     modePrefix,
+    modePrefixChevron,
+    modePrefixCurrent,
+    modePrefixGlyph,
     modePrefixIcon,
     modePrefixText,
     modeTabHint,

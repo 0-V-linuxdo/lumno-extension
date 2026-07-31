@@ -407,6 +407,15 @@
   "overlay_size_large": {
     "message": "大"
   },
+  "settings_overlay_enter_animation_title": {
+    "message": "進入動畫"
+  },
+  "overlay_enter_animation_elastic": {
+    "message": "彈性"
+  },
+  "overlay_enter_animation_fade": {
+    "message": "淡入"
+  },
   "recent_mode_latest": {
     "message": "最近瀏覽"
   },
@@ -986,6 +995,9 @@
   "shortcuts_label_alias": {
     "message": "別名"
   },
+  "shortcuts_label_display_group": {
+    "message": "顯示位置"
+  },
   "shortcuts_placeholder_required": {
     "message": "必填，多個請用英文逗號分隔，例如 jd,bili"
   },
@@ -1002,7 +1014,7 @@
     "message": "插入查詢變數"
   },
   "shortcuts_add": {
-    "message": "新增站內搜尋"
+    "message": "新增自訂搜尋"
   },
   "shortcuts_save": {
     "message": "儲存修改"
@@ -1017,10 +1029,13 @@
     "message": "移除"
   },
   "shortcuts_empty_custom": {
-    "message": "尚未新增自訂站內搜尋"
+    "message": "尚未新增自訂搜尋"
   },
   "shortcuts_empty_builtin": {
     "message": "沒有內建站內搜尋"
+  },
+  "shortcuts_empty_engines": {
+    "message": "沒有內建搜尋引擎"
   },
   "shortcuts_empty_ai": {
     "message": "沒有內建 AI"
@@ -1078,6 +1093,9 @@
   },
   "shortcuts_error_key_space": {
     "message": "觸發詞不能包含空白"
+  },
+  "shortcuts_error_key_duplicate": {
+    "message": "此觸發詞已存在，請更換"
   },
   "search_placeholder": {
     "message": "搜尋或輸入網址..."
@@ -1420,6 +1438,24 @@
   },
   "local_search_tab_hint": {
     "message": "僅搜尋{source}"
+  },
+  "search_scope_switcher_label": {
+    "message": "搜尋範圍：{scope}。選取即可切換"
+  },
+  "search_scope_current": {
+    "message": "目前"
+  },
+  "search_scope_group_engines": {
+    "message": "搜尋引擎"
+  },
+  "search_scope_group_local": {
+    "message": "瀏覽器內容"
+  },
+  "search_scope_group_ai": {
+    "message": "AI 搜尋"
+  },
+  "search_scope_group_sites": {
+    "message": "站內搜尋"
   },
   "overlay_empty_open_tabs": {
     "message": "暫無分頁"

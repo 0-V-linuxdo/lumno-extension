@@ -407,6 +407,15 @@
   "overlay_size_large": {
     "message": "大"
   },
+  "settings_overlay_enter_animation_title": {
+    "message": "进入动画"
+  },
+  "overlay_enter_animation_elastic": {
+    "message": "弹性"
+  },
+  "overlay_enter_animation_fade": {
+    "message": "淡入"
+  },
   "recent_mode_latest": {
     "message": "最近访问"
   },
@@ -986,6 +995,9 @@
   "shortcuts_label_alias": {
     "message": "别名"
   },
+  "shortcuts_label_display_group": {
+    "message": "显示位置"
+  },
   "shortcuts_placeholder_required": {
     "message": "必填，多个请用英文逗号分隔，如 jd,bili"
   },
@@ -1002,7 +1014,7 @@
     "message": "插入查询变量"
   },
   "shortcuts_add": {
-    "message": "添加站内搜索"
+    "message": "添加自定义搜索"
   },
   "shortcuts_save": {
     "message": "保存修改"
@@ -1017,10 +1029,13 @@
     "message": "移除"
   },
   "shortcuts_empty_custom": {
-    "message": "暂未添加自定义站内搜索"
+    "message": "暂未添加自定义搜索"
   },
   "shortcuts_empty_builtin": {
     "message": "暂无内置站内搜索"
+  },
+  "shortcuts_empty_engines": {
+    "message": "暂无内置搜索引擎"
   },
   "shortcuts_empty_ai": {
     "message": "暂无内置 AI"
@@ -1078,6 +1093,9 @@
   },
   "shortcuts_error_key_space": {
     "message": "触发词不能包含空格"
+  },
+  "shortcuts_error_key_duplicate": {
+    "message": "该触发词已存在，请更换"
   },
   "search_placeholder": {
     "message": "搜索或输入网址..."
@@ -1420,6 +1438,24 @@
   },
   "local_search_tab_hint": {
     "message": "仅搜索{source}"
+  },
+  "search_scope_switcher_label": {
+    "message": "搜索范围：{scope}。选择即可切换"
+  },
+  "search_scope_current": {
+    "message": "当前"
+  },
+  "search_scope_group_engines": {
+    "message": "搜索引擎"
+  },
+  "search_scope_group_local": {
+    "message": "浏览器内容"
+  },
+  "search_scope_group_ai": {
+    "message": "AI 搜索"
+  },
+  "search_scope_group_sites": {
+    "message": "站内搜索"
   },
   "overlay_empty_open_tabs": {
     "message": "暂无标签"

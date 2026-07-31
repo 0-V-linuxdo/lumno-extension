@@ -69,7 +69,8 @@
       merged.push({
         ...item,
         action: String(item.action || (baseMap.get(key) && baseMap.get(key).action) || '').trim(),
-        submitStrategy: String(item.submitStrategy || (baseMap.get(key) && baseMap.get(key).submitStrategy) || '').trim()
+        submitStrategy: String(item.submitStrategy || (baseMap.get(key) && baseMap.get(key).submitStrategy) || '').trim(),
+        _xIsCustom: true
       });
     });
     (baseItems || []).forEach((item) => {

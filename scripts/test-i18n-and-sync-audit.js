@@ -17,12 +17,15 @@ const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
 const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
+const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 const sharedSettingsSource = fs.readFileSync('src/shared/settings.js', 'utf8');
+const shortcutFaviconSource = fs.readFileSync('src/shared/shortcut-favicon.js', 'utf8');
 const localeNames = ['en', 'ja', 'zh_CN', 'zh_TW'];
 const localeMessages = Object.fromEntries(localeNames.map((locale) => [
   locale,
   JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'))
 ]));
+const optionsMigratesSyncKeys = /migrateStorageIfNeeded\(SYNC_KEYS\);/.test(optionsSource);
 
 function getFunctionSource(source, name) {
   const marker = `function ${name}(`;
@@ -42,6 +45,62 @@ function getFunctionSource(source, name) {
   }
   assert.fail(`${name} should have a complete body`);
 }
+
+{
+  const animationKey = '_x_extension_overlay_enter_animation_2026_unique_';
+  assert(
+    /OVERLAY_ENTER_ANIMATION_STORAGE_KEY\s*=\s*['"]_x_extension_overlay_enter_animation_2026_unique_['"]/.test(sharedSettingsSource) &&
+      /OVERLAY_ENTER_ANIMATION_STORAGE_KEY,/.test(sharedSettingsSource),
+    'shared settings should define and export the overlay opening-animation key'
+  );
+  assert(
+    /const SYNC_KEYS = \[[\s\S]*OVERLAY_ENTER_ANIMATION_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
+    'overlay opening animation should be included in options sync/export/import keys'
+  );
+  assert(
+    optionsMigratesSyncKeys,
+    'options should migrate overlay opening animation from local to sync storage'
+  );
+  assert(
+    /migrateStorageIfNeeded\(\[[\s\S]*OVERLAY_ENTER_ANIMATION_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
+    'background should migrate overlay opening animation from local to sync storage'
+  );
+  assert(
+    overlaySource.includes(animationKey) &&
+      /getStorageValues\(\s*storageArea,\s*\[OVERLAY_ENTER_ANIMATION_STORAGE_KEY\]/.test(overlaySource),
+    'overlay runtime should read the synchronized opening-animation preference'
+  );
+  localeNames.forEach((locale) => {
+    ['settings_overlay_enter_animation_title', 'overlay_enter_animation_elastic', 'overlay_enter_animation_fade']
+      .forEach((key) => {
+        assert(
+          localeMessages[locale][key] &&
+            String(localeMessages[locale][key].message || '').trim(),
+          `${locale} should localize ${key}`
+        );
+      });
+  });
+}
+{
+  const iconCacheKey = '_x_extension_site_search_icon_cache_canonical_2026_unique_';
+  assert(
+    shortcutFaviconSource.includes(iconCacheKey),
+    'shared favicon runtime should define the canonical provider-icon cache key'
+  );
+  assert(
+    !optionsSource.includes(iconCacheKey) && !sharedSettingsSource.includes(iconCacheKey),
+    'regenerable provider-icon cache data must stay out of sync/export/import settings'
+  );
+  const iconStoreSource = getFunctionSource(backgroundSource, 'getSiteSearchIconStore');
+  assert(
+    /storageArea:\s*\(chrome && chrome\.storage && chrome\.storage\.local\)/.test(iconStoreSource),
+    'background should persist provider-icon cache data only in local storage'
+  );
+}
+assert(
+  /const SYNC_KEYS = \[[\s\S]*SITE_SEARCH_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
+  'custom search providers, including their selected category, should remain in sync/export/import'
+);
 
 assert(
   /data-i18n="settings_overlay_open_tabs_default_visible_title"/.test(optionsHtml),
@@ -93,7 +152,7 @@ assert(
   'bookmark view mode should be included in options sync/export/import keys'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*BOOKMARK_VIEW_MODE_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  optionsMigratesSyncKeys,
   'bookmark view mode should be included in local-to-sync migration'
 );
 assert(
@@ -464,7 +523,7 @@ assert(
   'bookmark folder icons should be included in options sync/export/import keys'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  optionsMigratesSyncKeys,
   'bookmark folder icons should be included in local-to-sync migration'
 );
 assert(
@@ -492,7 +551,7 @@ assert(
   'New Tab shortcuts should be included in options sync/export/import keys'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUTS_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  optionsMigratesSyncKeys,
   'New Tab shortcuts should be included in options local-to-sync migration'
 );
 assert(
@@ -508,7 +567,7 @@ assert(
   'the New Tab add shortcut preference should be included in sync export and import'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  optionsMigratesSyncKeys,
   'the New Tab add shortcut preference should be included in local-to-sync migration'
 );
 assert(
@@ -537,7 +596,7 @@ assert(
   'the New Tab shortcut Dock magnification preference should be included in sync export and import'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY[\s\S]*\]\);/.test(optionsSource),
+  optionsMigratesSyncKeys,
   'the New Tab shortcut Dock magnification preference should be included in local-to-sync migration'
 );
 assert(

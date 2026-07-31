@@ -4,16 +4,19 @@ import {
   type ReactRootController
 } from './root-controller';
 import type { BlacklistMatchMode } from './blacklist-list';
-import type {
-  SiteSearchProviderDraft,
-  SiteSearchSaveResult
+import {
+  SiteSearchProviderCategoryControl,
+  type SiteSearchProviderCategoryCopyModel,
+  type SiteSearchProviderDraft,
+  type SiteSearchSaveResult
 } from './site-search-list';
 import {
   getAsyncErrorMessage,
   useExclusiveAsyncAction
 } from '../shared/use-exclusive-async-action';
 
-export interface SiteSearchFormCopyModel {
+export interface SiteSearchFormCopyModel
+  extends SiteSearchProviderCategoryCopyModel {
   addLabel: string;
   aliasLabel: string;
   aliasPlaceholder: string;
@@ -93,6 +96,7 @@ function SiteSearchForm({
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<SiteSearchProviderDraft>({
     aliases: '',
+    category: 'site',
     key: '',
     name: '',
     template: ''
@@ -116,7 +120,7 @@ function SiteSearchForm({
     setDraft((current) => ({ ...current, [field]: value }));
   };
   const reset = () => {
-    setDraft({ aliases: '', key: '', name: '', template: '' });
+    setDraft({ aliases: '', category: 'site', key: '', name: '', template: '' });
     setError('');
     setExpanded(false);
   };
@@ -233,6 +237,16 @@ function SiteSearchForm({
             onChange={(event) => updateDraft('aliases', event.currentTarget.value)}
             placeholder={model.copy.aliasPlaceholder}
             value={draft.aliases}
+          />
+        </div>
+        <div className="_x_extension_shortcut_field_2024_unique_">
+          <div className="_x_extension_shortcut_label_2024_unique_">
+            {model.copy.categoryLabel}
+          </div>
+          <SiteSearchProviderCategoryControl
+            category={draft.category}
+            copy={model.copy}
+            onChange={(category) => updateDraft('category', category)}
           />
         </div>
         <div className="_x_extension_shortcut_actions_row_2024_unique_">

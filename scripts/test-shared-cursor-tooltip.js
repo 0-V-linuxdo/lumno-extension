@@ -76,6 +76,24 @@ assert.strictEqual(
 );
 assert.strictEqual(typeof cursorTooltip.createController, 'function', 'cursor tooltip should expose createController()');
 assert.strictEqual(typeof cursorTooltip.positionAtPoint, 'function', 'cursor tooltip should expose positionAtPoint()');
+assert.strictEqual(
+  cursorTooltip.isElementTextTruncated({ clientWidth: 48, scrollWidth: 49 }),
+  true,
+  'a one-pixel horizontal overflow should still count as truncated'
+);
+assert.strictEqual(
+  cursorTooltip.isElementTextTruncated({ clientWidth: 48, scrollWidth: 48 }),
+  false,
+  'equal horizontal dimensions should not count as truncated'
+);
+assert.strictEqual(
+  cursorTooltip.isElementTextTruncated(
+    { clientWidth: 48, scrollWidth: 48, clientHeight: 20, scrollHeight: 21 },
+    { vertical: true }
+  ),
+  true,
+  'callers can opt into vertical truncation checks for clamped text'
+);
 assert.ok(
   cursorTooltipCss.includes('._x_extension_cursor_tooltip_host_2026_unique_[data-cursor-tooltip]'),
   'cursor tooltip CSS should suppress native pseudo tips for cursor tooltip hosts'
@@ -656,8 +674,10 @@ assert.strictEqual(
 );
 
 const newtabHtml = fs.readFileSync(newtabHtmlPath, 'utf8');
+const newtabPanel = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const background = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
 const overlayPanel = fs.readFileSync(path.join(repoRoot, 'src/overlay/search-panel.js'), 'utf8');
+const searchInputMode = fs.readFileSync(path.join(repoRoot, 'src/shared/search-input-mode.js'), 'utf8');
 assert.ok(newtabHtml.includes('../shared/cursor-tooltip.css'), 'newtab should load cursor tooltip stylesheet');
 assert.ok(newtabHtml.includes('../shared/cursor-tooltip.js'), 'newtab should load cursor tooltip component');
 assert.ok(
@@ -675,6 +695,46 @@ assert.ok(
 assert.ok(
   overlayPanel.includes('LumnoCursorTooltip.createController'),
   'overlay should use the cursor tooltip controller'
+);
+assert.match(
+  overlayPanel,
+  /const overlayCursorTooltipController = window\.LumnoCursorTooltip[\s\S]*?id: '_x_extension_overlay_cursor_tooltip_2026_unique_'/,
+  'overlay input actions and suggestion text should share the overlay cursor tooltip controller'
+);
+assert.match(
+  overlayPanel,
+  /modeMenuCursorTooltipController: overlayCursorTooltipController/,
+  'overlay search-scope labels should use the shared cursor tooltip controller'
+);
+assert.match(
+  newtabPanel,
+  /modeMenuCursorTooltipController: bookmarkCursorTooltipController/,
+  'new-tab search-scope labels should use the shared cursor tooltip controller'
+);
+assert.match(
+  searchInputMode,
+  /const cursorTooltipApi = root\.LumnoCursorTooltip[\s\S]*?typeof cursorTooltipApi\.createController === 'function'/,
+  'new-tab search-scope labels should prefer the cursor tooltip controller'
+);
+assert.match(
+  overlayPanel,
+  /bindInputActionCursorTooltip\(rightIcon, settingsTooltipText\)/,
+  'overlay settings icon should bind its tooltip to the cursor'
+);
+assert.match(
+  overlayPanel,
+  /bindInputActionCursorTooltip\(closeOtherTabsButton, closeOtherTooltipText\)/,
+  'overlay close-other-tabs icon should bind its tooltip to the cursor'
+);
+assert.doesNotMatch(
+  overlayPanel,
+  /rightIcon\.addEventListener\('mouseenter',[\s\S]{0,180}showTopActionTooltip/,
+  'overlay settings icon should no longer use the anchored top-action tooltip'
+);
+assert.doesNotMatch(
+  overlayPanel,
+  /closeOtherTabsButton\.addEventListener\('mouseenter',[\s\S]{0,180}showTopActionTooltip/,
+  'overlay close-other-tabs icon should no longer use the anchored top-action tooltip'
 );
 
 console.log('shared cursor tooltip tests passed');

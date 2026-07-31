@@ -1203,6 +1203,15 @@ function assertWallpaperBootstrapWaitsForTheme() {
   );
 }
 
+function assertInitialWallpaperToneStartsBeforeDeferredRefresh() {
+  const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
+  assert.match(
+    wallpaperSource,
+    /if \(isInitialWallpaperApply\) \{\s*applyWallpaperVisualState\(wallpaper\);\s*refreshWallpaperAdaptiveSampler\(\);\s*scheduleWallpaperVisualRefresh\(visualSeq\);\s*finalizeInitialWallpaper\(\);/,
+    'initial wallpaper tone sampling should start before the deferred visual refresh can repaint the top bar'
+  );
+}
+
 function createMemoryStorage(initialData) {
   const data = Object.assign({}, initialData || {});
   const sets = [];
@@ -2067,6 +2076,7 @@ Promise.resolve()
     assertThemeAwareAlternateFaviconAsset();
     assertSquareFaviconOptionCss('src/newtab/newtab.html');
     assertWallpaperBootstrapWaitsForTheme();
+    assertInitialWallpaperToneStartsBeforeDeferredRefresh();
   })
   .then(testNewtabFaviconPreloadAppliesCachedAlternateBeforeMainRuntime)
   .then(testWallpaperPreloadUsesTheCachedResolvedMode)

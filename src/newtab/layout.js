@@ -69,6 +69,10 @@
     const narrowViewportMinWidthPx = getOptionNumber(constants, 'narrowViewportMinWidthPx', 0);
     const narrowViewportMaxWidthPx = getOptionNumber(constants, 'narrowViewportMaxWidthPx', 0);
     const narrowTopInsetPx = getOptionNumber(constants, 'narrowTopInsetPx', 0);
+    const narrowTopInsetTransitionPx = Math.max(
+      1,
+      getOptionNumber(constants, 'narrowTopInsetTransitionPx', 64)
+    );
     const shortViewportMaxHeightPx = getOptionNumber(constants, 'shortViewportMaxHeightPx', 0);
     const shortMinTopPx = getOptionNumber(constants, 'shortMinTopPx', minTopPx);
     const occupiedTopUpshiftMaxPx = getOptionNumber(constants, 'occupiedTopUpshiftMaxPx', 36);
@@ -80,6 +84,7 @@
     const mobileFlowBreakpointPx = getOptionNumber(constants, 'mobileFlowBreakpointPx', 0);
     const suggestionsBottomInsetPx = getOptionNumber(constants, 'suggestionsBottomInsetPx', 14);
     const suggestionsResizeDurationMs = getOptionNumber(constants, 'suggestionsResizeDurationMs', 180);
+    const suggestionsInputSettleMs = getOptionNumber(constants, 'suggestionsInputSettleMs', 280);
     const suggestionsResizeEasing = typeof constants.suggestionsResizeEasing === 'string' &&
       constants.suggestionsResizeEasing.trim()
       ? constants.suggestionsResizeEasing.trim()
@@ -90,6 +95,9 @@
     let suggestionsResizeAnimationTimer = 0;
     let suggestionsResizeTransitionEndHandler = null;
     let suggestionsResizeTargetHeight = 0;
+    let suggestionsInputSessionActive = false;
+    let suggestionsInputSettleTimer = 0;
+    let suggestionsInputLockedHeight = 0;
     let dockDensityPromotionLock = null;
     const getTopInsetPx = typeof options.getTopInsetPx === 'function'
       ? options.getTopInsetPx
@@ -254,6 +262,8 @@
       if (suggestionsContainer && suggestionsContainer.style) {
         suggestionsContainer.style.removeProperty('height');
         suggestionsContainer.style.removeProperty('overflow');
+        suggestionsContainer.style.removeProperty('overflow-x');
+        suggestionsContainer.style.removeProperty('overflow-y');
         suggestionsContainer.style.removeProperty('transition');
         suggestionsContainer.removeAttribute('data-resizing');
       }
@@ -262,10 +272,89 @@
       }
     }
 
+    function clearSuggestionsInputSettleTimer() {
+      if (!suggestionsInputSettleTimer) {
+        return;
+      }
+      windowObj.clearTimeout(suggestionsInputSettleTimer);
+      suggestionsInputSettleTimer = 0;
+    }
+
+    function holdSuggestionsInputHeight() {
+      const suggestionsContainer = getSuggestionsContainer();
+      if (!suggestionsInputSessionActive ||
+          !suggestionsContainer ||
+          suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
+        return false;
+      }
+      if (!suggestionsInputLockedHeight) {
+        const renderedHeight = suggestionsResizeTargetHeight ||
+          getRenderedHeight(suggestionsContainer);
+        if (!renderedHeight) {
+          return false;
+        }
+        cancelSuggestionsResizeAnimation(false);
+        suggestionsInputLockedHeight = renderedHeight;
+      }
+      suggestionsContainer.setAttribute('data-input-height-locked', 'true');
+      suggestionsContainer.style.setProperty(
+        'height',
+        `${suggestionsInputLockedHeight}px`,
+        'important'
+      );
+      suggestionsContainer.style.setProperty('overflow-x', 'hidden', 'important');
+      suggestionsContainer.style.setProperty('overflow-y', 'auto', 'important');
+      suggestionsContainer.style.setProperty('transition', 'none', 'important');
+      updateSuggestionsSurfaceFrame();
+      return true;
+    }
+
+    function finishSuggestionsInputSession(options) {
+      const finishOptions = options || {};
+      const suggestionsContainer = getSuggestionsContainer();
+      const fromHeight = suggestionsInputLockedHeight;
+      suggestionsInputSessionActive = false;
+      suggestionsInputLockedHeight = 0;
+      clearSuggestionsInputSettleTimer();
+      if (!suggestionsContainer) {
+        return false;
+      }
+      suggestionsContainer.removeAttribute('data-input-height-locked');
+      cancelSuggestionsResizeAnimation(false);
+      updateSuggestionsFloatingLayout();
+      const targetHeight = getRenderedHeight(suggestionsContainer);
+      if (finishOptions.animate !== false && fromHeight > 0) {
+        return animateSuggestionsResize({
+          height: fromHeight,
+          targetHeight
+        });
+      }
+      return false;
+    }
+
+    function scheduleSuggestionsInputSettle() {
+      clearSuggestionsInputSettleTimer();
+      if (suggestionsInputSettleMs <= 0) {
+        finishSuggestionsInputSession();
+        return;
+      }
+      suggestionsInputSettleTimer = windowObj.setTimeout(() => {
+        suggestionsInputSettleTimer = 0;
+        finishSuggestionsInputSession();
+      }, suggestionsInputSettleMs);
+    }
+
+    function beginSuggestionsInputSession() {
+      suggestionsInputSessionActive = true;
+      holdSuggestionsInputHeight();
+      scheduleSuggestionsInputSettle();
+    }
+
     function captureSuggestionsResizeState() {
       const suggestionsContainer = getSuggestionsContainer();
       if (!suggestionsContainer ||
-          suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
+          suggestionsContainer.getAttribute(visibleAttribute) !== 'true' ||
+          suggestionsInputSessionActive) {
         return null;
       }
       const height = getRenderedHeight(suggestionsContainer);
@@ -294,7 +383,10 @@
         return false;
       }
       updateSuggestionsFloatingLayout();
-      const toHeight = getRenderedHeight(suggestionsContainer);
+      const requestedTargetHeight = Number(previousState && previousState.targetHeight);
+      const toHeight = Number.isFinite(requestedTargetHeight) && requestedTargetHeight >= 0
+        ? requestedTargetHeight
+        : getRenderedHeight(suggestionsContainer);
       if (prefersReducedMotion() ||
           suggestionsResizeDurationMs <= 0 ||
           Math.abs(toHeight - fromHeight) <= 1) {
@@ -415,6 +507,89 @@
         tileCount = shortcutSection.querySelectorAll('.x-nt-shortcut-tile').length;
       }
       return `${viewportWidth}:${viewportHeight}:${topReserve}:${sectionWidth}:${tileCount}`;
+    }
+
+    function getDockDensityForAvailableHeight(availableHeight, mobileFlow) {
+      if (mobileFlow) {
+        return 'mobile';
+      }
+      if (availableHeight <= 260) {
+        return 'tiny';
+      }
+      if (availableHeight <= 360) {
+        return 'compact';
+      }
+      return 'default';
+    }
+
+    function getBottomDockTopReserve(viewportHeight) {
+      let topReserve = bottomDockTopReservePx;
+      if (compactDockViewportMaxHeightPx <= 0 ||
+          viewportHeight > compactDockViewportMaxHeightPx) {
+        return topReserve;
+      }
+      const root = getRoot();
+      const rootRect = root ? root.getBoundingClientRect() : null;
+      const rootBottom = rootRect ? Number(rootRect.bottom) || 0 : 0;
+      let compactTopReserve = compactDockMinTopReservePx;
+      if (rootBottom > 0) {
+        compactTopReserve = Math.max(
+          compactTopReserve,
+          Math.ceil(rootBottom + compactDockSearchGapPx)
+        );
+      }
+      const shortcutSection = getShortcutSection();
+      if (isSectionVisible(shortcutSection)) {
+        const shortcutRect = shortcutSection.getBoundingClientRect();
+        const shortcutBottom = shortcutRect ? Number(shortcutRect.bottom) || 0 : 0;
+        if (shortcutBottom > 0) {
+          compactTopReserve = Math.max(
+            compactTopReserve,
+            Math.ceil(shortcutBottom + compactDockShortcutGapPx)
+          );
+        }
+      }
+      topReserve = compactTopReserve;
+      return topReserve;
+    }
+
+    function restoreAttribute(element, name, value) {
+      if (!element || typeof element.setAttribute !== 'function') {
+        return;
+      }
+      if (value === null || typeof value === 'undefined') {
+        if (typeof element.removeAttribute === 'function') {
+          element.removeAttribute(name);
+        }
+        return;
+      }
+      element.setAttribute(name, value);
+    }
+
+    function isDockDensityPromotionStable(
+      body,
+      bottomDock,
+      candidateDensity,
+      viewportHeight
+    ) {
+      if (!body || !bottomDock || !candidateDensity) {
+        return true;
+      }
+      const bodyDensityAttribute = 'data-nt-bottom-dock-density';
+      const dockDensityAttribute = 'data-density';
+      const previousBodyDensity = body.getAttribute(bodyDensityAttribute);
+      const previousDockDensity = bottomDock.getAttribute(dockDensityAttribute);
+      body.setAttribute(bodyDensityAttribute, candidateDensity);
+      bottomDock.setAttribute(dockDensityAttribute, candidateDensity);
+      const candidateTopReserve = getBottomDockTopReserve(viewportHeight);
+      const candidateAvailableHeight = Math.max(0, viewportHeight - candidateTopReserve);
+      const resolvedDensity = getDockDensityForAvailableHeight(
+        candidateAvailableHeight,
+        false
+      );
+      restoreAttribute(body, bodyDensityAttribute, previousBodyDensity);
+      restoreAttribute(bottomDock, dockDensityAttribute, previousDockDensity);
+      return resolvedDensity === candidateDensity;
     }
 
     function getCssPixelValue(style, property) {
@@ -549,7 +724,19 @@
       }
       if (narrowTopInsetPx > 0 && narrowViewportMaxWidthPx > 0) {
         if (viewportWidth > narrowViewportMinWidthPx && viewportWidth <= narrowViewportMaxWidthPx) {
-          targetTop += narrowTopInsetPx;
+          const narrowViewportRange = Math.max(
+            1,
+            narrowViewportMaxWidthPx - narrowViewportMinWidthPx
+          );
+          const transitionWidth = Math.min(
+            narrowTopInsetTransitionPx,
+            narrowViewportRange
+          );
+          const narrowProgress = Math.min(
+            1,
+            Math.max(0, (narrowViewportMaxWidthPx - viewportWidth) / transitionWidth)
+          );
+          targetTop += narrowTopInsetPx * narrowProgress;
         }
       }
       targetTop = Math.max(effectiveMinTopPx, Math.min(maxTop, targetTop));
@@ -574,25 +761,7 @@
       }
       const viewportHeight = Math.max(0, windowObj.innerHeight || 0);
       const mobileFlow = isMobileFlowViewport();
-      let bottomDockTopReserve = bottomDockTopReservePx;
-      if (compactDockViewportMaxHeightPx > 0 && viewportHeight <= compactDockViewportMaxHeightPx) {
-        const root = getRoot();
-        const rootRect = root ? root.getBoundingClientRect() : null;
-        const rootBottom = rootRect ? Number(rootRect.bottom) || 0 : 0;
-        let compactTopReserve = compactDockMinTopReservePx;
-        if (rootBottom > 0) {
-          compactTopReserve = Math.max(compactTopReserve, Math.ceil(rootBottom + compactDockSearchGapPx));
-        }
-        const shortcutSection = getShortcutSection();
-        if (isSectionVisible(shortcutSection)) {
-          const shortcutRect = shortcutSection.getBoundingClientRect();
-          const shortcutBottom = shortcutRect ? Number(shortcutRect.bottom) || 0 : 0;
-          if (shortcutBottom > 0) {
-            compactTopReserve = Math.max(compactTopReserve, Math.ceil(shortcutBottom + compactDockShortcutGapPx));
-          }
-        }
-        bottomDockTopReserve = compactTopReserve;
-      }
+      const bottomDockTopReserve = getBottomDockTopReserve(viewportHeight);
       const bottomDockMaxHeight = Math.max(0, viewportHeight - bottomDockTopReserve);
       const bookmarkVisible = isSectionVisible(bookmarkSection);
       const recentVisible = isSectionVisible(recentSection);
@@ -614,26 +783,28 @@
         shortcutVisible,
         bottomDockTopReserve
       );
-      if (callbacks && callbacks.releaseDockDensityLock) {
-        dockDensityPromotionLock = null;
-      }
+      const releaseDockDensityLock = Boolean(callbacks && callbacks.releaseDockDensityLock);
       if (dockDensityPromotionLock &&
           dockDensityPromotionLock.context !== densityLayoutContext) {
         dockDensityPromotionLock = null;
       }
-      let dockDensity = mobileFlow
-        ? 'mobile'
-        : bottomDockMaxHeight <= 260
-          ? 'tiny'
-          : bottomDockMaxHeight <= 360
-            ? 'compact'
-            : 'default';
+      let dockDensity = getDockDensityForAvailableHeight(bottomDockMaxHeight, mobileFlow);
       const isDensityPromotion = !mobileFlow &&
         previousDockDensity &&
         getDockDensityRank(dockDensity) < getDockDensityRank(previousDockDensity);
+      const releaseWouldOscillate = releaseDockDensityLock &&
+        isDensityPromotion &&
+        !isDockDensityPromotionStable(
+          body,
+          bottomDock,
+          dockDensity,
+          viewportHeight
+        );
       const shouldKeepCompactedDensity = isDensityPromotion && (
         Boolean(callbacks && callbacks.stabilizeDockDensity) ||
+        releaseWouldOscillate ||
         Boolean(
+          !releaseDockDensityLock &&
           dockDensityPromotionLock &&
           dockDensityPromotionLock.context === densityLayoutContext &&
           dockDensityPromotionLock.density === previousDockDensity
@@ -645,7 +816,7 @@
           context: densityLayoutContext,
           density: previousDockDensity
         };
-      } else if (dockDensity !== previousDockDensity) {
+      } else if (releaseDockDensityLock || dockDensity !== previousDockDensity) {
         dockDensityPromotionLock = null;
       }
       body.setAttribute('data-nt-bottom-dock-density', dockDensity);
@@ -681,6 +852,7 @@
       }
       setSuggestionsOpenState(shouldShow);
       if (!shouldShow) {
+        finishSuggestionsInputSession({ animate: false });
         cancelSuggestionsResizeAnimation(false);
       }
       if (shouldShow) {
@@ -717,11 +889,7 @@
       const width = Math.max(0, Math.round(anchorRect.width));
       const availableWithoutInset = Math.max(0, viewportBottom - dropdownTopViewport);
       const available = Math.max(0, availableWithoutInset - suggestionsBottomInsetPx);
-      const availableFitHeight = Math.ceil(availableWithoutInset);
-      const contentHeight = Math.ceil(Math.max(0, Number(suggestionsContainer.scrollHeight) || 0));
-      const maxHeight = contentHeight > 0 && contentHeight <= availableFitHeight
-        ? contentHeight
-        : Math.floor(available);
+      const maxHeight = Math.floor(available);
       setPixelStyle(suggestionsContainer, 'left', left);
       setPixelStyle(suggestionsContainer, 'top', top);
       setPixelStyle(suggestionsContainer, 'width', width);
@@ -735,6 +903,9 @@
       updateSearchEntryLayout,
       setSuggestionsVisible,
       updateSuggestionsFloatingLayout,
+      beginSuggestionsInputSession,
+      finishSuggestionsInputSession,
+      holdSuggestionsInputHeight,
       captureSuggestionsResizeState,
       animateSuggestionsResize
     };

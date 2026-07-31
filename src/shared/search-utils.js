@@ -2301,30 +2301,24 @@
     'kimiPrompt'
   ]);
 
-  function getGstaticFaviconUrlForHost(hostname, size) {
-    const host = String(hostname || '').trim();
-    if (!host) {
-      return '';
-    }
-    const iconSize = Number.isFinite(Number(size)) ? Math.max(1, Math.round(Number(size))) : 64;
-    return `https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=${encodeURIComponent(`https://${host}/`)}&size=${iconSize}`;
-  }
-
   const DEFAULT_SITE_SEARCH_PROVIDERS = Object.freeze([
     { key: 'yt', aliases: ['youtube'], name: 'YouTube', template: 'https://www.youtube.com/results?search_query={query}' },
     { key: 'bb', aliases: ['bilibili', 'bili'], name: 'Bilibili', template: 'https://search.bilibili.com/all?keyword={query}' },
     { key: 'gh', aliases: ['github'], name: 'GitHub', template: 'https://github.com/search?q={query}' },
-    { key: 'gpt', aliases: ['chatgpt', 'openai'], name: 'ChatGPT', template: 'https://chatgpt.com/?hints=search&ref=ext&q={query}', action: 'openAndSubmit', submitStrategy: 'chatgptPrompt', iconUrl: getGstaticFaviconUrlForHost('chatgpt.com') },
-    { key: 'gm', aliases: ['gemini'], name: 'Gemini', template: 'https://gemini.google.com/app', action: 'openAndSubmit', submitStrategy: 'geminiPrompt', iconUrl: getGstaticFaviconUrlForHost('gemini.google.com') },
-    { key: 'dbai', aliases: ['doubao', '豆包'], name: '豆包', template: 'https://www.doubao.com/chat/', action: 'openAndSubmit', submitStrategy: 'doubaoPrompt', iconUrl: getGstaticFaviconUrlForHost('www.doubao.com') },
-    { key: 'qw', aliases: ['qianwen', 'qwen', '千问'], name: '千问', template: 'https://www.qianwen.com/?q={query}', action: 'openAndSubmit', submitStrategy: 'qianwenQuery', iconUrl: getGstaticFaviconUrlForHost('www.qianwen.com') },
-    { key: 'yb', aliases: ['yuanbao', 'tencent', '腾讯元宝', '元宝'], name: '元宝', template: 'https://yuanbao.tencent.com/chat/', action: 'openAndSubmit', submitStrategy: 'yuanbaoPrompt', iconUrl: getGstaticFaviconUrlForHost('yuanbao.tencent.com') },
-    { key: 'mx', aliases: ['minimax', 'mini max'], name: 'MiniMax', template: 'https://chat.minimax.io/', action: 'openAndSubmit', submitStrategy: 'minimaxPrompt', iconUrl: getGstaticFaviconUrlForHost('chat.minimax.io') },
-    { key: 'ds', aliases: ['deepseek', 'deep seek', '深度求索'], name: 'DeepSeek', template: 'https://chat.deepseek.com/', action: 'openAndSubmit', submitStrategy: 'deepseekPrompt', iconUrl: getGstaticFaviconUrlForHost('chat.deepseek.com') },
-    { key: 'kimi', aliases: ['moonshot', '月之暗面'], name: 'Kimi', template: 'https://www.kimi.com/', action: 'openAndSubmit', submitStrategy: 'kimiPrompt', iconUrl: getGstaticFaviconUrlForHost('www.kimi.com') },
-    { key: 'so', aliases: ['baidu', 'bd'], name: 'Baidu', template: 'https://www.baidu.com/s?wd={query}' },
-    { key: 'bi', aliases: ['bing'], name: 'Bing', template: 'https://www.bing.com/search?q={query}' },
-    { key: 'gg', aliases: ['google'], name: 'Google', template: 'https://www.google.com/search?q={query}' },
+    { key: 'gpt', aliases: ['chatgpt', 'openai'], name: 'ChatGPT', template: 'https://chatgpt.com/?hints=search&ref=ext&q={query}', action: 'openAndSubmit', submitStrategy: 'chatgptPrompt' },
+    { key: 'gm', aliases: ['gemini'], name: 'Gemini', template: 'https://gemini.google.com/app', action: 'openAndSubmit', submitStrategy: 'geminiPrompt' },
+    { key: 'dbai', aliases: ['doubao', '豆包'], name: '豆包', template: 'https://www.doubao.com/chat/', action: 'openAndSubmit', submitStrategy: 'doubaoPrompt' },
+    { key: 'qw', aliases: ['qianwen', 'qwen', '千问'], name: '千问', template: 'https://www.qianwen.com/?q={query}', action: 'openAndSubmit', submitStrategy: 'qianwenQuery' },
+    { key: 'yb', aliases: ['yuanbao', 'tencent', '腾讯元宝', '元宝'], name: '元宝', template: 'https://yuanbao.tencent.com/chat/', action: 'openAndSubmit', submitStrategy: 'yuanbaoPrompt' },
+    { key: 'mx', aliases: ['minimax', 'mini max'], name: 'MiniMax', template: 'https://chat.minimax.io/', action: 'openAndSubmit', submitStrategy: 'minimaxPrompt' },
+    { key: 'ds', aliases: ['deepseek', 'deep seek', '深度求索'], name: 'DeepSeek', template: 'https://chat.deepseek.com/', action: 'openAndSubmit', submitStrategy: 'deepseekPrompt' },
+    { key: 'kimi', aliases: ['moonshot', '月之暗面'], name: 'Kimi', template: 'https://www.kimi.com/', action: 'openAndSubmit', submitStrategy: 'kimiPrompt' },
+    { key: 'so', aliases: ['baidu', 'bd'], name: 'Baidu', template: 'https://www.baidu.com/s?wd={query}', category: 'searchEngine' },
+    { key: 'bi', aliases: ['bing'], name: 'Bing', template: 'https://www.bing.com/search?q={query}', category: 'searchEngine' },
+    { key: 'gg', aliases: ['google'], name: 'Google', template: 'https://www.google.com/search?q={query}', category: 'searchEngine' },
+    { key: 'ddg', aliases: ['duckduckgo', 'duck'], name: 'DuckDuckGo', template: 'https://duckduckgo.com/?q={query}', category: 'searchEngine' },
+    { key: 'br', aliases: ['brave', 'brave search'], name: 'Brave Search', template: 'https://search.brave.com/search?q={query}', category: 'searchEngine' },
+    { key: 'eco', aliases: ['ecosia'], name: 'Ecosia', template: 'https://www.ecosia.org/search?q={query}', category: 'searchEngine' },
     { key: 'zh', aliases: ['zhihu'], name: 'Zhihu', template: 'https://www.zhihu.com/search?q={query}' },
     { key: 'db', aliases: ['douban'], name: 'Douban', template: 'https://www.douban.com/search?q={query}' },
     { key: 'jj', aliases: ['juejin'], name: 'Juejin', template: 'https://juejin.cn/search?query={query}' },
@@ -2365,6 +2359,9 @@
   }
 
   function getSiteSearchProviderDisplayNameMessage(provider) {
+    if (provider && provider._xIsCustom === true) {
+      return null;
+    }
     const key = String(provider && provider.key ? provider.key : '').toLowerCase();
     const mapping = SITE_SEARCH_PROVIDER_DISPLAY_NAME_MESSAGES[key];
     if (!mapping) {
@@ -2400,6 +2397,30 @@
     }
     const template = normalizeSiteSearchTemplate(provider.template);
     return Boolean(template) && !template.includes('{query}');
+  }
+
+  const SEARCH_ENGINE_SITE_SEARCH_PROVIDER_KEYS = new Set([
+    'so',
+    'bi',
+    'gg',
+    'ddg',
+    'br',
+    'eco'
+  ]);
+
+  function isSearchEngineSiteSearchProvider(provider) {
+    if (!provider) {
+      return false;
+    }
+    const category = String(provider.category || '').trim();
+    if (category === 'searchEngine') {
+      return true;
+    }
+    if (provider._xIsCustom === true) {
+      return false;
+    }
+    const key = String(provider.key || '').trim().toLowerCase();
+    return SEARCH_ENGINE_SITE_SEARCH_PROVIDER_KEYS.has(key);
   }
 
   function isInteractiveSiteSearchProvider(provider) {
@@ -2439,6 +2460,9 @@
       action: String((item && item.action) || (baseProvider && baseProvider.action) || '').trim(),
       submitStrategy: String(
         (item && item.submitStrategy) || (baseProvider && baseProvider.submitStrategy) || ''
+      ).trim(),
+      category: String(
+        (item && item.category) || (baseProvider && baseProvider.category) || ''
       ).trim(),
       disabled: Boolean(item && item.disabled),
       disabledReason: String((item && item.disabledReason) || '').trim(),
@@ -2483,7 +2507,10 @@
         return;
       }
       seen.add(key);
-      merged.push(inheritSiteSearchProviderBehavior(item, baseMap.get(key)));
+      merged.push({
+        ...inheritSiteSearchProviderBehavior(item, baseMap.get(key)),
+        _xIsCustom: true
+      });
     });
     (baseItems || []).forEach((item) => {
       const key = String(item && item.key ? item.key : '').toLowerCase();
@@ -2572,6 +2599,15 @@
       return null;
     }
     return (providers || []).find((provider) => String(provider && provider.key || '').toLowerCase() === key) || null;
+  }
+
+  function findSiteSearchProviderKeyConflict(trigger, providers, allowedKey) {
+    const key = String(trigger || '').trim().toLowerCase();
+    const allowed = String(allowedKey || '').trim().toLowerCase();
+    if (!key || key === allowed) {
+      return null;
+    }
+    return findSiteSearchProviderByKey(key, providers);
   }
 
   function suggestionMatchesSiteSearchProvider(suggestion, provider) {
@@ -2848,6 +2884,7 @@
     hasOpenAndSubmitSiteSearchAction,
     inheritSiteSearchProviderBehavior,
     isAiSiteSearchProvider,
+    isSearchEngineSiteSearchProvider,
     isInteractiveSiteSearchProvider,
     isInteractiveSiteSearchSubmitStrategy,
     isKeywordSearchSuggestion,
@@ -2862,6 +2899,7 @@
     findSiteSearchProvider,
     findSiteSearchProviderByInput,
     findSiteSearchProviderByKey,
+    findSiteSearchProviderKeyConflict,
     filterSearchSuggestionsBySourceTypes,
     mergeCustomProviders,
     mergeItemsByUrl,

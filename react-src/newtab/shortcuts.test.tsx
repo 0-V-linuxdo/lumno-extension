@@ -247,6 +247,68 @@ describe('Shortcuts React island', () => {
     );
   });
 
+  it('upgrades the unified fallback to a locally cacheable high-resolution favicon', async () => {
+    const attachFavicon = vi.fn((image: HTMLImageElement) => {
+      image.src = 'data:image/png;base64,bG93LXJlcw==';
+      const fallback = document.createElement('span');
+      fallback.className = '_x_extension_favicon_fallback_2024_unique_';
+      image.parentElement?.appendChild(fallback);
+    });
+    let finishResolution: (dataUrl: string) => void = () => {};
+    const resolveShortcutFaviconDataUrl = vi.fn(() => new Promise<string>((resolve) => {
+      finishResolution = resolve;
+    }));
+    const { view } = createView({
+      attachFaviconWithFallbacks: attachFavicon,
+      getShortcutFaviconDataUrl: () => '',
+      resolveShortcutFaviconDataUrl
+    });
+    renderItems(view, [{
+      id: 'docs',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    }]);
+
+    expect(attachFavicon).toHaveBeenCalledOnce();
+    expect(resolveShortcutFaviconDataUrl).toHaveBeenCalledWith(
+      'https://example.com/docs'
+    );
+
+    await act(async () => {
+      finishResolution('data:image/png;base64,aGlnaC1yZXM=');
+      await Promise.resolve();
+    });
+
+    const image = view.getTiles()[0]
+      .querySelector<HTMLImageElement>('.x-nt-shortcut-favicon');
+    expect(image?.src).toContain('data:image/png;base64,aGlnaC1yZXM=');
+    expect(view.getTiles()[0].querySelector(
+      '._x_extension_favicon_fallback_2024_unique_'
+    )).toBeNull();
+    expect(attachFavicon).toHaveBeenCalledOnce();
+  });
+
+  it('renders a cached high-resolution favicon without starting the unified loader', () => {
+    const attachFavicon = vi.fn();
+    const resolveShortcutFaviconDataUrl = vi.fn(() => Promise.resolve(''));
+    const { view } = createView({
+      attachFaviconWithFallbacks: attachFavicon,
+      getShortcutFaviconDataUrl: () => 'data:image/png;base64,Y2FjaGVkLWhk',
+      resolveShortcutFaviconDataUrl
+    });
+    renderItems(view, [{
+      id: 'docs',
+      title: 'Docs',
+      url: 'https://example.com/docs'
+    }]);
+
+    const image = view.getTiles()[0]
+      .querySelector<HTMLImageElement>('.x-nt-shortcut-favicon');
+    expect(image?.src).toContain('data:image/png;base64,Y2FjaGVkLWhk');
+    expect(attachFavicon).not.toHaveBeenCalled();
+    expect(resolveShortcutFaviconDataUrl).not.toHaveBeenCalled();
+  });
+
   it('preserves keyed tile nodes when legacy drag order is synchronized', () => {
     const { view, options } = createView();
     const first = {

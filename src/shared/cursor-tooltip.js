@@ -214,6 +214,30 @@
     }
   }
 
+  function isElementTextTruncated(element, options) {
+    if (!element) {
+      return false;
+    }
+    const config = options || {};
+    const checkHorizontal = config.horizontal !== false;
+    const checkVertical = config.vertical === true;
+    const clientWidth = Number(element.clientWidth);
+    const scrollWidth = Number(element.scrollWidth);
+    const clientHeight = Number(element.clientHeight);
+    const scrollHeight = Number(element.scrollHeight);
+    const hasHorizontalOverflow = checkHorizontal &&
+      Number.isFinite(clientWidth) &&
+      Number.isFinite(scrollWidth) &&
+      clientWidth > 0 &&
+      scrollWidth > clientWidth;
+    const hasVerticalOverflow = checkVertical &&
+      Number.isFinite(clientHeight) &&
+      Number.isFinite(scrollHeight) &&
+      clientHeight > 0 &&
+      scrollHeight > clientHeight;
+    return hasHorizontalOverflow || hasVerticalOverflow;
+  }
+
   function createElement(doc, options, tooltipKind) {
     const baseTooltip = getBaseTooltip();
     const decorateElement = typeof options.decorateElement === 'function'
@@ -874,6 +898,7 @@
     tagLabelClassName: TAG_LABEL_CLASS,
     windowsLogoClassName: WINDOWS_LOGO_CLASS,
     createController,
+    isElementTextTruncated,
     positionAtPoint
   });
 });

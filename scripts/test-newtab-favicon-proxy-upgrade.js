@@ -244,6 +244,10 @@ function createRuntime(options) {
     isBlockedLocalFaviconUrl() {
       return false;
     },
+    getPersistedFaviconEntry: config.getPersistedFaviconEntry,
+    getPersistedFaviconDataEntry: config.getPersistedFaviconDataEntry,
+    setPersistedFaviconUrl: config.setPersistedFaviconUrl,
+    setPersistedFaviconData: config.setPersistedFaviconData,
     detectDefaultExtensionFavicon(_img, url) {
       if (typeof config.detectDefaultExtensionFavicon === 'function') {
         return config.detectDefaultExtensionFavicon(_img, url);
@@ -257,6 +261,49 @@ function createRuntime(options) {
 }
 
 (async () => {
+  const persistedDataUrl = 'data:image/png;base64,cGVyc2lzdGVk';
+  const persistedWrites = [];
+  const persistedRuntime = createRuntime({
+    getPersistedFaviconEntry(cacheKey) {
+      assert.strictEqual(cacheKey, 'futurecomm.cn');
+      return { url: primaryUrl, updatedAt: Date.now() - 1 };
+    },
+    getPersistedFaviconDataEntry(cacheKey) {
+      assert.strictEqual(cacheKey, 'futurecomm.cn');
+      return { dataUrl: persistedDataUrl, updatedAt: Date.now() };
+    },
+    setPersistedFaviconUrl(cacheKey, url) {
+      persistedWrites.push({ cacheKey, type: 'url', value: url });
+    },
+    setPersistedFaviconData(cacheKey, dataUrl) {
+      persistedWrites.push({ cacheKey, type: 'data', value: dataUrl });
+    }
+  });
+  const persistedImg = createFakeImage();
+  persistedRuntime.attachFaviconWithFallbacks(
+    persistedImg,
+    pageUrl,
+    'futurecomm.cn',
+    { primaryUrl }
+  );
+  assert.strictEqual(
+    persistedImg.src,
+    persistedDataUrl,
+    'theme-aware shortcut favicons should render local persisted data before network candidates'
+  );
+  assert.strictEqual(
+    persistedImg.getAttribute('data-x-nt-favicon-cache-key'),
+    'futurecomm.cn',
+    'theme-aware shortcut favicons should keep a stable host cache key'
+  );
+  persistedImg.dispatchEvent('load');
+  await wait(4);
+  assert.deepStrictEqual(
+    persistedWrites[0],
+    { cacheKey: 'futurecomm.cn', type: 'data', value: persistedDataUrl },
+    'confirmed persisted favicon data should refresh its local cache entry'
+  );
+
   const privatePageUrl = 'https://foo.example.com/private';
   const publicPageUrl = 'https://foo.example.com/public';
   const matrixDirectUrl = 'https://foo.example.com/favicon.ico';
@@ -456,6 +503,34 @@ function createRuntime(options) {
   await wait(4);
   assert.strictEqual(placeholderImg.getAttribute('data-fallback-icon'), 'true');
   assert.strictEqual(placeholderImg.getAttribute('data-favicon-placeholder'), null);
+
+  let unavailableCount = 0;
+  const unavailableRuntime = createRuntime({
+    requestFaviconData() {
+      return Promise.resolve(null);
+    }
+  });
+  const unavailableImg = createFakeImage();
+  unavailableRuntime.attachFaviconWithFallbacks(
+    unavailableImg,
+    pageUrl,
+    'futurecomm.cn',
+    {
+      primaryUrl,
+      onUnavailable() {
+        unavailableCount += 1;
+      }
+    }
+  );
+  unavailableImg._xThemeFaviconErrorHandler();
+  unavailableImg._xThemeFaviconErrorHandler();
+  unavailableImg.dispatchEvent('load');
+  await wait(4);
+  assert.strictEqual(
+    unavailableCount,
+    1,
+    'provider favicon consumers should be able to replace the generic fallback with their own glyph'
+  );
 
   let resolveGstaticData = null;
   const delayedGstaticRuntime = createRuntime({

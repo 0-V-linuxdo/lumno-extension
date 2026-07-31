@@ -1,5 +1,6 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import '../../src/shared/suggestion-action-model.js';
 import {
   createSuggestionsView,
   createSuggestionsViewApi,
@@ -10,6 +11,11 @@ import {
 } from './suggestions';
 
 let views: SuggestionsViewController[] = [];
+const sharedSuggestionActionModel = (
+  globalThis as typeof globalThis & {
+    LumnoSuggestionActionModel: NonNullable<SuggestionsViewOptions['actionModel']>;
+  }
+).LumnoSuggestionActionModel;
 
 function createOptions(
   overrides: Partial<SuggestionsViewOptions> = {}
@@ -30,6 +36,10 @@ function createOptions(
     tagBg: '#def',
     tagText: '#123',
     tagBorder: '#abc'
+  };
+  const actionModel = {
+    ...sharedSuggestionActionModel,
+    ...(overrides.actionModel || {})
   };
   const options: SuggestionsViewOptions = {
     document,
@@ -93,7 +103,8 @@ function createOptions(
       selectedIndex = index;
     },
     getSelectedIndex: () => selectedIndex,
-    ...overrides
+    ...overrides,
+    actionModel
   };
   return {
     options,
@@ -230,6 +241,206 @@ describe('Suggestions React island', () => {
     expect(items[1]).toBe(second);
     expect(items[1].dataset.last).toBe('false');
     expect(items[2].dataset.last).toBe('true');
+  });
+
+  it('updates only the matching mark when result content is unchanged', () => {
+    const bindCursorTooltip = vi.fn();
+    const onSetSelectedIndex = vi.fn();
+    const { view, items } = createView({
+      bindCursorTooltip,
+      onSetSelectedIndex
+    });
+    const suggestion: Suggestion = {
+      type: 'history',
+      title: 'Example result',
+      url: 'https://example.com/result'
+    };
+
+    render(view, [suggestion], {
+      query: 'ex',
+      updateKind: 'structure'
+    });
+    const row = items[0];
+    const mark = row.querySelector('mark');
+    bindCursorTooltip.mockClear();
+    onSetSelectedIndex.mockClear();
+
+    render(view, [{ ...suggestion }], {
+      query: 'exam',
+      updateKind: 'highlight'
+    });
+
+    expect(items[0]).toBe(row);
+    expect(items[0].querySelector('mark')).toBe(mark);
+    expect(mark?.textContent).toBe('Exam');
+    expect(bindCursorTooltip).not.toHaveBeenCalled();
+    expect(onSetSelectedIndex).not.toHaveBeenCalledWith(-1);
+  });
+
+  it('keeps a direct URL action row mounted while its text grows', () => {
+    const applyThemeVariables = vi.fn();
+    const getImmediateThemeForSuggestion = vi.fn(() => ({
+      accent: '#2563eb'
+    }));
+    const onActivateSuggestion = vi.fn();
+    const onSetSelectedIndex = vi.fn();
+    const { view, items } = createView({
+      applyThemeVariables,
+      getImmediateThemeForSuggestion,
+      onActivateSuggestion,
+      onSetSelectedIndex
+    });
+    const firstSuggestion: Suggestion = {
+      type: 'directUrl',
+      title: '打开 https://code.0h',
+      url: 'https://code.0h',
+      favicon: 'https://icons.example/first.png'
+    };
+
+    render(view, [firstSuggestion], {
+      query: 'https://code.0h',
+      updateKind: 'structure'
+    });
+    const row = items[0];
+    const mark = row.querySelector('mark');
+    const iconSlot = row.querySelector('.x-nt-suggestion-icon-slot');
+    const inlineIcon = iconSlot?.firstElementChild;
+    applyThemeVariables.mockClear();
+    getImmediateThemeForSuggestion.mockClear();
+    onSetSelectedIndex.mockClear();
+
+    const nextSuggestion: Suggestion = {
+      ...firstSuggestion,
+      title: '打开 https://code.0htt',
+      url: 'https://code.0htt',
+      favicon: 'https://icons.example/second.png'
+    };
+    render(view, [nextSuggestion], {
+      query: 'https://code.0htt',
+      updateKind: 'content'
+    });
+
+    expect(items[0]).toBe(row);
+    expect(items[0].querySelector('mark')).toBe(mark);
+    expect(mark?.textContent).toBe('https://code.0htt');
+    expect(row.querySelector('.x-nt-suggestion-icon-slot')).toBe(iconSlot);
+    expect(iconSlot?.firstElementChild).toBe(inlineIcon);
+    expect(iconSlot?.querySelector('img')).toBeNull();
+    expect(iconSlot?.querySelector('.ri-link')).not.toBeNull();
+    expect(items[0]._xSuggestion).toBe(nextSuggestion);
+    expect(applyThemeVariables).not.toHaveBeenCalled();
+    expect(getImmediateThemeForSuggestion).not.toHaveBeenCalled();
+    expect(onSetSelectedIndex).not.toHaveBeenCalledWith(-1);
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        button: 0
+      }));
+    });
+    expect(onActivateSuggestion).toHaveBeenLastCalledWith(
+      nextSuggestion,
+      'https://code.0htt',
+      expect.any(MouseEvent),
+      0,
+      row
+    );
+  });
+
+  it('keeps visible rows inert when only ranking metadata changes', () => {
+    const applyThemeVariables = vi.fn();
+    const attachFaviconWithFallbacks = vi.fn(
+      (image: HTMLImageElement) => {
+        image.src = 'data:image/png;base64,dGVzdA==';
+      }
+    );
+    const bindCursorTooltip = vi.fn();
+    const getThemeForSuggestion = vi.fn(
+      () => new Promise<Record<string, unknown> | null>(() => {
+        // Keep async theme resolution pending for deterministic tests.
+      })
+    );
+    const onActivateSuggestion = vi.fn();
+    const { view, items } = createView({
+      applyThemeVariables,
+      attachFaviconWithFallbacks,
+      bindCursorTooltip,
+      getThemeForSuggestion,
+      onActivateSuggestion
+    });
+    const firstSuggestion: Suggestion = {
+      type: 'history',
+      title: 'Home - 0HTTP',
+      url: 'https://code.0http.com/',
+      favicon: 'https://code.0http.com/favicon.ico',
+      score: 120,
+      visitCount: 4,
+      typedCount: 2,
+      lastVisitTime: 100,
+      reasons: ['标题前缀']
+    };
+
+    render(view, [firstSuggestion], {
+      query: 'code.0h',
+      updateKind: 'structure'
+    });
+    const row = items[0];
+    const icon = row.querySelector('img');
+    applyThemeVariables.mockClear();
+    attachFaviconWithFallbacks.mockClear();
+    bindCursorTooltip.mockClear();
+    getThemeForSuggestion.mockClear();
+
+    const nextSuggestion: Suggestion = {
+      ...firstSuggestion,
+      score: 260,
+      visitCount: 9,
+      typedCount: 5,
+      lastVisitTime: 200,
+      reasons: ['URL 前缀']
+    };
+    render(view, [nextSuggestion], {
+      query: 'code.0h',
+      updateKind: 'content'
+    });
+
+    expect(items[0]).toBe(row);
+    expect(row.querySelector('img')).toBe(icon);
+    expect(items[0]._xSuggestion).toBe(nextSuggestion);
+    expect(applyThemeVariables).not.toHaveBeenCalled();
+    expect(attachFaviconWithFallbacks).not.toHaveBeenCalled();
+    expect(bindCursorTooltip).not.toHaveBeenCalled();
+    expect(getThemeForSuggestion).not.toHaveBeenCalled();
+
+    const latestSuggestion: Suggestion = {
+      ...nextSuggestion,
+      score: 300,
+      reasons: ['站点直达']
+    };
+    render(view, [latestSuggestion], {
+      query: 'code.0ht',
+      updateKind: 'highlight'
+    });
+    expect(items[0]).toBe(row);
+    expect(items[0]._xSuggestion).toBe(latestSuggestion);
+    expect(applyThemeVariables).not.toHaveBeenCalled();
+    expect(attachFaviconWithFallbacks).not.toHaveBeenCalled();
+    expect(bindCursorTooltip).not.toHaveBeenCalled();
+    expect(getThemeForSuggestion).not.toHaveBeenCalled();
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        button: 0
+      }));
+    });
+    expect(onActivateSuggestion).toHaveBeenLastCalledWith(
+      latestSuggestion,
+      'code.0ht',
+      expect.any(MouseEvent),
+      0,
+      row
+    );
   });
 
   it('keeps existing row nodes when a remote result is inserted ahead of local results', () => {

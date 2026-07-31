@@ -161,6 +161,7 @@
   const LUMNO_FEEDBACK_LINKS_FALLBACK = COMMUNITY_LINKS.FALLBACK_LINKS;
   const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
   const NEWTAB_FAVICON_CACHE = globalThis.LumnoFaviconCache || globalThis.LumnoNewtabFaviconCache || {};
+  const SHORTCUT_FAVICON = globalThis.LumnoShortcutFavicon || {};
   const NEWTAB_FAVICON_THEME = globalThis.LumnoNewtabFaviconTheme || {};
   const NEWTAB_FAVICON_VIEW = globalThis.LumnoNewtabFaviconView || {};
   const NEWTAB_RECENT_STORE = globalThis.LumnoNewtabRecentSitesStore || {};
@@ -243,6 +244,11 @@
       typeof NEWTAB_SHORTCUTS_STORE.createShortcutRecord !== 'function' ||
       typeof NEWTAB_SHORTCUT_ICON_STORE.createShortcutIconStore !== 'function' ||
       typeof NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap !== 'function' ||
+      typeof SHORTCUT_FAVICON.createShortcutFaviconStore !== 'function' ||
+      typeof SHORTCUT_FAVICON.normalizeCacheMap !== 'function' ||
+      typeof SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity !== 'function' ||
+      typeof SUGGESTION_ACTION_MODEL.getSuggestionPresentationFingerprint !== 'function' ||
+      typeof SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind !== 'function' ||
       typeof NEWTAB_SHORTCUT_DIALOG.createShortcutDialog !== 'function' ||
       typeof NEWTAB_SHORTCUTS_VIEW.createShortcutsView !== 'function' ||
       typeof NEWTAB_WALLPAPER_LOCAL_STORE.createWallpaperLocalStore !== 'function' ||
@@ -281,6 +287,17 @@
   const NEWTAB_SHORTCUT_ICONS_STORAGE_KEY =
     NEWTAB_SHORTCUT_ICON_STORE.DEFAULT_STORAGE_KEY ||
     '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const NEWTAB_SHORTCUT_FAVICON_CACHE_STORAGE_KEY =
+    SHORTCUT_FAVICON.DEFAULT_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_favicon_cache_2026_unique_';
+  const SITE_SEARCH_ICON_CACHE_STORAGE_KEY =
+    SHORTCUT_FAVICON.SITE_SEARCH_STORAGE_KEY ||
+    '_x_extension_site_search_icon_cache_canonical_2026_unique_';
+  const siteSearchIconCacheOptions = SHORTCUT_FAVICON.SITE_SEARCH_CACHE_OPTIONS || {
+    cacheTtlMs: 1000 * 60 * 60 * 24 * 180,
+    cacheMaxEntries: 40,
+    maxDataUrlLength: 192 * 1024
+  };
   const MAX_PINNED_RECENT_SITES = 3;
   const MAX_HIDDEN_RECENT_SITES = 60;
   const MAX_NEWTAB_SHORTCUTS = 20;
@@ -298,6 +315,8 @@
   const NEWTAB_SECTION_CACHE_TTL_MS = 1000 * 60 * 5;
   const NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS = 120;
   const NEWTAB_RESIZE_DENSITY_SETTLE_MS = 140;
+  const NEWTAB_INITIAL_VIEWPORT_SETTLE_MS = 32;
+  const NEWTAB_ENTRY_ANIMATION_TOTAL_MS = 460;
   const pageSearchParams = new URLSearchParams(window.location.search || '');
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let mediaListenerAttached = false;
@@ -356,6 +375,11 @@
   let layoutController = null;
   let faviconViewRuntime = null;
   let searchEntryRestoreLayoutLockUntil = 0;
+  let newtabResizeLayoutLocked = false;
+  let newtabReadyRequested = false;
+  let newtabReadySettleTimer = 0;
+  let newtabReadyViewportRevision = 0;
+  let newtabEntryAnimationTimer = 0;
   let searchEntryLastVisibleViewportWidth = Math.max(0, window.innerWidth || 0);
   let searchEntryLastVisibleViewportHeight = Math.max(0, window.innerHeight || 0);
   let currentRecentMode = 'most';
@@ -440,6 +464,7 @@
   let shortcutContextMenuTarget = null;
   let newtabShortcuts = [];
   let newtabShortcutIcons = {};
+  let newtabShortcutFavicons = {};
   let newtabShortcutsVisible = true;
   let newtabShortcutAddVisible = true;
   let newtabShortcutDockMagnificationEnabled = true;
@@ -457,6 +482,52 @@
     storageArea: localStorageArea,
     storageKey: NEWTAB_SHORTCUT_ICONS_STORAGE_KEY
   });
+  const shortcutFaviconStore = SHORTCUT_FAVICON.createShortcutFaviconStore({
+    chromeApi: typeof chrome !== 'undefined' ? chrome : null,
+    storageArea: localStorageArea,
+    storageKey: NEWTAB_SHORTCUT_FAVICON_CACHE_STORAGE_KEY
+  });
+  const siteSearchIconStore = SHORTCUT_FAVICON.createShortcutFaviconStore({
+    chromeApi: typeof chrome !== 'undefined' ? chrome : null,
+    storageArea: localStorageArea,
+    storageKey: SITE_SEARCH_ICON_CACHE_STORAGE_KEY,
+    ...siteSearchIconCacheOptions
+  });
+  let siteSearchIconCache = {};
+  let siteSearchIconCacheLoaded = false;
+  let siteSearchIconCacheLoadPromise = null;
+  let siteSearchIconCacheRevision = 0;
+
+  function loadSiteSearchIconCache() {
+    if (siteSearchIconCacheLoaded) {
+      return Promise.resolve(siteSearchIconCache);
+    }
+    if (siteSearchIconCacheLoadPromise) {
+      return siteSearchIconCacheLoadPromise;
+    }
+    const loadRevision = siteSearchIconCacheRevision;
+    siteSearchIconCacheLoadPromise = siteSearchIconStore.readAll().then((cache) => {
+      if (siteSearchIconCacheRevision === loadRevision) {
+        siteSearchIconCache = cache && typeof cache === 'object' ? cache : {};
+      }
+      siteSearchIconCacheLoaded = true;
+      return siteSearchIconCache;
+    }).catch(() => {
+      if (siteSearchIconCacheRevision === loadRevision) {
+        siteSearchIconCache = {};
+      }
+      siteSearchIconCacheLoaded = true;
+      return siteSearchIconCache;
+    });
+    return siteSearchIconCacheLoadPromise;
+  }
+
+  loadSiteSearchIconCache();
+  const shortcutFaviconPending = new Map();
+  const shortcutFaviconRequestQueue = [];
+  const SHORTCUT_FAVICON_MAX_CONCURRENT_REQUESTS = 3;
+  let shortcutFaviconActiveRequestCount = 0;
+  let shortcutFaviconCacheWriteTimer = null;
   const sectionModeSelectController =
     NEWTAB_SELECT_MENU.createController({
       documentObj: document,
@@ -511,10 +582,11 @@
   const SEARCH_LAYOUT_NARROW_VIEWPORT_MIN_WIDTH_PX = 520;
   const SEARCH_LAYOUT_NARROW_VIEWPORT_MAX_WIDTH_PX = 1440;
   const SEARCH_LAYOUT_NARROW_TOP_INSET_PX = 16;
+  const SEARCH_LAYOUT_NARROW_TOP_INSET_TRANSITION_PX = 64;
   const SEARCH_LAYOUT_SHORT_VIEWPORT_MAX_HEIGHT_PX = 680;
   const SEARCH_LAYOUT_SHORT_MIN_TOP_PX = 44;
   const WORDMARK_ENTRY_ANIMATION_NAME = '_x_nt_wordmark_enter_2026_unique_';
-  const WORDMARK_ENTRY_ANIMATION_TOTAL_MS = 660;
+  const WORDMARK_ENTRY_ANIMATION_TOTAL_MS = 380;
   const WORDMARK_WALLPAPER_COVER_DARK_OPACITY = '0.32';
   const WORDMARK_WALLPAPER_COVER_LIGHT_OPACITY = '0.32';
   const WORDMARK_WALLPAPER_SOLID_OPACITY = '0.6';
@@ -1892,15 +1964,79 @@
     return fallback || '';
   }
 
+  function finishNewtabEntryAnimation() {
+    if (newtabEntryAnimationTimer) {
+      window.clearTimeout(newtabEntryAnimationTimer);
+      newtabEntryAnimationTimer = 0;
+    }
+    if (document.body && document.body.getAttribute('data-nt-enter') === 'run') {
+      document.body.setAttribute('data-nt-enter', 'done');
+      root.setAttribute('data-lumno-search-entry', 'done');
+    }
+  }
+
+  function startNewtabEntryAnimation() {
+    if (!document.body) {
+      return;
+    }
+    if (newtabEntryAnimationTimer) {
+      window.clearTimeout(newtabEntryAnimationTimer);
+      newtabEntryAnimationTimer = 0;
+    }
+    const prefersReducedMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const entryState = prefersReducedMotion ? 'done' : 'run';
+    document.body.setAttribute('data-nt-enter', entryState);
+    root.setAttribute('data-lumno-search-entry', entryState);
+    if (prefersReducedMotion) {
+      return;
+    }
+    newtabEntryAnimationTimer = window.setTimeout(
+      finishNewtabEntryAnimation,
+      NEWTAB_ENTRY_ANIMATION_TOTAL_MS
+    );
+  }
+
+  function scheduleNewtabReadyAfterViewportSettle() {
+    if (!newtabReadyRequested ||
+        !document.body ||
+        document.body.getAttribute('data-nt-ready') === '1') {
+      return;
+    }
+    if (newtabReadySettleTimer) {
+      window.clearTimeout(newtabReadySettleTimer);
+    }
+    const viewport = getSearchEntryViewportSnapshot();
+    const viewportRevision = newtabReadyViewportRevision;
+    newtabReadySettleTimer = window.setTimeout(() => {
+      newtabReadySettleTimer = 0;
+      if (newtabResizeLayoutLocked ||
+          viewportRevision !== newtabReadyViewportRevision ||
+          hasSearchEntryViewportChanged(viewport)) {
+        scheduleNewtabReadyAfterViewportSettle();
+        return;
+      }
+      updateBookmarkSectionPosition({ releaseDockDensityLock: true });
+      requestAnimationFrame(() => {
+        if (newtabResizeLayoutLocked ||
+            viewportRevision !== newtabReadyViewportRevision ||
+            hasSearchEntryViewportChanged(viewport)) {
+          scheduleNewtabReadyAfterViewportSettle();
+          return;
+        }
+        document.body.setAttribute('data-nt-ready', '1');
+        startNewtabEntryAnimation();
+        rememberSearchEntryViewport();
+      });
+    }, NEWTAB_INITIAL_VIEWPORT_SETTLE_MS);
+  }
+
   function markNewtabReady() {
     if (!document.body) {
       return;
     }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.body.setAttribute('data-nt-ready', '1');
-      });
-    });
+    newtabReadyRequested = true;
+    scheduleNewtabReadyAfterViewportSettle();
   }
 
   function formatMessage(key, fallback, params) {
@@ -3169,6 +3305,9 @@
   }
 
   function getDefaultSearchEngineFaviconUrl() {
+    if (defaultSearchEngineState.id === 'google') {
+      return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
+    }
     if (defaultSearchEngineState.host) {
       return `https://${defaultSearchEngineState.host}/favicon.ico`;
     }
@@ -3181,7 +3320,7 @@
         return '';
       }
     }
-    return 'https://www.google.com/favicon.ico';
+    return 'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
   }
 
   function getSearchActionLabel() {
@@ -3812,11 +3951,15 @@
   window.addEventListener('blur', hideToast);
   window.addEventListener('pagehide', hideToast);
 
-  bootstrapInitialThemeMode();
-  bootstrapInitialWallpaper();
-  bootstrapInitialWallpaperOverlay();
-  bootstrapInitialWallpaperEffect();
-  bootstrapInitialNewtabFavicon();
+  const initialAppearanceReadyTask = Promise.all([
+    bootstrapInitialThemeMode(),
+    bootstrapInitialWallpaper(),
+    bootstrapInitialWallpaperOverlay(),
+    bootstrapInitialWallpaperEffect(),
+    bootstrapInitialNewtabFavicon()
+  ]).catch((error) => {
+    console.warn('[Lumno] Initial new tab appearance setup failed.', error);
+  });
 
   addStorageChangeListener((changes, areaName) => {
     if (areaName === 'local' && changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY]) {
@@ -3824,6 +3967,37 @@
         changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY].newValue
       );
       renderShortcuts();
+    }
+    if (areaName === 'local' && changes[NEWTAB_SHORTCUT_FAVICON_CACHE_STORAGE_KEY]) {
+      newtabShortcutFavicons = SHORTCUT_FAVICON.normalizeCacheMap(
+        changes[NEWTAB_SHORTCUT_FAVICON_CACHE_STORAGE_KEY].newValue
+      );
+      renderShortcuts();
+    }
+    if (areaName === 'local' && changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY]) {
+      siteSearchIconCache = SHORTCUT_FAVICON.normalizeCacheMap(
+        changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY].newValue,
+        Date.now(),
+        siteSearchIconCacheOptions
+      );
+      siteSearchIconCacheLoaded = true;
+      siteSearchIconCacheRevision += 1;
+      siteSearchIconCacheLoadPromise = Promise.resolve(siteSearchIconCache);
+      if (siteSearchState && inputModeController) {
+        const activeProvider = siteSearchState;
+        setSiteSearchPrefix(activeProvider, defaultTheme);
+        getThemeForProvider(activeProvider).then((theme) => {
+          if (siteSearchState === activeProvider) {
+            setSiteSearchPrefix(activeProvider, theme);
+          }
+        }).catch(() => {});
+      }
+      if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+        inputModeController.refreshModeMenu();
+      }
+      if (latestQuery) {
+        requestSuggestions(latestQuery, { immediate: true });
+      }
     }
     handleBookmarkTopbarSurfaceColorStorageChanges(changes, areaName);
     const isPrimaryArea = Boolean(storageAreaName) && areaName === storageAreaName;
@@ -4039,6 +4213,7 @@
         changes[NEWTAB_SHORTCUTS_STORAGE_KEY].newValue,
         getShortcutStoreOptions()
       );
+      pruneShortcutFavicons(newtabShortcuts);
       const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
       if (!areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons)) {
         newtabShortcutIcons = prunedIcons;
@@ -5633,11 +5808,9 @@
       : {
         bg: 'var(--x-nt-hover-bg, #F3F4F6)',
         border: 'transparent'
-      };
+    };
     target.style.setProperty('--x-nt-suggestion-active-bg', highlight.bg);
-    target.style.setProperty('--x-nt-suggestion-active-border', highlight.border);
     target.style.setProperty('--x-nt-suggestion-hover-bg', hover.bg);
-    target.style.setProperty('--x-nt-suggestion-hover-border', hover.border);
   }
 
   function applyMarkVariables(target, theme) {
@@ -5697,6 +5870,14 @@
     faviconCacheRuntime.setPersistedUrl(cacheKey, url);
   }
 
+  function getPersistedFaviconEntry(cacheKey) {
+    return faviconCacheRuntime.getPersistedEntry(cacheKey);
+  }
+
+  function getPersistedFaviconDataEntry(cacheKey) {
+    return faviconCacheRuntime.getPersistedDataEntry(cacheKey);
+  }
+
   function setPersistedFaviconData(cacheKey, dataUrl) {
     faviconCacheRuntime.setPersistedData(cacheKey, dataUrl);
   }
@@ -5744,6 +5925,8 @@
     getHostFromUrl,
     isFaviconProxyUrl,
     isChromeMonogramFaviconUrl,
+    getPersistedFaviconEntry,
+    getPersistedFaviconDataEntry,
     setPersistedFaviconUrl,
     setPersistedFaviconData,
     preloadThemeFromFavicon,
@@ -6426,6 +6609,103 @@
   function getShortcutIconDataUrl(shortcutId) {
     const id = String(shortcutId || '').trim();
     return id && newtabShortcutIcons[id] ? newtabShortcutIcons[id] : '';
+  }
+
+  function getShortcutFaviconDataUrl(pageUrl) {
+    return SHORTCUT_FAVICON.getCachedIconDataUrl(newtabShortcutFavicons, pageUrl);
+  }
+
+  function scheduleShortcutFaviconCacheWrite() {
+    if (shortcutFaviconCacheWriteTimer !== null) {
+      window.clearTimeout(shortcutFaviconCacheWriteTimer);
+    }
+    shortcutFaviconCacheWriteTimer = window.setTimeout(() => {
+      shortcutFaviconCacheWriteTimer = null;
+      shortcutFaviconStore.writeAll(newtabShortcutFavicons).catch(() => {});
+    }, 120);
+  }
+
+  function drainShortcutFaviconRequestQueue() {
+    while (shortcutFaviconActiveRequestCount < SHORTCUT_FAVICON_MAX_CONCURRENT_REQUESTS &&
+        shortcutFaviconRequestQueue.length > 0) {
+      const task = shortcutFaviconRequestQueue.shift();
+      shortcutFaviconActiveRequestCount += 1;
+      Promise.resolve().then(task.run).then(task.resolve, () => task.resolve('')).finally(() => {
+        shortcutFaviconActiveRequestCount = Math.max(0, shortcutFaviconActiveRequestCount - 1);
+        drainShortcutFaviconRequestQueue();
+      });
+    }
+  }
+
+  function enqueueShortcutFaviconRequest(run) {
+    return new Promise((resolve) => {
+      shortcutFaviconRequestQueue.push({ run, resolve });
+      drainShortcutFaviconRequestQueue();
+    });
+  }
+
+  function resolveShortcutFaviconDataUrl(pageUrl) {
+    const normalizedPageUrl = SHORTCUT_FAVICON.normalizePageUrl(pageUrl);
+    if (!normalizedPageUrl) {
+      return Promise.resolve('');
+    }
+    const cachedDataUrl = getShortcutFaviconDataUrl(normalizedPageUrl);
+    if (cachedDataUrl) {
+      return Promise.resolve(cachedDataUrl);
+    }
+    if (shortcutFaviconPending.has(normalizedPageUrl)) {
+      return shortcutFaviconPending.get(normalizedPageUrl);
+    }
+    const promise = enqueueShortcutFaviconRequest(() => new Promise((resolve) => {
+      let settled = false;
+      const finish = (dataUrl) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(dataUrl || '');
+      };
+      const shortcutStillExists = newtabShortcuts.some((item) =>
+        SHORTCUT_FAVICON.normalizePageUrl(item && item.url) === normalizedPageUrl);
+      if (!shortcutStillExists) {
+        finish('');
+        return;
+      }
+      const timeoutId = window.setTimeout(() => finish(''), 8000);
+      const sent = sendRuntimeMessage({
+        action: 'getShortcutFaviconData',
+        pageUrl: normalizedPageUrl
+      }, (response) => {
+        window.clearTimeout(timeoutId);
+        const dataUrl = SHORTCUT_FAVICON.normalizeDataUrl(response && response.data);
+        if (!dataUrl) {
+          finish('');
+          return;
+        }
+        const shortcutStillExistsAfterRequest = newtabShortcuts.some((item) =>
+          SHORTCUT_FAVICON.normalizePageUrl(item && item.url) === normalizedPageUrl);
+        if (!shortcutStillExistsAfterRequest) {
+          finish('');
+          return;
+        }
+        newtabShortcutFavicons = SHORTCUT_FAVICON.setCachedIcon(
+          newtabShortcutFavicons,
+          normalizedPageUrl,
+          dataUrl,
+          response && response.sourceUrl
+        );
+        scheduleShortcutFaviconCacheWrite();
+        finish(dataUrl);
+      });
+      if (!sent) {
+        window.clearTimeout(timeoutId);
+        finish('');
+      }
+    })).finally(() => {
+      shortcutFaviconPending.delete(normalizedPageUrl);
+    });
+    shortcutFaviconPending.set(normalizedPageUrl, promise);
+    return promise;
   }
 
   function getShortcutTitle(shortcut) {
@@ -7710,6 +7990,31 @@
       });
   }
 
+  function loadShortcutFavicons() {
+    return shortcutFaviconStore.readAll()
+      .then((cacheMap) => {
+        newtabShortcutFavicons = SHORTCUT_FAVICON.normalizeCacheMap(cacheMap);
+        return newtabShortcutFavicons;
+      })
+      .catch(() => {
+        newtabShortcutFavicons = {};
+        return newtabShortcutFavicons;
+      });
+  }
+
+  function pruneShortcutFavicons(shortcuts, persist) {
+    const nextFavicons = SHORTCUT_FAVICON.retainCachedIcons(
+      newtabShortcutFavicons,
+      (Array.isArray(shortcuts) ? shortcuts : []).map((item) => item && item.url)
+    );
+    const changed = JSON.stringify(newtabShortcutFavicons) !== JSON.stringify(nextFavicons);
+    newtabShortcutFavicons = nextFavicons;
+    if (changed && persist !== false) {
+      scheduleShortcutFaviconCacheWrite();
+    }
+    return changed;
+  }
+
   function loadNewtabShortcutPreferences() {
     if (!storageArea) {
       newtabShortcutsVisible = true;
@@ -7756,13 +8061,17 @@
   }
 
   function loadVisibleShortcuts() {
-    return Promise.all([loadShortcuts(), loadShortcutIcons()]).then(() => {
+    return Promise.all([loadShortcuts(), loadShortcutIcons(), loadShortcutFavicons()]).then(() => {
       const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
       const shouldPrune = !areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons);
+      const shouldPruneFavicons = pruneShortcutFavicons(newtabShortcuts, false);
       newtabShortcutIcons = prunedIcons;
       renderShortcuts();
       if (shouldPrune) {
         shortcutIconStore.writeAll(prunedIcons).catch(() => {});
+      }
+      if (shouldPruneFavicons) {
+        shortcutFaviconStore.writeAll(newtabShortcutFavicons).catch(() => {});
       }
       return newtabShortcuts;
     });
@@ -7830,6 +8139,7 @@
       })
       .then((items) => {
         newtabShortcuts = Array.isArray(items) ? items : normalized;
+        pruneShortcutFavicons(newtabShortcuts);
         renderShortcuts();
         if (toastMessage) {
           showToast(toastMessage);
@@ -8025,6 +8335,8 @@
       getShortcutTitle,
       getHostFromUrl,
       getShortcutIconDataUrl,
+      getShortcutFaviconDataUrl,
+      resolveShortcutFaviconDataUrl,
       getBrowserPageFaviconUrl,
       getImmediateThemeForSuggestion,
       applyShortcutTileTheme,
@@ -8360,6 +8672,7 @@
       narrowViewportMinWidthPx: SEARCH_LAYOUT_NARROW_VIEWPORT_MIN_WIDTH_PX,
       narrowViewportMaxWidthPx: SEARCH_LAYOUT_NARROW_VIEWPORT_MAX_WIDTH_PX,
       narrowTopInsetPx: SEARCH_LAYOUT_NARROW_TOP_INSET_PX,
+      narrowTopInsetTransitionPx: SEARCH_LAYOUT_NARROW_TOP_INSET_TRANSITION_PX,
       shortViewportMaxHeightPx: SEARCH_LAYOUT_SHORT_VIEWPORT_MAX_HEIGHT_PX,
       shortMinTopPx: SEARCH_LAYOUT_SHORT_MIN_TOP_PX,
       mobileFlowBreakpointPx: NEWTAB_MOBILE_FLOW_BREAKPOINT_PX
@@ -8671,6 +8984,13 @@
     };
   }
 
+  function hasSearchEntryViewportChanged(referenceViewport) {
+    const currentViewport = getSearchEntryViewportSnapshot();
+    const reference = referenceViewport || {};
+    return Math.abs(currentViewport.width - (Number(reference.width) || 0)) > 1 ||
+      Math.abs(currentViewport.height - (Number(reference.height) || 0)) > 1;
+  }
+
   function rememberSearchEntryViewport() {
     const viewport = getSearchEntryViewportSnapshot();
     searchEntryLastVisibleViewportWidth = viewport.width;
@@ -8710,6 +9030,7 @@
     if (layoutController && typeof layoutController.updateBottomDockLayout === 'function') {
       layoutController.updateBottomDockLayout({
         preserveSearchEntryLayout: Boolean(layoutOptions.preserveSearchEntryLayout) ||
+          newtabResizeLayoutLocked ||
           shouldPreserveSearchEntryLayout(),
         stabilizeDockDensity: Boolean(layoutOptions.stabilizeDockDensity),
         releaseDockDensityLock: Boolean(layoutOptions.releaseDockDensityLock),
@@ -12048,6 +12369,13 @@
     );
   }
 
+  function isSearchEngineSiteSearchProvider(provider) {
+    if (typeof SEARCH_UTILS.isSearchEngineSiteSearchProvider === 'function') {
+      return SEARCH_UTILS.isSearchEngineSiteSearchProvider(provider);
+    }
+    return Boolean(provider && String(provider.category || '').trim() === 'searchEngine');
+  }
+
   function isInteractiveSiteSearchProvider(provider) {
     if (typeof SEARCH_UTILS.isInteractiveSiteSearchProvider === 'function') {
       return SEARCH_UTILS.isInteractiveSiteSearchProvider(provider);
@@ -12089,6 +12417,9 @@
   }
 
   function getProviderFaviconPageUrl(provider) {
+    if (typeof SHORTCUT_FAVICON.getSiteSearchProviderPageUrl === 'function') {
+      return SHORTCUT_FAVICON.getSiteSearchProviderPageUrl(provider);
+    }
     const template = provider && provider.template ? provider.template : '';
     if (!template) {
       return '';
@@ -12106,6 +12437,20 @@
   }
 
   function getProviderIcon(provider) {
+    if (typeof SHORTCUT_FAVICON.getSiteSearchProviderIcon === 'function') {
+      const resolvedIcon = SHORTCUT_FAVICON.getSiteSearchProviderIcon(
+        siteSearchIconCacheLoaded ? siteSearchIconCache : {},
+        provider,
+        Date.now(),
+        {
+          ...siteSearchIconCacheOptions,
+          resolveAssetUrl: getExtensionResourceUrl
+        }
+      );
+      if (resolvedIcon) {
+        return resolvedIcon;
+      }
+    }
     const explicitIcon = provider && (provider.icon || provider.iconUrl) ? (provider.icon || provider.iconUrl) : '';
     const providerIconPageUrl = explicitIcon ? getCanonicalPageUrlForFavicon(explicitIcon) : '';
     if (providerIconPageUrl && providerIconPageUrl !== explicitIcon) {
@@ -12152,9 +12497,13 @@
     }
     const hostKey = iconHost || getHostFromUrl(pageUrl);
     const candidates = getPageFaviconRenderCandidates(pageUrl, iconUrl) || {};
+    const primaryUrl = isFaviconProxyUrl(iconUrl)
+      ? (candidates.primaryUrl || iconUrl)
+      : iconUrl;
     attachFaviconWithFallbacks(icon, pageUrl, hostKey, {
-      primaryUrl: candidates.primaryUrl || iconUrl,
-      browserUrl: candidates.browserUrl || ''
+      primaryUrl,
+      browserUrl: candidates.browserUrl || '',
+      onUnavailable: context && context.onIconUnavailable
     });
     return true;
   }
@@ -12351,6 +12700,96 @@
     return '';
   }
 
+  function getLocalSearchScopeIconClass(sourceType) {
+    if (sourceType === 'bookmark') {
+      return 'ri-bookmark-3-line';
+    }
+    if (sourceType === 'history') {
+      return 'ri-history-line';
+    }
+    return 'ri-star-line';
+  }
+
+  function getSearchModeProviderId(provider) {
+    return `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`;
+  }
+
+  function buildSearchModeMenuItems() {
+    const engineGroup = t('search_scope_group_engines', '搜索引擎');
+    const localGroup = t('search_scope_group_local', '浏览器内容');
+    const aiGroup = t('search_scope_group_ai', 'AI 搜索');
+    const siteGroup = t('search_scope_group_sites', '站内搜索');
+    const items = [];
+    const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+      ? siteSearchProvidersCache
+      : defaultSiteSearchProviders;
+    providers
+      .filter((provider) => isSearchEngineSiteSearchProvider(provider))
+      .concat(providers.filter((provider) => (
+        !isSearchEngineSiteSearchProvider(provider) && !isAiSiteSearchProvider(provider)
+      )))
+      .concat(providers.filter((provider) => isAiSiteSearchProvider(provider)))
+      .forEach((provider) => {
+        const isAi = isAiSiteSearchProvider(provider);
+        const isSearchEngine = isSearchEngineSiteSearchProvider(provider);
+        items.push({
+          id: getSearchModeProviderId(provider),
+          kind: 'provider',
+          provider,
+          label: getSiteSearchDisplayName(provider),
+          group: isSearchEngine ? engineGroup : (isAi ? aiGroup : siteGroup),
+          iconUrl: getProviderIcon(provider),
+          iconClass: isAi ? 'ri-search-ai-line' : 'ri-global-line',
+          isAi,
+          active: Boolean(siteSearchState && getSearchModeProviderId(siteSearchState) === getSearchModeProviderId(provider))
+        });
+      });
+    ['topSite', 'bookmark', 'history'].forEach((sourceType) => {
+      if (!enabledSearchResultSourceTypes.includes(sourceType)) {
+        return;
+      }
+      items.push({
+        id: `local:${sourceType}`,
+        kind: 'local',
+        sourceType,
+        label: getLocalSearchScopeLabel({ sourceType }),
+        group: localGroup,
+        iconClass: getLocalSearchScopeIconClass(sourceType),
+        menuIconName: sourceType === 'topSite' ? 'star' : sourceType,
+        active: Boolean(localSearchScopeState && localSearchScopeState.sourceType === sourceType)
+      });
+    });
+    return items;
+  }
+
+  function getSearchModeMenuItems() {
+    return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+  }
+
+  function restoreSearchModeQuery(rawQuery) {
+    const value = String(rawQuery || '');
+    inputParts.input.value = value;
+    latestRawQuery = value;
+    latestQuery = value.trim();
+    inputParts.input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function selectSearchModeMenuItem(item) {
+    if (!item || !item.kind) {
+      return;
+    }
+    const rawQuery = inputParts.input.value || '';
+    if (item.kind === 'local') {
+      activateLocalSearchScope({ sourceType: item.sourceType });
+      restoreSearchModeQuery(rawQuery);
+      return;
+    }
+    if (item.kind === 'provider' && item.provider) {
+      activateSiteSearch(item.provider);
+      restoreSearchModeQuery(rawQuery);
+    }
+  }
+
   function getLocalSearchScopeTabHintProvider(scope) {
     const source = getLocalSearchScopeLabel(scope);
     return {
@@ -12370,7 +12809,12 @@
     inputModeController.setPrefixText(
       getLocalSearchScopeLabel(scope),
       defaultTheme,
-      { animate: true }
+      {
+        animate: true,
+        iconClass: getLocalSearchScopeIconClass(scope.sourceType),
+        menuIconName: scope.sourceType === 'topSite' ? 'star' : scope.sourceType,
+        modeId: `local:${scope.sourceType}`
+      }
     );
   }
 
@@ -12892,37 +13336,14 @@
     return suggestionsView.getAutoHighlightIndex();
   }
 
-  function isSameSuggestion(a, b) {
-    if (!a || !b) {
-      return false;
+  function getSuggestionUpdateKind(options) {
+    if (typeof SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind !== 'function') {
+      return 'structure';
     }
-    if (a.type !== b.type) {
-      return false;
-    }
-    if ((a.url || '') !== (b.url || '')) {
-      return false;
-    }
-    if ((a.title || '') !== (b.title || '')) {
-      return false;
-    }
-    const providerA = a.provider && a.provider.key ? a.provider.key : '';
-    const providerB = b.provider && b.provider.key ? b.provider.key : '';
-    return providerA === providerB;
-  }
-
-  function isSuggestionPrefix(previous, next) {
-    if (!Array.isArray(previous) || !Array.isArray(next)) {
-      return false;
-    }
-    if (previous.length === 0 || previous.length > next.length) {
-      return false;
-    }
-    for (let i = 0; i < previous.length; i += 1) {
-      if (!isSameSuggestion(previous[i], next[i])) {
-        return false;
-      }
-    }
-    return true;
+    return SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind({
+      ...(options || {}),
+      includeDebugReasons: Boolean(tabRankScoreDebugEnabled)
+    });
   }
 
   function getSuggestionActionContextKey(options) {
@@ -13046,6 +13467,10 @@
   }
 
   function clearSearchSuggestions() {
+    if (layoutController &&
+        typeof layoutController.finishSuggestionsInputSession === 'function') {
+      layoutController.finishSuggestionsInputSession({ animate: false });
+    }
     inlineSearchState = null;
     siteSearchTriggerState = null;
     localSearchScopeTriggerState = null;
@@ -13379,9 +13804,15 @@
         mergedProvider,
         emptyMessage
       });
-      const canAppend = query === lastRenderedQuery &&
-        actionContextKey === lastRenderedActionContextKey &&
-        isSuggestionPrefix(currentSuggestions, allSuggestions);
+      const updateKind = getSuggestionUpdateKind({
+        query,
+        lastRenderedQuery,
+        actionContextKey,
+        lastRenderedActionContextKey,
+        currentSuggestions,
+        allSuggestions
+      });
+      const canAppend = updateKind === 'append';
       const startIndex = canAppend ? currentSuggestions.length : 0;
       const shouldAnimateSuggestionsResize = Boolean(
         canAppend &&
@@ -13398,10 +13829,15 @@
       currentSuggestions = allSuggestions;
       lastRenderedQuery = query;
       lastRenderedActionContextKey = actionContextKey;
-      warmIconCache(allSuggestions);
+      if (updateKind !== 'highlight') {
+        warmIconCache(allSuggestions.filter((item) => (
+          item && item.type !== 'directUrl'
+        )));
+      }
       suggestionsView.render({
         suggestions: allSuggestions,
         query,
+        updateKind,
         canAppend,
         startIndex,
         primaryHighlightIndex,
@@ -13411,12 +13847,23 @@
         mergedProvider,
         emptyMessage
       });
-      updateSelection();
-      setSuggestionsVisible(true);
+      if (updateKind !== 'highlight') {
+        updateSelection();
+        setSuggestionsVisible(true);
+      }
+      if ((updateKind === 'append' || updateKind === 'structure') &&
+          layoutController &&
+          typeof layoutController.holdSuggestionsInputHeight === 'function') {
+        layoutController.holdSuggestionsInputHeight();
+      }
       if (previousSuggestionsResizeState) {
         layoutController.animateSuggestionsResize(previousSuggestionsResizeState);
       }
     });
+  }
+
+  function renderPendingSuggestions(query) {
+    renderSuggestions(lastSuggestionResponse, query);
   }
 
   function requestSuggestions(query, options) {
@@ -13447,7 +13894,7 @@
         requestSuggestions(requestQuery, { immediate: true, retryCount: retryCount + 1 });
         return;
       }
-      renderSuggestions([], requestQuery);
+      renderPendingSuggestions(requestQuery);
     }, immediate ? 1200 : 1300);
     const localRequestSent = sendRuntimeMessage({
       action: 'getSearchSuggestions',
@@ -13464,7 +13911,7 @@
         return;
       }
       if (chrome.runtime && chrome.runtime.lastError) {
-        renderSuggestions([], requestQuery);
+        renderPendingSuggestions(requestQuery);
         return;
       }
       const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
@@ -13507,7 +13954,7 @@
         suggestionRequestWatchdogTimer = null;
       }
       if (requestSeq === suggestionRequestSeq && requestQuery === latestQuery) {
-        renderSuggestions([], requestQuery);
+        renderPendingSuggestions(requestQuery);
       }
     }
   }
@@ -13588,6 +14035,10 @@
       }
       latestRawQuery = rawValue;
       clearAutocomplete();
+      if (layoutController &&
+          typeof layoutController.beginSuggestionsInputSession === 'function') {
+        layoutController.beginSuggestionsInputSession();
+      }
       if (!localSearchScopeState && isSlashCommandInput(query)) {
         latestQuery = query;
         renderSuggestions([], query);
@@ -13595,7 +14046,7 @@
       }
       if (isPaste || getDirectUrlSuggestion(query)) {
         latestQuery = query;
-        renderSuggestions([], query);
+        renderPendingSuggestions(query);
         requestSuggestions(query, { immediate: true });
         return;
       }
@@ -14200,6 +14651,8 @@
     focusSearch: focusSearchInputPreservingScroll
   });
 
+  window.addEventListener('keydown', finishNewtabEntryAnimation, true);
+  window.addEventListener('pointerdown', finishNewtabEntryAnimation, true);
   window.addEventListener('keydown', handleGlobalTypingFocus, true);
   window.addEventListener('focus', () => refreshFallbackShortcut(true), true);
   document.addEventListener('visibilitychange', () => {
@@ -14384,7 +14837,7 @@
   }
   const defaultPlaceholder = searchInput.placeholder;
   const defaultCaretColor = searchInput.style.caretColor || '#7DB7FF';
-  const inputModePrefixTransition = 'opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 300ms cubic-bezier(0.22, 1, 0.36, 1), filter 260ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, box-shadow 180ms ease';
+  const inputModePrefixTransition = 'opacity 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease';
   inputModeController = SEARCH_INPUT_MODE.createInputModeController(inputParts, {
     surface: 'newtab',
     useImportantStyles: false,
@@ -14403,15 +14856,32 @@
     isDarkMode: isNewtabDarkMode,
     getProviderIcon,
     getProviderThemeHost,
+    getThemeForProvider,
     getSiteSearchPrefixText,
     getSiteSearchDisplayName,
     isAiSiteSearchProvider,
     attachFaviconData,
     attachProviderIcon: attachInputModeProviderIcon,
+    preferDirectProviderIcons: true,
     formatMessage,
+    modeMenuCursorTooltipController: bookmarkCursorTooltipController,
+    getModeMenuItems: getSearchModeMenuItems,
+    onModeMenuSelect: selectSearchModeMenuItem,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
   siteSearchTabHint = inputModeController.tabHintElement;
+  loadSiteSearchIconCache().then(() => {
+    if (!siteSearchState || !inputModeController) {
+      return;
+    }
+    const activeProvider = siteSearchState;
+    setSiteSearchPrefix(activeProvider, defaultTheme);
+    getThemeForProvider(activeProvider).then((theme) => {
+      if (siteSearchState === activeProvider) {
+        setSiteSearchPrefix(activeProvider, theme);
+      }
+    }).catch(() => {});
+  });
 
   function updateSiteSearchPrefixLayout() {
     if (inputModeController) {
@@ -14445,7 +14915,10 @@
       renderCurrentBookmarkPage();
     }
     updateBookmarkGridHeightLock();
-    updateBookmarkSectionPosition({ stabilizeDockDensity: true });
+    updateBookmarkSectionPosition({
+      preserveSearchEntryLayout: true,
+      stabilizeDockDensity: true
+    });
     positionBookmarkCascadeLevels();
     updateSuggestionsFloatingLayout();
     if (recentColumnsChanged) {
@@ -14455,13 +14928,21 @@
   }
 
   window.addEventListener('resize', () => {
+    newtabReadyViewportRevision += 1;
+    newtabResizeLayoutLocked = true;
     if (newtabResizeSettleTimer) {
       window.clearTimeout(newtabResizeSettleTimer);
     }
     newtabResizeSettleTimer = window.setTimeout(() => {
       newtabResizeSettleTimer = 0;
+      newtabResizeLayoutLocked = false;
       updateBookmarkSectionPosition({ releaseDockDensityLock: true });
     }, NEWTAB_RESIZE_DENSITY_SETTLE_MS);
+    if (newtabReadyRequested &&
+        document.body &&
+        document.body.getAttribute('data-nt-ready') !== '1') {
+      scheduleNewtabReadyAfterViewportSettle();
+    }
     if (newtabResizeFrame) {
       return;
     }
@@ -14642,6 +15123,15 @@
       clearSearchSuggestions();
       return;
     }
+    if (layoutController &&
+        typeof layoutController.beginSuggestionsInputSession === 'function') {
+      layoutController.beginSuggestionsInputSession();
+    }
+    if (getDirectUrlSuggestion(query)) {
+      renderPendingSuggestions(query);
+      requestSuggestions(query, { immediate: true });
+      return;
+    }
     requestSuggestions(query);
   });
 
@@ -14820,17 +15310,9 @@
     loadFaviconRequestBlacklistItems(),
     loadFaviconEnhancedFetchEnabled()
   ]);
-  Promise.all([
-    bootstrapInitialWallpaper(),
-    bootstrapInitialWallpaperOverlay(),
-    bootstrapInitialWallpaperEffect(),
-    bootstrapInitialNewtabFavicon()
-  ]).catch((error) => {
-    console.warn('[Lumno] Deferred new tab appearance setup failed.', error);
-  });
+  const initialLanguageReadyTask = bootstrapInitialLanguageMode();
   const initialVisualReadyPromise = Promise.all([
-    bootstrapInitialThemeMode(),
-    bootstrapInitialLanguageMode(),
+    initialAppearanceReadyTask,
     initialBookmarkViewModeReadyPromise,
     loadZenMode(),
     shortcutPreferencesReadyPromise
@@ -14839,7 +15321,11 @@
     maybeShowFileAccessNotice();
     markNewtabReady();
   });
-  Promise.all([initialVisualReadyPromise, sectionPolicyReadyPromise]).then(() => {
+  Promise.all([
+    initialVisualReadyPromise,
+    initialLanguageReadyTask,
+    sectionPolicyReadyPromise
+  ]).then(() => {
     loadRecentSites();
     loadBookmarks();
   });
