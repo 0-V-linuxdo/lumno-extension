@@ -127,28 +127,118 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?overlayEnterAnimation === 'fade'[\s\S]*?--x-lumno-search-entry-scale-start', '0\.92'[\s\S]*?--x-lumno-search-entry-duration', '270ms'[\s\S]*?--x-lumno-search-entry-delay', '40ms'/,
-  'the whole overlay panel should use a pronounced horizontal stretch after its initial blur starts clearing'
+  /const OVERLAY_ENTER_MOTION = Object\.freeze\(\{[\s\S]*?elastic:[\s\S]*?panelDelayMs: 40,[\s\S]*?panelDurationMs: 270,[\s\S]*?panelEasing: 'cubic-bezier\(0\.16, 1, 0\.3, 1\)'[\s\S]*?fade:[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 340,[\s\S]*?panelEasing: 'cubic-bezier\(0\.2, 1, 0\.36, 1\)'[\s\S]*?function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?--x-lumno-search-entry-scale-start', '0\.92'[\s\S]*?motion\.panelDurationMs[\s\S]*?motion\.panelDelayMs/,
+  'one semantic timing table should drive the whole overlay panel entry'
 );
 assert.match(
   searchPanelSource,
-  /const revealTransform = getOverlayEnterAnimationRevealTransform\(\);\s*if \(reduceMotion\) \{[\s\S]*?setProperty\('transform', revealTransform, 'important'\)[\s\S]*?runEnterAnimation\(overlay, \(\) => \{[\s\S]*?setProperty\('transform', revealTransform, 'important'\)/,
-  'overlay reveal should stretch the entire panel in the visible frame and skip transitions for reduced motion'
+  /const revealTransform = getOverlayEnterAnimationRevealTransform\(\);[\s\S]*?if \(reduceMotion\) \{[\s\S]*?setProperty\('transform', revealTransform, 'important'\)[\s\S]*?runEnterAnimation\(overlay, \(\) => \{[\s\S]*?playOverlayPanelEnterAnimation\(overlay, revealTransform\)/,
+  'overlay reveal should start an explicit panel animation in the visible frame and skip it for reduced motion'
 );
 assert.match(
   searchPanelSource,
-  /if \(overlayEnterAnimation === 'fade'\) \{[\s\S]*?translateY\(10px\)[\s\S]*?scale\(0\.985\)[\s\S]*?blur\(6px\)[\s\S]*?transform 340ms cubic-bezier\(0\.2, 1, 0\.36, 1\), opacity 220ms ease, filter 300ms ease/,
-  'fade mode should restore the former overlay entrance motion'
+  /function getOverlayEnterAnimationStartTransform\(\)[\s\S]*?if \(overlayEnterAnimation === 'fade'\)[\s\S]*?translateY\(10px\)[\s\S]*?scale\(0\.985\)[\s\S]*?function playOverlayPanelEnterAnimation[\s\S]*?duration: motion\.panelDurationMs,[\s\S]*?duration: motion\.opacityDurationMs,/,
+  'fade mode should retain its position and opacity entrance motion through explicit keyframes'
 );
 assert.match(
   searchPanelSource,
-  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*revealOverlay\(\);/,
-  'overlay reveal should wait for the stored animation preference before exposing the mount'
+  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialLanguageReady,[\s\S]*?initialOverlayThemeReady,[\s\S]*?initialOverlayContentReady,[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*applyOverlayInputEnterAnimationInitialState\(inputContainer\);\s*revealOverlay\(\);/,
+  'overlay reveal should wait for styles, language, theme, initial content, and animation preference'
+);
+assert.doesNotMatch(
+  searchPanelSource,
+  /setTimeout\(\(\) => searchInput\.focus/,
+  'overlay focus should follow the visible reveal state instead of an unrelated wall-clock timer'
 );
 assert.match(
   shellSource,
-  /const OVERLAY_PANEL_ENTRY_TRANSFORM =\s*'translateX\(-50%\) translateY\(4px\) scale\(var\(--x-ov-visible-scale, 1\)\) scaleX\(var\(--x-lumno-search-entry-scale-start, 0\.97\)\)';[\s\S]*?const OVERLAY_PANEL_TRANSITION =\s*'transform var\(--x-lumno-search-entry-duration, 240ms\) var\(--x-lumno-search-entry-easing,[\s\S]*?var\(--x-lumno-search-entry-delay, 40ms\)[\s\S]*?opacity 180ms ease, filter 240ms ease'[\s\S]*?transform: \$\{OVERLAY_PANEL_ENTRY_TRANSFORM\} !important;[\s\S]*?filter: blur\(10px\) !important;[\s\S]*?transition: \$\{OVERLAY_PANEL_TRANSITION\} !important;/,
-  'the overlay shell should keep centering and horizontal stretch in one transform chain'
+  /const OVERLAY_PANEL_REST_TRANSFORM =\s*'translateX\(-50%\) translateY\(0\) scale\(var\(--x-ov-visible-scale, 1\)\)';[\s\S]*?all: unset;[\s\S]*?transform: \$\{OVERLAY_PANEL_REST_TRANSFORM\} !important;[\s\S]*?filter: none !important;[\s\S]*?will-change: auto !important;[\s\S]*?transition: none !important;/,
+  'the React shell should provide a passive centered rest state while search-panel owns entry timing'
+);
+assert.doesNotMatch(
+  shellSource,
+  /all: unset !important/,
+  'the Shadow DOM shell reset must not outrank its own animated longhands or panel surface declarations'
+);
+assert.doesNotMatch(
+  shellSource,
+  /OVERLAY_PANEL_ENTRY_TRANSFORM|OVERLAY_PANEL_TRANSITION/,
+  'the React shell should not duplicate search-panel entry state or timing'
+);
+assert.ok(
+  searchPanelSource.includes("shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px -2px rgba(15, 23, 42, 0.11), 0 16px 42px -12px rgba(15, 23, 42, 0.17), 0 48px 112px -30px rgba(15, 23, 42, 0.19)'") &&
+    shellSource.includes('box-shadow: var(--x-ov-shadow, inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px -2px rgba(15, 23, 42, 0.11), 0 16px 42px -12px rgba(15, 23, 42, 0.17), 0 48px 112px -30px rgba(15, 23, 42, 0.19))'),
+  'the active light theme and passive shell fallback should share the same soft layered elevation shadow'
+);
+assert.ok(
+  searchPanelSource.includes("shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.28), 0 18px 48px -14px rgba(0, 0, 0, 0.42), 0 52px 124px -34px rgba(0, 0, 0, 0.52)'"),
+  'the dark theme should keep a soft neutral elevation without a hard contact edge or colored glow'
+);
+assert.ok(
+  searchPanelSource.includes('function trackOverlayPanelEnterAnimation(overlayElement, animations)') &&
+    searchPanelSource.includes('primaryAnimation.onfinish = () =>') &&
+    searchPanelSource.includes("event.propertyName !== 'transform'") &&
+    /cleanupDelayMs = motion\.panelDelayMs \+[\s\S]*?motion\.panelDurationMs \+ OVERLAY_ENTER_CLEANUP_BUFFER_MS[\s\S]*?overlayEnterCleanupTimer = setTimeout/.test(searchPanelSource),
+  'the panel entry transaction should finish from its primary animation, retain transitionend fallback, and use a bounded watchdog'
+);
+assert.match(
+  searchPanelSource,
+  /function finishOverlayPanelEnterAnimation\(overlayElement, animationRevision\)[\s\S]*?removeProperty\('transition'\)[\s\S]*?setProperty\('will-change', 'auto'[\s\S]*?function applyOverlayEnterAnimationInitialState[\s\S]*?data-lumno-overlay-entry', 'prepared'[\s\S]*?function playOverlayPanelEnterAnimation[\s\S]*?trackOverlayPanelEnterAnimation\([\s\S]*?transformAnimation, opacityAnimation/,
+  'one panel entry owner should prepare, reveal, and release temporary compositor state'
+);
+const overlayPanelEntryFunction = searchPanelSource.match(
+  /function applyOverlayEnterAnimationInitialState\(overlayElement\) \{[\s\S]*?\n  \}\n\n  function playOverlayPanelEnterAnimation/
+);
+assert.ok(overlayPanelEntryFunction, 'overlay panel entry function should remain available');
+assert.doesNotMatch(
+  overlayPanelEntryFunction[0],
+  /style\.setProperty\('filter'/,
+  'the backdrop-filtered overlay shell should not animate CSS filter because it can flash an offscreen compositing surface'
+);
+assert.match(
+  searchPanelSource,
+  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(10px\) scale\(0\.985\)[\s\S]*?translateY\(4px\) scaleX\(0\.92\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
+  'WAAPI should replay an additive motion delta without replacing the panel centering transform when the hidden host becomes visible'
+);
+assert.match(
+  searchPanelSource,
+  /WAAPI animation values sit below author !important declarations[\s\S]*?style\.setProperty\('will-change', 'transform, opacity', 'important'\);[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);/,
+  'the animation transaction should release only the animated longhands while retaining a bounded compositor hint'
+);
+assert.doesNotMatch(
+  searchPanelSource,
+  /style\.setProperty\('all',\s*'unset'/,
+  'entry playback and cleanup must never rewrite the whole panel reset'
+);
+assert.match(
+  searchPanelSource,
+  /function finishOverlayPanelEnterAnimation\(overlayElement, animationRevision\)[\s\S]*?setProperty\('opacity', '1', 'important'\)[\s\S]*?getOverlayEnterAnimationRevealTransform\(\)[\s\S]*?setProperty\('will-change', 'auto'/,
+  'the protected important rest state should be restored after the keyframe transaction'
+);
+assert.match(
+  searchPanelSource,
+  /function applyOverlayInputEnterAnimationInitialState\(inputElement\)[\s\S]*?getOverlayEnterMotion\(\)[\s\S]*?motion\.inputBlurPx[\s\S]*?motion\.inputDurationMs[\s\S]*?setProperty\('will-change', 'filter'/,
+  'the small input surface should retain a short bounded blur entry instead of blurring the full backdrop-filtered panel'
+);
+assert.match(
+  searchPanelSource,
+  /function revealOverlayInputEnterAnimation\(inputElement, reduceMotion\)[\s\S]*?finishOverlayInputEnterAnimation\(inputElement\)[\s\S]*?setProperty\('filter', 'blur\(0px\)'[\s\S]*?removeProperty\('will-change'\)/,
+  'input blur should clear immediately for reduced motion and release its temporary compositor hint after entry'
+);
+assert.match(
+  searchPanelSource,
+  /function createOverlayEntryBlurProxy\(overlayElement\)[\s\S]*?getBoundingClientRect\(\)[\s\S]*?setProperty\('backdrop-filter', 'none'[\s\S]*?setProperty\('filter', 'blur\(5px\)'[\s\S]*?OVERLAY_ENTRY_PROXY_FADE_DURATION_MS[\s\S]*?setProperty\('will-change', 'opacity'/,
+  'the full-layer blur impression should come from a measured proxy with static blur and compositor-only opacity motion'
+);
+assert.doesNotMatch(
+  searchPanelSource.match(/function createOverlayEntryBlurProxy\(overlayElement\)[\s\S]*?\n  \}\n\n  function fadeOverlayEntryBlurProxy/)[0],
+  /transition[^\n]*filter|filter[^\n]*transition/,
+  'the full-layer proxy should never animate its large blur radius'
+);
+assert.match(
+  searchPanelSource,
+  /const blurProxy = reduceMotion \? null : createOverlayEntryBlurProxy\(overlay\)[\s\S]*?revealOverlayInputEnterAnimation\(inputContainer, false\);\s*fadeOverlayEntryBlurProxy\(blurProxy\)/,
+  'the proxy should be skipped for reduced motion and fade with the real overlay reveal'
 );
 assert.match(
   sharedSearchInputSource,
@@ -202,8 +292,13 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const previousHeightState =[\s\S]*?updateKind === 'highlight' \|\| updateKind === 'content'[\s\S]*?\? null[\s\S]*?: captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?reactView\.render\(\{[\s\S]*?if \(previousHeightState\) \{[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\([\s\S]*?suggestionsContainer,[\s\S]*?previousHeightState\.height/,
+  /const previousHeightState =[\s\S]*?updateKind === 'highlight' \|\| updateKind === 'content'[\s\S]*?\? null[\s\S]*?: captureSuggestionsHeightState\(suggestionsContainer\);[\s\S]*?reactView\.render\(\{[\s\S]*?reconcileSuggestionsHeightAfterRender\(previousHeightState, query, \{[\s\S]*?deferCappedShrink: shouldDeferCappedShrink/,
   'overlay structural replacements should animate from the existing height while local content and highlight updates bypass the height pipeline'
+);
+assert.match(
+  searchPanelSource,
+  /function reconcileSuggestionsHeightAfterRender\(previousState, query, options\)[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\(suggestionsContainer, previousState\.height\)/,
+  'overlay result renderers should share one measured-height reconciliation pipeline'
 );
 assert.match(
   searchPanelSource,
@@ -227,7 +322,7 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function activateSiteSearch\(provider\)[\s\S]*?finishSuggestionsHeightInputSession\(\{ animate: false \}\);[\s\S]*?siteSearchState = provider;/,
+  /function activateSiteSearch\(provider, activationOptions\)[\s\S]*?finishSuggestionsHeightInputSession\(\{ animate: false \}\);[\s\S]*?siteSearchState = provider;/,
   'entering site search should release any stable-height session inherited from the previous search mode'
 );
 assert.match(
@@ -257,13 +352,28 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180/,
-  'large result collapses should use the faster height transition'
+  /const searchPanelsLayoutTransitionDurationMs = 220;[\s\S]*?const searchPanelsLayoutTransitionEasing =[\s\S]*?'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/,
+  'the result surface and scope panel should share one layout-transition rhythm'
 );
 assert.match(
   searchPanelSource,
-  /const transitionEasing = 'ease-in-out';[\s\S]*?`height \$\{transitionDurationMs\}ms \$\{transitionEasing\}`/,
-  'result-height changes should use regular ease-in-out motion instead of spring easing'
+  /function scheduleSearchPanelsLayoutTransition\(container, fromHeight, targetMetrics, modeMenu\)[\s\S]*?modeMenu\.style\.setProperty\('transition', 'none', 'important'\)[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?`height \$\{searchPanelsLayoutTransitionDurationMs\}ms \$\{searchPanelsLayoutTransitionEasing\}`[\s\S]*?`opacity 170ms ease, transform \$\{searchPanelsLayoutTransitionDurationMs\}ms \$\{searchPanelsLayoutTransitionEasing\}`[\s\S]*?setModeMenuResultOffset\(toHeight\)/,
+  'one animation frame should start result height and scope-panel displacement with identical timing'
+);
+assert.match(
+  searchPanelSource,
+  /function scheduleStandaloneSuggestionsHeightTransition\(container, fromHeight, targetMetrics\)[\s\S]*?const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180;[\s\S]*?transitionEasing = 'ease-in-out'/,
+  'results without an open scope panel should retain the ordinary search height rhythm'
+);
+assert.match(
+  searchPanelSource,
+  /const modeMenu = getSearchPanelsLayoutTransitionMenu\(\);\s*if \(modeMenu\) \{\s*scheduleSearchPanelsLayoutTransition\([\s\S]*?modeMenu[\s\S]*?return;\s*\}\s*scheduleStandaloneSuggestionsHeightTransition\(/,
+  'the coordinated scheduler should only run while the scope panel is actually open'
+);
+assert.match(
+  searchPanelSource,
+  /function syncSearchModeMenuResultOffset\(\) \{[\s\S]*?if \(searchPanelsLayoutTransitionActive\) \{\s*return;\s*\}/,
+  'ResizeObserver should not retarget the scope panel while the coordinated transition is active'
 );
 assert.match(
   searchPanelSource,

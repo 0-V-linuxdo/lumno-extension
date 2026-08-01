@@ -297,7 +297,7 @@
     "message": "Lumnoを開きます"
   },
   "overlay_close_other_tabs_tooltip": {
-    "message": "このページ以外のタブを閉じる（固定・グループを除く）"
+    "message": "他のタブを閉じる"
   },
   "settings_shortcuts_status": {
     "message": "現在：{shortcut}"
@@ -1311,7 +1311,7 @@
     "message": "新しいタブを開く"
   },
   "command_settings": {
-    "message": "{name} の設定を開く"
+    "message": "設定を開く"
   },
   "command_show_search": {
     "message": "Lumnoを開く"
@@ -1348,6 +1348,30 @@
   },
   "site_search_name_baidu": {
     "message": "Baidu"
+  },
+  "site_search_name_metaso": {
+    "message": "Metaso AI検索"
+  },
+  "site_search_name_sogou": {
+    "message": "Sogou"
+  },
+  "site_search_name_360": {
+    "message": "360検索"
+  },
+  "site_search_name_shenma": {
+    "message": "Shenma"
+  },
+  "site_search_name_weibo": {
+    "message": "Weibo"
+  },
+  "site_search_name_xiaohongshu": {
+    "message": "Xiaohongshu"
+  },
+  "site_search_name_douyin": {
+    "message": "Douyin"
+  },
+  "site_search_name_jd": {
+    "message": "JD.com"
   },
   "site_search_name_chatgpt": {
     "message": "ChatGPT"
@@ -1458,7 +1482,16 @@
     "message": "もう一度 Backspace で検索範囲を解除"
   },
   "search_scope_menu_shortcut_hint": {
-    "message": "このパネルをすばやく開く"
+    "message": "パネルを開く"
+  },
+  "search_scope_menu_navigation_hint": {
+    "message": "移動"
+  },
+  "search_scope_menu_select_hint": {
+    "message": "切替"
+  },
+  "search_scope_menu_input_focus_hint": {
+    "message": "入力へ"
   },
   "search_scope_menu_filter_hint": {
     "message": "パネルをクリックし、英字またはピンインで絞り込み"

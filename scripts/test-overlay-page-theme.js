@@ -265,8 +265,12 @@ function testSearchPanelExcludesInputExtensionsBeforeMountAndFocus() {
     'applyOverlayInputExtensionIsolation(searchInput);'
   );
   const inputMountIndex = searchPanelSource.indexOf('overlay.appendChild(inputContainer);');
+  const focusFunctionIndex = searchPanelSource.indexOf(
+    'function focusOverlayInputForReveal()'
+  );
   const focusIndex = searchPanelSource.indexOf(
-    'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
+    'focusOverlayInputForReveal();',
+    focusFunctionIndex
   );
   const requiredAttributes = {
     'data-1p-ignore': 'true',
@@ -292,8 +296,16 @@ function testSearchPanelExcludesInputExtensionsBeforeMountAndFocus() {
     'search-panel should isolate its search input after creation'
   );
   assert.ok(
-    isolationCallIndex < inputMountIndex && inputMountIndex < focusIndex,
-    'input-extension exclusion should be applied before the input is mounted or focused'
+    isolationCallIndex < inputMountIndex &&
+      inputMountIndex < focusFunctionIndex &&
+      focusFunctionIndex < focusIndex,
+    'input-extension exclusion should be applied before the input is mounted and reveal-owned focus runs'
+  );
+  assert.ok(
+    !searchPanelSource.includes(
+      'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
+    ),
+    'overlay focus should follow the reveal transaction instead of an unrelated fixed timer'
   );
 }
 

@@ -3699,6 +3699,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/shared/cursor-tooltip.js',
     'src/overlay/runtime.js',
     'src/shared/favicon-utils.js',
+    'src/newtab/favicon-theme.js',
     'src/shared/favicon-cache.js',
     'src/shared/favicon-view-core.js',
     'src/overlay/favicon-view.js',
@@ -7364,6 +7365,7 @@ function isAiSiteSearchProvider(provider) {
   }
   const template = normalizeSiteSearchTemplate(provider && provider.template);
   return Boolean(provider && (
+    String(provider.category || '').trim() === 'aiSearch' ||
     String(provider.action || '').trim() === 'openAndSubmit' ||
     (template && !template.includes('{query}'))
   ));
@@ -7398,7 +7400,8 @@ function sanitizeSiteSearchProviders(items) {
         name: item.name || item.key,
         template,
         action: String(item.action || '').trim(),
-        submitStrategy: String(item.submitStrategy || '').trim()
+        submitStrategy: String(item.submitStrategy || '').trim(),
+        category: String(item.category || '').trim()
       };
     })
     .filter((item) => item.key && item.template && (item.template.includes('{query}') || isAiSiteSearchProvider(item)));

@@ -3071,6 +3071,7 @@
         max-height: min(
           calc(100vh - 220px),
           var(--x-nt-suggestions-max-height, 594px),
+          var(--x-nt-suggestions-viewport-fit-max-height, 100vh),
           var(--x-nt-suggestions-menu-fit-max-height, 594px)
         );
         overflow-y: auto;
@@ -5478,6 +5479,7 @@
         justify-content: space-between;
         gap: 12px;
         padding: 12px 16px;
+        height: var(--x-nt-suggestion-row-height, 52px);
         min-height: var(--x-nt-suggestion-row-height, 52px);
         background: transparent;
         border: 1px solid transparent;
@@ -5633,8 +5635,8 @@
         line-height: 15px;
       }
       .x-nt-empty-state {
-        height: 52px;
-        min-height: 52px;
+        height: var(--x-nt-suggestion-row-height, 52px);
+        min-height: var(--x-nt-suggestion-row-height, 52px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -6027,6 +6029,11 @@
       }
       .x-nt-suggestion-utility-button[data-hover="true"] .ri-icon {
         transform: scale(1.06);
+      }
+      .x-nt-suggestion-action-button:focus-visible,
+      .x-nt-suggestion-utility-button:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 2px;
       }
       .x-nt-tab-switch-button {
         all: unset;

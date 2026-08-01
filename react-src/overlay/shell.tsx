@@ -223,20 +223,18 @@ function supportsCornerShape(doc: Document): boolean {
   );
 }
 
-const OVERLAY_PANEL_ENTRY_TRANSFORM =
-  'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.97))';
-const OVERLAY_PANEL_TRANSITION =
-  'transform var(--x-lumno-search-entry-duration, 240ms) var(--x-lumno-search-entry-easing, cubic-bezier(0.16, 1, 0.3, 1)) var(--x-lumno-search-entry-delay, 40ms), opacity 180ms ease, filter 240ms ease';
+const OVERLAY_PANEL_REST_TRANSFORM =
+  'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1))';
 
 function getPanelStyle(options: OverlayShellOptions): string {
   const width = Number(options.width) || 760;
   const maxHeightVh = Number(options.maxHeightVh) || 75;
   return `
-    all: unset !important;
+    all: unset;
     position: fixed !important;
     top: 20vh !important;
     left: 50% !important;
-    transform: ${OVERLAY_PANEL_ENTRY_TRANSFORM} !important;
+    transform: ${OVERLAY_PANEL_REST_TRANSFORM} !important;
     transform-origin: top center !important;
     width: ${width}px !important;
     max-width: calc(100vw - 24px) !important;
@@ -247,7 +245,7 @@ function getPanelStyle(options: OverlayShellOptions): string {
     -webkit-backdrop-filter: blur(var(--x-ov-blur, 24px)) saturate(var(--x-ov-saturate, 165%)) !important;
     border: 1px solid var(--x-ov-border, rgba(0, 0, 0, 0.08)) !important;
     border-radius: var(--x-ov-panel-radius) !important;
-    box-shadow: var(--x-ov-shadow, 0 17px 120px 0 rgba(0, 0, 0, 0.05), 0 32px 44.5px 0 rgba(0, 0, 0, 0.10), 0 80px 120px 0 rgba(0, 0, 0, 0.15)) !important;
+    box-shadow: var(--x-ov-shadow, inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px -2px rgba(15, 23, 42, 0.11), 0 16px 42px -12px rgba(15, 23, 42, 0.17), 0 48px 112px -30px rgba(15, 23, 42, 0.19)) !important;
     z-index: 2147483647 !important;
     font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
     display: flex !important;
@@ -273,9 +271,9 @@ function getPanelStyle(options: OverlayShellOptions): string {
     text-shadow: none !important;
     vertical-align: baseline !important;
     opacity: 0 !important;
-    filter: blur(10px) !important;
-    will-change: transform, opacity, filter !important;
-    transition: ${OVERLAY_PANEL_TRANSITION} !important;
+    filter: none !important;
+    will-change: auto !important;
+    transition: none !important;
   `;
 }
 
@@ -360,14 +358,12 @@ function OverlayPanel({
     panel.style.setProperty('max-height', `${maxHeightVh}vh`, 'important');
     panel.style.setProperty(
       'transform',
-      OVERLAY_PANEL_ENTRY_TRANSFORM,
+      OVERLAY_PANEL_REST_TRANSFORM,
       'important'
     );
-    panel.style.setProperty(
-      'transition',
-      OVERLAY_PANEL_TRANSITION,
-      'important'
-    );
+    panel.style.setProperty('transition', 'none', 'important');
+    panel.style.setProperty('filter', 'none', 'important');
+    panel.style.setProperty('will-change', 'auto', 'important');
     if (supportsSuperellipse) {
       panel.style.setProperty(
         'corner-shape',

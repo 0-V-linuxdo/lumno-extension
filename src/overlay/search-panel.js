@@ -34,6 +34,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayUpdateNoticeFrameListener = null;
   let overlayUpdateNoticeFrameVisualViewport = null;
   let overlayUpdateNoticeMountTimer = null;
+  let overlayEnterCleanupElement = null;
+  let overlayEnterCleanupTimer = null;
+  let overlayEnterTransitionEndHandler = null;
+  let overlayEnterAnimations = [];
+  let overlayEnterAnimationRevision = 0;
+  let overlayInputEnterCleanupElement = null;
+  let overlayInputEnterTransitionEndHandler = null;
+  let overlayInputEnterCleanupTimer = null;
+  let overlayEntryBlurProxy = null;
+  let overlayEntryBlurProxyCleanupTimer = null;
+  let overlayEntryBlurProxyTransitionEndHandler = null;
   let overlaySuggestionsView = null;
   let overlaySuggestionRequestSeq = 0;
   let overlayRemoteSuggestionDebounceTimer = null;
@@ -67,6 +78,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const UPDATE_NOTICE = window.LumnoUpdateNotice || {};
   const ENGAGEMENT_NOTICE = window.LumnoEngagementNotice || {};
   const FAVICON_UTILS = window.LumnoFaviconUtils || {};
+  const FAVICON_THEME = window.LumnoNewtabFaviconTheme || {};
   const overlayRuntime = window.LumnoOverlayRuntime;
   const overlayLifecycle = window.LumnoOverlayLifecycle;
   const overlayFaviconView = window.LumnoOverlayFaviconView;
@@ -115,6 +127,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   if (!overlayFaviconView ||
       typeof overlayFaviconView.createOverlayFaviconViewRuntime !== 'function') {
     console.warn('Lumno: overlay favicon view helper not available.');
+    return;
+  }
+  if (typeof FAVICON_THEME.buildTheme !== 'function' ||
+      typeof FAVICON_THEME.getThemeForMode !== 'function' ||
+      typeof FAVICON_THEME.getHoverColors !== 'function') {
+    console.warn('Lumno: shared favicon theme helper not available.');
     return;
   }
   function getSearchUtilsRuntime() {
@@ -213,6 +231,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const LANGUAGE_STORAGE_KEY = overlayStorageKeys.language;
   const LANGUAGE_MESSAGES_STORAGE_KEY = overlayStorageKeys.languageMessages;
   const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = overlayStorageKeys.defaultSearchEngine;
+  const OVERLAY_MODE_MENU_DOUBLE_TAB_DURATION_MS = 700;
+  const OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS = 120;
   const SITE_SEARCH_STORAGE_KEY = overlayStorageKeys.siteSearchCustom;
   const SITE_SEARCH_DISABLED_STORAGE_KEY = overlayStorageKeys.siteSearchDisabled;
   const SITE_SEARCH_ICON_CACHE_STORAGE_KEY = overlayStorageKeys.siteSearchIconCache ||
@@ -249,6 +269,28 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySearchResultPriorityMode = 'autocomplete';
   let overlaySizeMode = 'standard';
   let overlayEnterAnimation = 'elastic';
+  const OVERLAY_ENTER_MOTION = Object.freeze({
+    elastic: Object.freeze({
+      inputBlurPx: 6,
+      inputDurationMs: 200,
+      opacityDurationMs: 180,
+      panelDelayMs: 40,
+      panelDurationMs: 270,
+      panelEasing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+    }),
+    fade: Object.freeze({
+      inputBlurPx: 4,
+      inputDurationMs: 180,
+      opacityDurationMs: 220,
+      panelDelayMs: 0,
+      panelDurationMs: 340,
+      panelEasing: 'cubic-bezier(0.2, 1, 0.36, 1)'
+    })
+  });
+  const OVERLAY_ENTER_CLEANUP_BUFFER_MS = 80;
+  const OVERLAY_INPUT_ENTER_CLEANUP_BUFFER_MS = 40;
+  const OVERLAY_ENTRY_PROXY_FADE_DURATION_MS = 170;
+  const OVERLAY_ENTRY_PROXY_CLEANUP_BUFFER_MS = 50;
   let overlaySearchBlacklistItems = [];
   let overlayFaviconRequestBlacklistItems = [];
   let faviconEnhancedFetchEnabled = false;
@@ -601,43 +643,370 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
   function getOverlayEnterAnimationRevealTransform() {
     if (overlayEnterAnimation === 'fade') {
-      return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1))';
+      return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1)) scale(1)';
     }
     return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1)) scaleX(1)';
+  }
+
+  function getOverlayEnterAnimationStartTransform() {
+    if (overlayEnterAnimation === 'fade') {
+      return 'translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)';
+    }
+    return 'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.92))';
+  }
+
+  function getOverlayEnterAnimationDeltaTransform() {
+    if (overlayEnterAnimation === 'fade') {
+      return 'translateY(10px) scale(0.985)';
+    }
+    return 'translateY(4px) scaleX(0.92)';
+  }
+
+  function getOverlayEnterMotion() {
+    return OVERLAY_ENTER_MOTION[overlayEnterAnimation] ||
+      OVERLAY_ENTER_MOTION.elastic;
+  }
+
+  function clearOverlayPanelEnterCleanup() {
+    overlayEnterAnimationRevision += 1;
+    if (overlayEnterCleanupTimer !== null) {
+      clearTimeout(overlayEnterCleanupTimer);
+      overlayEnterCleanupTimer = null;
+    }
+    if (overlayEnterCleanupElement && overlayEnterTransitionEndHandler) {
+      overlayEnterCleanupElement.removeEventListener(
+        'transitionend',
+        overlayEnterTransitionEndHandler
+      );
+    }
+    overlayEnterAnimations.forEach((animation) => {
+      if (animation && typeof animation.cancel === 'function') {
+        try {
+          animation.cancel();
+        } catch (error) {
+          // A finished animation may already have released its effect.
+        }
+      }
+    });
+    overlayEnterAnimations = [];
+    overlayEnterCleanupElement = null;
+    overlayEnterTransitionEndHandler = null;
+  }
+
+  function finishOverlayPanelEnterAnimation(overlayElement, animationRevision) {
+    if (!overlayElement ||
+        (animationRevision && animationRevision !== overlayEnterAnimationRevision)) {
+      return;
+    }
+    clearOverlayPanelEnterCleanup();
+    overlayElement.style.setProperty('opacity', '1', 'important');
+    overlayElement.style.setProperty(
+      'transform',
+      getOverlayEnterAnimationRevealTransform(),
+      'important'
+    );
+    overlayElement.setAttribute('data-lumno-overlay-entry', 'done');
+    overlayElement.style.removeProperty('transition');
+    overlayElement.style.setProperty('will-change', 'auto', 'important');
+    overlayElement.style.removeProperty('--x-lumno-search-entry-scale-start');
+    overlayElement.style.removeProperty('--x-lumno-search-entry-duration');
+    overlayElement.style.removeProperty('--x-lumno-search-entry-delay');
+  }
+
+  function trackOverlayPanelEnterAnimation(overlayElement, animations) {
+    const animationRevision = overlayEnterAnimationRevision;
+    overlayElement.setAttribute('data-lumno-overlay-entry', 'running');
+    overlayEnterCleanupElement = overlayElement;
+    overlayEnterAnimations = Array.isArray(animations)
+      ? animations.filter(Boolean)
+      : [];
+    const primaryAnimation = overlayEnterAnimations[0] || null;
+    if (primaryAnimation) {
+      primaryAnimation.onfinish = () => {
+        finishOverlayPanelEnterAnimation(overlayElement, animationRevision);
+      };
+    } else {
+      overlayEnterTransitionEndHandler = (event) => {
+        if (!event || event.target !== overlayElement || event.propertyName !== 'transform') {
+          return;
+        }
+        finishOverlayPanelEnterAnimation(overlayElement, animationRevision);
+      };
+      overlayElement.addEventListener('transitionend', overlayEnterTransitionEndHandler);
+    }
+    const motion = getOverlayEnterMotion();
+    const cleanupDelayMs = motion.panelDelayMs +
+      motion.panelDurationMs + OVERLAY_ENTER_CLEANUP_BUFFER_MS;
+    overlayEnterCleanupTimer = setTimeout(() => {
+      overlayEnterCleanupTimer = null;
+      finishOverlayPanelEnterAnimation(overlayElement, animationRevision);
+    }, cleanupDelayMs);
+    return animationRevision;
   }
 
   function applyOverlayEnterAnimationInitialState(overlayElement) {
     if (!overlayElement) {
       return;
     }
+    clearOverlayPanelEnterCleanup();
+    const motion = getOverlayEnterMotion();
+    overlayElement.setAttribute('data-lumno-overlay-entry', 'prepared');
     overlayElement.style.setProperty('opacity', '0', 'important');
-    if (overlayEnterAnimation === 'fade') {
-      overlayElement.style.setProperty(
-        'transform',
-        'translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)',
-        'important'
-      );
-      overlayElement.style.setProperty('filter', 'blur(6px)', 'important');
-      overlayElement.style.setProperty(
-        'transition',
-        'transform 340ms cubic-bezier(0.2, 1, 0.36, 1), opacity 220ms ease, filter 300ms ease',
-        'important'
-      );
-      return;
+    overlayElement.style.setProperty('transition', 'none', 'important');
+    overlayElement.style.setProperty('will-change', 'transform, opacity', 'important');
+    if (overlayEnterAnimation !== 'fade') {
+      overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.92');
     }
-    overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.92');
-    overlayElement.style.setProperty('--x-lumno-search-entry-duration', '270ms');
-    overlayElement.style.setProperty('--x-lumno-search-entry-delay', '40ms');
+    overlayElement.style.setProperty('--x-lumno-search-entry-duration', `${motion.panelDurationMs}ms`);
+    overlayElement.style.setProperty('--x-lumno-search-entry-delay', `${motion.panelDelayMs}ms`);
     overlayElement.style.setProperty(
       'transform',
-      'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.97))',
+      getOverlayEnterAnimationStartTransform(),
       'important'
     );
-    overlayElement.style.setProperty('filter', 'blur(10px)', 'important');
+  }
+
+  function playOverlayPanelEnterAnimation(overlayElement, revealTransform) {
+    if (!overlayElement || !overlayElement.style) {
+      return false;
+    }
+    clearOverlayPanelEnterCleanup();
+    const motion = getOverlayEnterMotion();
+    const startTransform = getOverlayEnterAnimationStartTransform();
+    const deltaTransform = getOverlayEnterAnimationDeltaTransform();
+    overlayElement.style.setProperty('transition', 'none', 'important');
+    if (typeof overlayElement.animate === 'function') {
+      let transformAnimation = null;
+      let opacityAnimation = null;
+      try {
+        // WAAPI animation values sit below author !important declarations.
+        // The shell reset stays at normal priority inside Shadow DOM, so only
+        // the two animated longhands need their protected priority released.
+        overlayElement.style.setProperty('will-change', 'transform, opacity', 'important');
+        overlayElement.style.setProperty('opacity', '1');
+        overlayElement.style.setProperty('transform', revealTransform);
+        transformAnimation = overlayElement.animate([
+          { transform: deltaTransform },
+          { transform: 'none' }
+        ], {
+          composite: 'add',
+          delay: motion.panelDelayMs,
+          duration: motion.panelDurationMs,
+          easing: motion.panelEasing,
+          fill: 'backwards'
+        });
+        opacityAnimation = overlayElement.animate([
+          { opacity: 0 },
+          { opacity: 1 }
+        ], {
+          duration: motion.opacityDurationMs,
+          easing: 'ease-out',
+          fill: 'backwards'
+        });
+        trackOverlayPanelEnterAnimation(
+          overlayElement,
+          [transformAnimation, opacityAnimation]
+        );
+        return true;
+      } catch (error) {
+        [transformAnimation, opacityAnimation].forEach((animation) => {
+          if (animation && typeof animation.cancel === 'function') {
+            try {
+              animation.cancel();
+            } catch (cancelError) {
+              // Continue into the CSS fallback with a clean protected state.
+            }
+          }
+        });
+        // Fall through to the CSS transition path for restricted documents.
+      }
+    }
+    overlayElement.style.setProperty('opacity', '0', 'important');
+    overlayElement.style.setProperty('transform', startTransform, 'important');
     overlayElement.style.setProperty(
       'transition',
-      'transform var(--x-lumno-search-entry-duration, 240ms) var(--x-lumno-search-entry-easing, cubic-bezier(0.16, 1, 0.3, 1)) var(--x-lumno-search-entry-delay, 40ms), opacity 180ms ease, filter 240ms ease',
+      `transform ${motion.panelDurationMs}ms ${motion.panelEasing} ${motion.panelDelayMs}ms, opacity ${motion.opacityDurationMs}ms ease-out`,
       'important'
+    );
+    trackOverlayPanelEnterAnimation(overlayElement, []);
+    overlayFrameTracker.runEnterAnimation(overlayElement, () => {
+      overlayElement.style.setProperty('opacity', '1', 'important');
+      overlayElement.style.setProperty('transform', revealTransform, 'important');
+    });
+    return true;
+  }
+
+  function clearOverlayInputEnterCleanupTimer() {
+    if (overlayInputEnterCleanupTimer !== null) {
+      clearTimeout(overlayInputEnterCleanupTimer);
+      overlayInputEnterCleanupTimer = null;
+    }
+    if (overlayInputEnterCleanupElement && overlayInputEnterTransitionEndHandler) {
+      overlayInputEnterCleanupElement.removeEventListener(
+        'transitionend',
+        overlayInputEnterTransitionEndHandler
+      );
+    }
+    overlayInputEnterCleanupElement = null;
+    overlayInputEnterTransitionEndHandler = null;
+  }
+
+  function finishOverlayInputEnterAnimation(inputElement) {
+    clearOverlayInputEnterCleanupTimer();
+    if (!inputElement || !inputElement.style) {
+      return;
+    }
+    inputElement.style.setProperty('filter', 'none', 'important');
+    inputElement.style.removeProperty('transition');
+    inputElement.style.removeProperty('will-change');
+  }
+
+  function applyOverlayInputEnterAnimationInitialState(inputElement) {
+    if (!inputElement || !inputElement.style) {
+      return;
+    }
+    clearOverlayInputEnterCleanupTimer();
+    const motion = getOverlayEnterMotion();
+    inputElement.style.setProperty('filter', `blur(${motion.inputBlurPx}px)`, 'important');
+    inputElement.style.setProperty(
+      'transition',
+      `filter ${motion.inputDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+      'important'
+    );
+    inputElement.style.setProperty('will-change', 'filter', 'important');
+  }
+
+  function revealOverlayInputEnterAnimation(inputElement, reduceMotion) {
+    if (!inputElement || !inputElement.style) {
+      return;
+    }
+    if (reduceMotion) {
+      finishOverlayInputEnterAnimation(inputElement);
+      return;
+    }
+    clearOverlayInputEnterCleanupTimer();
+    overlayInputEnterCleanupElement = inputElement;
+    overlayInputEnterTransitionEndHandler = (event) => {
+      if (!event || event.target !== inputElement || event.propertyName !== 'filter') {
+        return;
+      }
+      finishOverlayInputEnterAnimation(inputElement);
+    };
+    inputElement.addEventListener('transitionend', overlayInputEnterTransitionEndHandler);
+    inputElement.style.setProperty('filter', 'blur(0px)', 'important');
+    const cleanupDelayMs = getOverlayEnterMotion().inputDurationMs +
+      OVERLAY_INPUT_ENTER_CLEANUP_BUFFER_MS;
+    overlayInputEnterCleanupTimer = setTimeout(() => {
+      if (!inputElement.isConnected) {
+        clearOverlayInputEnterCleanupTimer();
+        return;
+      }
+      finishOverlayInputEnterAnimation(inputElement);
+    }, cleanupDelayMs);
+  }
+
+  function removeOverlayEntryBlurProxy() {
+    if (overlayEntryBlurProxyCleanupTimer !== null) {
+      clearTimeout(overlayEntryBlurProxyCleanupTimer);
+      overlayEntryBlurProxyCleanupTimer = null;
+    }
+    if (overlayEntryBlurProxy && overlayEntryBlurProxyTransitionEndHandler) {
+      overlayEntryBlurProxy.removeEventListener(
+        'transitionend',
+        overlayEntryBlurProxyTransitionEndHandler
+      );
+    }
+    overlayEntryBlurProxyTransitionEndHandler = null;
+    if (overlayEntryBlurProxy && overlayEntryBlurProxy.parentNode) {
+      overlayEntryBlurProxy.parentNode.removeChild(overlayEntryBlurProxy);
+    }
+    overlayEntryBlurProxy = null;
+  }
+
+  function createOverlayEntryBlurProxy(overlayElement) {
+    removeOverlayEntryBlurProxy();
+    if (!overlayElement || !overlayElement.parentNode) {
+      return null;
+    }
+    const rect = overlayElement.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) {
+      return null;
+    }
+    const theme = overlayElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    const background = overlayElement.style.getPropertyValue('--x-ov-bg') ||
+      (theme === 'dark' ? 'rgba(20, 20, 20, 0.62)' : 'rgba(255, 255, 255, 0.96)');
+    const border = overlayElement.style.getPropertyValue('--x-ov-border') ||
+      (theme === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)');
+    const proxy = document.createElement('div');
+    proxy.setAttribute('aria-hidden', 'true');
+    proxy.setAttribute('data-lumno-overlay-entry-blur-proxy', 'true');
+    proxy.style.setProperty('all', 'initial', 'important');
+    proxy.style.setProperty('position', 'fixed', 'important');
+    proxy.style.setProperty('top', `${rect.top}px`, 'important');
+    proxy.style.setProperty('left', `${rect.left}px`, 'important');
+    proxy.style.setProperty('width', `${rect.width}px`, 'important');
+    proxy.style.setProperty('height', `${rect.height}px`, 'important');
+    proxy.style.setProperty('box-sizing', 'border-box', 'important');
+    proxy.style.setProperty('border', `1px solid ${border}`, 'important');
+    proxy.style.setProperty('border-radius', 'var(--x-ov-panel-radius, 28px)', 'important');
+    proxy.style.setProperty('background', background, 'important');
+    proxy.style.setProperty(
+      'box-shadow',
+      theme === 'dark'
+        ? '0 16px 50px rgba(0, 0, 0, 0.34)'
+        : '0 14px 42px rgba(15, 23, 42, 0.14)',
+      'important'
+    );
+    proxy.style.setProperty('backdrop-filter', 'none', 'important');
+    proxy.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+    proxy.style.setProperty('filter', 'blur(5px)', 'important');
+    proxy.style.setProperty('opacity', theme === 'dark' ? '0.42' : '0.26', 'important');
+    proxy.style.setProperty(
+      'transition',
+      `opacity ${OVERLAY_ENTRY_PROXY_FADE_DURATION_MS}ms ease-out`,
+      'important'
+    );
+    proxy.style.setProperty('will-change', 'opacity', 'important');
+    proxy.style.setProperty('contain', 'paint', 'important');
+    proxy.style.setProperty('pointer-events', 'none', 'important');
+    proxy.style.setProperty('z-index', '2147483646', 'important');
+    overlayElement.parentNode.insertBefore(proxy, overlayElement);
+    overlayEntryBlurProxy = proxy;
+    return proxy;
+  }
+
+  function fadeOverlayEntryBlurProxy(proxy) {
+    if (!proxy || proxy !== overlayEntryBlurProxy) {
+      return;
+    }
+    const finish = () => {
+      if (proxy === overlayEntryBlurProxy && overlayEntryBlurProxyTransitionEndHandler) {
+        proxy.removeEventListener('transitionend', overlayEntryBlurProxyTransitionEndHandler);
+      }
+      overlayEntryBlurProxyTransitionEndHandler = null;
+      if (overlayEntryBlurProxyCleanupTimer !== null) {
+        clearTimeout(overlayEntryBlurProxyCleanupTimer);
+        overlayEntryBlurProxyCleanupTimer = null;
+      }
+      if (proxy.parentNode) {
+        proxy.parentNode.removeChild(proxy);
+      }
+      if (overlayEntryBlurProxy === proxy) {
+        overlayEntryBlurProxy = null;
+      }
+    };
+    overlayEntryBlurProxyTransitionEndHandler = (event) => {
+      if (!event || event.target !== proxy || event.propertyName !== 'opacity') {
+        return;
+      }
+      finish();
+    };
+    proxy.addEventListener('transitionend', overlayEntryBlurProxyTransitionEndHandler);
+    proxy.style.setProperty('opacity', '0', 'important');
+    overlayEntryBlurProxyCleanupTimer = setTimeout(
+      finish,
+      OVERLAY_ENTRY_PROXY_FADE_DURATION_MS +
+        OVERLAY_ENTRY_PROXY_CLEANUP_BUFFER_MS
     );
   }
 
@@ -1130,6 +1499,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   // Helper function to remove overlay and clean up styles
   function removeOverlay(overlayElement) {
     clearOverlayEnterAnimationFrames();
+    clearOverlayPanelEnterCleanup();
+    clearOverlayInputEnterCleanupTimer();
+    removeOverlayEntryBlurProxy();
     cancelPendingOverlaySuggestionRequests();
     const suggestionsHeightSettleTimer = overlayElement &&
       overlayElement._lumnoSuggestionsHeightSettleTimer;
@@ -1442,6 +1814,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let localSearchScopeState = null;
     let enabledSearchResultSourceTypes = ['topSite', 'bookmark', 'history'];
     let openTabsSearchModeActive = false;
+    let pendingOpenTabsPrefixEntryTimer = 0;
     const imeKeyGuard = LumnoImeKeyGuard.createImeKeyGuard();
     let selectedIndex = -1; // -1 means input is focused, 0+ means suggestion is selected
     const suggestionItems = [];
@@ -1656,6 +2029,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         'padding-left': '50px',
         'padding-right': '92px'
       },
+      iconStyleOverrides: {
+        left: '13px'
+      },
       rightIconStyleOverrides: {
         '--x-ext-input-right-icon-inset': '13px',
         cursor: 'pointer'
@@ -1663,7 +2039,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       secondaryAction: {
         id: '_x_extension_search_close_other_tabs_2026_unique_',
         className: 'x-ov-close-other-tabs',
-        ariaLabel: t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）'),
+        ariaLabel: t('overlay_close_other_tabs_tooltip', '关闭其他标签页'),
         html: getRiSvg('ri-brush-2-line', 'ri-size-16')
       },
       modeBadge: {
@@ -1677,6 +2053,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let searchInput = inputParts.input;
     applyOverlayInputExtensionIsolation(searchInput);
     const inputContainer = inputParts.container;
+    const searchScopeIcon = inputParts.icon;
     const rightIcon = inputParts.rightIcon;
     inputHistoryController =
       typeof SEARCH_INPUT_HISTORY.createSearchInputHistoryController === 'function'
@@ -1998,11 +2375,22 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     applyNoTranslate(suggestionsContainer);
     suggestionsContainer.id = '_x_extension_suggestions_container_2024_unique_';
     suggestionsContainer.className = 'x-ov-suggestions-container';
+    suggestionsContainer.addEventListener('animationend', (event) => {
+      if (!event || event.animationName !== '_x_ov_scope_result_enter_2026_unique_') {
+        return;
+      }
+      suggestionsContainer.setAttribute('data-scope-result-enter', 'done');
+    });
     let suggestionsHeightAnimationFrame = 0;
     let suggestionsHeightAnimationTimer = 0;
     let suggestionsHeightTransitionEndHandler = null;
     let suggestionsHeightAnimationTarget = 0;
     let suggestionsHeightAnimationTargetIsCapped = false;
+    let searchPanelsLayoutTransitionActive = false;
+    let searchPanelsLayoutTransitionMenu = null;
+    const searchPanelsLayoutTransitionDurationMs = 220;
+    const searchPanelsLayoutTransitionEasing =
+      'cubic-bezier(0.22, 1, 0.36, 1)';
     const suggestionsHeightInputSettleMs = 280;
     let suggestionsHeightInputSettleTimer = 0;
     let suggestionsHeightInputLockedHeight = 0;
@@ -2039,6 +2427,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     function syncSearchModeMenuResultOffset() {
       if (!inputModeController ||
           typeof inputModeController.setModeMenuResultOffset !== 'function') {
+        return;
+      }
+      if (searchPanelsLayoutTransitionActive) {
         return;
       }
       const fitMaxHeightProperty =
@@ -2122,6 +2513,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function clearDefaultOpenTabsSuggestions() {
       ensureOverlaySuggestionsView().clear();
+      suggestionsContainer.removeAttribute('data-scope-result-enter');
       suggestionItems.length = 0;
       currentSuggestions = [];
       lastRenderedQuery = '';
@@ -2163,8 +2555,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           typeof overlayEngagementNoticeController.updateLanguage === 'function') {
         overlayEngagementNoticeController.updateLanguage();
       }
-      const settingsTooltipText = formatMessage('command_settings', '打开 Lumno 设置', { name: 'Lumno' });
-      const closeOtherTooltipText = t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）');
+      const settingsTooltipText = formatMessage('command_settings', '打开设置', { name: 'Lumno' });
+      const closeOtherTooltipText = t('overlay_close_other_tabs_tooltip', '关闭其他标签页');
       if (searchInput) {
         defaultPlaceholderText = t('overlay_search_placeholder', t('search_placeholder', defaultPlaceholderText));
         if (!siteSearchState && !localSearchScopeState) {
@@ -2331,7 +2723,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       let titleText = '';
       if (command.type === 'commandSettings') {
-        titleText = formatMessage('command_settings', '打开 Lumno 设置', {
+        titleText = formatMessage('command_settings', '打开设置', {
           name: 'Lumno'
         });
       } else if (command.type === 'commandOpenTabs') {
@@ -2434,8 +2826,64 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     }
 
+    const searchScopeTooltipText = () => t(
+      'shortcut_reference_search_open_scope_menu_title',
+      '打开搜索范围面板'
+    );
+    const setSearchScopeIconVisualState = (active) => {
+      if (!searchScopeIcon) {
+        return;
+      }
+      searchScopeIcon.dataset.hoverActive = active ? 'true' : 'false';
+    };
+    const activateSearchScopeIcon = (event) => {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      if (event && typeof event.stopPropagation === 'function') {
+        event.stopPropagation();
+      }
+      hideInputActionCursorTooltip();
+      setSearchScopeIconVisualState(false);
+      if (inputModeController &&
+          typeof inputModeController.resetModeMenuDoubleTab === 'function') {
+        inputModeController.resetModeMenuDoubleTab();
+      }
+      openSearchModeMenuFromDoubleTab();
+      if (searchScopeIcon && typeof searchScopeIcon.blur === 'function') {
+        searchScopeIcon.blur();
+      }
+    };
+    if (searchScopeIcon) {
+      searchScopeIcon.dataset.searchScopeAction = 'true';
+      searchScopeIcon.setAttribute('role', 'button');
+      searchScopeIcon.setAttribute('tabindex', '0');
+      searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
+      searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+      setSearchScopeIconVisualState(false);
+      searchScopeIcon.addEventListener('mouseenter', () => {
+        setSearchScopeIconVisualState(true);
+      });
+      searchScopeIcon.addEventListener('focus', () => {
+        setSearchScopeIconVisualState(true);
+      });
+      ['mouseleave', 'blur', 'pointerup', 'pointercancel'].forEach((type) => {
+        searchScopeIcon.addEventListener(type, () => {
+          setSearchScopeIconVisualState(false);
+        });
+      });
+      searchScopeIcon.addEventListener('click', activateSearchScopeIcon);
+      searchScopeIcon.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+        activateSearchScopeIcon(event);
+      });
+      bindInputActionCursorTooltip(searchScopeIcon, searchScopeTooltipText);
+    }
+
     if (rightIcon) {
-      const settingsTooltipText = () => formatMessage('command_settings', '打开 Lumno 设置', { name: 'Lumno' });
+      const settingsTooltipText = () => formatMessage('command_settings', '打开设置', { name: 'Lumno' });
       bindInputActionCursorTooltip(rightIcon, settingsTooltipText);
       rightIcon.addEventListener('click', function(event) {
         event.preventDefault();
@@ -2455,7 +2903,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     if (closeOtherTabsButton) {
-      const closeOtherTooltipText = () => t('overlay_close_other_tabs_tooltip', '清理本页外的其他标签页（除置顶与群组）');
+      const closeOtherTooltipText = () => t('overlay_close_other_tabs_tooltip', '关闭其他标签页');
       bindInputActionCursorTooltip(closeOtherTabsButton, closeOtherTooltipText);
       closeOtherTabsButton.addEventListener('click', function(event) {
         event.preventDefault();
@@ -2552,7 +3000,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const defaultSiteSearchProviders = typeof SEARCH_UTILS.getDefaultSiteSearchProviders === 'function'
       ? SEARCH_UTILS.getDefaultSiteSearchProviders()
       : initialSiteSearchProviders;
-    const defaultAccentColor = [59, 130, 246];
+    const defaultAccentColor = FAVICON_THEME.defaultAccentColor;
     const themeColorCache = window._x_extension_theme_color_cache_2024_unique_ || new Map();
     window._x_extension_theme_color_cache_2024_unique_ = themeColorCache;
     const themeHostCache = window._x_extension_theme_host_cache_2024_unique_ || new Map();
@@ -2644,54 +3092,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const defaultCaretColor = searchInput.style.caretColor || 'var(--x-ext-input-caret, #7DB7FF)';
     const inputModePrefixTransition = 'opacity 140ms cubic-bezier(0.22, 1, 0.36, 1), transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease';
 
-    function mixColor(color, target, amount) {
-      return [
-        Math.round(color[0] + (target[0] - color[0]) * amount),
-        Math.round(color[1] + (target[1] - color[1]) * amount),
-        Math.round(color[2] + (target[2] - color[2]) * amount)
-      ];
-    }
-
-    function rgbToCss(rgb) {
-      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-    }
-
-    function parseCssColor(color) {
-      if (!color || typeof color !== 'string') {
-        return null;
-      }
-      const trimmed = color.trim().toLowerCase();
-      if (trimmed.startsWith('#')) {
-        const hex = trimmed.slice(1);
-        if (hex.length === 3) {
-          const r = parseInt(hex[0] + hex[0], 16);
-          const g = parseInt(hex[1] + hex[1], 16);
-          const b = parseInt(hex[2] + hex[2], 16);
-          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
-            return [r, g, b];
-          }
-        }
-        if (hex.length === 6) {
-          const r = parseInt(hex.slice(0, 2), 16);
-          const g = parseInt(hex.slice(2, 4), 16);
-          const b = parseInt(hex.slice(4, 6), 16);
-          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
-            return [r, g, b];
-          }
-        }
-        return null;
-      }
-      const rgbMatch = trimmed.match(/^rgb\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*\)$/);
-      if (rgbMatch) {
-        const r = Number(rgbMatch[1]);
-        const g = Number(rgbMatch[2]);
-        const b = Number(rgbMatch[3]);
-        if ([r, g, b].every((value) => Number.isFinite(value))) {
-          return [r, g, b];
-        }
-      }
-      return null;
-    }
+    const mixColor = FAVICON_THEME.mixColor;
+    const rgbToCss = FAVICON_THEME.rgbToCss;
+    const parseCssColor = FAVICON_THEME.parseCssColor;
+    const getLuminance = FAVICON_THEME.getLuminance;
+    const buildTheme = FAVICON_THEME.buildTheme;
 
     function getHighlightColors(theme) {
       const resolvedTheme = getThemeForMode(theme);
@@ -2707,101 +3112,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       };
     }
 
-    function getLuminance(rgb) {
-      const [r, g, b] = rgb.map((value) => {
-        const channel = value / 255;
-        return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
-      });
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    }
-
-    function getReadableTextColor(bgRgb) {
-      if (!bgRgb || bgRgb.length !== 3) {
-        return '#111827';
-      }
-      const darkText = [17, 24, 39];
-      const lightText = [248, 250, 252];
-      const bgLum = getLuminance(bgRgb);
-      const darkLum = getLuminance(darkText);
-      const lightLum = getLuminance(lightText);
-      const contrastWithDark = (Math.max(bgLum, darkLum) + 0.05) / (Math.min(bgLum, darkLum) + 0.05);
-      const contrastWithLight = (Math.max(bgLum, lightLum) + 0.05) / (Math.min(bgLum, lightLum) + 0.05);
-      return contrastWithDark >= contrastWithLight ? '#111827' : '#F8FAFC';
-    }
-
-    function normalizeAccentColor(rgb) {
-      if (!rgb || rgb.length !== 3) {
-        return defaultAccentColor;
-      }
-      const luminance = getLuminance(rgb);
-      if (luminance < 0.12) {
-        return mixColor(rgb, [255, 255, 255], 0.55);
-      }
-      if (luminance > 0.9) {
-        return mixColor(rgb, [0, 0, 0], 0.2);
-      }
-      return rgb;
-    }
-
-    function buildThemeVariant(accent, mode) {
-      const isDark = mode === 'dark';
-      const base = isDark ? [48, 48, 48] : [255, 255, 255];
-      const highlightBg = mixColor(accent, base, isDark ? 0.82 : 0.86);
-      const highlightBorder = mixColor(accent, base, isDark ? 0.66 : 0.62);
-      const markBg = mixColor(accent, base, isDark ? 0.74 : 0.78);
-      const tagBg = mixColor(accent, base, isDark ? 0.76 : 0.74);
-      const keyBg = mixColor(accent, base, isDark ? 0.88 : 0.9);
-      const tagBorder = mixColor(accent, base, isDark ? 0.62 : 0.58);
-      const keyBorder = mixColor(accent, base, isDark ? 0.7 : 0.18);
-      const buttonBg = mixColor(accent, base, isDark ? 0.8 : 0.94);
-      const buttonBorder = mixColor(accent, base, isDark ? 0.68 : 0.7);
-      const buttonText = isDark
-        ? getReadableTextColor(buttonBg)
-        : (getLuminance(accent) > 0.8
-          ? rgbToCss(mixColor(accent, [0, 0, 0], 0.6))
-          : rgbToCss(accent));
-      const placeholderText = isDark
-        ? rgbToCss(mixColor(accent, [255, 255, 255], 0.2))
-        : buttonText;
-      return {
-        accent: rgbToCss(accent),
-        accentRgb: accent,
-        highlightBg: rgbToCss(highlightBg),
-        highlightBorder: rgbToCss(highlightBorder),
-        markBg: rgbToCss(markBg),
-        markText: getReadableTextColor(markBg),
-        tagBg: rgbToCss(tagBg),
-        tagText: getReadableTextColor(tagBg),
-        tagBorder: rgbToCss(tagBorder),
-        keyBg: rgbToCss(keyBg),
-        keyText: getReadableTextColor(keyBg),
-        keyBorder: rgbToCss(keyBorder),
-        buttonText: buttonText,
-        buttonBg: rgbToCss(buttonBg),
-        buttonBorder: rgbToCss(buttonBorder),
-        placeholderText: placeholderText
-      };
-    }
-
-    function buildTheme(rgb) {
-      const accent = normalizeAccentColor(rgb);
-      return buildThemeVariant(accent, 'light');
-    }
-
-    const defaultTheme = buildTheme(defaultAccentColor);
-    defaultTheme._xIsDefault = true;
-    defaultTheme._xIsBrand = false;
-    defaultTheme._xThemeSource = 'fallback';
-    const urlHighlightTheme = buildTheme(defaultAccentColor);
-    urlHighlightTheme._xIsBrand = true;
-    urlHighlightTheme._xIsUrl = true;
-    urlHighlightTheme._xThemeSource = 'url';
+    const defaultTheme = FAVICON_THEME.createDefaultTheme();
+    const urlHighlightTheme = FAVICON_THEME.createUrlHighlightTheme();
     const overlayThemeTokens = {
       light: {
         bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.95) 100%)',
         modeMenuBg: '#FFFFFF',
         border: 'rgba(0, 0, 0, 0.14)',
-        shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 16px 40px rgba(15, 23, 42, 0.12), 0 40px 90px rgba(15, 23, 42, 0.12)',
+        shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px -2px rgba(15, 23, 42, 0.11), 0 16px 42px -12px rgba(15, 23, 42, 0.17), 0 48px 112px -30px rgba(15, 23, 42, 0.19)',
         text: '#111827',
         subtext: '#6B7280',
         link: '#2563EB',
@@ -2821,7 +3139,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         bg: 'rgba(20, 20, 20, 0.62)',
         modeMenuBg: '#141414',
         border: 'rgba(255, 255, 255, 0.16)',
-        shadow: '0 24px 90px rgba(0, 0, 0, 0.65)',
+        shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.28), 0 18px 48px -14px rgba(0, 0, 0, 0.42), 0 52px 124px -34px rgba(0, 0, 0, 0.52)',
         text: '#E5E7EB',
         subtext: '#9CA3AF',
         link: '#D1D5DB',
@@ -3269,11 +3587,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     }
 
-    if (storageArea) {
+    const initialOverlayThemeReady = new Promise((resolve) => {
+      if (!storageArea) {
+        applyOverlayTheme('system');
+        resolve('system');
+        return;
+      }
       storageArea.get([THEME_STORAGE_KEY], (result) => {
-        applyOverlayTheme(result[THEME_STORAGE_KEY] || 'system');
+        const initialThemeMode = result[THEME_STORAGE_KEY] || 'system';
+        applyOverlayTheme(initialThemeMode);
+        resolve(initialThemeMode);
       });
-    }
+    });
     overlayThemeStorageListener = (changes, areaName) => {
       if (!storageAreaName || areaName !== storageAreaName || !changes[THEME_STORAGE_KEY]) {
         return;
@@ -3282,11 +3607,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     chrome.storage.onChanged.addListener(overlayThemeStorageListener);
 
-    if (storageArea) {
-      storageArea.get([LANGUAGE_STORAGE_KEY], (result) => {
-        applyLanguageMode(result[LANGUAGE_STORAGE_KEY] || 'system');
-      });
-    }
     overlayLanguageStorageListener = (changes, areaName) => {
       if (!storageAreaName || areaName !== storageAreaName) {
         return;
@@ -3603,32 +3923,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getThemeForMode(theme) {
-      if (!theme) {
-        return defaultTheme;
-      }
-      if (!isOverlayDarkMode()) {
-        return theme;
-      }
-      if (theme._xDark) {
-        return theme._xDark;
-      }
-      const accentRgb = theme.accentRgb || parseCssColor(theme.accent) || defaultAccentColor;
-      const darkTheme = buildThemeVariant(accentRgb, 'dark');
-      darkTheme._xIsDefault = Boolean(theme._xIsDefault);
-      darkTheme._xIsBrand = Boolean(theme._xIsBrand);
-      theme._xDark = darkTheme;
-      return darkTheme;
+      return FAVICON_THEME.getThemeForMode(theme, {
+        defaultTheme,
+        isDarkMode: isOverlayDarkMode
+      });
     }
 
     function getHoverColors(theme) {
-      const resolvedTheme = getThemeForMode(theme);
-      const accentRgb = resolvedTheme.accentRgb || parseCssColor(resolvedTheme.accent) || defaultAccentColor;
-      const isDark = isOverlayDarkMode();
-      const base = isDark ? [48, 48, 48] : [255, 255, 255];
-      return {
-        bg: rgbToCss(mixColor(accentRgb, base, isDark ? 0.6 : 0.9)),
-        border: rgbToCss(mixColor(accentRgb, base, isDark ? 0.4 : 0.72))
-      };
+      return FAVICON_THEME.getHoverColors(theme, {
+        defaultTheme,
+        isDarkMode: isOverlayDarkMode
+      });
     }
 
     function getNeutralHoverActionColors() {
@@ -4375,6 +4680,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       attachProviderIcon: attachInputModeProviderIcon,
       preferDirectProviderIcons: true,
       formatMessage,
+      modeMenuDoubleTabDuration: OVERLAY_MODE_MENU_DOUBLE_TAB_DURATION_MS,
       modeMenuCursorTooltipController: overlayModeMenuCursorTooltipController,
       getModeMenuItems: getSearchModeMenuItems,
       onModeMenuSelect: selectSearchModeMenuItem,
@@ -4433,7 +4739,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           t('search_open_tabs_only_entry', '搜索已打开标签页'),
           theme,
           {
-            animate: true,
+            animate: prefixOptions.animate !== false,
             iconClass: 'ri-window-line',
             menuIconName: 'browser',
             modeId: 'openTabs',
@@ -4443,6 +4749,32 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           }
         );
       }
+    }
+
+    function cancelPendingOpenTabsPrefixEntry() {
+      if (!pendingOpenTabsPrefixEntryTimer) {
+        return false;
+      }
+      window.clearTimeout(pendingOpenTabsPrefixEntryTimer);
+      pendingOpenTabsPrefixEntryTimer = 0;
+      return true;
+    }
+
+    function scheduleOpenTabsPrefixEntry(options) {
+      cancelPendingOpenTabsPrefixEntry();
+      const prefixOptions = options || {};
+      pendingOpenTabsPrefixEntryTimer = window.setTimeout(() => {
+        pendingOpenTabsPrefixEntryTimer = 0;
+        if (!openTabsSearchModeActive || siteSearchState || localSearchScopeState) {
+          return;
+        }
+        setOpenTabsSearchPrefix(defaultTheme, {
+          animate: true,
+          preserveModeMenuDoubleTab: Boolean(
+            prefixOptions.preserveModeMenuDoubleTab
+          )
+        });
+      }, OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS);
     }
 
     function clearSiteSearchPrefix() {
@@ -4913,9 +5245,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       const template = normalizeOverlaySiteSearchTemplate(provider && provider.template);
       return Boolean(
-        provider &&
-        (
-          hasOpenAndSubmitSiteSearchAction(provider) ||
+      provider &&
+      (
+        String(provider.category || '').trim() === 'aiSearch' ||
+        hasOpenAndSubmitSiteSearchAction(provider) ||
           (template && !template.includes('{query}'))
         )
       );
@@ -5453,32 +5786,49 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function openSearchModeMenuFromDoubleTab() {
+      cancelPendingOpenTabsPrefixEntry();
       const expectedSiteSearchState = siteSearchState;
       const expectedLocalSearchScopeState = localSearchScopeState;
       const expectedOpenTabsSearchModeActive = openTabsSearchModeActive;
       const expectedInputValue = String(searchInput.value || '');
+      const isActivationCurrent = () => Boolean(
+        inputModeController &&
+        siteSearchState === expectedSiteSearchState &&
+        localSearchScopeState === expectedLocalSearchScopeState &&
+        openTabsSearchModeActive === expectedOpenTabsSearchModeActive &&
+        String(searchInput.value || '') === expectedInputValue &&
+        !expectedSiteSearchState &&
+        !expectedLocalSearchScopeState
+      );
       const activateDefaultProvider = (providers) => {
-        if (!inputModeController ||
-            siteSearchState !== expectedSiteSearchState ||
-            localSearchScopeState !== expectedLocalSearchScopeState ||
-            openTabsSearchModeActive !== expectedOpenTabsSearchModeActive ||
-            String(searchInput.value || '') !== expectedInputValue ||
-            expectedSiteSearchState || expectedLocalSearchScopeState ||
-            expectedInputValue !== '') {
+        if (!isActivationCurrent()) {
           return false;
         }
-        const provider = getCurrentPageSiteSearchModeProvider(providers) ||
+        const currentPageProvider = getCurrentPageSiteSearchModeProvider(providers);
+        const provider = currentPageProvider ||
           getOverlayDefaultSearchModeProvider(providers);
         if (!provider) {
           return false;
         }
-        activateSiteSearch(provider);
-        inputModeController.openModeMenu('none');
-        return true;
+        if (expectedInputValue.trim()) {
+          beginSearchModeResultTransition(expectedInputValue);
+          activateSiteSearch(provider, {
+            animatePrefix: false,
+            preserveResults: true
+          });
+          restoreSearchModeQuery(expectedInputValue);
+        } else {
+          activateSiteSearch(provider, { animatePrefix: false });
+        }
+        const openResult = inputModeController.openModeMenu(
+          currentPageProvider ? 'input' : 'none'
+        );
+        return Promise.resolve(openResult).then(Boolean);
       };
       return Promise.all([
         overlaySearchEngineStateReady.catch(() => overlaySearchEngineState),
-        getSiteSearchProviders().catch(() => defaultSiteSearchProviders)
+        getSiteSearchProviders().catch(() => defaultSiteSearchProviders),
+        loadSiteSearchIconCache().catch(() => siteSearchIconCache)
       ]).then(([, providers]) => activateDefaultProvider(providers));
     }
 
@@ -5490,23 +5840,39 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       searchInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    function beginSearchModeResultTransition(rawQuery) {
+      const query = String(rawQuery || '').trim();
+      if (!query) {
+        return false;
+      }
+      beginSuggestionsHeightInputSession(query);
+      return true;
+    }
+
     function selectSearchModeMenuItem(item) {
       if (!item || !item.kind) {
         return;
       }
       const rawQuery = searchInput.value || '';
+      const preserveResults = beginSearchModeResultTransition(rawQuery);
       if (item.kind === 'openTabs') {
-        activateOpenTabsSearchMode();
+        activateOpenTabsSearchMode({
+          deferResults: true,
+          preserveResults
+        });
         restoreSearchModeQuery(rawQuery);
         return;
       }
       if (item.kind === 'local') {
-        activateLocalSearchScope({ sourceType: item.sourceType });
+        activateLocalSearchScope(
+          { sourceType: item.sourceType },
+          { preserveResults }
+        );
         restoreSearchModeQuery(rawQuery);
         return;
       }
       if (item.kind === 'provider' && item.provider) {
-        activateSiteSearch(item.provider);
+        activateSiteSearch(item.provider, { preserveResults });
         restoreSearchModeQuery(rawQuery);
       }
     }
@@ -5539,11 +5905,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       );
     }
 
-    function activateLocalSearchScope(scope) {
+    function activateLocalSearchScope(scope, activationOptions) {
       if (!scope || !enabledSearchResultSourceTypes.includes(scope.sourceType)) {
         return false;
       }
-      overlaySuggestionRequestSeq += 1;
+      const options = activationOptions && typeof activationOptions === 'object'
+        ? activationOptions
+        : {};
+      cancelPendingOverlaySuggestionRequests();
       openTabsSearchModeActive = false;
       localSearchScopeState = scope;
       localSearchScopeTriggerState = null;
@@ -5555,7 +5924,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       latestOverlayQuery = '';
       clearAutocomplete();
       setLocalSearchScopePrefix(scope);
-      clearSearchSuggestions();
+      if (options.preserveResults !== true) {
+        clearSearchSuggestions();
+      }
       return true;
     }
 
@@ -5572,11 +5943,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return true;
     }
 
-    function activateSiteSearch(provider) {
+    function activateSiteSearch(provider, activationOptions) {
       if (!provider) {
         return;
       }
-      finishSuggestionsHeightInputSession({ animate: false });
+      const options = activationOptions && typeof activationOptions === 'object'
+        ? activationOptions
+        : {};
+      cancelPendingOpenTabsPrefixEntry();
+      if (options.preserveResults === true) {
+        cancelPendingOverlaySuggestionRequests();
+      } else {
+        finishSuggestionsHeightInputSession({ animate: false });
+      }
       openTabsSearchModeActive = false;
       localSearchScopeState = null;
       localSearchScopeTriggerState = null;
@@ -5586,14 +5965,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       latestRawInputValue = '';
       latestOverlayQuery = '';
       clearAutocomplete();
-      setSiteSearchPrefix(provider, defaultTheme, { animate: true });
-      const providerIcon = getProviderIcon(provider);
+      const immediateTheme = getImmediateThemeForSuggestion({ provider }) || defaultTheme;
+      setSiteSearchPrefix(provider, immediateTheme, {
+        animate: options.animatePrefix !== false
+      });
       getThemeForProvider(provider).then((theme) => {
         if (siteSearchState === provider) {
           setSiteSearchPrefix(provider, theme);
         }
       });
-      clearSearchSuggestions();
+      if (options.preserveResults !== true) {
+        clearSearchSuggestions();
+      }
     }
 
     function clearSiteSearch() {
@@ -5607,6 +5990,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function activateOpenTabsSearchMode(options) {
+      const prefixOptions = options || {};
+      cancelPendingOpenTabsPrefixEntry();
+      cancelPendingOverlaySuggestionRequests();
       openTabsSearchModeActive = true;
       siteSearchState = null;
       localSearchScopeState = null;
@@ -5614,16 +6000,26 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       inlineSearchState = null;
       siteSearchTriggerState = null;
       clearAutocomplete();
-      setOpenTabsSearchPrefix(defaultTheme, options);
+      if (prefixOptions.deferPrefixEntry === true) {
+        scheduleOpenTabsPrefixEntry(prefixOptions);
+      } else {
+        setOpenTabsSearchPrefix(defaultTheme, prefixOptions);
+      }
       latestRawInputValue = searchInput.value || '';
       latestOverlayQuery = latestRawInputValue.trim();
-      requestTabsAndRender(latestOverlayQuery);
+      if (prefixOptions.deferResults !== true) {
+        if (Array.isArray(tabs) && tabs.length > 0) {
+          renderTabSuggestions(filterTabsForOverlay(tabs, latestOverlayQuery));
+        }
+        requestTabsAndRender(latestOverlayQuery);
+      }
     }
 
     function clearOpenTabsSearchMode() {
       if (!openTabsSearchModeActive) {
         return;
       }
+      cancelPendingOpenTabsPrefixEntry();
       openTabsSearchModeActive = false;
       clearSiteSearchPrefix();
       clearAutocomplete();
@@ -5891,6 +6287,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         const shouldOpenModeMenu =
           inputModeController.shouldCompleteModeMenuDoubleTab(e);
         if (shouldOpenModeMenu) {
+          cancelPendingOpenTabsPrefixEntry();
           openSearchModeMenuFromDoubleTab();
           return true;
         }
@@ -5914,11 +6311,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           typeof inputModeController.shouldOpenModeMenuOnDoubleTab === 'function') {
         const shouldOpenModeMenu = inputModeController.shouldOpenModeMenuOnDoubleTab(e);
         if (shouldOpenModeMenu) {
+          cancelPendingOpenTabsPrefixEntry();
           openSearchModeMenuFromDoubleTab();
           return true;
         }
         if (e.defaultPrevented) {
-          activateOpenTabsSearchMode({ preserveModeMenuDoubleTab: true });
+          activateOpenTabsSearchMode({
+            deferPrefixEntry: true,
+            preserveModeMenuDoubleTab: true
+          });
           return true;
         }
         return false;
@@ -6445,7 +6846,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ? searchInput.getRootNode()
         : null;
       const activeInRoot = searchRoot && searchRoot.activeElement ? searchRoot.activeElement : null;
-      if (document.activeElement !== searchInput && activeInRoot !== searchInput) {
+      const searchInputActive = document.activeElement === searchInput ||
+        activeInRoot === searchInput;
+      const modeMenuActive = Boolean(
+        inputModeController &&
+        typeof inputModeController.shouldHandleModeMenuKeyEvent === 'function' &&
+        inputModeController.shouldHandleModeMenuKeyEvent(e)
+      );
+      if (!searchInputActive && !modeMenuActive) {
         return;
       }
       if (isImeCompositionEvent(e)) {
@@ -6456,7 +6864,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       if (e.type === 'keydown') {
-        handleSearchInputKeydown(e);
+        if (modeMenuActive &&
+            typeof inputModeController.handleModeMenuKeyEvent === 'function') {
+          inputModeController.handleModeMenuKeyEvent(e);
+        } else {
+          handleSearchInputKeydown(e);
+        }
       } else if (e.type === 'keyup') {
         syncSuggestionActionModifiersFromEvent(e);
       }
@@ -6529,6 +6942,32 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
 
+    function getSearchPanelsLayoutTransitionMenu() {
+      if (!inputModeController ||
+          typeof inputModeController.setModeMenuResultOffset !== 'function') {
+        return null;
+      }
+      const menu = inputModeController && inputModeController.menuElement
+        ? inputModeController.menuElement
+        : inputParts.modeMenu;
+      if (!menu || menu.hidden || menu.getAttribute('data-open') !== 'true') {
+        return null;
+      }
+      return menu;
+    }
+
+    function clearSearchPanelsLayoutTransitionStyles() {
+      const menu = searchPanelsLayoutTransitionMenu;
+      searchPanelsLayoutTransitionActive = false;
+      searchPanelsLayoutTransitionMenu = null;
+      if (!menu) {
+        return;
+      }
+      menu.removeAttribute('data-results-layout-transition');
+      menu.style.removeProperty('transition');
+      menu.style.removeProperty('will-change');
+    }
+
     function cancelSuggestionsHeightAnimation(container) {
       if (!container) {
         return;
@@ -6552,6 +6991,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       container.style.removeProperty('overflow-x');
       container.style.removeProperty('overflow-y');
       container.style.removeProperty('transition');
+      clearSearchPanelsLayoutTransitionStyles();
     }
 
     function readSuggestionsHeightMetrics(container) {
@@ -6634,6 +7074,29 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return true;
     }
 
+    function reconcileSuggestionsHeightAfterRender(previousState, query, options) {
+      if (!previousState) {
+        return false;
+      }
+      const reconcileOptions = options && typeof options === 'object'
+        ? options
+        : {};
+      const heightHeld = holdSuggestionsHeightForRemoteMix(
+        suggestionsContainer,
+        previousState,
+        query,
+        reconcileOptions.deferCappedShrink === true
+      );
+      if (heightHeld) {
+        return true;
+      }
+      if (deferredSuggestionsHeightQuery === query) {
+        deferredSuggestionsHeightQuery = '';
+      }
+      animateSuggestionsHeight(suggestionsContainer, previousState.height);
+      return false;
+    }
+
     function clearSuggestionsHeightInputSettleTimer() {
       if (!suggestionsHeightInputSettleTimer) {
         return;
@@ -6695,16 +7158,57 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       animateSuggestionsHeight(suggestionsContainer, previousState.height);
     }
 
-    function animateSuggestionsHeight(container, fromHeight) {
-      if (!container || !fromHeight || container.getAttribute('data-collapsed') === 'true') {
-        return;
-      }
-      const targetMetrics = readSuggestionsHeightMetrics(container);
+    function scheduleSearchPanelsLayoutTransition(container, fromHeight, targetMetrics, modeMenu) {
       const toHeight = targetMetrics.height;
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (reduceMotion || Math.abs(toHeight - fromHeight) <= 1) {
-        return;
-      }
+      cancelSuggestionsHeightAnimation(container);
+      suggestionsHeightAnimationTarget = toHeight;
+      suggestionsHeightAnimationTargetIsCapped = targetMetrics.atMaxHeight;
+      container.style.setProperty('height', `${fromHeight}px`, 'important');
+      container.style.setProperty('overflow', 'hidden', 'important');
+      container.style.setProperty('transition', 'none', 'important');
+      searchPanelsLayoutTransitionActive = true;
+      searchPanelsLayoutTransitionMenu = modeMenu;
+      modeMenu.setAttribute('data-results-layout-transition', 'true');
+      modeMenu.style.setProperty('transition', 'none', 'important');
+      modeMenu.style.setProperty('will-change', 'transform', 'important');
+      inputModeController.setModeMenuResultOffset(fromHeight);
+      void container.offsetHeight;
+      void modeMenu.offsetHeight;
+      suggestionsHeightAnimationFrame = requestAnimationFrame(() => {
+        suggestionsHeightAnimationFrame = 0;
+        container.style.setProperty(
+          'transition',
+          `height ${searchPanelsLayoutTransitionDurationMs}ms ${searchPanelsLayoutTransitionEasing}`,
+          'important'
+        );
+        container.style.setProperty('height', `${toHeight}px`, 'important');
+        if (searchPanelsLayoutTransitionActive &&
+            searchPanelsLayoutTransitionMenu === modeMenu &&
+            inputModeController &&
+            typeof inputModeController.setModeMenuResultOffset === 'function') {
+          modeMenu.style.setProperty(
+            'transition',
+            `opacity 170ms ease, transform ${searchPanelsLayoutTransitionDurationMs}ms ${searchPanelsLayoutTransitionEasing}`,
+            'important'
+          );
+          inputModeController.setModeMenuResultOffset(toHeight);
+        }
+      });
+      suggestionsHeightTransitionEndHandler = (event) => {
+        if (event && event.propertyName && event.propertyName !== 'height') {
+          return;
+        }
+        cancelSuggestionsHeightAnimation(container);
+      };
+      container.addEventListener('transitionend', suggestionsHeightTransitionEndHandler);
+      suggestionsHeightAnimationTimer = setTimeout(() => {
+        cancelSuggestionsHeightAnimation(container);
+        syncSearchModeMenuResultOffset();
+      }, searchPanelsLayoutTransitionDurationMs + 60);
+    }
+
+    function scheduleStandaloneSuggestionsHeightTransition(container, fromHeight, targetMetrics) {
+      const toHeight = targetMetrics.height;
       const isLargeShrink = toHeight < fromHeight - Math.max(104, fromHeight * 0.35);
       const transitionDurationMs = isLargeShrink ? 100 : 180;
       const transitionEasing = 'ease-in-out';
@@ -6734,6 +7238,40 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       suggestionsHeightAnimationTimer = setTimeout(() => {
         cancelSuggestionsHeightAnimation(container);
       }, transitionDurationMs + 60);
+    }
+
+    function animateSuggestionsHeight(container, fromHeight) {
+      fromHeight = Math.max(0, Number(fromHeight) || 0);
+      const allowFromZero = Boolean(
+        container && container.getAttribute('data-scope-result-enter') === 'run'
+      );
+      if (!container ||
+          (!fromHeight && !allowFromZero) ||
+          container.getAttribute('data-collapsed') === 'true') {
+        return;
+      }
+      const targetMetrics = readSuggestionsHeightMetrics(container);
+      const toHeight = targetMetrics.height;
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduceMotion || Math.abs(toHeight - fromHeight) <= 1) {
+        syncSearchModeMenuResultOffset();
+        return;
+      }
+      const modeMenu = getSearchPanelsLayoutTransitionMenu();
+      if (modeMenu) {
+        scheduleSearchPanelsLayoutTransition(
+          container,
+          fromHeight,
+          targetMetrics,
+          modeMenu
+        );
+        return;
+      }
+      scheduleStandaloneSuggestionsHeightTransition(
+        container,
+        fromHeight,
+        targetMetrics
+      );
     }
 
     function closeOverlayAfterCommand() {
@@ -6970,6 +7508,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function renderTabSuggestions(tabList) {
       setOverlayResultsCollapsed(false);
+      suggestionsContainer.removeAttribute('data-scope-result-enter');
+      const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
       const reactView = ensureOverlaySuggestionsView();
       suggestionItems.length = 0;
       currentSuggestions = [];
@@ -6981,6 +7521,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           ? t('overlay_empty_open_tabs', '未找到匹配的已打开标签页')
           : t('overlay_empty_result', '无匹配结果');
         renderOverlayEmptyState(emptyText);
+        reconcileSuggestionsHeightAfterRender(
+          previousHeightState,
+          latestOverlayQuery
+        );
         return;
       }
       list.forEach((tab) => {
@@ -6991,6 +7535,23 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       reactView.renderTabs(list);
       selectedIndex = -1;
       updateSelection();
+      reconcileSuggestionsHeightAfterRender(
+        previousHeightState,
+        latestOverlayQuery
+      );
+    }
+
+    function getOverlaySearchModeKey() {
+      if (openTabsSearchModeActive) {
+        return 'openTabs';
+      }
+      if (localSearchScopeState && localSearchScopeState.sourceType) {
+        return `local:${localSearchScopeState.sourceType}`;
+      }
+      if (siteSearchState) {
+        return `provider:${getSearchModeProviderId(siteSearchState)}`;
+      }
+      return 'default';
     }
 
     function requestTabsAndRender(filterQuery) {
@@ -6998,6 +7559,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const requestQuery = typeof filterQuery === 'string'
         ? filterQuery
         : String(searchInput.value || '').trim();
+      const requestModeKey = getOverlaySearchModeKey();
       if (!requestQuery && !shouldShowOpenTabsForEmptyQuery()) {
         clearDefaultOpenTabsSuggestions();
         return;
@@ -7006,7 +7568,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         request.currentTabId = currentOverlayTabId;
       }
       chrome.runtime.sendMessage(request, (response) => {
-        if (requestQuery !== latestOverlayQuery) {
+        if (requestQuery !== latestOverlayQuery ||
+            requestModeKey !== getOverlaySearchModeKey()) {
           return;
         }
         const freshTabs = response && Array.isArray(response.tabs) ? response.tabs : [];
@@ -7621,6 +8184,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           currentSuggestions,
           allSuggestions
         });
+        const shouldAnimateScopeResultEnter = Boolean(
+          getSearchPanelsLayoutTransitionMenu() &&
+          siteSearchQueryModeActive &&
+          updateKind === 'structure' &&
+          currentSuggestions.length === 0 &&
+          allSuggestions.some((suggestion) => suggestion && suggestion.type === 'siteSearch')
+        );
         const canAppend = updateKind === 'append';
         const shouldPreserveVisualState =
           updateKind === 'content' || updateKind === 'append';
@@ -7662,6 +8232,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           mergedProvider,
           emptyMessage
         });
+        if (shouldAnimateScopeResultEnter) {
+          suggestionsContainer.setAttribute('data-scope-result-enter', 'run');
+        } else {
+          suggestionsContainer.removeAttribute('data-scope-result-enter');
+        }
         if (updateKind !== 'highlight') {
           if (shouldPreserveVisualState) {
             suggestionsContainer.scrollTop = previousScrollTop;
@@ -7669,23 +8244,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           syncSuggestionLastState();
           updateSelection();
         }
-        if (previousHeightState) {
-          const heightHeldForRemoteMix = holdSuggestionsHeightForRemoteMix(
-            suggestionsContainer,
-            previousHeightState,
-            query,
-            shouldDeferCappedShrink
-          );
-          if (!heightHeldForRemoteMix) {
-            if (deferredSuggestionsHeightQuery === query) {
-              deferredSuggestionsHeightQuery = '';
-            }
-            animateSuggestionsHeight(
-              suggestionsContainer,
-              previousHeightState.height
-            );
-          }
-        }
+        reconcileSuggestionsHeightAfterRender(previousHeightState, query, {
+          deferCappedShrink: shouldDeferCappedShrink
+        });
         if (updateKind === 'structure') {
           selectedIndex = -1;
         }
@@ -7722,8 +8283,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayHost.removeAttribute('popover');
       }
     }
-    // Focus only after the host is connected and promoted into the top layer.
-    setTimeout(() => searchInput.focus({ preventScroll: true }), 100);
     startOverlayViewportSizeSync(overlay);
     startOverlayUpdateNoticeFrameSync(overlay);
     startOverlayAntiTranslateObserver(overlay);
@@ -7739,6 +8298,39 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }, Math.max(0, Number(delayMs) || 0));
     }
 
+    function focusOverlayInputForReveal() {
+      if (!searchInput || !searchInput.isConnected ||
+          typeof searchInput.focus !== 'function') {
+        return;
+      }
+      searchInput.focus({ preventScroll: true });
+    }
+
+    const initialOverlayContentReady = Promise.all([
+      initialOverlayOpenTabsDefaultVisibleReady,
+      initialFaviconEnhancedFetchReady
+    ]).then(() => {
+      if (!overlay || !overlay.isConnected) {
+        return false;
+      }
+      if (initialPrefillQuery) {
+        searchInput.value = initialPrefillQuery;
+        if (typeof searchInput.setSelectionRange === 'function') {
+          searchInput.setSelectionRange(initialPrefillQuery.length, initialPrefillQuery.length);
+        }
+        latestRawInputValue = initialPrefillQuery;
+        latestOverlayQuery = initialPrefillQuery.trim();
+        updateModeBadge(initialPrefillQuery);
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      }
+      if (shouldShowOpenTabsForEmptyQuery() && Array.isArray(tabs) && tabs.length > 0) {
+        renderTabSuggestions(filterTabsForOverlay(tabs, ''));
+      }
+      requestTabsAndRender();
+      return true;
+    }).catch(() => false);
+
     const revealOverlay = () => {
       if (!overlay || !overlay.isConnected) {
         return;
@@ -7749,18 +8341,22 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const revealTransform = getOverlayEnterAnimationRevealTransform();
+      const blurProxy = reduceMotion ? null : createOverlayEntryBlurProxy(overlay);
       if (reduceMotion) {
         overlay.style.setProperty('transition', 'none', 'important');
         overlay.style.setProperty('opacity', '1', 'important');
         overlay.style.setProperty('transform', revealTransform, 'important');
-        overlay.style.setProperty('filter', 'blur(0)', 'important');
+        revealOverlayInputEnterAnimation(inputContainer, true);
+        finishOverlayPanelEnterAnimation(overlay);
+        focusOverlayInputForReveal();
         scheduleOverlayUpdateNoticeMount(0);
       } else {
         clearOverlayEnterAnimationFrames();
         overlayFrameTracker.runEnterAnimation(overlay, () => {
-          overlay.style.setProperty('opacity', '1', 'important');
-          overlay.style.setProperty('transform', revealTransform, 'important');
-          overlay.style.setProperty('filter', 'blur(0)', 'important');
+          playOverlayPanelEnterAnimation(overlay, revealTransform);
+          revealOverlayInputEnterAnimation(inputContainer, false);
+          fadeOverlayEntryBlurProxy(blurProxy);
+          focusOverlayInputForReveal();
           scheduleOverlayUpdateNoticeMount(360);
         });
       }
@@ -7770,35 +8366,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       : Promise.resolve({ ok: true, reason: 'no-site-fix' });
     Promise.all([
       Promise.resolve(revealReady).catch(() => null),
+      initialLanguageReady,
+      initialOverlayThemeReady,
+      initialOverlayContentReady,
       initialOverlayEnterAnimationReady.catch(() => {
         overlayEnterAnimation = 'elastic';
       })
     ]).then(() => {
+      if (!overlay || !overlay.isConnected) {
+        return;
+      }
       applyOverlayEnterAnimationInitialState(overlay);
+      applyOverlayInputEnterAnimationInitialState(inputContainer);
       revealOverlay();
-    });
-    // Let the container paint first so the enter transition is visible on busy pages.
-    const queueInitialOverlayRender = () => {
-      Promise.all([initialOverlayOpenTabsDefaultVisibleReady, initialFaviconEnhancedFetchReady]).then(() => {
-        if (!overlay.isConnected) {
-          return;
-        }
-        if (initialPrefillQuery) {
-          searchInput.value = initialPrefillQuery;
-          if (typeof searchInput.setSelectionRange === 'function') {
-            searchInput.setSelectionRange(initialPrefillQuery.length, initialPrefillQuery.length);
-          }
-          latestRawInputValue = initialPrefillQuery;
-          latestOverlayQuery = initialPrefillQuery.trim();
-          updateModeBadge(initialPrefillQuery);
-          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
-        requestTabsAndRender();
-      });
-    };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(queueInitialOverlayRender);
     });
     overlayScrollPauseHandler = () => {
       pauseOverlayAntiTranslateObserverForScroll();

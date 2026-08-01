@@ -280,6 +280,9 @@ function createFixture(options) {
       const pendingFrames = Array.from(animationFrames.entries());
       animationFrames.clear();
       pendingFrames.forEach(([, callback]) => callback());
+    },
+    pendingTimerCount() {
+      return timers.size;
     }
   };
 }
@@ -472,8 +475,15 @@ function testTypingSessionKeepsSuggestionHeightStable() {
     'the transition should restore the old height before the browser can paint the shorter list'
   );
   assert.ok(
-    Number.parseFloat(suggestionsContainer.style.getPropertyValue('max-height')) > 236,
+    Number.parseFloat(suggestionsContainer.style.getPropertyValue(
+      '--x-nt-suggestions-viewport-fit-max-height'
+    )) > 236,
     'the viewport cap should not clamp the old animation height to the smaller content height'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('max-height'),
+    '',
+    'the layout runtime should not override the scope-panel safe-area cap with an inline max-height'
   );
 
   flushAnimationFrames();
@@ -486,6 +496,52 @@ function testTypingSessionKeepsSuggestionHeightStable() {
 
 testTypingSessionKeepsSuggestionHeightStable();
 
+function testDeferredSearchModeSessionWaitsForTargetRender() {
+  const {
+    controller,
+    suggestionsContainer,
+    pendingTimerCount,
+    flushAnimationFrames
+  } = createFixture({ deferAnimationFrame: true });
+  suggestionsContainer.setAttribute('data-visible', 'true');
+  suggestionsContainer.setRect({ top: 254, height: 320, bottom: 574 });
+  suggestionsContainer.scrollHeight = 320;
+
+  controller.beginSuggestionsInputSession({ autoSettle: false });
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '320px',
+    'a scope switch should lock the history-result height before changing sources'
+  );
+  assert.strictEqual(
+    pendingTimerCount(),
+    0,
+    'a scope-switch transaction should wait for the target render instead of a wall-clock settle'
+  );
+
+  suggestionsContainer.setRect({ top: 254, height: 184, bottom: 438 });
+  suggestionsContainer.scrollHeight = 184;
+  assert.strictEqual(
+    controller.finishSuggestionsInputSession(),
+    true,
+    'the first target render should animate once from the locked history height'
+  );
+  flushAnimationFrames();
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '184px',
+    'history to top-site should reach the newly measured height through the resize path'
+  );
+}
+
+testDeferredSearchModeSessionWaitsForTargetRender();
+
+assert.match(
+  newtabHtml,
+  /max-height:\s*min\([\s\S]*?--x-nt-suggestions-max-height[\s\S]*?--x-nt-suggestions-viewport-fit-max-height[\s\S]*?--x-nt-suggestions-menu-fit-max-height/,
+  'new-tab suggestions should combine content, viewport, and open scope-panel height limits'
+);
+
 assert.match(
   newtabSource,
   /const previousSuggestionsResizeState = shouldAnimateSuggestionsResize[\s\S]*?captureSuggestionsResizeState\(\)[\s\S]*?suggestionsView\.render\([\s\S]*?setSuggestionsVisible\(true\);[\s\S]*?animateSuggestionsResize\(previousSuggestionsResizeState\)/,
@@ -493,13 +549,28 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /onInput: function\(event\)[\s\S]*?beginSuggestionsInputSession\(\)[\s\S]*?requestSuggestions\(query\)/,
+  /onInput: function\(event\)[\s\S]*?beginSuggestionsInputSession\(\{[\s\S]*?autoSettle: !isSearchModeResultTransitionPending\(query\)[\s\S]*?requestSuggestions\(query\)/,
   'new-tab input should begin a stable-height session before requesting each query'
 );
 assert.match(
   newtabSource,
   /suggestionsView\.render\(\{[\s\S]*?setSuggestionsVisible\(true\);[\s\S]*?holdSuggestionsInputHeight\(\)/,
   'new-tab result renders should retain the input-session height lock'
+);
+assert.match(
+  newtabSource,
+  /function beginSearchModeResultTransition\(rawQuery\)[\s\S]*?beginSuggestionsInputSession\(\{ autoSettle: false \}\)[\s\S]*?const preserveResults = beginSearchModeResultTransition\(rawQuery\);[\s\S]*?activateLocalSearchScope\([\s\S]*?\{ preserveResults \}[\s\S]*?activateSiteSearch\(item\.provider, \{ preserveResults \}\)/,
+  'every non-empty scope switch should preserve the old result frame until the target renders'
+);
+assert.match(
+  newtabSource,
+  /function activateLocalSearchScope\(scope, activationOptions\)[\s\S]*?if \(options\.preserveResults !== true\) \{\s*clearSearchSuggestions\(\);\s*\}[\s\S]*?function activateSiteSearch\(provider, activationOptions\)[\s\S]*?if \(options\.preserveResults !== true\) \{\s*clearSearchSuggestions\(\);\s*\}/,
+  'local and provider activation should both avoid clearing a preserved result frame'
+);
+assert.match(
+  newtabSource,
+  /const searchModeResultTransitionPending =[\s\S]*?isSearchModeResultTransitionPending\(query\)[\s\S]*?holdSuggestionsInputHeight\(\)[\s\S]*?finishSearchModeResultTransition\(query\)/,
+  'the first target render should hold, measure, and finish the scope-switch transaction in order'
 );
 
 
@@ -909,6 +980,11 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
     searchEntryKeyframes[1],
     /translate:/,
     'the search field should not move upward during entry'
+  );
+  assert.doesNotMatch(
+    searchEntryKeyframes[1],
+    /filter:\s*blur/,
+    'the backdrop-filtered search panel should stay on compositor-only opacity and scale motion'
   );
   assert.match(
     newtabHtml,

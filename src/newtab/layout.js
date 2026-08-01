@@ -89,6 +89,8 @@
       constants.suggestionsResizeEasing.trim()
       ? constants.suggestionsResizeEasing.trim()
       : 'cubic-bezier(0.22, 1, 0.36, 1)';
+    const suggestionsViewportFitMaxHeightProperty =
+      '--x-nt-suggestions-viewport-fit-max-height';
     const visibleAttribute = 'data-visible';
     const suggestionsOpenAttribute = 'data-nt-suggestions-open';
     let suggestionsResizeAnimationFrame = 0;
@@ -344,10 +346,15 @@
       }, suggestionsInputSettleMs);
     }
 
-    function beginSuggestionsInputSession() {
+    function beginSuggestionsInputSession(options) {
+      const beginOptions = options || {};
       suggestionsInputSessionActive = true;
       holdSuggestionsInputHeight();
-      scheduleSuggestionsInputSettle();
+      if (beginOptions.autoSettle === false) {
+        clearSuggestionsInputSettleTimer();
+      } else {
+        scheduleSuggestionsInputSettle();
+      }
     }
 
     function captureSuggestionsResizeState() {
@@ -893,7 +900,12 @@
       setPixelStyle(suggestionsContainer, 'left', left);
       setPixelStyle(suggestionsContainer, 'top', top);
       setPixelStyle(suggestionsContainer, 'width', width);
-      setPixelStyle(suggestionsContainer, 'max-height', maxHeight);
+      suggestionsContainer.style.removeProperty('max-height');
+      setPixelStyle(
+        suggestionsContainer,
+        suggestionsViewportFitMaxHeightProperty,
+        maxHeight
+      );
       updateSuggestionsSurfaceFrame();
     }
 

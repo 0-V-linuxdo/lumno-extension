@@ -337,10 +337,13 @@ assert(
     overlaySource.includes("typeof overlayHost.showPopover === 'function'") &&
     overlaySource.includes('overlayHost.showPopover();') &&
     overlaySource.includes("overlayHost.removeAttribute('popover');") &&
-    overlaySource.includes(
+    overlaySource.includes('function focusOverlayInputForReveal()') &&
+    overlaySource.includes('searchInput.focus({ preventScroll: true });') &&
+    overlaySource.includes('focusOverlayInputForReveal();') &&
+    !overlaySource.includes(
       'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
     ),
-  'the Overlay panel should mount inside the fullscreen subtree, enter the browser top layer, and focus without scrolling'
+  'the Overlay panel should mount inside the fullscreen subtree, enter the browser top layer, and focus as part of the reveal transaction'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&

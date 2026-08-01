@@ -2308,6 +2308,13 @@
     { key: 'yt', aliases: ['youtube'], name: 'YouTube', template: 'https://www.youtube.com/results?search_query={query}' },
     { key: 'bb', aliases: ['bilibili', 'bili'], name: 'Bilibili', template: 'https://search.bilibili.com/all?keyword={query}' },
     { key: 'gh', aliases: ['github'], name: 'GitHub', template: 'https://github.com/search?q={query}' },
+    { key: 'sf', aliases: ['stackoverflow', 'stack overflow'], name: 'Stack Overflow', template: 'https://stackoverflow.com/search?q={query}' },
+    { key: 'mdn', aliases: ['mdn web docs'], name: 'MDN', template: 'https://developer.mozilla.org/en-US/search?q={query}' },
+    { key: 'npm', aliases: ['npmjs'], name: 'npm', template: 'https://www.npmjs.com/search?q={query}' },
+    { key: 'hf', aliases: ['huggingface', 'hugging face'], name: 'Hugging Face', template: 'https://huggingface.co/search/full-text?q={query}' },
+    { key: 'gs', aliases: ['scholar', 'google scholar'], name: 'Google Scholar', template: 'https://scholar.google.com/scholar?q={query}' },
+    { key: 'ss', aliases: ['semantic', 'semantic scholar'], name: 'Semantic Scholar', template: 'https://www.semanticscholar.org/search?q={query}' },
+    { key: 'maps', aliases: ['map', 'google maps'], name: 'Google Maps', template: 'https://www.google.com/maps/search/?api=1&query={query}' },
     { key: 'gpt', aliases: ['chatgpt', 'openai'], name: 'ChatGPT', template: 'https://chatgpt.com/?hints=search&ref=ext&q={query}', action: 'openAndSubmit', submitStrategy: 'chatgptPrompt' },
     { key: 'gm', aliases: ['gemini'], name: 'Gemini', template: 'https://gemini.google.com/app', action: 'openAndSubmit', submitStrategy: 'geminiPrompt' },
     { key: 'dbai', aliases: ['doubao', '豆包'], name: '豆包', template: 'https://www.doubao.com/chat/', action: 'openAndSubmit', submitStrategy: 'doubaoPrompt' },
@@ -2316,12 +2323,20 @@
     { key: 'mx', aliases: ['minimax', 'mini max'], name: 'MiniMax', template: 'https://chat.minimax.io/', action: 'openAndSubmit', submitStrategy: 'minimaxPrompt' },
     { key: 'ds', aliases: ['deepseek', 'deep seek', '深度求索'], name: 'DeepSeek', template: 'https://chat.deepseek.com/', action: 'openAndSubmit', submitStrategy: 'deepseekPrompt' },
     { key: 'kimi', aliases: ['moonshot', '月之暗面'], name: 'Kimi', template: 'https://www.kimi.com/', action: 'openAndSubmit', submitStrategy: 'kimiPrompt' },
-    { key: 'so', aliases: ['baidu', 'bd'], name: 'Baidu', template: 'https://www.baidu.com/s?wd={query}', category: 'searchEngine' },
+    { key: 'pplx', aliases: ['perplexity'], name: 'Perplexity', template: 'https://www.perplexity.ai/search?q={query}', category: 'aiSearch' },
+    { key: 'metaso', aliases: ['秘塔', '秘塔ai', '秘塔搜索'], name: 'Metaso AI Search', template: 'https://metaso.cn/?q={query}', category: 'aiSearch' },
+    { key: 'felo', aliases: ['felo search'], name: 'Felo', template: 'https://felo.ai/search?q={query}', category: 'aiSearch' },
+    { key: 'bd', aliases: ['baidu', '百度'], name: 'Baidu', template: 'https://www.baidu.com/s?wd={query}', category: 'searchEngine' },
     { key: 'bi', aliases: ['bing'], name: 'Bing', template: 'https://www.bing.com/search?q={query}', category: 'searchEngine' },
     { key: 'gg', aliases: ['google'], name: 'Google', template: 'https://www.google.com/search?q={query}', category: 'searchEngine' },
     { key: 'ddg', aliases: ['duckduckgo', 'duck'], name: 'DuckDuckGo', template: 'https://duckduckgo.com/?q={query}', category: 'searchEngine' },
     { key: 'br', aliases: ['brave', 'brave search'], name: 'Brave Search', template: 'https://search.brave.com/search?q={query}', category: 'searchEngine' },
     { key: 'eco', aliases: ['ecosia'], name: 'Ecosia', template: 'https://www.ecosia.org/search?q={query}', category: 'searchEngine' },
+    { key: 'sg', aliases: ['sogou', '搜狗'], name: 'Sogou', template: 'https://www.sogou.com/web?query={query}', category: 'searchEngine' },
+    { key: 'so360', aliases: ['360', 'so.com', 'haosou', '360搜索'], name: '360 Search', template: 'https://www.so.com/s?q={query}', category: 'searchEngine' },
+    { key: 'yh', aliases: ['yahoo'], name: 'Yahoo', template: 'https://search.yahoo.com/search?p={query}', category: 'searchEngine' },
+    { key: 'yx', aliases: ['yandex'], name: 'Yandex', template: 'https://yandex.com/search/?text={query}', category: 'searchEngine' },
+    { key: 'sm', aliases: ['shenma', '神马'], name: 'Shenma', template: 'https://m.sm.cn/s?q={query}', category: 'searchEngine' },
     { key: 'zh', aliases: ['zhihu'], name: 'Zhihu', template: 'https://www.zhihu.com/search?q={query}' },
     { key: 'db', aliases: ['douban'], name: 'Douban', template: 'https://www.douban.com/search?q={query}' },
     { key: 'jj', aliases: ['juejin'], name: 'Juejin', template: 'https://juejin.cn/search?query={query}' },
@@ -2330,6 +2345,10 @@
     { key: 'wx', aliases: ['weixin', 'wechat'], name: 'WeChat Official Accounts', template: 'https://weixin.sogou.com/weixin?query={query}' },
     { key: 'tw', aliases: ['twitter', 'x'], name: 'X', template: 'https://x.com/search?q={query}' },
     { key: 'rd', aliases: ['reddit'], name: 'Reddit', template: 'https://www.reddit.com/search/?q={query}' },
+    { key: 'wb', aliases: ['weibo', '微博'], name: 'Weibo', template: 'https://s.weibo.com/weibo?q={query}' },
+    { key: 'xhs', aliases: ['rednote', '小红书'], name: 'Xiaohongshu', template: 'https://www.xiaohongshu.com/search_result?keyword={query}' },
+    { key: 'dy', aliases: ['douyin', '抖音'], name: 'Douyin', template: 'https://www.douyin.com/search/{query}' },
+    { key: 'jd', aliases: ['jingdong', '京东'], name: 'JD.com', template: 'https://search.jd.com/Search?keyword={query}' },
     { key: 'wk', aliases: ['wiki', 'wikipedia'], name: 'Wikipedia', template: 'https://en.wikipedia.org/wiki/Special:Search?search={query}' },
     { key: 'zw', aliases: ['zhwiki'], name: 'Wikipedia', template: 'https://zh.wikipedia.org/wiki/Special:Search?search={query}' }
   ]);
@@ -2343,14 +2362,21 @@
     mx: ['site_search_name_minimax', 'MiniMax'],
     ds: ['site_search_name_deepseek', 'DeepSeek'],
     kimi: ['site_search_name_kimi', 'Kimi'],
-    so: ['site_search_name_baidu', 'Baidu'],
+    metaso: ['site_search_name_metaso', 'Metaso AI Search'],
+    bd: ['site_search_name_baidu', 'Baidu'],
+    sg: ['site_search_name_sogou', 'Sogou'],
+    so360: ['site_search_name_360', '360 Search'],
+    sm: ['site_search_name_shenma', 'Shenma'],
     zh: ['site_search_name_zhihu', 'Zhihu'],
     db: ['site_search_name_douban', 'Douban'],
-    jd: ['site_search_name_juejin', 'Juejin'],
     jj: ['site_search_name_juejin', 'Juejin'],
     tb: ['site_search_name_taobao', 'Taobao'],
     tm: ['site_search_name_tmall', 'Tmall'],
     wx: ['site_search_name_wechat', 'WeChat Official Accounts'],
+    wb: ['site_search_name_weibo', 'Weibo'],
+    xhs: ['site_search_name_xiaohongshu', 'Xiaohongshu'],
+    dy: ['site_search_name_douyin', 'Douyin'],
+    jd: ['site_search_name_jd', 'JD.com'],
     zw: ['site_search_name_wikipedia', 'Wikipedia']
   });
 
@@ -2395,6 +2421,9 @@
     if (!provider) {
       return false;
     }
+    if (String(provider.category || '').trim() === 'aiSearch') {
+      return true;
+    }
     if (hasOpenAndSubmitSiteSearchAction(provider)) {
       return true;
     }
@@ -2403,12 +2432,17 @@
   }
 
   const SEARCH_ENGINE_SITE_SEARCH_PROVIDER_KEYS = new Set([
-    'so',
+    'bd',
     'bi',
     'gg',
     'ddg',
     'br',
-    'eco'
+    'eco',
+    'sg',
+    'so360',
+    'yh',
+    'yx',
+    'sm'
   ]);
 
   function isSearchEngineSiteSearchProvider(provider) {

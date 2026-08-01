@@ -916,7 +916,7 @@ function getActionLabel(
   if (action === 'commandSettings') {
     return options.formatMessage(
       'command_settings',
-      '打开 {name} 设置',
+      '打开设置',
       { name: 'Lumno' }
     );
   }

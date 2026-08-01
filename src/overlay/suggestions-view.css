@@ -250,6 +250,28 @@
   margin-bottom: 0;
 }
 
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-scope-result-enter="run"] .x-ov-suggestion-item {
+  animation: _x_ov_scope_result_enter_2026_unique_ 180ms ease-in-out both;
+  will-change: transform;
+}
+
+@keyframes _x_ov_scope_result_enter_2026_unique_ {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-scope-result-enter="run"] .x-ov-suggestion-item {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+}
+
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-left {
   all: unset;
   display: flex;
@@ -753,4 +775,10 @@
 
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-utility-button[data-hover="true"] .ri-icon {
   transform: scale(1.06);
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-action-button:focus-visible,
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestion-utility-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }

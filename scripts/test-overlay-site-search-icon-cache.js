@@ -45,6 +45,13 @@ const expectedBundledProviderIcons = Object.freeze({
   yt: 'assets/images/site-search/youtube.svg',
   bb: 'assets/images/site-search/bilibili.svg',
   gh: 'assets/images/site-search/github.svg',
+  sf: 'assets/images/site-search/stackoverflow.svg',
+  mdn: 'assets/images/site-search/mdn.svg',
+  npm: 'assets/images/site-search/npm.svg',
+  hf: 'assets/images/site-search/huggingface.png',
+  gs: 'assets/images/site-search/google-scholar.png',
+  ss: 'assets/images/site-search/semantic-scholar.svg',
+  maps: 'assets/images/site-search/google-maps.png',
   gpt: 'assets/images/site-search/openai.svg',
   gm: 'assets/images/site-search/gemini.svg',
   dbai: 'assets/images/site-search/doubao-mascot.png',
@@ -53,12 +60,20 @@ const expectedBundledProviderIcons = Object.freeze({
   mx: 'assets/images/site-search/minimax.svg',
   ds: 'assets/images/site-search/deepseek.svg',
   kimi: 'assets/images/site-search/kimi.svg',
-  so: 'assets/images/site-search/baidu.svg',
+  pplx: 'assets/images/site-search/perplexity.svg',
+  metaso: 'assets/images/site-search/metaso.svg',
+  felo: 'assets/images/site-search/felo.svg',
+  bd: 'assets/images/site-search/baidu.svg',
   bi: 'assets/images/site-search/bing.svg',
   gg: 'assets/images/site-search/google.svg',
   ddg: 'assets/images/site-search/duckduckgo.svg',
   br: 'assets/images/site-search/brave.svg',
   eco: 'assets/images/site-search/ecosia.svg',
+  sg: 'assets/images/site-search/sogou.svg',
+  so360: 'assets/images/site-search/360-search.svg',
+  yh: 'assets/images/site-search/yahoo.svg',
+  yx: 'assets/images/site-search/yandex.svg',
+  sm: 'assets/images/site-search/shenma.svg',
   zh: 'assets/images/site-search/zhihu.svg',
   db: 'assets/images/site-search/douban.svg',
   jj: 'assets/images/site-search/juejin.svg',
@@ -66,7 +81,11 @@ const expectedBundledProviderIcons = Object.freeze({
   tm: 'assets/images/site-search/tmall.png',
   wx: 'assets/images/site-search/sogou.svg',
   tw: 'assets/images/site-search/x.svg',
-  rd: 'assets/images/site-search/reddit.svg',
+  rd: 'assets/images/site-search/reddit.png',
+  wb: 'assets/images/site-search/weibo.svg',
+  xhs: 'assets/images/site-search/xiaohongshu.png',
+  dy: 'assets/images/site-search/douyin.svg',
+  jd: 'assets/images/site-search/jd.svg',
   wk: 'assets/images/site-search/wikipedia.svg',
   zw: 'assets/images/site-search/wikipedia.svg'
 });
@@ -274,14 +293,14 @@ assert.match(
 
 assert.match(
   inputModeCss,
-  /\[data-search-input-mode-current\] \{[\s\S]*?overflow: visible !important;/,
-  'the current-mode label should not clip fallback-font glyphs vertically'
+  /\[data-search-input-mode-current\] \{[\s\S]*?overflow: hidden !important;/,
+  'the current-mode slot should clip only its own horizontal expansion'
 );
 
 assert.match(
   inputModeSource,
-  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', currentLabelVisible \? 'inline-flex' : 'none'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'visible'\]/,
-  'the current-mode label should keep its full-height line box only while the panel is open'
+  /siteSearchPrefixCurrent\.style\.cssText = cssText\(\[[\s\S]*?\['display', currentLabelVisible \? 'inline-flex' : 'none'\][\s\S]*?\['line-height', '18px'\][\s\S]*?\['overflow', 'hidden'\]/,
+  'the current-mode slot should preserve its line box while constraining the reveal width'
 );
 
 assert.match(
@@ -290,22 +309,27 @@ assert.match(
   'the current-mode label should use a dedicated reveal state'
 );
 
-assert.match(
+assert.doesNotMatch(
   inputModeCss,
-  /\[data-current-overlay="true"\][\s\S]*?\[data-search-input-mode-current\] \{[\s\S]*?position: absolute !important;[\s\S]*?left: var\(--x-lumno-search-mode-current-overlay-left, 0\) !important;[\s\S]*?z-index: 1 !important;/,
-  'the current-mode label should stay out of flex layout while the chevron reveals it'
+  /\[data-current-overlay="true"\]|--x-lumno-search-mode-current-overlay-left/,
+  'the current-mode label should never share the chevron coordinate through an overlay state'
 );
 
 assert.match(
   inputModeSource,
-  /onStart: nextOpen \? \(\) => \{[\s\S]*?setInputModePrefixCurrentOverlay\(true, currentOverlayLeft\);[\s\S]*?setInputModePrefixCurrentVisible\(true\);[\s\S]*?onFinish: nextOpen \? \(\) => \{[\s\S]*?setInputModePrefixCurrentOverlay\(false\);/,
-  'the current-mode mask should run during the chip resize and return to normal layout afterward'
+  /const previousCurrentState = shouldAnimate[\s\S]*?getInputModePrefixCurrentVisualState\(\)[\s\S]*?cancelInputModePrefixAnimation\(\)[\s\S]*?playInputModePrefixCurrentResizeAnimation\([\s\S]*?previousCurrentState,[\s\S]*?nextCurrentState/,
+  'menu reversal should capture the rendered current-slot geometry before cancelling the active animation'
 );
 
 assert.match(
+  inputModeSource,
+  /function playInputModePrefixCurrentResizeAnimation\(fromState, toState\)[\s\S]*?siteSearchPrefixCurrent\.animate\(\[[\s\S]*?marginLeft: `\$\{startMarginLeft\}px`[\s\S]*?width: `\$\{startWidth\}px`[\s\S]*?marginLeft: `\$\{endMarginLeft\}px`[\s\S]*?width: `\$\{endWidth\}px`[\s\S]*?animationRevision !== inputModePrefixAnimationRevision/,
+  'the current-mode slot should expand in flow, cancel the extra flex gap, and reject stale completions'
+);
+assert.doesNotMatch(
   inputModeCss,
-  /\[data-current-visible="true"\][\s\S]*?\[data-search-input-mode-current-text\] \{[\s\S]*?animation: _x_lumno_search_mode_current_mask_reveal_2026_unique_[\s\S]*?140ms cubic-bezier\(0\.22, 1, 0\.36, 1\) both !important;[\s\S]*?@keyframes _x_lumno_search_mode_current_mask_reveal_2026_unique_[\s\S]*?clip-path: inset\(0 100% 0 0\);[\s\S]*?clip-path: inset\(0 0 0 0\);/,
-  'the current-mode label should reveal behind the moving chevron using the chip resize rhythm'
+  /_x_lumno_search_mode_current_mask_reveal_2026_unique_/,
+  'the stylesheet should not start a second uncoordinated current-label animation'
 );
 
 console.log('overlay site-search icon cache tests passed');

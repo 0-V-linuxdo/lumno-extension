@@ -297,7 +297,7 @@
     "message": "用于唤起 Lumno 搜索框"
   },
   "overlay_close_other_tabs_tooltip": {
-    "message": "清理本页外的其他标签页（除置顶与群组）"
+    "message": "关闭其他标签页"
   },
   "settings_shortcuts_status": {
     "message": "当前：{shortcut}"
@@ -1311,7 +1311,7 @@
     "message": "新建标签页"
   },
   "command_settings": {
-    "message": "打开 {name} 设置"
+    "message": "打开设置"
   },
   "command_show_search": {
     "message": "唤起聚焦搜索窗口"
@@ -1348,6 +1348,30 @@
   },
   "site_search_name_baidu": {
     "message": "百度"
+  },
+  "site_search_name_metaso": {
+    "message": "秘塔 AI 搜索"
+  },
+  "site_search_name_sogou": {
+    "message": "搜狗"
+  },
+  "site_search_name_360": {
+    "message": "360 搜索"
+  },
+  "site_search_name_shenma": {
+    "message": "神马"
+  },
+  "site_search_name_weibo": {
+    "message": "微博"
+  },
+  "site_search_name_xiaohongshu": {
+    "message": "小红书"
+  },
+  "site_search_name_douyin": {
+    "message": "抖音"
+  },
+  "site_search_name_jd": {
+    "message": "京东"
   },
   "site_search_name_chatgpt": {
     "message": "ChatGPT"
@@ -1458,7 +1482,16 @@
     "message": "再按一次退格键，移除搜索范围"
   },
   "search_scope_menu_shortcut_hint": {
-    "message": "快速打开此面板"
+    "message": "打开面板"
+  },
+  "search_scope_menu_navigation_hint": {
+    "message": "移动"
+  },
+  "search_scope_menu_select_hint": {
+    "message": "切换"
+  },
+  "search_scope_menu_input_focus_hint": {
+    "message": "聚焦"
   },
   "search_scope_menu_filter_hint": {
     "message": "点击面板，输入拼音或英文快速筛选"

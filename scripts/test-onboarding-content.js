@@ -106,7 +106,7 @@ assert.strictEqual(
 assert.deepStrictEqual(
   firstSlide.left.interactionSlots.map((slot) => slot.label),
   [
-    '开源、无隐私风险、注重用户体验',
+    '开源、隐私边界透明、注重用户体验',
     '支持主流浏览器',
     '兼容其他新标签页插件'
   ],

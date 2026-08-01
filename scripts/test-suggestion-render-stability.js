@@ -134,8 +134,8 @@ const overlaySource = readSource('src/overlay/search-panel.js');
 
 assert.match(
   newtabSource,
-  /\(updateKind === 'append' \|\| updateKind === 'structure'\)[\s\S]*?holdSuggestionsInputHeight\(\)/,
-  'New Tab highlight and content updates should bypass the height lock path'
+  /\(updateKind === 'append' \|\| updateKind === 'structure' \|\|\s*searchModeResultTransitionPending\)[\s\S]*?holdSuggestionsInputHeight\(\)/,
+  'New Tab should lock height only for append, structure, or a pending mode transition'
 );
 assert.match(
   overlaySource,
@@ -144,7 +144,7 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /if \(previousHeightState\) \{[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\(/,
+  /reconcileSuggestionsHeightAfterRender\(previousHeightState, query, \{[\s\S]*?deferCappedShrink: shouldDeferCappedShrink/,
   'Overlay should run its height pipeline only for append or structure updates'
 );
 assert.match(

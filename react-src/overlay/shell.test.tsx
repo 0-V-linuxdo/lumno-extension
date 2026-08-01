@@ -36,13 +36,11 @@ describe('Overlay React shell', () => {
     expect(mount.panel.style.position).toBe('fixed');
     expect(mount.panel.style.width).toBe('800px');
     expect(mount.panel.style.maxHeight).toBe('80vh');
-    expect(mount.panel.style.transform).toContain(
-      '--x-lumno-search-entry-scale-start'
-    );
     expect(mount.panel.style.transform).toContain('translateX(-50%)');
-    expect(mount.panel.style.transition).toContain(
-      '--x-lumno-search-entry-duration'
-    );
+    expect(mount.panel.style.transform).toContain('--x-ov-visible-scale');
+    expect(mount.panel.style.transition).toBe('none');
+    expect(mount.panel.style.filter).toBe('none');
+    expect(mount.panel.style.willChange).toBe('auto');
     expect(mount.host.getAttribute('popover')).toBe('manual');
     expect(mount.root?.querySelectorAll('#overlay-panel')).toHaveLength(1);
     expect(

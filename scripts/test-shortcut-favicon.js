@@ -363,13 +363,17 @@ function testCanonicalProviderResolution() {
 
   [
     ['yt', youtubeProvider, 'youtube.svg'],
-    ['so', { key: 'so', template: 'https://www.baidu.com/s?wd={query}' }, 'baidu.svg'],
+    ['bd', { key: 'bd', template: 'https://www.baidu.com/s?wd={query}' }, 'baidu.svg'],
     ['bi', { key: 'bi', template: 'https://www.bing.com/search?q={query}' }, 'bing.svg'],
     ['gg', googleProvider, 'google.svg'],
+    ['zh', { key: 'zh', template: 'https://www.zhihu.com/search?q={query}' }, 'zhihu.svg'],
     ['db', { key: 'db', template: 'https://www.douban.com/search?q={query}' }, 'douban.svg'],
     ['wx', { key: 'wx', template: 'https://weixin.sogou.com/weixin?query={query}' }, 'sogou.svg'],
     ['tb', { key: 'tb', template: 'https://s.taobao.com/search?q={query}' }, 'taobao.png'],
-    ['rd', { key: 'rd', template: 'https://www.reddit.com/search/?q={query}' }, 'reddit.svg']
+    ['rd', { key: 'rd', template: 'https://www.reddit.com/search/?q={query}' }, 'reddit.png'],
+    ['wb', { key: 'wb', template: 'https://s.weibo.com/weibo?q={query}' }, 'weibo.svg'],
+    ['dy', { key: 'dy', template: 'https://www.douyin.com/search/{query}' }, 'douyin.svg'],
+    ['jd', { key: 'jd', template: 'https://search.jd.com/Search?keyword={query}' }, 'jd.svg']
   ].forEach(([, provider, assetName]) => {
     const assetPath = path.join(__dirname, '..', 'assets/images/site-search', assetName);
     assert.ok(fs.existsSync(assetPath), `${assetName} should exist as a bundled provider icon`);
@@ -384,7 +388,7 @@ function testCanonicalProviderResolution() {
         }
       ),
       `chrome-extension://test/assets/images/site-search/${assetName}`,
-      'bundled vector providers should resolve instantly without a network or cache lookup'
+      'bundled providers should resolve instantly without a network or cache lookup'
     );
   });
   assert.match(

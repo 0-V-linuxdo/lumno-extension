@@ -59,8 +59,18 @@ assert.match(
 );
 assert.match(
   sharedCss,
-  /\.x-lumno-search-input-mode__menu-footer\s*\{[\s\S]*?font:\s*400 12px\/18px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-key\s*\{[\s\S]*?margin-inline-start:\s*auto !important;[\s\S]*?font:\s*500 11px\/16px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-filter-text\s*\{[\s\S]*?flex:\s*0 1 auto !important;[\s\S]*?text-align:\s*left !important;/,
-  'the lighter filter hint should stay left while the shortcut hint aligns right'
+  /\.x-lumno-search-input-mode__menu-footer\s*\{[\s\S]*?justify-content:\s*space-between !important;[\s\S]*?font:\s*400 12px\/18px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-actions\s*\{[\s\S]*?margin-inline-start:\s*0 !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-key\s*\{[\s\S]*?font:\s*500 11px\/16px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-filter-text\s*\{[\s\S]*?flex:\s*1 1 0 !important;[\s\S]*?text-align:\s*left !important;/,
+  'the filter hint should stay left while the grouped keyboard hints align right'
+);
+assert.match(
+  sharedSource,
+  /search_scope_menu_navigation_hint[\s\S]*?search_scope_menu_select_hint[\s\S]*?search_scope_menu_input_focus_hint[\s\S]*?formatShortcutReference\('Tab Tab'/,
+  'the scope footer should describe arrow navigation, Enter selection, Tab input focus, and the existing open shortcut'
+);
+assert.match(
+  sharedCss,
+  /max-width:\s*800px[\s\S]*?menu-footer-hint--shortcut[\s\S]*?display:\s*none !important;/,
+  'narrow scope panels should hide the already-used open shortcut before current-action hints'
 );
 assert.doesNotMatch(
   sharedSource,
@@ -99,8 +109,13 @@ for (const [surface, source] of [
   );
   assert.match(
     source,
-    /function openSearchModeMenuFromDoubleTab\(\)[\s\S]*?activateSiteSearch\(provider\);\s*inputModeController\.openModeMenu\('none'\);/,
-    `${surface} should activate the default tag before opening the scope menu`
+    /function openSearchModeMenuFromDoubleTab\(\)[\s\S]*?activateSiteSearch\(provider(?:, \{ animatePrefix: false \})?\);[\s\S]*?inputModeController\.openModeMenu/,
+    `${surface} scope entry should reuse the same provider activation path as keyword plus Tab`
+  );
+  assert.match(
+    source,
+    /function activateSiteSearch\(provider, activationOptions\)[\s\S]*?animate: options\.animatePrefix !== false/,
+    `${surface} provider tags should share one animated first-entry path`
   );
   assert.ok(
     source.includes('inputModeController.refreshModeMenuLanguage();'),
@@ -129,8 +144,8 @@ assert.match(
 );
 assert.match(
   overlayTabHandlerSource,
-  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?if \(e\.defaultPrevented\) \{\s*activateOpenTabsSearchMode\(\{ preserveModeMenuDoubleTab: true \}\);\s*return true;/,
-  'overlay first Tab should immediately restore open-tabs search without losing the second-press window'
+  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?if \(e\.defaultPrevented\) \{\s*activateOpenTabsSearchMode\(\{[\s\S]*?deferPrefixEntry: true,[\s\S]*?preserveModeMenuDoubleTab: true[\s\S]*?\}\);\s*return true;/,
+  'overlay first Tab should defer only its tag entry until the second-press window closes'
 );
 
 const overlayDoubleTabOpenStart = overlaySource.indexOf(
@@ -146,8 +161,49 @@ const overlayDoubleTabOpenSource = overlaySource.slice(
 );
 assert.match(
   overlayDoubleTabOpenSource,
-  /expectedOpenTabsSearchModeActive = openTabsSearchModeActive[\s\S]*?openTabsSearchModeActive !== expectedOpenTabsSearchModeActive/,
+  /expectedOpenTabsSearchModeActive = openTabsSearchModeActive[\s\S]*?openTabsSearchModeActive === expectedOpenTabsSearchModeActive/,
   'a delayed provider activation should keep the exact temporary open-tabs state that initiated it'
+);
+assert.match(
+  overlaySource,
+  /OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS = 120[\s\S]*?function scheduleOpenTabsPrefixEntry\(options\)[\s\S]*?setTimeout\([\s\S]*?setOpenTabsSearchPrefix\(defaultTheme, \{[\s\S]*?animate: true[\s\S]*?OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS/,
+  'overlay should give a single Tab prompt feedback without waiting for the full double-Tab window'
+);
+assert.match(
+  overlayDoubleTabOpenSource,
+  /cancelPendingOpenTabsPrefixEntry\(\);[\s\S]*?activateSiteSearch\(provider, \{ animatePrefix: false \}\);/,
+  'overlay double-Tab should commit the provider without starting an animation that menu-open immediately cancels'
+);
+assert.match(
+  overlayDoubleTabOpenSource,
+  /Promise\.all\(\[[\s\S]*?overlaySearchEngineStateReady[\s\S]*?getSiteSearchProviders\(\)[\s\S]*?loadSiteSearchIconCache\(\)[\s\S]*?\]\)/,
+  'overlay double-Tab should wait for engine, provider, and icon-cache readiness before committing the tag'
+);
+assert.match(
+  overlaySource,
+  /function activateSiteSearch\(provider, activationOptions\)[\s\S]*?const immediateTheme = getImmediateThemeForSuggestion\(\{ provider \}\) \|\| defaultTheme;[\s\S]*?setSiteSearchPrefix\(provider, immediateTheme/,
+  'overlay provider activation should paint its cached or brand theme on the first tag commit'
+);
+const overlayOpenTabsActivationStart = overlaySource.indexOf(
+  'function activateOpenTabsSearchMode(options) {'
+);
+const overlayOpenTabsActivationEnd = overlaySource.indexOf(
+  'function clearOpenTabsSearchMode()',
+  overlayOpenTabsActivationStart
+);
+const overlayOpenTabsActivationSource = overlaySource.slice(
+  overlayOpenTabsActivationStart,
+  overlayOpenTabsActivationEnd
+);
+assert.doesNotMatch(
+  overlayOpenTabsActivationSource,
+  /deferPrefixEntry[\s\S]*?clearSiteSearchPrefix\(\)/,
+  'deferring the overlay tag must not clear or relayout the entering input'
+);
+assert.match(
+  overlayOpenTabsActivationSource,
+  /Array\.isArray\(tabs\) && tabs\.length > 0[\s\S]*?renderTabSuggestions\(filterTabsForOverlay\(tabs, latestOverlayQuery\)\)[\s\S]*?requestTabsAndRender\(latestOverlayQuery\)/,
+  'overlay first Tab should render the tabs already supplied at launch before refreshing them'
 );
 
 for (const [surface, source, visibleAttributes] of [
@@ -193,8 +249,18 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /const provider = getCurrentPageSiteSearchModeProvider\(providers\) \|\|\s*getOverlayDefaultSearchModeProvider\(providers\);/,
+  /const currentPageProvider = getCurrentPageSiteSearchModeProvider\(providers\);[\s\S]*?const provider = currentPageProvider \|\|\s*getOverlayDefaultSearchModeProvider\(providers\);/,
   'overlay should prefer the current-page site search and fall back to the current engine'
+);
+assert.match(
+  overlaySource,
+  /inputModeController\.openModeMenu\(\s*currentPageProvider \? 'input' : 'none'\s*\);/,
+  'overlay should keep focus in the search input when double Tab selects the current site'
+);
+assert.match(
+  newtabSource,
+  /function openSearchModeMenuFromDoubleTab\(\)[\s\S]*?inputModeController\.openModeMenu\(\s*'none'\s*\)/,
+  'New Tab should keep its default scope-panel focus behavior'
 );
 assert.match(
   overlaySource,
@@ -221,11 +287,23 @@ const detected360 = search.getSearchEngineSiteSearchProvider({
 }, providers);
 assert.strictEqual(
   detected360.key,
-  'engine-so',
-  'an engine id must not collide with an unrelated provider key'
+  'so360',
+  'a detected browser engine should reuse the matching built-in provider when available'
 );
-assert.strictEqual(detected360.name, '360搜索');
+assert.strictEqual(detected360.name, '360 Search');
 assert.strictEqual(detected360.category, 'searchEngine');
+const detectedUnlistedEngine = search.getSearchEngineSiteSearchProvider({
+  id: 'private-engine',
+  host: 'search.example.test',
+  name: 'Private Engine',
+  searchTemplate: 'https://search.example.test/?q={query}'
+}, providers);
+assert.strictEqual(
+  detectedUnlistedEngine.key,
+  'engine-private-engine',
+  'an unlisted browser default should still become the active dynamic provider'
+);
+assert.strictEqual(detectedUnlistedEngine.category, 'searchEngine');
 assert.strictEqual(
   search.getSearchEngineSiteSearchProvider({}, providers).key,
   'gg',
@@ -239,10 +317,28 @@ const expectedShortcutTitles = {
   zh_TW: '開啟搜尋範圍面板'
 };
 const expectedShortcutHints = {
-  en: 'Quickly open this panel',
-  ja: 'このパネルをすばやく開く',
-  zh_CN: '快速打开此面板',
-  zh_TW: '快速開啟此面板'
+  en: 'Open panel',
+  ja: 'パネルを開く',
+  zh_CN: '打开面板',
+  zh_TW: '開啟面板'
+};
+const expectedInputFocusHints = {
+  en: 'Focus',
+  ja: '入力へ',
+  zh_CN: '聚焦',
+  zh_TW: '聚焦'
+};
+const expectedSelectHints = {
+  en: 'Switch',
+  ja: '切替',
+  zh_CN: '切换',
+  zh_TW: '切換'
+};
+const expectedFilterHints = {
+  en: 'Type to filter',
+  ja: 'パネルをクリックし、英字またはピンインで絞り込み',
+  zh_CN: '点击面板，输入拼音或英文快速筛选',
+  zh_TW: '點擊面板，輸入拼音或英文快速篩選'
 };
 const expectedShortcutDescriptions = {
   en: 'When the input is empty, press Tab twice; with a search scope selected, press Tab once',
@@ -269,6 +365,24 @@ Object.entries(expectedShortcutTitles).forEach(([locale, expectedTitle]) => {
       messages.search_scope_menu_shortcut_hint.message,
     expectedShortcutHints[locale],
     `${locale} should localize the fixed scope-panel shortcut hint`
+  );
+  assert.strictEqual(
+    messages.search_scope_menu_input_focus_hint &&
+      messages.search_scope_menu_input_focus_hint.message,
+    expectedInputFocusHints[locale],
+    `${locale} should localize the scope-panel input-focus hint`
+  );
+  assert.strictEqual(
+    messages.search_scope_menu_select_hint &&
+      messages.search_scope_menu_select_hint.message,
+    expectedSelectHints[locale],
+    `${locale} should localize the scope-panel selection hint`
+  );
+  assert.strictEqual(
+    messages.search_scope_menu_filter_hint &&
+      messages.search_scope_menu_filter_hint.message,
+    expectedFilterHints[locale],
+    `${locale} should localize the scope-panel filter hint`
   );
 });
 
@@ -312,22 +426,34 @@ async function runRuntimeStabilityTests() {
       resolve();
     };
   });
+  let resolveIconCache;
+  const iconCacheReadyPromise = new Promise((resolve) => {
+    resolveIconCache = resolve;
+  });
   const activations = [];
+  const activationOptions = [];
   const menuOpens = [];
   const providerItems = [
     { key: 'gg', name: 'Google' },
     { key: 'bi', name: 'Bing' }
   ];
-  const overlayRuntimeContext = vm.createContext({
+  let overlayRuntimeContext;
+  overlayRuntimeContext = vm.createContext({
     Promise,
+    cancelPendingOpenTabsPrefixEntry: () => {},
     defaultSiteSearchProviders: providerItems,
     getCurrentPageSiteSearchModeProvider: () => null,
     getOverlayDefaultSearchModeProvider: () => (
       engineStateReady ? providerItems[1] : providerItems[0]
     ),
     getSiteSearchProviders: () => Promise.resolve(providerItems),
+    loadSiteSearchIconCache: () => iconCacheReadyPromise,
+    siteSearchIconCache: {},
     inputModeController: {
-      openModeMenu: (focusTarget) => menuOpens.push(focusTarget)
+      openModeMenu: (focusTarget) => {
+        menuOpens.push(focusTarget);
+        return true;
+      }
     },
     localSearchScopeState: null,
     openTabsSearchModeActive: true,
@@ -335,7 +461,12 @@ async function runRuntimeStabilityTests() {
     searchInput: { value: '' },
     siteSearchProvidersCache: providerItems,
     siteSearchState: null,
-    activateSiteSearch: (provider) => activations.push(provider.key)
+    activateSiteSearch: (provider, options) => {
+      activations.push(provider.key);
+      activationOptions.push(Boolean(options && options.animatePrefix === false));
+      overlayRuntimeContext.openTabsSearchModeActive = false;
+      overlayRuntimeContext.siteSearchState = provider;
+    }
   });
   vm.runInContext(
     `${overlayDoubleTabOpenSource}\nthis.openSearchModeMenuFromDoubleTabForTest = openSearchModeMenuFromDoubleTab;`,
@@ -355,6 +486,13 @@ async function runRuntimeStabilityTests() {
     'the scope menu should not open with a temporary fallback selection'
   );
   resolveEngineState();
+  await Promise.resolve();
+  assert.deepStrictEqual(
+    activations,
+    [],
+    'double-Tab should not commit a provider while the first icon-cache read is still pending'
+  );
+  resolveIconCache();
   assert.strictEqual(
     await pendingActivation,
     true,
@@ -366,12 +504,18 @@ async function runRuntimeStabilityTests() {
     'the resolved default engine should win over the pre-storage Google fallback'
   );
   assert.deepStrictEqual(
+    activationOptions,
+    [true],
+    'double-Tab should atomically commit the provider before opening its scope menu'
+  );
+  assert.deepStrictEqual(
     menuOpens,
     ['none'],
     'the scope menu should open only after the stable provider is active'
   );
 
   let resolveStaleEngineState;
+  overlayRuntimeContext.siteSearchState = null;
   overlayRuntimeContext.overlaySearchEngineStateReady = new Promise((resolve) => {
     resolveStaleEngineState = resolve;
   });
@@ -390,9 +534,39 @@ async function runRuntimeStabilityTests() {
     'a stale async completion must not replace the user\'s newer interaction state'
   );
   assert.deepStrictEqual(
+    activationOptions,
+    [true],
+    'a stale async completion must not enqueue another provider animation'
+  );
+  assert.deepStrictEqual(
     menuOpens,
     ['none'],
     'a stale async completion must not reopen the scope menu'
+  );
+
+  overlayRuntimeContext.overlaySearchEngineStateReady = Promise.resolve();
+  overlayRuntimeContext.getCurrentPageSiteSearchModeProvider = () => providerItems[0];
+  overlayRuntimeContext.siteSearchState = null;
+  overlayRuntimeContext.searchInput.value = '';
+  assert.strictEqual(
+    await overlayRuntimeContext.openSearchModeMenuFromDoubleTabForTest(),
+    true,
+    'double-Tab activation should select a matching current-page provider'
+  );
+  assert.deepStrictEqual(
+    activations,
+    ['bi', 'gg'],
+    'the current-page provider should replace the default engine when available'
+  );
+  assert.deepStrictEqual(
+    activationOptions,
+    [true, true],
+    'current-page activation should use the same atomic provider commit'
+  );
+  assert.deepStrictEqual(
+    menuOpens,
+    ['none', 'input'],
+    'a current-page provider should open the scope panel with focus in the search input'
   );
 }
 

@@ -1398,7 +1398,17 @@
       const pageUrl = getCanonicalFaviconPage(input.pageUrl || input.url || '');
       const browserUrl = String(input.browserUrl || '').trim() ||
         (pageUrl && isBrowserInternalPageUrl(pageUrl) ? getResolverChromeFaviconUrl(pageUrl) : '');
+      const persistedCandidates = input.skipPersisted === true
+        ? []
+        : [
+          { kind: 'persisted-data', url: input.persistedDataUrl || '' },
+          { kind: 'primary', url: input.persistedUrl || '' }
+        ];
+      // A full-page resolution is more specific than host-scoped browser and
+      // persisted caches, which may legitimately collapse sibling URLs.
       const rawCandidates = [
+        { kind: 'page-specific', url: input.pageSpecificUrl || '' },
+        ...persistedCandidates,
         { kind: 'primary', url: input.primaryUrl || input.fallbackUrl || '' },
         { kind: 'extension', url: input.extensionFavicon || input.extensionUrl || getResolverExtensionFaviconUrl(pageUrl) },
         { kind: 'browser', url: browserUrl },
@@ -1426,7 +1436,7 @@
       if (candidate.kind === 'gstatic') {
         return 'gstatic';
       }
-      if (candidate.kind !== 'primary') {
+      if (candidate.kind !== 'primary' && candidate.kind !== 'page-specific') {
         return '';
       }
       const url = String(candidate.url || '').trim();

@@ -46,7 +46,7 @@
         }),
         body: '开源浏览器聚焦搜索 & 极简新标签页',
         rows: Object.freeze({
-          trust: '开源、无隐私风险、注重用户体验',
+          trust: '开源、隐私边界透明、注重用户体验',
           browser: '支持主流浏览器',
           compatibility: '兼容其他新标签页插件',
           githubLabel: 'GitHub 仓库',
@@ -237,7 +237,7 @@
           Object.freeze({ art: 'newtab-filters', artSize: Object.freeze({ width: 298, height: 120 }), tone: 'newtab', title: '打造你的个性新标签页', body: '可更换壁纸，支持海量滤镜效果' })
         ]),
         featureAwards: Object.freeze([
-          Object.freeze({ lines: Object.freeze(['开源', '无隐私风险']) }),
+          Object.freeze({ lines: Object.freeze(['开源', '隐私透明']) }),
           Object.freeze({ lines: Object.freeze(['永久免费']) }),
           Object.freeze({ lines: Object.freeze(['专注', '用户体验']) })
         ])
@@ -258,7 +258,7 @@
         }),
         body: '開源聚焦搜尋 & 極簡新分頁',
         rows: Object.freeze({
-          trust: '開源、無隱私風險、重視體驗',
+          trust: '開源、隱私範圍透明、重視體驗',
           browser: '支援主流瀏覽器',
           compatibility: '可與其他新分頁擴充功能並用',
           githubLabel: 'GitHub 倉庫',
@@ -366,7 +366,7 @@
           Object.freeze({ art: 'newtab-filters', artSize: Object.freeze({ width: 298, height: 120 }), tone: 'newtab', title: '打造你的個性新分頁', body: '可更換桌布，支援多種濾鏡效果' })
         ]),
         featureAwards: Object.freeze([
-          Object.freeze({ lines: Object.freeze(['開源', '無隱私風險']) }),
+          Object.freeze({ lines: Object.freeze(['開源', '隱私透明']) }),
           Object.freeze({ lines: Object.freeze(['永久免費']) }),
           Object.freeze({ lines: Object.freeze(['專注', '使用者體驗']) })
         ])

@@ -46,8 +46,18 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function applyModeMenuIconTheme\(wrap, menuItem, theme\)[\s\S]*?darkMode \? 0\.72 : 0\.82[\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-item-theme-bg/,
-  'scope menu cards and icon backgrounds should reuse one resolved provider theme'
+  /function applyModeMenuIconTheme\(wrap, menuItem, theme\)[\s\S]*?getAccessibleThemeFocusRingRgb\([\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-item-theme-bg[\s\S]*?--x-lumno-search-mode-item-focus-ring/,
+  'scope menu cards, icons, and contrast-safe focus rings should reuse one resolved provider theme'
+);
+assert.match(
+  inputModeSource,
+  /function scrollModeMenuButtonIntoView\(button\)[\s\S]*?DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT[\s\S]*?DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT[\s\S]*?buttonRect\.top < topBoundary[\s\S]*?buttonRect\.bottom > bottomBoundary/,
+  'keyboard scrolling should preserve group-title context above and panel padding below'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[\s\S]*?border-color:\s*var\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?box-shadow:\s*inset 0 0 0 1px color-mix\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?42%/,
+  'keyboard-focused scope cards should keep a contrast-safe theme border with a softer inner ring'
 );
 assert.match(
   inputModeCss,
@@ -66,7 +76,7 @@ assert.match(
 );
 assert.doesNotMatch(
   inputModeCss,
-  /x-lumno-search-mode-icon-hover-outline|inset 0 0 0 1px/,
+  /x-lumno-search-mode-icon-hover-outline/,
   'scope menu hover should not retain an icon outline'
 );
 assert.match(
@@ -106,8 +116,8 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function focusModeInput\(\)[\s\S]*?setModeMenuSearchActive\(false\)[\s\S]*?input\.focus\(\{ preventScroll: true \}\)[\s\S]*?function selectModeMenuItem\(item\)[\s\S]*?focusModeInput\(\)/,
-  'selecting a filtered scope should return keyboard ownership to the main input'
+  /function focusModeInput\(\)[\s\S]*?setModeMenuSearchActive\(false\)[\s\S]*?input\.focus\(\{ preventScroll: true \}\)[\s\S]*?function selectModeMenuItem\(item, selectionOptions\)[\s\S]*?keepMenuFocus[\s\S]*?focusModeInput\(\)/,
+  'pointer selection should return to the input while keyboard navigation can retain panel ownership'
 );
 assert.match(
   inputModeCss,
@@ -146,8 +156,13 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-footer\s*\{[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?flex:\s*0 0 auto !important;[\s\S]*?font:\s*400 12px\/18px[\s\S]*?text-align:\s*left !important;[\s\S]*?overflow:\s*hidden !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-key\s*\{[\s\S]*?margin-inline-start:\s*auto !important;[\s\S]*?font:\s*500 11px\/16px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-filter-text\s*\{[\s\S]*?flex:\s*0 1 auto !important;[\s\S]*?text-align:\s*left !important;[\s\S]*?text-overflow:\s*ellipsis !important;/,
-  'the filter hint should stay left while the lighter shortcut hint aligns right in the fixed footer'
+  /\.x-lumno-search-input-mode__menu-footer\s*\{[\s\S]*?display:\s*flex !important;[\s\S]*?justify-content:\s*space-between !important;[\s\S]*?flex:\s*0 0 auto !important;[\s\S]*?font:\s*400 12px\/18px[\s\S]*?text-align:\s*left !important;[\s\S]*?overflow:\s*hidden !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-actions\s*\{[\s\S]*?margin-inline-start:\s*0 !important;[\s\S]*?gap:\s*18px !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-hint\s*\{[\s\S]*?gap:\s*4px !important;[\s\S]*?\.x-lumno-search-input-mode__menu-footer-key\s*\{[\s\S]*?font:\s*500 11px\/16px[\s\S]*?\.x-lumno-search-input-mode__menu-footer-filter-text\s*\{[\s\S]*?flex:\s*1 1 0 !important;[\s\S]*?text-align:\s*left !important;[\s\S]*?text-overflow:\s*ellipsis !important;/,
+  'keyboard hints should use tight key-label spacing and wider separation between actions'
+);
+assert.match(
+  inputModeSource,
+  /modeMenuFooterSelectHint\.appendChild\(modeMenuFooterSelectKey\);[\s\S]*?modeMenuFooterSelectHint\.appendChild\(modeMenuFooterSelectText\);[\s\S]*?modeMenuFooterActions\.appendChild\(modeMenuFooterNavigationHint\);[\s\S]*?modeMenuFooterActions\.appendChild\(modeMenuFooterSelectHint\);[\s\S]*?modeMenuFooterActions\.appendChild\(modeMenuFooterInputHint\);[\s\S]*?modeMenuFooterActions\.appendChild\(modeMenuFooterShortcutHint\);/,
+  'each keyboard action should have its own semantic spacing group'
 );
 assert.doesNotMatch(
   inputModeCss,
@@ -381,7 +396,7 @@ assert.match(
 );
 assert.match(
   overlayTabKeySource,
-  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?activateOpenTabsSearchMode\(\{ preserveModeMenuDoubleTab: true \}\)/,
+  /shouldOpenModeMenuOnDoubleTab\(e\)[\s\S]*?activateOpenTabsSearchMode\(\{[\s\S]*?preserveModeMenuDoubleTab: true[\s\S]*?\}\)/,
   'overlay first empty-input Tab should keep its established open-tabs search behavior'
 );
 

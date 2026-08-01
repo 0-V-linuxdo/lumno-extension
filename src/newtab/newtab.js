@@ -362,6 +362,7 @@
   let localSearchScopeTriggerState = null;
   let lastRenderedQuery = '';
   let lastRenderedActionContextKey = '';
+  let searchModeResultTransitionQuery = '';
   let suggestionsView = null;
   let recentSourceItems = [];
   let pinnedRecentSites = [];
@@ -4537,7 +4538,7 @@
     }
     let titleText = '';
     if (command.type === 'commandSettings') {
-      titleText = formatMessage('command_settings', '打开 Lumno 设置', {
+      titleText = formatMessage('command_settings', '打开设置', {
         name: 'Lumno'
       });
     } else {
@@ -6367,6 +6368,18 @@
       offsetY: 16
     })
     : null;
+  const searchInputCursorTooltipController = globalThis.LumnoCursorTooltip &&
+      typeof globalThis.LumnoCursorTooltip.createController === 'function'
+    ? globalThis.LumnoCursorTooltip.createController({
+      documentObj: document,
+      windowObj: window,
+      id: '_x_extension_newtab_search_input_cursor_tooltip_2026_unique_',
+      appendTo: document.body,
+      maxWidth: 520,
+      offsetX: 14,
+      offsetY: 16
+    })
+    : null;
 
   function showTopActionTooltip(button, text, options) {
     if (!topActionTooltipController || !button || !text) {
@@ -6387,6 +6400,27 @@
       return;
     }
     topActionTooltipController.hide();
+  }
+
+  function bindSearchInputCursorTooltip(button, getText) {
+    if (!searchInputCursorTooltipController || !button) {
+      return null;
+    }
+    return searchInputCursorTooltipController.bind(button, getText, {
+      maxWidth: 420,
+      deferHideVisibility: true,
+      preserveVisibleOnTargetSwitch: true,
+      handoffRoot: inputParts && inputParts.container
+        ? inputParts.container
+        : null
+    });
+  }
+
+  function hideSearchInputCursorTooltip() {
+    if (!searchInputCursorTooltipController) {
+      return;
+    }
+    searchInputCursorTooltipController.hide();
   }
 
   function bindShortcutTooltip(target, getText, options) {
@@ -12530,6 +12564,7 @@
     return Boolean(
       provider &&
       (
+        String(provider.category || '').trim() === 'aiSearch' ||
         hasOpenAndSubmitSiteSearchAction(provider) ||
         (template && !template.includes('{query}'))
       )
@@ -12673,6 +12708,27 @@
       onUnavailable: context && context.onIconUnavailable
     });
     return true;
+  }
+
+  function isBundledInputModeProviderIcon(iconUrl) {
+    try {
+      const resolvedIconUrl = new URL(String(iconUrl || ''), window.location.href);
+      const pinnedIconAssets = SHORTCUT_FAVICON.SITE_SEARCH_PINNED_ICON_ASSETS || {};
+      return Object.values(pinnedIconAssets).some((assetPath) => {
+        const bundledIconUrl = new URL(getExtensionResourceUrl(assetPath));
+        return resolvedIconUrl.href === bundledIconUrl.href;
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function attachInputModeFaviconData(icon, iconUrl, iconHost) {
+    const resolvedIconUrl = String(iconUrl || '').trim();
+    if (!resolvedIconUrl || isBundledInputModeProviderIcon(resolvedIconUrl)) {
+      return;
+    }
+    attachFaviconData(icon, resolvedIconUrl, iconHost);
   }
 
   function getSiteSearchProviders() {
@@ -12963,16 +13019,23 @@
   }
 
   function openSearchModeMenuFromDoubleTab() {
+    const expectedInputValue = String(inputParts.input.value || '');
     const activateDefaultProvider = (providers) => {
       if (!inputModeController || siteSearchState || localSearchScopeState ||
-          String(inputParts.input.value || '') !== '') {
+          String(inputParts.input.value || '') !== expectedInputValue) {
         return false;
       }
       const provider = getDefaultSearchModeProvider(providers);
       if (!provider) {
         return false;
       }
-      activateSiteSearch(provider);
+      if (expectedInputValue.trim()) {
+        beginSearchModeResultTransition(expectedInputValue);
+        activateSiteSearch(provider, { preserveResults: true });
+        restoreSearchModeQuery(expectedInputValue);
+      } else {
+        activateSiteSearch(provider);
+      }
       inputModeController.openModeMenu('none');
       return true;
     };
@@ -12993,18 +13056,54 @@
     inputParts.input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  function beginSearchModeResultTransition(rawQuery) {
+    const query = String(rawQuery || '').trim();
+    if (!query) {
+      return false;
+    }
+    searchModeResultTransitionQuery = query;
+    if (layoutController &&
+        typeof layoutController.beginSuggestionsInputSession === 'function') {
+      layoutController.beginSuggestionsInputSession({ autoSettle: false });
+    }
+    return true;
+  }
+
+  function isSearchModeResultTransitionPending(query) {
+    return Boolean(
+      searchModeResultTransitionQuery &&
+      searchModeResultTransitionQuery === String(query || '').trim()
+    );
+  }
+
+  function finishSearchModeResultTransition(query) {
+    if (!isSearchModeResultTransitionPending(query)) {
+      return false;
+    }
+    searchModeResultTransitionQuery = '';
+    if (layoutController &&
+        typeof layoutController.finishSuggestionsInputSession === 'function') {
+      layoutController.finishSuggestionsInputSession();
+    }
+    return true;
+  }
+
   function selectSearchModeMenuItem(item) {
     if (!item || !item.kind) {
       return;
     }
     const rawQuery = inputParts.input.value || '';
+    const preserveResults = beginSearchModeResultTransition(rawQuery);
     if (item.kind === 'local') {
-      activateLocalSearchScope({ sourceType: item.sourceType });
+      activateLocalSearchScope(
+        { sourceType: item.sourceType },
+        { preserveResults }
+      );
       restoreSearchModeQuery(rawQuery);
       return;
     }
     if (item.kind === 'provider' && item.provider) {
-      activateSiteSearch(item.provider);
+      activateSiteSearch(item.provider, { preserveResults });
       restoreSearchModeQuery(rawQuery);
     }
   }
@@ -13037,10 +13136,13 @@
     );
   }
 
-  function activateLocalSearchScope(scope) {
+  function activateLocalSearchScope(scope, activationOptions) {
     if (!scope || !enabledSearchResultSourceTypes.includes(scope.sourceType)) {
       return false;
     }
+    const options = activationOptions && typeof activationOptions === 'object'
+      ? activationOptions
+      : {};
     suggestionRequestSeq += 1;
     localSearchScopeState = scope;
     localSearchScopeTriggerState = null;
@@ -13052,7 +13154,9 @@
     latestQuery = '';
     clearAutocomplete();
     setLocalSearchScopePrefix(scope);
-    clearSearchSuggestions();
+    if (options.preserveResults !== true) {
+      clearSearchSuggestions();
+    }
     return true;
   }
 
@@ -13069,10 +13173,13 @@
     return true;
   }
 
-  function activateSiteSearch(provider) {
+  function activateSiteSearch(provider, activationOptions) {
     if (!provider) {
       return;
     }
+    const options = activationOptions && typeof activationOptions === 'object'
+      ? activationOptions
+      : {};
     localSearchScopeState = null;
     localSearchScopeTriggerState = null;
     siteSearchState = provider;
@@ -13081,13 +13188,17 @@
     latestRawQuery = '';
     latestQuery = '';
     clearAutocomplete();
-    setSiteSearchPrefix(provider, defaultTheme, { animate: true });
+    setSiteSearchPrefix(provider, defaultTheme, {
+      animate: options.animatePrefix !== false
+    });
     getThemeForProvider(provider).then((theme) => {
       if (siteSearchState === provider) {
         setSiteSearchPrefix(provider, theme);
       }
     });
-    clearSearchSuggestions();
+    if (options.preserveResults !== true) {
+      clearSearchSuggestions();
+    }
   }
 
   function clearSiteSearch() {
@@ -13687,6 +13798,7 @@
   }
 
   function clearSearchSuggestions() {
+    searchModeResultTransitionQuery = '';
     if (layoutController &&
         typeof layoutController.finishSuggestionsInputSession === 'function') {
       layoutController.finishSuggestionsInputSession({ animate: false });
@@ -14071,10 +14183,16 @@
         updateSelection();
         setSuggestionsVisible(true);
       }
-      if ((updateKind === 'append' || updateKind === 'structure') &&
+      const searchModeResultTransitionPending =
+        isSearchModeResultTransitionPending(query);
+      if ((updateKind === 'append' || updateKind === 'structure' ||
+          searchModeResultTransitionPending) &&
           layoutController &&
           typeof layoutController.holdSuggestionsInputHeight === 'function') {
         layoutController.holdSuggestionsInputHeight();
+      }
+      if (searchModeResultTransitionPending) {
+        finishSearchModeResultTransition(query);
       }
       if (previousSuggestionsResizeState) {
         layoutController.animateSuggestionsResize(previousSuggestionsResizeState);
@@ -14227,7 +14345,7 @@
     },
     iconStyleOverrides: {
       'color': 'var(--x-nt-subtext, #6B7280)',
-      'left': '14px'
+      'left': '7px'
     },
     rightIconStyleOverrides: {
       '--x-ext-input-right-icon-inset': '7px',
@@ -14270,7 +14388,9 @@
       clearAutocomplete();
       if (layoutController &&
           typeof layoutController.beginSuggestionsInputSession === 'function') {
-        layoutController.beginSuggestionsInputSession();
+        layoutController.beginSuggestionsInputSession({
+          autoSettle: !isSearchModeResultTransitionPending(query)
+        });
       }
       if (!localSearchScopeState && isSlashCommandInput(query)) {
         latestQuery = query;
@@ -14861,6 +14981,9 @@
       return;
     }
     const activeElement = document.activeElement;
+    if (searchScopeIcon && activeElement === searchScopeIcon) {
+      return;
+    }
     if (activeElement === inputParts.input || isEditableElement(activeElement)) {
       return;
     }
@@ -14908,7 +15031,63 @@
   modeBadge = inputParts.modeBadge;
   const searchInput = inputParts.input;
   searchInputRef = searchInput;
+  const searchScopeIcon = inputParts.icon;
   const rightIcon = inputParts.rightIcon;
+  const searchScopeTooltipText = () => t(
+    'shortcut_reference_search_open_scope_menu_title',
+    '打开搜索范围面板'
+  );
+  function setSearchScopeIconVisualState(active) {
+    if (!searchScopeIcon) {
+      return;
+    }
+    searchScopeIcon.dataset.hoverActive = active ? 'true' : 'false';
+  }
+  function activateSearchScopeIcon(event) {
+    if (event && typeof event.preventDefault === 'function') {
+      event.preventDefault();
+    }
+    if (event && typeof event.stopPropagation === 'function') {
+      event.stopPropagation();
+    }
+    hideSearchInputCursorTooltip();
+    setSearchScopeIconVisualState(false);
+    if (inputModeController &&
+        typeof inputModeController.resetModeMenuDoubleTab === 'function') {
+      inputModeController.resetModeMenuDoubleTab();
+    }
+    openSearchModeMenuFromDoubleTab();
+    if (searchScopeIcon && typeof searchScopeIcon.blur === 'function') {
+      searchScopeIcon.blur();
+    }
+  }
+  if (searchScopeIcon) {
+    searchScopeIcon.dataset.searchScopeAction = 'true';
+    searchScopeIcon.setAttribute('role', 'button');
+    searchScopeIcon.setAttribute('tabindex', '0');
+    searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
+    searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+    setSearchScopeIconVisualState(false);
+    searchScopeIcon.addEventListener('mouseenter', () => {
+      setSearchScopeIconVisualState(true);
+    });
+    searchScopeIcon.addEventListener('focus', () => {
+      setSearchScopeIconVisualState(true);
+    });
+    ['mouseleave', 'blur', 'pointerup', 'pointercancel'].forEach((type) => {
+      searchScopeIcon.addEventListener(type, () => {
+        setSearchScopeIconVisualState(false);
+      });
+    });
+    searchScopeIcon.addEventListener('click', activateSearchScopeIcon);
+    searchScopeIcon.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      activateSearchScopeIcon(event);
+    });
+    bindSearchInputCursorTooltip(searchScopeIcon, searchScopeTooltipText);
+  }
   function openWordmarkUrl(event) {
     if (event && typeof event.preventDefault === 'function') {
       event.preventDefault();
@@ -15022,9 +15201,18 @@
   });
 
   if (rightIcon) {
+    const settingsTooltipText = () => formatMessage(
+      'command_settings',
+      '打开设置',
+      { name: 'Lumno' }
+    );
+    rightIcon.setAttribute('aria-label', settingsTooltipText());
+    rightIcon.setAttribute('data-tooltip', settingsTooltipText());
+    bindSearchInputCursorTooltip(rightIcon, settingsTooltipText);
     rightIcon.addEventListener('click', function(event) {
       event.preventDefault();
       event.stopPropagation();
+      hideSearchInputCursorTooltip();
       const runtime = typeof chrome !== 'undefined' && chrome && chrome.runtime
         ? chrome.runtime
         : null;
@@ -15104,7 +15292,7 @@
     getSiteSearchPrefixText,
     getSiteSearchDisplayName,
     isAiSiteSearchProvider,
-    attachFaviconData,
+    attachFaviconData: attachInputModeFaviconData,
     attachProviderIcon: attachInputModeProviderIcon,
     preferDirectProviderIcons: true,
     formatMessage,

@@ -297,7 +297,7 @@
     "message": "Use to open the Lumno command bar"
   },
   "overlay_close_other_tabs_tooltip": {
-    "message": "Close other tabs, keep pinned and grouped tabs"
+    "message": "Close other tabs"
   },
   "settings_shortcuts_status": {
     "message": "Current: {shortcut}"
@@ -1311,7 +1311,7 @@
     "message": "New Tab"
   },
   "command_settings": {
-    "message": "Open {name} Settings"
+    "message": "Open settings"
   },
   "command_show_search": {
     "message": "Open command bar"
@@ -1348,6 +1348,30 @@
   },
   "site_search_name_baidu": {
     "message": "Baidu"
+  },
+  "site_search_name_metaso": {
+    "message": "Metaso AI Search"
+  },
+  "site_search_name_sogou": {
+    "message": "Sogou"
+  },
+  "site_search_name_360": {
+    "message": "360 Search"
+  },
+  "site_search_name_shenma": {
+    "message": "Shenma"
+  },
+  "site_search_name_weibo": {
+    "message": "Weibo"
+  },
+  "site_search_name_xiaohongshu": {
+    "message": "Xiaohongshu"
+  },
+  "site_search_name_douyin": {
+    "message": "Douyin"
+  },
+  "site_search_name_jd": {
+    "message": "JD.com"
   },
   "site_search_name_chatgpt": {
     "message": "ChatGPT"
@@ -1458,10 +1482,19 @@
     "message": "Press Backspace again to remove the scope"
   },
   "search_scope_menu_shortcut_hint": {
-    "message": "Quickly open this panel"
+    "message": "Open panel"
+  },
+  "search_scope_menu_navigation_hint": {
+    "message": "Move"
+  },
+  "search_scope_menu_select_hint": {
+    "message": "Switch"
+  },
+  "search_scope_menu_input_focus_hint": {
+    "message": "Focus"
   },
   "search_scope_menu_filter_hint": {
-    "message": "Click the panel, then type English or pinyin to filter"
+    "message": "Type to filter"
   },
   "search_scope_menu_filter_query": {
     "message": "Search: {query}"

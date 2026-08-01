@@ -305,27 +305,38 @@ function createRuntime(options) {
   );
 
   const shortcutCachedDataUrl = 'data:image/png;base64,c2hvcnRjdXQtY2FjaGU=';
+  const shortcutPersistedWrites = [];
   const shortcutRuntime = createRuntime({
     getPersistedFaviconEntry() {
-      return { url: primaryUrl, updatedAt: Date.now() };
+      throw new Error('shortcut rendering should not read the shared host URL cache');
     },
     getPersistedFaviconDataEntry() {
-      return { dataUrl: persistedDataUrl, updatedAt: Date.now() };
+      throw new Error('shortcut rendering should not read the shared host data cache');
     },
-    detectDefaultExtensionFavicon() {
-      return Promise.resolve(false);
+    setPersistedFaviconUrl(cacheKey, url) {
+      shortcutPersistedWrites.push({ cacheKey, type: 'url', value: url });
+    },
+    setPersistedFaviconData(cacheKey, dataUrl) {
+      shortcutPersistedWrites.push({ cacheKey, type: 'data', value: dataUrl });
     }
   });
   const shortcutImg = createFakeImage();
   shortcutRuntime.attachFaviconWithFallbacks(shortcutImg, pageUrl, 'futurecomm.cn', {
     primaryUrl: extensionUrl,
-    browserUrl: shortcutCachedDataUrl,
+    pageSpecificUrl: shortcutCachedDataUrl,
     skipPersisted: true
   });
   assert.strictEqual(
     shortcutImg.src,
-    extensionUrl,
-    'shortcut tiles should prefer the page-specific browser favicon over stale host and shortcut caches'
+    shortcutCachedDataUrl,
+    'shortcut tiles should prefer an exact page icon over browser and shared host caches'
+  );
+  shortcutImg.dispatchEvent('load');
+  await wait(4);
+  assert.deepStrictEqual(
+    shortcutPersistedWrites,
+    [],
+    'shortcut page icons should not write into the shared host favicon cache'
   );
 
   const privatePageUrl = 'https://foo.example.com/private';

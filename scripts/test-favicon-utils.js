@@ -359,6 +359,24 @@ assert.strictEqual(
 );
 assert.strictEqual(resolver.getFaviconProxyCheckKind(plan[0]), 'extension');
 assert.strictEqual(resolver.getFaviconProxyCheckKind(plan[2]), 'gstatic');
+const pageSpecificPlan = resolver.buildFaviconCandidatePlan({
+  pageUrl: 'https://x.com/home',
+  pageSpecificUrl: 'data:image/png;base64,eA==',
+  persistedDataUrl: 'data:image/jpeg;base64,c3RhbGU=',
+  persistedUrl: 'https://x.com/stale.ico',
+  primaryUrl: 'chrome-extension://abc/_favicon/?pageUrl=https%3A%2F%2Fx.com%2Fhome&size=128',
+  skipPersisted: true
+});
+assert.strictEqual(
+  pageSpecificPlan.map((candidate) => candidate.kind).join(','),
+  'page-specific,primary,gstatic',
+  'page-specific icons should lead browser and proxy fallbacks without reading shared host cache entries'
+);
+assert.strictEqual(
+  pageSpecificPlan[0].url,
+  'data:image/png;base64,eA==',
+  'the full-page icon should remain the first render candidate'
+);
 assert.strictEqual(utils.getChromeFaviconUrl(''), '');
 assert.strictEqual(
   utils.getPageUrlFromFaviconProxyUrl('https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fwww.lovart.ai%2Fhome&size=128'),

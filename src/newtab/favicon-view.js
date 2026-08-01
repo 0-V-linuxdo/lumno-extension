@@ -399,8 +399,13 @@
       const session = img._xThemeFaviconSession;
       const hostKey = host || getHostFromUrl(url);
       const cacheKey = String(hostKey || url || '').trim();
-      const persistedDataEntry = cacheKey ? getPersistedFaviconDataEntry(cacheKey) : null;
-      const persistedUrlEntry = cacheKey ? getPersistedFaviconEntry(cacheKey) : null;
+      const skipPersisted = Boolean(optionsArg && optionsArg.skipPersisted === true);
+      const persistedDataEntry = !skipPersisted && cacheKey
+        ? getPersistedFaviconDataEntry(cacheKey)
+        : null;
+      const persistedUrlEntry = !skipPersisted && cacheKey
+        ? getPersistedFaviconEntry(cacheKey)
+        : null;
       const previousWorkingSrc = getSafeFaviconCandidateUrl(
         getLastWorkingFaviconSrc(img),
         url,
@@ -427,10 +432,15 @@
         ),
         browserUrl: getSafeFaviconCandidateUrl((optionsArg && optionsArg.browserUrl) || '', url, 'browser') ||
           (/^https?:\/\//i.test(String(url || '')) ? '' : getRuntimeChromeFaviconUrl(url)),
+        pageSpecificUrl: getSafeFaviconCandidateUrl(
+          (optionsArg && optionsArg.pageSpecificUrl) || '',
+          url,
+          'page-specific'
+        ),
         extensionFavicon: getRuntimeExtensionFaviconUrl(url),
         gstaticFavicon: getRuntimeGstaticFaviconUrl(url),
         previousWorkingSrc,
-        skipPersisted: Boolean(optionsArg && optionsArg.skipPersisted === true),
+        skipPersisted,
         isSessionCurrent() {
           return Boolean(img && img._xThemeFaviconSession === session);
         },
@@ -499,17 +509,21 @@
     }
 
     function buildThemeAwareFaviconCandidatePlan(state) {
-      const persistedCandidates = state.skipPersisted
-        ? []
-        : [
-          { kind: 'persisted-data', url: state.persistedDataUrl },
-          { kind: 'primary', url: state.persistedUrl }
-        ];
       const runtimeCandidates = faviconUrlResolver
         ? faviconUrlResolver.buildFaviconCandidatePlan(state)
-        : [];
+        : [
+          { kind: 'page-specific', url: state.pageSpecificUrl },
+          ...(state.skipPersisted ? [] : [
+            { kind: 'persisted-data', url: state.persistedDataUrl },
+            { kind: 'primary', url: state.persistedUrl }
+          ]),
+          { kind: 'primary', url: state.primaryUrl },
+          { kind: 'browser', url: state.browserUrl },
+          { kind: 'extension', url: state.extensionFavicon },
+          { kind: 'gstatic', url: state.gstaticFavicon }
+        ];
       const seen = new Set();
-      return persistedCandidates.concat(runtimeCandidates).filter((candidate) => {
+      return runtimeCandidates.filter((candidate) => {
         const safeUrl = getSafeFaviconCandidateUrl(candidate && candidate.url, state.url, candidate && candidate.kind);
         if (!safeUrl || seen.has(safeUrl)) {
           return false;
@@ -521,6 +535,9 @@
     }
 
     function persistResolvedThemeAwareCandidate(state, candidateUrl, resolvedDataUrl) {
+      if (state && state.skipPersisted) {
+        return;
+      }
       const cacheKey = state && state.cacheKey ? String(state.cacheKey) : '';
       const nextSrc = String(candidateUrl || '').trim();
       const dataUrl = String(resolvedDataUrl || '').trim();

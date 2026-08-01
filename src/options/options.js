@@ -3800,6 +3800,9 @@
     if (!item) {
       return false;
     }
+    if (String(item.category || '').trim() === 'aiSearch') {
+      return true;
+    }
     if (hasOpenAndSubmitSiteSearchAction(item)) {
       return true;
     }
@@ -5070,7 +5073,9 @@
       name: String(draft && draft.name ? draft.name : '').trim() || nextKeyRaw,
       template,
       aliases,
-      category: draft && draft.category === 'searchEngine' ? 'searchEngine' : 'site',
+      category: isBuiltinAiProvider
+        ? 'aiSearch'
+        : (draft && draft.category === 'searchEngine' ? 'searchEngine' : 'site'),
       disabled: shouldDisable,
       disabledReason: shouldDisable ? 'duplicate' : ''
     });

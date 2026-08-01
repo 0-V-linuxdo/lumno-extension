@@ -54,8 +54,8 @@ assert.match(
 );
 assert.match(
   optionsJs,
-  /category: draft && draft\.category === 'searchEngine' \? 'searchEngine' : 'site'/,
-  'Options should persist the selected custom provider group'
+  /category:\s*isBuiltinAiProvider\s*\?\s*'aiSearch'\s*:\s*\(draft && draft\.category === 'searchEngine' \? 'searchEngine' : 'site'\)/,
+  'Options should preserve built-in AI providers and persist the selected custom provider group'
 );
 [newtabJs, overlaySearchPanelJs].forEach((source, index) => {
   assert.doesNotMatch(

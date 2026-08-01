@@ -338,7 +338,7 @@ function testOverlayRendererLoadsFaviconPolicyBeforeInitialTabs() {
   );
   assert.match(
     overlayJs,
-    /Promise\.all\(\[initialOverlayOpenTabsDefaultVisibleReady, initialFaviconEnhancedFetchReady\]\)[\s\S]*?requestTabsAndRender\(\)/,
+    /const initialOverlayContentReady = Promise\.all\(\[\s*initialOverlayOpenTabsDefaultVisibleReady,\s*initialFaviconEnhancedFetchReady\s*\]\)[\s\S]*?requestTabsAndRender\(\)/,
     'first open-tab rendering should wait for the favicon policy setting'
   );
   assert.match(

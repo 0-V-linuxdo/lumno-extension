@@ -42,6 +42,7 @@ interface ModeController {
     viewportBottom?: number;
   }): number | null;
   getModeMenuFilterQuery(): string;
+  handleModeMenuKeyEvent(event: KeyboardEvent): boolean;
   menuElement: HTMLDivElement;
   openModeMenu(focusTarget?: string): boolean;
   refreshModeMenuLanguage(): void;
@@ -247,7 +248,8 @@ describe('Shared search scope menu', () => {
           id: 'provider:google',
           kind: 'provider',
           label: 'Google'
-        }]
+        }],
+        surface: 'overlay'
       }
     );
     const createTabEvent = (options: KeyboardEventInit = {}) => new KeyboardEvent(
@@ -358,9 +360,39 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
+  it('can keep the search input focused while opening the scope panel', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'provider:site',
+          kind: 'provider',
+          label: 'Current site'
+        }]
+      }
+    );
+
+    expect(controller.openModeMenu('input')).toBe(true);
+    expect(controller.menuElement.hidden).toBe(false);
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.dataset.searchActive).toBe('false');
+    const tabEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab'
+    });
+    expect(controller.shouldContainModeMenuTab(tabEvent)).toBe(true);
+    expect(tabEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(parts.input);
+    controller.destroy();
+  });
+
   it('keeps a platform-aware shortcut hint fixed outside the scrollable menu grid', () => {
     const macParts = createModeParts();
-    let localizedShortcutHint = '快速打开此面板';
+    let localizedShortcutHint = '打开面板';
+    let localizedInputFocusHint = '聚焦';
     let localizedFilterHint = '点击面板，输入拼音或英文快速筛选';
     let localizedFilterQuery = '检索：{query}';
     const macController = window.LumnoSearchInputMode.createInputModeController(
@@ -373,6 +405,15 @@ describe('Shared search scope menu', () => {
         ) => {
           if (key === 'search_scope_menu_shortcut_hint') {
             return localizedShortcutHint;
+          }
+          if (key === 'search_scope_menu_navigation_hint') {
+            return '移动';
+          }
+          if (key === 'search_scope_menu_select_hint') {
+            return '切换';
+          }
+          if (key === 'search_scope_menu_input_focus_hint') {
+            return localizedInputFocusHint;
           }
           if (key === 'search_scope_menu_filter_hint') {
             return localizedFilterHint;
@@ -412,7 +453,56 @@ describe('Shared search scope menu', () => {
     expect(
       macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
         ?.textContent
-    ).toBe('快速打开此面板');
+    ).toBe('打开面板');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-navigation-key]'
+      )?.textContent
+    ).toBe('←↑↓→');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-navigation-text]'
+      )?.textContent
+    ).toBe('移动');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-select-key]'
+      )?.textContent
+    ).toBe('Enter');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-select-text]'
+      )?.textContent
+    ).toBe('切换');
+    const footerActions = macFooter?.querySelector(
+      '[data-search-input-mode-menu-footer-actions]'
+    );
+    const selectHint = macFooter?.querySelector(
+      '[data-search-input-mode-menu-footer-select-hint]'
+    );
+    expect(selectHint?.children).toHaveLength(2);
+    expect(selectHint?.firstElementChild).toBe(
+      macFooter?.querySelector('[data-search-input-mode-menu-footer-select-key]')
+    );
+    expect(Array.from(footerActions?.children || []).map((element) => (
+      element.getAttribute('data-search-input-mode-menu-footer-navigation-hint') !== null
+        ? 'navigation'
+        : element.getAttribute('data-search-input-mode-menu-footer-select-hint') !== null
+          ? 'select'
+          : element.getAttribute('data-search-input-mode-menu-footer-input-hint') !== null
+            ? 'input'
+            : 'shortcut'
+    ))).toEqual(['navigation', 'select', 'input', 'shortcut']);
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-input-key]'
+      )?.textContent
+    ).toBe('Tab');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-input-text]'
+      )?.textContent
+    ).toBe('聚焦');
     expect(
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-filter-text]'
@@ -429,7 +519,7 @@ describe('Shared search scope menu', () => {
       )
     );
     expect(macFooter?.lastElementChild).toBe(
-      macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
+      footerActions
     );
     macController.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
       bubbles: true,
@@ -461,14 +551,20 @@ describe('Shared search scope menu', () => {
         '[data-search-input-mode-menu-footer-filter-text] .x-lumno-search-input-mode__menu-match'
       )
     ).toBeNull();
-    localizedShortcutHint = '快速開啟此面板';
+    localizedShortcutHint = '開啟面板';
+    localizedInputFocusHint = '聚焦';
     localizedFilterHint = '點擊面板，輸入拼音或英文快速篩選';
     localizedFilterQuery = '搜尋：{query}';
     macController.refreshModeMenuLanguage();
     expect(
       macFooter?.querySelector('[data-search-input-mode-menu-footer-text]')
         ?.textContent
-    ).toBe('快速開啟此面板');
+    ).toBe('開啟面板');
+    expect(
+      macFooter?.querySelector(
+        '[data-search-input-mode-menu-footer-input-text]'
+      )?.textContent
+    ).toBe('聚焦');
     expect(
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-filter-text]'
@@ -664,6 +760,165 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
+  it('moves across visual grid rows and keeps keyboard selection in the panel until Tab', () => {
+    const parts = createModeParts();
+    const items: ModeMenuItem[] = Array.from({ length: 6 }, (_, index) => ({
+      active: index === 1,
+      group: 'Search engines',
+      id: `provider:${index}`,
+      kind: 'provider',
+      label: `Provider ${index + 1}`
+    }));
+    const onModeMenuSelect = vi.fn((selectedItem: ModeMenuItem) => {
+      items.forEach((item) => {
+        item.active = item === selectedItem;
+      });
+    });
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => items,
+        onModeMenuSelect
+      }
+    );
+
+    expect(controller.openModeMenu()).toBe(true);
+    const buttons = Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    );
+    buttons.forEach((button, index) => {
+      const column = index % 3;
+      const row = Math.floor(index / 3);
+      button.getBoundingClientRect = () => ({
+        bottom: (row * 100) + 80,
+        height: 80,
+        left: column * 100,
+        right: (column * 100) + 80,
+        top: row * 100,
+        width: 80,
+        x: column * 100,
+        y: row * 100,
+        toJSON: () => ({})
+      });
+    });
+
+    expect(document.activeElement).toBe(buttons[1]);
+    buttons[1].dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'ArrowDown'
+    }));
+    expect(document.activeElement).toBe(buttons[4]);
+
+    const enterEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter'
+    });
+    buttons[4].dispatchEvent(enterEvent);
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(onModeMenuSelect).toHaveBeenCalledWith(items[4]);
+    expect(buttons[4].getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(buttons[4]);
+
+    const spaceEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: ' '
+    });
+    buttons[4].dispatchEvent(spaceEvent);
+    expect(spaceEvent.defaultPrevented).toBe(true);
+    expect(onModeMenuSelect).toHaveBeenLastCalledWith(items[4]);
+
+    const tabEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab'
+    });
+    buttons[4].dispatchEvent(tabEvent);
+    expect(tabEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.hidden).toBe(false);
+    controller.destroy();
+  });
+
+  it('keeps group-title and edge-padding context visible while keyboard scrolling', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => Array.from({ length: 3 }, (_, index) => ({
+          group: 'Search engines',
+          id: `provider:${index}`,
+          kind: 'provider',
+          label: `Provider ${index + 1}`
+        }))
+      }
+    );
+
+    expect(controller.openModeMenu('none')).toBe(true);
+    const menuContent = controller.menuElement.querySelector<HTMLElement>(
+      '[data-search-input-mode-menu-content]'
+    );
+    const buttons = Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    );
+    expect(menuContent).not.toBeNull();
+    menuContent!.getBoundingClientRect = () => ({
+      bottom: 400,
+      height: 300,
+      left: 0,
+      right: 300,
+      top: 100,
+      width: 300,
+      x: 0,
+      y: 100,
+      toJSON: () => ({})
+    });
+    const verticalRects = [
+      { bottom: 190, top: 110 },
+      { bottom: 290, top: 210 },
+      { bottom: 390, top: 330 }
+    ];
+    buttons.forEach((button, index) => {
+      const rect = verticalRects[index];
+      button.getBoundingClientRect = () => ({
+        bottom: rect.bottom,
+        height: rect.bottom - rect.top,
+        left: 0,
+        right: 80,
+        top: rect.top,
+        width: 80,
+        x: 0,
+        y: rect.top,
+        toJSON: () => ({})
+      });
+    });
+
+    menuContent!.scrollTop = 200;
+    controller.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'ArrowRight'
+    }));
+    expect(document.activeElement).toBe(buttons[0]);
+    expect(menuContent!.scrollTop).toBe(166);
+
+    menuContent!.scrollTop = 100;
+    buttons[0].dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'End'
+    }));
+    expect(document.activeElement).toBe(buttons[2]);
+    expect(menuContent!.scrollTop).toBe(106);
+    controller.destroy();
+  });
+
   it('keeps panel typing separate from the main input and filters English or pinyin matches', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
@@ -719,6 +974,15 @@ describe('Shared search scope menu', () => {
     expect(document.activeElement).toBe(controller.menuElement);
     expect(controller.menuElement.dataset.searchActive).toBe('true');
 
+    pressMenuKey('Tab');
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.hidden).toBe(false);
+    controller.menuElement.dispatchEvent(new Event('pointerdown', {
+      bubbles: true,
+      cancelable: true
+    }));
+    expect(document.activeElement).toBe(controller.menuElement);
+
     pressMenuKey('d');
     pressMenuKey('o');
     pressMenuKey('u');
@@ -730,6 +994,10 @@ describe('Shared search scope menu', () => {
         '.x-lumno-search-input-mode__menu-match'
       )?.textContent
     ).toBe('豆');
+
+    pressMenuKey('Tab');
+    expect(document.activeElement).toBe(parts.input);
+    expect(controller.getModeMenuFilterQuery()).toBe('dou');
 
     const filteredItem = Array.from(
       controller.menuElement.querySelectorAll<HTMLButtonElement>(
@@ -975,6 +1243,9 @@ describe('Shared search scope menu', () => {
     expect(
       menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
     ).toContain('var(--x-ov-text, #111827) 14%');
+    expect(
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-focus-ring')
+    ).toBe('var(--x-ov-text, #111827)');
     expect(parts.modePrefix.style.background).toContain(
       'var(--x-ov-text, #111827) 14%'
     );
@@ -1111,12 +1382,12 @@ describe('Shared search scope menu', () => {
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefix.style.justifyContent).toBe('flex-start');
     expect(parts.modePrefixText.style.display).toBe('block');
-    expect(parts.modePrefixText.style.flex).toBe('1 1 auto');
+    expect(parts.modePrefixText.style.flex).toBe('0 1 auto');
     expect(parts.modePrefixText.style.lineHeight).toBe('18px');
     expect(parts.modePrefixCurrent.style.fontSize).toBe('13px');
     expect(parts.modePrefixCurrent.style.lineHeight).toBe('18px');
     expect(parts.modePrefixCurrent.style.display).toBe('none');
-    expect(parts.modePrefixCurrent.style.overflow).toBe('visible');
+    expect(parts.modePrefixCurrent.style.overflow).toBe('hidden');
     expect(parts.modePrefixCurrent.style.flex).toBe('0 0 auto');
     expect(parts.modePrefixChevron.style.flex).toBe('0 0 auto');
     expect(parts.modePrefix.getAttribute('data-menu-open')).toBe('false');
@@ -1153,7 +1424,21 @@ describe('Shared search scope menu', () => {
       modeId: 'provider:youtube'
     });
 
-    expect(animatePrefix).not.toHaveBeenCalled();
+    expect(animatePrefix).toHaveBeenCalledWith([
+      {
+        opacity: 0.4,
+        transform: 'translateY(-50%) translateX(-4px) scaleX(0.92)'
+      },
+      {
+        opacity: 1,
+        transform: 'translateY(-50%) translateX(0) scaleX(1)'
+      }
+    ], {
+      duration: 180,
+      easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+    });
+    prefixAnimation.onfinish?.();
+    animatePrefix.mockClear();
     expect(parts.modePrefixCurrent.textContent).toBe('当前');
     expect(parts.modePrefixCurrent.style.opacity).toBe('');
     expect(parts.modePrefix.getAttribute('data-menu-open')).toBe('false');
@@ -1272,7 +1557,20 @@ describe('Shared search scope menu', () => {
       modeId: 'openTabs'
     });
 
-    expect(animate).not.toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledWith([
+      {
+        opacity: 0.4,
+        transform: 'translateY(-50%) translateX(-4px) scaleX(0.92)'
+      },
+      {
+        opacity: 1,
+        transform: 'translateY(-50%) translateX(0) scaleX(1)'
+      }
+    ], {
+      duration: 180,
+      easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+    });
+    animation.onfinish?.();
     expect(lineIcon?.style.display).toBe('inline-flex');
     expect(parts.modePrefixGlyph.style.display).toBe('none');
     expect(animateIcon).toHaveBeenCalledWith([
@@ -1299,69 +1597,55 @@ describe('Shared search scope menu', () => {
     ).toBeNull();
     expect(parts.modePrefix.style.opacity).toBe('1');
     expect(parts.modePrefix.style.transform).toBe(
-      'translateY(-50%) translateX(0) scale(1)'
+      'translateY(-50%) translateX(0) scaleX(1)'
     );
     expect(parts.modePrefix.style.willChange).toBe('auto');
     controller.destroy();
   });
 
-  it('shows the current label only while the menu is open and resizes the chip', () => {
+  it('expands the current label in normal flow so it continuously pushes the chevron aside', () => {
     const parts = createModeParts();
     const animationStartStates: Array<Record<string, string | undefined>> = [];
     const measurementStates: Array<Record<string, string | undefined>> = [];
-    const resizeAnimation = {
+    const resizeAnimations = [0, 1].map(() => ({
       cancel: vi.fn(),
       oncancel: null as null | (() => void),
       onfinish: null as null | (() => void)
-    };
-    const animate = vi.fn(
+    }));
+    const animateCurrent = vi.fn(
       (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) => {
         animationStartStates.push({ ...parts.modePrefix.dataset });
-        return resizeAnimation as unknown as Animation;
+        return resizeAnimations[animateCurrent.mock.calls.length - 1] as unknown as Animation;
       }
     );
-    Object.defineProperty(parts.modePrefix, 'animate', {
+    Object.defineProperty(parts.modePrefixCurrent, 'animate', {
       configurable: true,
-      value: animate
+      value: animateCurrent
     });
-    Object.defineProperty(parts.modePrefix, 'getBoundingClientRect', {
+    Object.defineProperty(parts.modePrefixCurrent, 'getBoundingClientRect', {
       configurable: true,
       value: () => {
         if (parts.modePrefix.dataset.currentMeasuring === 'true') {
           measurementStates.push({ ...parts.modePrefix.dataset });
         }
-        const includesCurrent = parts.modePrefix.dataset.currentMeasuring === 'true' ||
+        const visible = parts.modePrefix.dataset.currentMeasuring === 'true' ||
           parts.modePrefix.dataset.currentVisible === 'true';
+        const inlineWidth = Number.parseFloat(parts.modePrefixCurrent.style.width);
+        const width = visible
+          ? (Number.isFinite(inlineWidth) ? inlineWidth : 24)
+          : 0;
         return {
           bottom: 0,
           height: 26,
           left: 0,
-          right: includesCurrent ? 162 : 132,
+          right: width,
           toJSON: () => ({}),
           top: 0,
-          width: includesCurrent ? 162 : 132,
+          width,
           x: 0,
           y: 0
         };
       }
-    });
-    Object.defineProperty(parts.modePrefix, 'clientLeft', {
-      configurable: true,
-      value: 1
-    });
-    Object.defineProperty(parts.modePrefixChevron, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({
-        bottom: 21,
-        height: 16,
-        left: 87,
-        right: 103,
-        toJSON: () => ({}),
-        top: 5,
-        width: 16,
-        x: 87,
-        y: 5
-      })
     });
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
@@ -1386,38 +1670,38 @@ describe('Shared search scope menu', () => {
     expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
     expect(parts.modePrefix.dataset.currentVisible).toBe('true');
     expect(parts.modePrefix.dataset.currentMeasuring).toBe('false');
-    expect(parts.modePrefix.dataset.currentOverlay).toBe('true');
+    expect(parts.modePrefixCurrent.style.position).toBe('');
+    expect(parts.modePrefixCurrent.style.left).toBe('');
+    expect(Array.from(parts.modePrefix.children).indexOf(parts.modePrefixCurrent)).toBeLessThan(
+      Array.from(parts.modePrefix.children).indexOf(parts.modePrefixChevron)
+    );
     expect(measurementStates.length).toBeGreaterThan(0);
     expect(measurementStates.every((state) => (
       state.currentVisible === 'false' && state.currentMeasuring === 'true'
     ))).toBe(true);
     expect(animationStartStates[0]).toMatchObject({
       currentMeasuring: 'false',
-      currentOverlay: 'true',
       currentVisible: 'true'
     });
-    expect(
-      parts.modePrefix.style.getPropertyValue(
-        '--x-lumno-search-mode-current-overlay-left'
-      )
-    ).toBe('86px');
-    expect(animate.mock.calls[0][0]).toEqual([
-      { width: '132px' },
-      { width: '162px' }
+    expect(animateCurrent.mock.calls[0][0]).toEqual([
+      { marginLeft: '-6px', width: '0px' },
+      { marginLeft: '0px', width: '24px' }
     ]);
-    expect(animate.mock.calls[0][1]).toEqual({
+    expect(animateCurrent.mock.calls[0][1]).toEqual({
       duration: 140,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
     });
-    resizeAnimation.onfinish?.();
+    controller.setPrefixText('Google', { accent: '#2563eb' }, {
+      iconClass: 'ri-google-fill',
+      modeId: 'provider:google'
+    });
+    expect(parts.modePrefixCurrent.style.position).toBe('');
+    expect(parts.modePrefixCurrent.style.left).toBe('');
+    resizeAnimations[0].onfinish?.();
     expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
     expect(parts.modePrefix.dataset.currentVisible).toBe('true');
-    expect(parts.modePrefix.dataset.currentOverlay).toBe('false');
-    expect(
-      parts.modePrefix.style.getPropertyValue(
-        '--x-lumno-search-mode-current-overlay-left'
-      )
-    ).toBe('');
+    expect(parts.modePrefixCurrent.style.width).toBe('');
+    expect(parts.modePrefixCurrent.style.marginLeft).toBe('');
     expect(
       parts.modePrefixCurrent.querySelector(
         '[data-search-input-mode-current-text]'
@@ -1425,13 +1709,118 @@ describe('Shared search scope menu', () => {
     ).toBe('当前');
 
     expect(controller.closeModeMenu(false)).toBe(true);
+    expect(parts.modePrefixCurrent.style.display).toBe('inline-flex');
+    expect(parts.modePrefix.dataset.currentVisible).toBe('true');
+    expect(animateCurrent.mock.calls[1][0]).toEqual([
+      { marginLeft: '0px', width: '24px' },
+      { marginLeft: '-6px', width: '0px' }
+    ]);
+    resizeAnimations[1].onfinish?.();
     expect(parts.modePrefixCurrent.style.display).toBe('none');
     expect(parts.modePrefix.dataset.currentVisible).toBe('false');
-    expect(parts.modePrefix.dataset.currentOverlay).toBe('false');
-    expect(animate.mock.calls[1][0]).toEqual([
-      { width: '162px' },
-      { width: '132px' }
+    controller.destroy();
+  });
+
+  it('continues a reversed current-slot resize from its in-flight geometry and ignores stale completion', () => {
+    const parts = createModeParts();
+    let inFlightWidth = 0;
+    let inFlightMarginLeft = -6;
+    const resizeAnimations = [0, 1].map(() => ({
+      cancel: vi.fn(),
+      oncancel: null as null | (() => void),
+      onfinish: null as null | (() => void)
+    }));
+    const animateCurrent = vi.fn(
+      (_keyframes: Keyframe[], _options?: KeyframeAnimationOptions) =>
+        resizeAnimations[animateCurrent.mock.calls.length - 1] as unknown as Animation
+    );
+    Object.defineProperty(parts.modePrefixCurrent, 'animate', {
+      configurable: true,
+      value: animateCurrent
+    });
+    Object.defineProperty(parts.modePrefixCurrent, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => {
+        const width = parts.modePrefix.dataset.currentMeasuring === 'true'
+          ? 24
+          : (parts.modePrefix.dataset.currentVisible === 'true' ? inFlightWidth : 0);
+        return {
+          bottom: 26,
+          height: 26,
+          left: 0,
+          right: width,
+          toJSON: () => ({}),
+          top: 0,
+          width,
+          x: 0,
+          y: 0
+        };
+      }
+    });
+    const originalGetComputedStyle = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
+      if (element === parts.modePrefixCurrent) {
+        const marginLeft = parts.modePrefix.dataset.currentMeasuring === 'true'
+          ? 0
+          : inFlightMarginLeft;
+        return { marginLeft: `${marginLeft}px` } as CSSStyleDeclaration;
+      }
+      return originalGetComputedStyle(element);
+    });
+    const controller = window.LumnoSearchInputMode.createInputModeController(parts, {
+      getModeMenuItems: () => [{
+        active: true,
+        id: 'provider:google',
+        kind: 'provider',
+        label: 'Google'
+      }]
+    });
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(animateCurrent.mock.calls[0][0]).toEqual([
+      { marginLeft: '-6px', width: '0px' },
+      { marginLeft: '0px', width: '24px' }
     ]);
+
+    inFlightWidth = 14;
+    inFlightMarginLeft = -2;
+    expect(controller.closeModeMenu(false)).toBe(true);
+    expect(resizeAnimations[0].cancel).toHaveBeenCalledTimes(1);
+    expect(animateCurrent.mock.calls[1][0]).toEqual([
+      { marginLeft: '-2px', width: '14px' },
+      { marginLeft: '-6px', width: '0px' }
+    ]);
+
+    resizeAnimations[0].onfinish?.();
+    expect(parts.modePrefix.dataset.currentVisible).toBe('true');
+    expect(parts.modePrefixCurrent.style.willChange).toBe('width');
+
+    resizeAnimations[1].onfinish?.();
+    expect(parts.modePrefix.dataset.currentVisible).toBe('false');
+    expect(parts.modePrefixCurrent.style.width).toBe('');
+    expect(parts.modePrefixCurrent.style.marginLeft).toBe('');
+    expect(parts.modePrefixCurrent.style.willChange).toBe('auto');
+    vi.restoreAllMocks();
+    controller.destroy();
+  });
+
+  it('keeps the overlay current label clipped by its own in-flow slot before CSS loads', () => {
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      { surface: 'overlay' }
+    );
+    const currentText = parts.modePrefixCurrent.querySelector<HTMLElement>(
+      '[data-search-input-mode-current-text]'
+    );
+    controller.setPrefixText('Google', {}, { modeId: 'provider:google' });
+
+    expect(currentText?.style.display).toBe('inline-block');
+    expect(currentText?.style.clipPath).toBe('');
+    expect(parts.modePrefixCurrent.style.overflow).toBe('hidden');
+    expect(parts.modePrefixCurrent.style.position).toBe('');
+    expect(parts.modePrefix.hasAttribute('data-current-overlay')).toBe(false);
     controller.destroy();
   });
 
@@ -2146,6 +2535,12 @@ describe('Shared search scope menu', () => {
     expect(
       menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
     ).toBe('rgba(0, 174, 236, 0.075)');
+    const focusRingRgb = (
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-focus-ring') || ''
+    ).match(/[0-9]+/g)?.map(Number) || [];
+    expect(focusRingRgb).toHaveLength(3);
+    expect(getTestContrastRatio(focusRingRgb, [236, 249, 254]))
+      .toBeGreaterThanOrEqual(3);
     expect(menuItem?.getAttribute('aria-label')).toBe('Bilibili');
     expect(label?.textContent).toBe('Bilibili');
     expect(label?.isConnected).toBe(true);

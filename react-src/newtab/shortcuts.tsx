@@ -65,6 +65,7 @@ export interface ShortcutsViewOptions {
     options: {
       primaryUrl: string;
       browserUrl?: string;
+      pageSpecificUrl?: string;
       skipPersisted?: boolean;
     }
   ) => void;
@@ -128,6 +129,7 @@ interface NormalizedOptions {
     options: {
       primaryUrl: string;
       browserUrl?: string;
+      pageSpecificUrl?: string;
       skipPersisted?: boolean;
     }
   ) => void;
@@ -250,7 +252,7 @@ function ShortcutFavicon({
     }
     options.attachFaviconWithFallbacks(image, url, host, {
       primaryUrl: options.getPageFaviconCandidateUrl(url),
-      browserUrl: fallbackFaviconDataUrl,
+      pageSpecificUrl: fallbackFaviconDataUrl,
       skipPersisted: true
     });
   }, [fallbackFaviconDataUrl, host, localIconDataUrl, options, url]);

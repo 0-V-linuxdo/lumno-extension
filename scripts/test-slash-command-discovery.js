@@ -317,8 +317,13 @@ assert.match(
 );
 assert.match(
   newtabHtmlSource,
-  /\.x-nt-empty-state\s*\{[^}]*height:\s*52px;[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*gap:\s*8px;/,
-  'New Tab command empty state should center its icon and message as one group'
+  /\.x-nt-suggestion-item\s*\{[^}]*height:\s*var\(--x-nt-suggestion-row-height,\s*52px\);[^}]*min-height:\s*var\(--x-nt-suggestion-row-height,\s*52px\);/,
+  'New Tab result rows should use the shared fixed row-height contract'
+);
+assert.match(
+  newtabHtmlSource,
+  /\.x-nt-empty-state\s*\{[^}]*height:\s*var\(--x-nt-suggestion-row-height,\s*52px\);[^}]*min-height:\s*var\(--x-nt-suggestion-row-height,\s*52px\);[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*gap:\s*8px;/,
+  'New Tab empty state should share the result-row height while centering its contents'
 );
 assert.match(
   overlayCssSource,

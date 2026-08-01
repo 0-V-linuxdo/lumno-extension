@@ -114,7 +114,7 @@ describe('Shortcuts React island', () => {
       'example.com',
       {
         primaryUrl: 'favicon:https://example.com/docs',
-        browserUrl: '',
+        pageSpecificUrl: '',
         skipPersisted: true
       }
     );
@@ -256,7 +256,7 @@ describe('Shortcuts React island', () => {
     );
   });
 
-  it('adds a resolved high-resolution icon behind the browser favicon', async () => {
+  it('promotes a resolved page-specific icon ahead of browser favicon fallbacks', async () => {
     const attachFavicon = vi.fn();
     let finishResolution: (dataUrl: string) => void = () => {};
     const resolveShortcutFaviconDataUrl = vi.fn(() => new Promise<string>((resolve) => {
@@ -290,13 +290,13 @@ describe('Shortcuts React island', () => {
       'example.com',
       {
         primaryUrl: 'favicon:https://example.com/docs',
-        browserUrl: 'data:image/png;base64,aGlnaC1yZXM=',
+        pageSpecificUrl: 'data:image/png;base64,aGlnaC1yZXM=',
         skipPersisted: true
       }
     );
   });
 
-  it('keeps a path-specific browser favicon ahead of a cached high-resolution fallback', () => {
+  it('uses a cached page-specific icon ahead of the browser favicon candidate', () => {
     const attachFavicon = vi.fn();
     const resolveShortcutFaviconDataUrl = vi.fn(() => Promise.resolve(''));
     const developerConsoleUrl =
@@ -321,11 +321,53 @@ describe('Shortcuts React island', () => {
       'example.com',
       {
         primaryUrl: `favicon:${developerConsoleUrl}`,
-        browserUrl: 'data:image/png;base64,Y2FjaGVkLWhk',
+        pageSpecificUrl: 'data:image/png;base64,Y2FjaGVkLWhk',
         skipPersisted: true
       }
     );
     expect(resolveShortcutFaviconDataUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps page-specific icons isolated for shortcuts on the same host', () => {
+    const attachFavicon = vi.fn();
+    const profileUrl = 'https://x.com/thsottiaux';
+    const homeUrl = 'https://x.com/home';
+    const profileIcon = 'data:image/jpeg;base64,dGlibw==';
+    const homeIcon = 'data:image/png;base64,eA==';
+    const { view } = createView({
+      getHostFromUrl: () => 'x.com',
+      getShortcutFaviconDataUrl: (url) =>
+        url === profileUrl ? profileIcon : homeIcon,
+      getPageFaviconCandidateUrl: (url) => `favicon:${url}`,
+      attachFaviconWithFallbacks: attachFavicon
+    });
+
+    renderItems(view, [
+      { id: 'profile', title: 'Tibo', url: profileUrl },
+      { id: 'home', title: 'X', url: homeUrl }
+    ]);
+
+    expect(attachFavicon).toHaveBeenCalledTimes(2);
+    expect(attachFavicon).toHaveBeenCalledWith(
+      expect.any(HTMLImageElement),
+      profileUrl,
+      'x.com',
+      {
+        primaryUrl: `favicon:${profileUrl}`,
+        pageSpecificUrl: profileIcon,
+        skipPersisted: true
+      }
+    );
+    expect(attachFavicon).toHaveBeenCalledWith(
+      expect.any(HTMLImageElement),
+      homeUrl,
+      'x.com',
+      {
+        primaryUrl: `favicon:${homeUrl}`,
+        pageSpecificUrl: homeIcon,
+        skipPersisted: true
+      }
+    );
   });
 
   it('preserves keyed tile nodes when legacy drag order is synchronized', () => {

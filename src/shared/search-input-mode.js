@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-07-31-scope-chip-v15';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-01-scope-chip-v25';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -12,12 +12,17 @@
   const DEFAULT_MODE_MENU_DOUBLE_TAB_DURATION = 700;
   const DEFAULT_MODE_TAG_REMOVAL_CONFIRMATION_DURATION = 2200;
   const DEFAULT_MODE_MENU_VIEWPORT_BOTTOM_INSET = 24;
+  const DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT = 44;
+  const DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT = 16;
   const DEFAULT_PREFIX_ICON_POP_DURATION = 180;
   const DEFAULT_PREFIX_ICON_POP_EASING = 'linear';
   const DEFAULT_PREFIX_ICON_EXIT_DURATION = 100;
   const DEFAULT_PREFIX_ICON_EXIT_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
   const DEFAULT_PREFIX_RESIZE_DURATION = 140;
   const DEFAULT_PREFIX_RESIZE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const DEFAULT_PREFIX_ITEM_GAP_PX = 6;
+  const DEFAULT_PREFIX_ENTER_DURATION = 180;
+  const DEFAULT_PREFIX_ENTER_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
   const DEFAULT_PREFIX_TRANSITION = 'background-color 140ms ease, color 140ms ease';
   const MIN_PREFIX_TEXT_CONTRAST = 4.5;
   const MODE_MENU_LINE_ICON_PATHS = Object.freeze({
@@ -192,10 +197,11 @@
     return darkContrast >= lightContrast ? '#111827' : '#F8FAFC';
   }
 
-  function getAccessibleThemeTextRgb(accentRgb, backgroundRgb) {
+  function getAccessibleThemeColorRgb(accentRgb, backgroundRgb, minimumContrast) {
     const darkTarget = [15, 23, 42];
     const lightTarget = [248, 250, 252];
-    if (getContrastRatio(accentRgb, backgroundRgb) >= MIN_PREFIX_TEXT_CONTRAST) {
+    const requiredContrast = Number(minimumContrast) || MIN_PREFIX_TEXT_CONTRAST;
+    if (getContrastRatio(accentRgb, backgroundRgb) >= requiredContrast) {
       return accentRgb.slice();
     }
     const target = getContrastRatio(darkTarget, backgroundRgb) >=
@@ -208,7 +214,7 @@
     for (let iteration = 0; iteration < 12; iteration += 1) {
       const weight = (lowerWeight + upperWeight) / 2;
       const candidate = mixRgb(accentRgb, target, weight);
-      if (getContrastRatio(candidate, backgroundRgb) >= MIN_PREFIX_TEXT_CONTRAST) {
+      if (getContrastRatio(candidate, backgroundRgb) >= requiredContrast) {
         readableColor = candidate;
         upperWeight = weight;
       } else {
@@ -216,6 +222,18 @@
       }
     }
     return readableColor;
+  }
+
+  function getAccessibleThemeTextRgb(accentRgb, backgroundRgb) {
+    return getAccessibleThemeColorRgb(
+      accentRgb,
+      backgroundRgb,
+      MIN_PREFIX_TEXT_CONTRAST
+    );
+  }
+
+  function getAccessibleThemeFocusRingRgb(accentRgb, backgroundRgb) {
+    return getAccessibleThemeColorRgb(accentRgb, backgroundRgb, 3);
   }
 
   function createInputModeController(parts, options) {
@@ -348,7 +366,9 @@
     let inputModePrefixAnimation = null;
     let inputModePrefixAnimationFrame = null;
     let inputModePrefixAnimationTimer = 0;
+    let inputModePrefixAnimationRevision = 0;
     let inputModePrefixContentRevision = 0;
+    let inputModePrefixCurrentAnimation = null;
     let inputModePrefixIconAnimation = null;
     let inputModePrefixIconAnimationElement = null;
     let inputModePrefixIconGhost = null;
@@ -366,6 +386,7 @@
     let modeMenuDoubleTabTimer = 0;
     let modeTagRemovalConfirmationPending = false;
     let modeTagRemovalConfirmationTimer = 0;
+    let modeMenuKeyboardNavigationActive = false;
     let destroyed = false;
 
     function getModeMenuPlaceholder() {
@@ -480,7 +501,6 @@
     siteSearchPrefix.setAttribute('data-menu-open', 'false');
     siteSearchPrefix.setAttribute('data-current-visible', 'false');
     siteSearchPrefix.setAttribute('data-current-measuring', 'false');
-    siteSearchPrefix.setAttribute('data-current-overlay', 'false');
     if (!siteSearchPrefixGlyph.parentNode) {
       if (typeof siteSearchPrefix.insertBefore === 'function') {
         siteSearchPrefix.insertBefore(siteSearchPrefixGlyph, siteSearchPrefixText);
@@ -517,6 +537,10 @@
     if (!siteSearchPrefixCurrentText.parentNode) {
       siteSearchPrefixCurrent.appendChild(siteSearchPrefixCurrentText);
     }
+    if (siteSearchPrefixCurrentText.style &&
+        typeof siteSearchPrefixCurrentText.style.setProperty === 'function') {
+      siteSearchPrefixCurrentText.style.setProperty('display', 'inline-block');
+    }
     siteSearchPrefixCurrent.setAttribute('aria-hidden', 'true');
     siteSearchPrefixCurrent.setAttribute('data-search-input-mode-current', '');
     siteSearchPrefixCurrentText.setAttribute('data-search-input-mode-current-text', '');
@@ -533,7 +557,7 @@
       ['display', 'none'],
       ['align-items', 'center'],
       ['justify-content', 'flex-start'],
-      ['gap', '6px'],
+      ['gap', `${DEFAULT_PREFIX_ITEM_GAP_PX}px`],
       ['max-width', 'min(220px, 48%)'],
       ['min-width', '0'],
       ['box-sizing', 'border-box'],
@@ -639,7 +663,46 @@
     let modeMenuFooterFilterText = typeof modeMenuFooter.querySelector === 'function'
       ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-filter-text]')
       : null;
-    if (!modeMenuFooterKey || !modeMenuFooterText || !modeMenuFooterFilterText) {
+    let modeMenuFooterActions = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-actions]')
+      : null;
+    let modeMenuFooterNavigationHint = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-navigation-hint]')
+      : null;
+    let modeMenuFooterSelectHint = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-select-hint]')
+      : null;
+    let modeMenuFooterNavigationKey = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-navigation-key]')
+      : null;
+    let modeMenuFooterNavigationText = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-navigation-text]')
+      : null;
+    let modeMenuFooterSelectKey = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-select-key]')
+      : null;
+    let modeMenuFooterSelectText = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-select-text]')
+      : null;
+    let modeMenuFooterShortcutHint = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-shortcut-hint]')
+      : null;
+    let modeMenuFooterInputHint = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-input-hint]')
+      : null;
+    let modeMenuFooterInputKey = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-input-key]')
+      : null;
+    let modeMenuFooterInputText = typeof modeMenuFooter.querySelector === 'function'
+      ? modeMenuFooter.querySelector('[data-search-input-mode-menu-footer-input-text]')
+      : null;
+    if (!modeMenuFooterKey || !modeMenuFooterText || !modeMenuFooterFilterText ||
+        !modeMenuFooterActions || !modeMenuFooterNavigationHint ||
+        !modeMenuFooterSelectHint ||
+        !modeMenuFooterNavigationKey || !modeMenuFooterNavigationText ||
+        !modeMenuFooterSelectKey || !modeMenuFooterSelectText ||
+        !modeMenuFooterShortcutHint || !modeMenuFooterInputHint ||
+        !modeMenuFooterInputKey || !modeMenuFooterInputText) {
       while (modeMenuFooter.firstChild) {
         modeMenuFooter.removeChild(modeMenuFooter.firstChild);
       }
@@ -648,6 +711,83 @@
         'x-lumno-search-input-mode__menu-footer-filter-text';
       modeMenuFooterFilterText.setAttribute(
         'data-search-input-mode-menu-footer-filter-text',
+        ''
+      );
+      modeMenuFooterActions = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterActions.className =
+        'x-lumno-search-input-mode__menu-footer-actions';
+      modeMenuFooterActions.setAttribute(
+        'data-search-input-mode-menu-footer-actions',
+        ''
+      );
+      modeMenuFooterNavigationHint = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterNavigationHint.className =
+        'x-lumno-search-input-mode__menu-footer-hint x-lumno-search-input-mode__menu-footer-hint--navigation';
+      modeMenuFooterNavigationHint.setAttribute(
+        'data-search-input-mode-menu-footer-navigation-hint',
+        ''
+      );
+      modeMenuFooterNavigationKey = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterNavigationKey.className =
+        'x-lumno-search-input-mode__menu-footer-key x-lumno-search-input-mode__menu-footer-key--arrows';
+      modeMenuFooterNavigationKey.setAttribute(
+        'data-search-input-mode-menu-footer-navigation-key',
+        ''
+      );
+      modeMenuFooterNavigationText = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterNavigationText.className =
+        'x-lumno-search-input-mode__menu-footer-text';
+      modeMenuFooterNavigationText.setAttribute(
+        'data-search-input-mode-menu-footer-navigation-text',
+        ''
+      );
+      modeMenuFooterSelectHint = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterSelectHint.className =
+        'x-lumno-search-input-mode__menu-footer-hint x-lumno-search-input-mode__menu-footer-hint--select';
+      modeMenuFooterSelectHint.setAttribute(
+        'data-search-input-mode-menu-footer-select-hint',
+        ''
+      );
+      modeMenuFooterSelectKey = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterSelectKey.className =
+        'x-lumno-search-input-mode__menu-footer-key';
+      modeMenuFooterSelectKey.setAttribute(
+        'data-search-input-mode-menu-footer-select-key',
+        ''
+      );
+      modeMenuFooterSelectText = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterSelectText.className =
+        'x-lumno-search-input-mode__menu-footer-text';
+      modeMenuFooterSelectText.setAttribute(
+        'data-search-input-mode-menu-footer-select-text',
+        ''
+      );
+      modeMenuFooterInputHint = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterInputHint.className =
+        'x-lumno-search-input-mode__menu-footer-hint x-lumno-search-input-mode__menu-footer-hint--input';
+      modeMenuFooterInputHint.setAttribute(
+        'data-search-input-mode-menu-footer-input-hint',
+        ''
+      );
+      modeMenuFooterInputKey = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterInputKey.className =
+        'x-lumno-search-input-mode__menu-footer-key';
+      modeMenuFooterInputKey.setAttribute(
+        'data-search-input-mode-menu-footer-input-key',
+        ''
+      );
+      modeMenuFooterInputText = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterInputText.className =
+        'x-lumno-search-input-mode__menu-footer-text';
+      modeMenuFooterInputText.setAttribute(
+        'data-search-input-mode-menu-footer-input-text',
+        ''
+      );
+      modeMenuFooterShortcutHint = applyNoTranslate(doc.createElement('span'));
+      modeMenuFooterShortcutHint.className =
+        'x-lumno-search-input-mode__menu-footer-hint x-lumno-search-input-mode__menu-footer-hint--shortcut';
+      modeMenuFooterShortcutHint.setAttribute(
+        'data-search-input-mode-menu-footer-shortcut-hint',
         ''
       );
       modeMenuFooterKey = applyNoTranslate(doc.createElement('span'));
@@ -663,8 +803,19 @@
         ''
       );
       modeMenuFooter.appendChild(modeMenuFooterFilterText);
-      modeMenuFooter.appendChild(modeMenuFooterKey);
-      modeMenuFooter.appendChild(modeMenuFooterText);
+      modeMenuFooterNavigationHint.appendChild(modeMenuFooterNavigationKey);
+      modeMenuFooterNavigationHint.appendChild(modeMenuFooterNavigationText);
+      modeMenuFooterSelectHint.appendChild(modeMenuFooterSelectKey);
+      modeMenuFooterSelectHint.appendChild(modeMenuFooterSelectText);
+      modeMenuFooterInputHint.appendChild(modeMenuFooterInputKey);
+      modeMenuFooterInputHint.appendChild(modeMenuFooterInputText);
+      modeMenuFooterShortcutHint.appendChild(modeMenuFooterKey);
+      modeMenuFooterShortcutHint.appendChild(modeMenuFooterText);
+      modeMenuFooterActions.appendChild(modeMenuFooterNavigationHint);
+      modeMenuFooterActions.appendChild(modeMenuFooterSelectHint);
+      modeMenuFooterActions.appendChild(modeMenuFooterInputHint);
+      modeMenuFooterActions.appendChild(modeMenuFooterShortcutHint);
+      modeMenuFooter.appendChild(modeMenuFooterActions);
     }
     const legacyModeMenuFooterDivider = typeof modeMenuFooter.querySelector === 'function'
       ? modeMenuFooter.querySelector('.x-lumno-search-input-mode__menu-footer-divider')
@@ -673,8 +824,19 @@
       legacyModeMenuFooterDivider.remove();
     }
     modeMenuFooter.appendChild(modeMenuFooterFilterText);
-    modeMenuFooter.appendChild(modeMenuFooterKey);
-    modeMenuFooter.appendChild(modeMenuFooterText);
+    modeMenuFooterNavigationHint.appendChild(modeMenuFooterNavigationKey);
+    modeMenuFooterNavigationHint.appendChild(modeMenuFooterNavigationText);
+    modeMenuFooterSelectHint.appendChild(modeMenuFooterSelectKey);
+    modeMenuFooterSelectHint.appendChild(modeMenuFooterSelectText);
+    modeMenuFooterInputHint.appendChild(modeMenuFooterInputKey);
+    modeMenuFooterInputHint.appendChild(modeMenuFooterInputText);
+    modeMenuFooterShortcutHint.appendChild(modeMenuFooterKey);
+    modeMenuFooterShortcutHint.appendChild(modeMenuFooterText);
+    modeMenuFooterActions.appendChild(modeMenuFooterNavigationHint);
+    modeMenuFooterActions.appendChild(modeMenuFooterSelectHint);
+    modeMenuFooterActions.appendChild(modeMenuFooterInputHint);
+    modeMenuFooterActions.appendChild(modeMenuFooterShortcutHint);
+    modeMenuFooter.appendChild(modeMenuFooterActions);
     function renderModeMenuFilterQuery(query) {
       const queryToken = '\uF8FFLUMNO_MODE_MENU_QUERY\uF8FF';
       const localizedQuery = formatMessage(
@@ -716,11 +878,26 @@
       } else {
         modeMenuFooterFilterText.textContent = formatMessage(
           'search_scope_menu_filter_hint',
-          'Click the panel, then type English or pinyin to filter'
+          'Type to filter'
         );
       }
     }
     function refreshModeMenuLanguage() {
+      modeMenuFooterNavigationKey.textContent = '\u2190\u2191\u2193\u2192';
+      modeMenuFooterNavigationText.textContent = formatMessage(
+        'search_scope_menu_navigation_hint',
+        'Move'
+      );
+      modeMenuFooterSelectKey.textContent = 'Enter';
+      modeMenuFooterSelectText.textContent = formatMessage(
+        'search_scope_menu_select_hint',
+        'Switch'
+      );
+      modeMenuFooterInputKey.textContent = 'Tab';
+      modeMenuFooterInputText.textContent = formatMessage(
+        'search_scope_menu_input_focus_hint',
+        'Focus'
+      );
       modeMenuFooterKey.textContent =
         typeof shortcutDisplayApi.formatShortcutReference === 'function'
           ? shortcutDisplayApi.formatShortcutReference('Tab Tab', {
@@ -729,7 +906,7 @@
           : 'Tab Tab';
       modeMenuFooterText.textContent = formatMessage(
         'search_scope_menu_shortcut_hint',
-        'Quickly open this panel'
+        'Open panel'
       );
       refreshModeMenuFilterText();
       syncInputPlaceholder();
@@ -1027,6 +1204,9 @@
         }
         return;
       }
+      activeIcon.style.setProperty('opacity', '1');
+      activeIcon.style.setProperty('filter', 'none');
+      activeIcon.style.setProperty('transform', 'none');
       const animation = activeIcon.animate([
         {
           opacity: 0.45,
@@ -1076,6 +1256,8 @@
         }
         return;
       }
+      outgoingIcon.style.setProperty('opacity', '1');
+      outgoingIcon.style.setProperty('transform', 'none');
       const outgoingAnimation = outgoingIcon.animate([
         { opacity: 1, transform: 'scale(1)' },
         { opacity: 0, transform: 'scale(0.84)' }
@@ -1206,7 +1388,7 @@
       text.style.cssText = cssText([
         ['all', 'unset'],
         ['display', 'block'],
-        ['flex', '1 1 auto'],
+        ['flex', '0 1 auto'],
         ['min-width', '0'],
         ['overflow', 'hidden'],
         ['text-overflow', 'ellipsis'],
@@ -1229,7 +1411,7 @@
         ['line-height', '18px'],
         ['letter-spacing', '0.04em'],
         ['white-space', 'nowrap'],
-        ['overflow', 'visible'],
+        ['overflow', 'hidden'],
         ['flex', '0 0 auto']
       ], useImportantStyles);
       setInputModePrefixIdentity(prefixText, contentOptions);
@@ -1240,10 +1422,116 @@
       }
     }
 
+    function getInputModePrefixRenderedWidth() {
+      if (!isElementVisible(siteSearchPrefix) ||
+          typeof siteSearchPrefix.getBoundingClientRect !== 'function') {
+        return 0;
+      }
+      return Math.max(
+        0,
+        Number(siteSearchPrefix.getBoundingClientRect().width) || 0
+      );
+    }
+
+    function getInputModePrefixCurrentVisualState() {
+      if (!isElementVisible(siteSearchPrefix) ||
+          typeof siteSearchPrefixCurrent.getBoundingClientRect !== 'function') {
+        return { marginLeft: 0, width: 0 };
+      }
+      const width = Math.max(
+        0,
+        Number(siteSearchPrefixCurrent.getBoundingClientRect().width) || 0
+      );
+      const computedStyle = win && typeof win.getComputedStyle === 'function'
+        ? win.getComputedStyle(siteSearchPrefixCurrent)
+        : null;
+      const marginLeft = computedStyle
+        ? Number.parseFloat(computedStyle.marginLeft) || 0
+        : 0;
+      return { marginLeft, width };
+    }
+
+    function clearInputModePrefixCurrentAnimatedStyles() {
+      if (siteSearchPrefixCurrent && siteSearchPrefixCurrent.style &&
+          typeof siteSearchPrefixCurrent.style.removeProperty === 'function') {
+        siteSearchPrefixCurrent.style.removeProperty('width');
+        siteSearchPrefixCurrent.style.removeProperty('margin-left');
+      }
+      setStyle(siteSearchPrefixCurrent, 'will-change', 'auto', useImportantStyles);
+    }
+
+    function cancelInputModePrefixCurrentAnimation() {
+      const animation = inputModePrefixCurrentAnimation;
+      inputModePrefixCurrentAnimation = null;
+      if (animation && typeof animation.cancel === 'function') {
+        animation.cancel();
+      }
+      clearInputModePrefixCurrentAnimatedStyles();
+    }
+
+    function playInputModePrefixCurrentResizeAnimation(fromState, toState) {
+      cancelInputModePrefixCurrentAnimation();
+      const animationRevision = inputModePrefixAnimationRevision;
+      const startWidth = Math.max(0, Number(fromState && fromState.width) || 0);
+      const endWidth = Math.max(0, Number(toState && toState.width) || 0);
+      const startMarginLeft = Number(fromState && fromState.marginLeft) || 0;
+      const endMarginLeft = Number(toState && toState.marginLeft) || 0;
+      const shouldHideOnFinish = endWidth < 0.5;
+      setInputModePrefixCurrentVisible(true);
+      siteSearchPrefixCurrent.style.setProperty('width', `${endWidth}px`);
+      siteSearchPrefixCurrent.style.setProperty('margin-left', `${endMarginLeft}px`);
+      if (shouldReduceInputModeMotion() ||
+          typeof siteSearchPrefixCurrent.animate !== 'function' ||
+          (Math.abs(startWidth - endWidth) < 0.5 &&
+            Math.abs(startMarginLeft - endMarginLeft) < 0.5)) {
+        if (shouldHideOnFinish) {
+          setInputModePrefixCurrentVisible(false);
+        }
+        clearInputModePrefixCurrentAnimatedStyles();
+        updatePrefixLayout();
+        return;
+      }
+      const animation = siteSearchPrefixCurrent.animate([
+        {
+          marginLeft: `${startMarginLeft}px`,
+          width: `${startWidth}px`
+        },
+        {
+          marginLeft: `${endMarginLeft}px`,
+          width: `${endWidth}px`
+        }
+      ], {
+        duration: DEFAULT_PREFIX_RESIZE_DURATION,
+        easing: DEFAULT_PREFIX_RESIZE_EASING
+      });
+      inputModePrefixCurrentAnimation = animation;
+      setStyle(siteSearchPrefixCurrent, 'will-change', 'width', useImportantStyles);
+      const finish = () => {
+        if (inputModePrefixCurrentAnimation !== animation ||
+            animationRevision !== inputModePrefixAnimationRevision) {
+          return;
+        }
+        inputModePrefixCurrentAnimation = null;
+        if (shouldHideOnFinish) {
+          setInputModePrefixCurrentVisible(false);
+        }
+        clearInputModePrefixCurrentAnimatedStyles();
+        updatePrefixLayout();
+      };
+      animation.onfinish = finish;
+      animation.oncancel = () => {
+        if (inputModePrefixCurrentAnimation === animation) {
+          inputModePrefixCurrentAnimation = null;
+        }
+      };
+    }
+
     function cancelInputModePrefixAnimation(cancelOptions) {
+      inputModePrefixAnimationRevision += 1;
       if (!cancelOptions || cancelOptions.preservePendingText !== true) {
         inputModePrefixPendingText = '';
       }
+      cancelInputModePrefixCurrentAnimation();
       if (inputModePrefixAnimation) {
         const animation = inputModePrefixAnimation;
         inputModePrefixAnimation = null;
@@ -1266,13 +1554,6 @@
           siteSearchPrefix.style.width = '';
         }
       }
-      if ((!cancelOptions || cancelOptions.preserveCurrentOverlay !== true) &&
-          siteSearchPrefix.getAttribute('data-current-overlay') === 'true') {
-        setInputModePrefixCurrentOverlay(false);
-        setInputModePrefixCurrentVisible(
-          siteSearchPrefix.getAttribute('data-menu-open') === 'true'
-        );
-      }
     }
 
     function restoreInputModePrefixAnimatedState() {
@@ -1284,7 +1565,7 @@
         }
       }
       setStyle(siteSearchPrefix, 'opacity', '1', useImportantStyles);
-      setStyle(siteSearchPrefix, 'transform', 'translateY(-50%) translateX(0) scale(1)', useImportantStyles);
+      setStyle(siteSearchPrefix, 'transform', 'translateY(-50%) translateX(0) scaleX(1)', useImportantStyles);
       setStyle(siteSearchPrefix, 'transition', prefixTransition, useImportantStyles);
       setStyle(siteSearchPrefix, 'will-change', 'auto', useImportantStyles);
     }
@@ -1293,13 +1574,52 @@
       cancelInputModePrefixAnimation();
       const transitionEnabled = !restOptions || restOptions.transition !== false;
       setStyle(siteSearchPrefix, 'opacity', '1', useImportantStyles);
-      setStyle(siteSearchPrefix, 'transform', 'translateY(-50%) translateX(0) scale(1)', useImportantStyles);
+      setStyle(siteSearchPrefix, 'transform', 'translateY(-50%) translateX(0) scaleX(1)', useImportantStyles);
       setStyle(siteSearchPrefix, 'transition', transitionEnabled ? prefixTransition : 'none', useImportantStyles);
       setStyle(siteSearchPrefix, 'will-change', 'auto', useImportantStyles);
     }
 
     function playInputModePrefixEnterAnimation() {
-      setInputModePrefixRestState();
+      cancelInputModePrefixAnimation();
+      const animationRevision = inputModePrefixAnimationRevision;
+      siteSearchPrefix.style.setProperty('opacity', '1');
+      siteSearchPrefix.style.setProperty(
+        'transform',
+        'translateY(-50%) translateX(0) scaleX(1)'
+      );
+      setStyle(siteSearchPrefix, 'transition', prefixTransition, useImportantStyles);
+      if (shouldReduceInputModeMotion() || typeof siteSearchPrefix.animate !== 'function') {
+        setStyle(siteSearchPrefix, 'will-change', 'auto', useImportantStyles);
+        return;
+      }
+      const animation = siteSearchPrefix.animate([
+        {
+          opacity: 0.4,
+          transform: 'translateY(-50%) translateX(-4px) scaleX(0.92)'
+        },
+        {
+          opacity: 1,
+          transform: 'translateY(-50%) translateX(0) scaleX(1)'
+        }
+      ], {
+        duration: DEFAULT_PREFIX_ENTER_DURATION,
+        easing: DEFAULT_PREFIX_ENTER_EASING
+      });
+      inputModePrefixAnimation = animation;
+      setStyle(siteSearchPrefix, 'will-change', 'opacity, transform', useImportantStyles);
+      animation.onfinish = () => {
+        if (inputModePrefixAnimation !== animation ||
+            animationRevision !== inputModePrefixAnimationRevision) {
+          return;
+        }
+        inputModePrefixAnimation = null;
+        restoreInputModePrefixAnimatedState();
+      };
+      animation.oncancel = () => {
+        if (inputModePrefixAnimation === animation) {
+          inputModePrefixAnimation = null;
+        }
+      };
     }
 
     function playInputModePrefixResizeAnimation(fromWidth, toWidth, resizeOptions) {
@@ -1313,23 +1633,26 @@
       cancelInputModePrefixAnimation({
         preservePendingText: options.preservePendingText === true
       });
+      const animationRevision = inputModePrefixAnimationRevision;
       const startWidth = Math.max(0, Number(fromWidth) || 0);
       const endWidth = Math.max(0, Number(toWidth) || 0);
+      if (onStart) {
+        onStart(animationRevision);
+      }
       if (shouldReduceInputModeMotion() || startWidth <= 0 || endWidth <= 0 ||
           Math.abs(startWidth - endWidth) < 1) {
         if (onFinish) {
-          onFinish();
+          onFinish(animationRevision);
         }
-        setInputModePrefixRestState();
+        if (animationRevision === inputModePrefixAnimationRevision) {
+          restoreInputModePrefixAnimatedState();
+        }
         return;
       }
       const keyframes = [
         { width: `${startWidth}px` },
         { width: `${endWidth}px` }
       ];
-      if (onStart) {
-        onStart();
-      }
       setStyle(siteSearchPrefix, 'will-change', 'width', useImportantStyles);
       if (typeof siteSearchPrefix.animate === 'function') {
         const animation = siteSearchPrefix.animate(keyframes, {
@@ -1344,7 +1667,10 @@
           inputModePrefixAnimation = null;
           setStyle(siteSearchPrefix, 'width', `${endWidth}px`, useImportantStyles);
           if (onFinish) {
-            onFinish();
+            onFinish(animationRevision);
+          }
+          if (animationRevision !== inputModePrefixAnimationRevision) {
+            return;
           }
           restoreInputModePrefixAnimatedState();
         };
@@ -1368,8 +1694,14 @@
         setStyle(siteSearchPrefix, 'width', `${endWidth}px`, useImportantStyles);
         inputModePrefixAnimationTimer = win.setTimeout(() => {
           inputModePrefixAnimationTimer = 0;
+          if (animationRevision !== inputModePrefixAnimationRevision) {
+            return;
+          }
           if (onFinish) {
-            onFinish();
+            onFinish(animationRevision);
+          }
+          if (animationRevision !== inputModePrefixAnimationRevision) {
+            return;
           }
           restoreInputModePrefixAnimatedState();
         }, DEFAULT_PREFIX_RESIZE_DURATION + 10);
@@ -1410,28 +1742,11 @@
       );
     }
 
-    function setInputModePrefixCurrentOverlay(active, left) {
-      const nextActive = Boolean(active);
-      siteSearchPrefix.setAttribute(
-        'data-current-overlay',
-        nextActive ? 'true' : 'false'
-      );
-      if (nextActive) {
-        const normalizedLeft = Math.max(0, Number(left) || 0);
-        setStyle(
-          siteSearchPrefix,
-          '--x-lumno-search-mode-current-overlay-left',
-          `${normalizedLeft}px`,
-          useImportantStyles
-        );
-        return;
-      }
-      if (siteSearchPrefix.style &&
-          typeof siteSearchPrefix.style.removeProperty === 'function') {
-        siteSearchPrefix.style.removeProperty(
-          '--x-lumno-search-mode-current-overlay-left'
-        );
-      }
+    function settleInputModePrefixMenuVisualState() {
+      const currentVisible = Boolean(modeMenuOpen && !modeMenu.hidden);
+      setInputModePrefixCurrentMeasuring(false);
+      setInputModePrefixCurrentVisible(currentVisible);
+      clearInputModePrefixCurrentAnimatedStyles();
     }
 
     function setInputModePrefixMenuOpen(open) {
@@ -1439,58 +1754,39 @@
       const wasOpen = siteSearchPrefix.getAttribute('data-menu-open') === 'true';
       if (wasOpen === nextOpen) {
         if (!nextOpen) {
-          setInputModePrefixCurrentOverlay(false);
           setInputModePrefixCurrentVisible(false);
         }
         return;
       }
       const shouldAnimate = isElementVisible(siteSearchPrefix);
+      const previousCurrentState = shouldAnimate
+        ? getInputModePrefixCurrentVisualState()
+        : { marginLeft: 0, width: 0 };
       if (shouldAnimate) {
         cancelInputModePrefixAnimation();
       }
-      const previousWidth = shouldAnimate
-        ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
-        : 0;
-      const prefixRect = nextOpen && shouldAnimate
-        ? siteSearchPrefix.getBoundingClientRect()
-        : null;
-      const chevronRect = nextOpen && shouldAnimate
-        ? siteSearchPrefixChevron.getBoundingClientRect()
-        : null;
-      const currentOverlayLeft = prefixRect && chevronRect
-        ? Number(chevronRect.left) - Number(prefixRect.left) -
-          (Number(siteSearchPrefix.clientLeft) || 0)
-        : 0;
       siteSearchPrefix.setAttribute('data-menu-open', nextOpen ? 'true' : 'false');
-      setInputModePrefixCurrentOverlay(false);
-      setInputModePrefixCurrentVisible(false);
       setInputModePrefixCurrentMeasuring(nextOpen);
-      const nextWidth = shouldAnimate
-        ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
-        : 0;
+      const nextCurrentState = nextOpen
+        ? getInputModePrefixCurrentVisualState()
+        : {
+          marginLeft: -DEFAULT_PREFIX_ITEM_GAP_PX,
+          width: 0
+        };
       setInputModePrefixCurrentMeasuring(false);
-      updatePrefixLayout();
       if (shouldAnimate) {
-        playInputModePrefixResizeAnimation(previousWidth, nextWidth, {
-          onStart: nextOpen ? () => {
-            if (siteSearchPrefix.getAttribute('data-menu-open') !== 'true') {
-              return;
-            }
-            setInputModePrefixCurrentOverlay(true, currentOverlayLeft);
-            setInputModePrefixCurrentVisible(true);
-          } : null,
-          onFinish: nextOpen ? () => {
-            if (siteSearchPrefix.getAttribute('data-menu-open') !== 'true') {
-              return;
-            }
-            setInputModePrefixCurrentOverlay(false);
-            setInputModePrefixCurrentVisible(true);
-            updatePrefixLayout();
-          } : null
-        });
+        if (nextOpen && previousCurrentState.width < 0.5) {
+          previousCurrentState.marginLeft = -DEFAULT_PREFIX_ITEM_GAP_PX;
+        }
+        playInputModePrefixCurrentResizeAnimation(
+          previousCurrentState,
+          nextCurrentState
+        );
       } else if (nextOpen) {
-        setInputModePrefixCurrentOverlay(false);
         setInputModePrefixCurrentVisible(true);
+        updatePrefixLayout();
+      } else {
+        setInputModePrefixCurrentVisible(false);
         updatePrefixLayout();
       }
     }
@@ -1687,6 +1983,7 @@
       );
       const hasActivePrefixAnimation = Boolean(
         inputModePrefixAnimation ||
+        inputModePrefixCurrentAnimation ||
         inputModePrefixAnimationFrame !== null ||
         inputModePrefixAnimationTimer
       );
@@ -1696,12 +1993,13 @@
         hasActivePrefixAnimation &&
         inputModePrefixPendingText === nextPrefixText
       );
+      const previousWidth = shouldAnimateResize
+        ? getInputModePrefixRenderedWidth()
+        : 0;
       if (shouldAnimateResize) {
         cancelInputModePrefixAnimation();
+        settleInputModePrefixMenuVisualState();
       }
-      const previousWidth = shouldAnimateResize
-        ? Number(siteSearchPrefix.getBoundingClientRect().width) || 0
-        : 0;
       const shouldPreserveAnimation = !shouldAnimate && isSameMode && Boolean(
         hasActivePrefixAnimation
       );
@@ -1902,10 +2200,21 @@
       ) || defaultAccentColor;
       const accentRgb = mixRgb(resolvedAccentRgb, resolvedAccentRgb, 0);
       const darkMode = Boolean(isDarkMode());
+      const panelRgb = darkMode ? [20, 20, 20] : [255, 255, 255];
+      const itemThemeOpacity = darkMode ? 0.14 : 0.075;
       const backgroundRgb = mixRgb(
         accentRgb,
         darkMode ? [22, 22, 22] : [255, 255, 255],
         darkMode ? 0.72 : 0.82
+      );
+      const itemBackgroundRgb = mixRgb(
+        accentRgb,
+        panelRgb,
+        1 - itemThemeOpacity
+      );
+      const focusRingRgb = getAccessibleThemeFocusRingRgb(
+        accentRgb,
+        itemBackgroundRgb
       );
       setStyle(
         wrap,
@@ -1923,7 +2232,13 @@
         setStyle(
           menuItem,
           '--x-lumno-search-mode-item-theme-bg',
-          `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${darkMode ? 0.14 : 0.075})`,
+          `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${itemThemeOpacity})`,
+          useImportantStyles
+        );
+        setStyle(
+          menuItem,
+          '--x-lumno-search-mode-item-focus-ring',
+          rgbToCss(focusRingRgb),
           useImportantStyles
         );
       }
@@ -1949,6 +2264,12 @@
           menuItem,
           '--x-lumno-search-mode-item-theme-bg',
           background,
+          useImportantStyles
+        );
+        setStyle(
+          menuItem,
+          '--x-lumno-search-mode-item-focus-ring',
+          surfaceColor,
           useImportantStyles
         );
       }
@@ -2316,6 +2637,7 @@
       if (destroyed || !input || typeof input.focus !== 'function') {
         return false;
       }
+      modeMenuKeyboardNavigationActive = false;
       setModeMenuSearchActive(false);
       input.focus({ preventScroll: true });
       return true;
@@ -2333,16 +2655,143 @@
       );
     }
 
+    function scrollModeMenuButtonIntoView(button) {
+      if (!button || !modeMenuContent ||
+          typeof button.getBoundingClientRect !== 'function' ||
+          typeof modeMenuContent.getBoundingClientRect !== 'function') {
+        return;
+      }
+      const buttonRect = button.getBoundingClientRect();
+      const contentRect = modeMenuContent.getBoundingClientRect();
+      const topBoundary = contentRect.top + DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT;
+      const bottomBoundary = contentRect.bottom -
+        DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT;
+      if (buttonRect.top < topBoundary) {
+        modeMenuContent.scrollTop -= topBoundary - buttonRect.top;
+      } else if (buttonRect.bottom > bottomBoundary) {
+        modeMenuContent.scrollTop += buttonRect.bottom - bottomBoundary;
+      }
+    }
+
     function focusModeMenuButton(index) {
       const buttons = getModeMenuButtons();
       if (buttons.length === 0) {
-        return;
+        return false;
       }
       const normalizedIndex = ((index % buttons.length) + buttons.length) % buttons.length;
       buttons.forEach((button, buttonIndex) => {
         button.tabIndex = buttonIndex === normalizedIndex ? 0 : -1;
       });
       buttons[normalizedIndex].focus({ preventScroll: true });
+      scrollModeMenuButtonIntoView(buttons[normalizedIndex]);
+      return true;
+    }
+
+    function getModeMenuButtonLayout(button, index) {
+      const rect = button && typeof button.getBoundingClientRect === 'function'
+        ? button.getBoundingClientRect()
+        : null;
+      const left = Number(rect && rect.left) || 0;
+      const top = Number(rect && rect.top) || 0;
+      const width = Number(rect && rect.width) || 0;
+      const height = Number(rect && rect.height) || 0;
+      return {
+        bottom: Number(rect && rect.bottom) || top + height,
+        centerX: left + (width / 2),
+        centerY: top + (height / 2),
+        height,
+        index,
+        left,
+        right: Number(rect && rect.right) || left + width,
+        top,
+        width
+      };
+    }
+
+    function getModeMenuButtonRows(buttons) {
+      const layouts = buttons.map(getModeMenuButtonLayout);
+      const hasMeasuredLayout = layouts.some((layout) => (
+        layout.width > 0 && layout.height > 0
+      ));
+      if (!hasMeasuredLayout) {
+        return null;
+      }
+      const rows = [];
+      layouts.forEach((layout) => {
+        let row = rows.find((candidate) => {
+          const tolerance = Math.max(
+            2,
+            Math.min(candidate.averageHeight, layout.height) * 0.4
+          );
+          return Math.abs(candidate.centerY - layout.centerY) <= tolerance;
+        });
+        if (!row) {
+          row = {
+            averageHeight: layout.height,
+            centerY: layout.centerY,
+            items: []
+          };
+          rows.push(row);
+        }
+        row.items.push(layout);
+        const itemCount = row.items.length;
+        row.centerY = row.items.reduce((total, item) => total + item.centerY, 0) /
+          itemCount;
+        row.averageHeight = row.items.reduce((total, item) => total + item.height, 0) /
+          itemCount;
+      });
+      rows.sort((left, right) => left.centerY - right.centerY);
+      rows.forEach((row) => {
+        row.items.sort((left, right) => left.centerX - right.centerX);
+      });
+      return rows;
+    }
+
+    function getModeMenuDirectionalIndex(buttons, currentIndex, key) {
+      if (buttons.length === 0) {
+        return -1;
+      }
+      const movesForward = key === 'ArrowDown' || key === 'ArrowRight';
+      if (currentIndex < 0) {
+        return movesForward ? 0 : buttons.length - 1;
+      }
+      const rows = getModeMenuButtonRows(buttons);
+      if (!rows) {
+        return ((currentIndex + (movesForward ? 1 : -1)) % buttons.length +
+          buttons.length) % buttons.length;
+      }
+      const currentRowIndex = rows.findIndex((row) => (
+        row.items.some((item) => item.index === currentIndex)
+      ));
+      if (currentRowIndex < 0) {
+        return currentIndex;
+      }
+      const currentRow = rows[currentRowIndex];
+      const currentItemIndex = currentRow.items.findIndex((item) => (
+        item.index === currentIndex
+      ));
+      const currentItem = currentRow.items[currentItemIndex];
+      if (!currentItem) {
+        return currentIndex;
+      }
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        const horizontalOffset = key === 'ArrowRight' ? 1 : -1;
+        const target = currentRow.items[currentItemIndex + horizontalOffset];
+        return target ? target.index : currentIndex;
+      }
+      const verticalOffset = key === 'ArrowDown' ? 1 : -1;
+      const targetRow = rows[currentRowIndex + verticalOffset];
+      if (!targetRow) {
+        return currentIndex;
+      }
+      return targetRow.items.reduce((closest, candidate) => {
+        if (!closest) {
+          return candidate;
+        }
+        const candidateDistance = Math.abs(candidate.centerX - currentItem.centerX);
+        const closestDistance = Math.abs(closest.centerX - currentItem.centerX);
+        return candidateDistance < closestDistance ? candidate : closest;
+      }, null).index;
     }
 
     function syncModeMenuSelection(modeId) {
@@ -2358,7 +2807,9 @@
       return matched;
     }
 
-    function selectModeMenuItem(item) {
+    function selectModeMenuItem(item, selectionOptions) {
+      const selectOptions = selectionOptions || {};
+      const keepMenuFocus = selectOptions.keepMenuFocus === true;
       let result = null;
       if (typeof config.onModeMenuSelect === 'function') {
         result = config.onModeMenuSelect(item);
@@ -2369,7 +2820,17 @@
           if (!syncModeMenuSelection(selectedModeId)) {
             refreshModeMenu(selectedModeId);
           }
-          focusModeInput();
+          if (keepMenuFocus) {
+            const buttons = getModeMenuButtons();
+            const selectedIndex = buttons.findIndex((button) => (
+              String(button.dataset.modeId || '') === selectedModeId
+            ));
+            if (selectedIndex >= 0) {
+              focusModeMenuButton(selectedIndex);
+            }
+          } else {
+            focusModeInput();
+          }
         }
       };
       if (result && typeof result.then === 'function') {
@@ -2424,6 +2885,7 @@
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
+          modeMenuKeyboardNavigationActive = false;
           selectModeMenuItem(item);
         });
         modeMenuContent.appendChild(button);
@@ -2670,6 +3132,7 @@
           return false;
         }
         modeMenuOpen = true;
+        modeMenuKeyboardNavigationActive = false;
         syncModeMenuQueryLift();
         modeMenu.hidden = false;
         syncInputPlaceholder();
@@ -2684,7 +3147,9 @@
         const targetIndex = focusTarget === 'last'
           ? normalizedItems.length - 1
           : (activeIndex >= 0 ? activeIndex : 0);
-        if (focusTarget === 'none') {
+        if (focusTarget === 'input') {
+          focusModeInput();
+        } else if (focusTarget === 'none') {
           focusModeMenuSearch();
         } else {
           focusModeMenuButton(targetIndex);
@@ -2790,6 +3255,7 @@
         modeMenuCursorTooltipController.hide();
       }
       modeMenuOpen = false;
+      modeMenuKeyboardNavigationActive = false;
       modeMenuFilterQuery = '';
       setModeMenuSearchActive(false);
       concealModeMenuSurface();
@@ -2826,58 +3292,91 @@
       }
     }
 
+    function stopModeMenuKeyEvent(event) {
+      event.preventDefault();
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      } else {
+        event.stopPropagation();
+      }
+    }
+
     function handleMenuKeydown(event) {
       const buttons = getModeMenuButtons();
       const currentIndex = buttons.indexOf(getModeMenuActiveElement());
       if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
+        stopModeMenuKeyEvent(event);
         if (modeMenuFilterQuery) {
           applyModeMenuFilter('');
           focusModeMenuSearch();
         } else {
           closeModeMenu(true);
         }
+        return true;
       } else if (event.key === 'Backspace' && !event.metaKey &&
           !event.ctrlKey && !event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
+        stopModeMenuKeyEvent(event);
         const queryCharacters = Array.from(modeMenuFilterQuery);
         queryCharacters.pop();
         applyModeMenuFilter(queryCharacters.join(''));
         focusModeMenuSearch();
+        return true;
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight' ||
           event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-        event.preventDefault();
-        event.stopPropagation();
-        const movesForward = event.key === 'ArrowDown' || event.key === 'ArrowRight';
-        const nextIndex = currentIndex < 0
-          ? (movesForward ? 0 : buttons.length - 1)
-          : currentIndex + (movesForward ? 1 : -1);
+        stopModeMenuKeyEvent(event);
+        modeMenuKeyboardNavigationActive = true;
+        const nextIndex = getModeMenuDirectionalIndex(
+          buttons,
+          currentIndex,
+          event.key
+        );
         focusModeMenuButton(nextIndex);
+        return true;
       } else if (event.key === 'Home' || event.key === 'End') {
-        event.preventDefault();
-        event.stopPropagation();
+        stopModeMenuKeyEvent(event);
+        modeMenuKeyboardNavigationActive = true;
         focusModeMenuButton(event.key === 'Home' ? 0 : buttons.length - 1);
+        return true;
+      } else if ((event.key === 'Enter' || event.key === ' ') && currentIndex >= 0) {
+        stopModeMenuKeyEvent(event);
+        const entry = renderedModeMenuEntries.find((candidate) => (
+          candidate.button === buttons[currentIndex]
+        ));
+        if (entry) {
+          selectModeMenuItem(entry.item, {
+            keepMenuFocus: modeMenuKeyboardNavigationActive
+          });
+        }
+        return true;
       } else if (event.key === 'Tab') {
-        event.preventDefault();
-        event.stopPropagation();
-        focusModeMenuSearch();
+        stopModeMenuKeyEvent(event);
+        focusModeInput();
+        return true;
       } else if (!event.isComposing && !event.repeat &&
           !event.metaKey && !event.ctrlKey && !event.altKey &&
           typeof event.key === 'string' && event.key.length === 1 &&
           /[a-z0-9\u3400-\u9fff\s]/i.test(event.key)) {
-        event.preventDefault();
-        event.stopPropagation();
+        stopModeMenuKeyEvent(event);
+        modeMenuKeyboardNavigationActive = false;
         applyModeMenuFilter(modeMenuFilterQuery + event.key);
         focusModeMenuSearch();
+        return true;
       }
+      return false;
+    }
+
+    function handleModeMenuKeyEvent(event) {
+      if (!shouldHandleModeMenuKeyEvent(event)) {
+        return false;
+      }
+      return handleMenuKeydown(event);
     }
 
     function handleModeMenuPointerDown(event) {
       if (!modeMenuOpen || modeMenu.hidden) {
         return;
       }
+      modeMenuKeyboardNavigationActive = false;
       setModeMenuSearchActive(true);
       const target = event && event.target;
       const button = target && typeof target.closest === 'function'
@@ -3002,6 +3501,7 @@
       setTabHintVisible,
       shouldCompleteModeMenuDoubleTab,
       shouldContainModeMenuTab,
+      handleModeMenuKeyEvent,
       shouldHandleModeMenuKeyEvent,
       shouldOpenModeMenuForActiveModeOnTab,
       shouldOpenModeMenuOnDoubleTab,

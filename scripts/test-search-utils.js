@@ -535,11 +535,48 @@ assert.ok(search.isInteractiveSiteSearchProvider(geminiBase), 'Gemini provider s
 
 const defaultSearchEngines = search.getDefaultSiteSearchProviders()
   .filter(search.isSearchEngineSiteSearchProvider);
+const bundledSiteSearchProviders = JSON.parse(readSource('assets/data/site-search.json')).items;
+assert.deepStrictEqual(
+  search.getDefaultSiteSearchProviders(),
+  bundledSiteSearchProviders,
+  'the bundled provider catalog and JavaScript fallback should stay fully synchronized'
+);
 assert.deepStrictEqual(
   defaultSearchEngines.map((provider) => provider.key),
-  ['so', 'bi', 'gg', 'ddg', 'br', 'eco'],
+  ['bd', 'bi', 'gg', 'ddg', 'br', 'eco', 'sg', 'so360', 'yh', 'yx', 'sm'],
   'built-in search engines should be explicitly classified and keep their intended order'
 );
+assert.strictEqual(
+  search.findSiteSearchProvider('so', search.getDefaultSiteSearchProviders()),
+  null,
+  'the retired Baidu so trigger should not match any built-in provider'
+);
+assert.strictEqual(
+  search.findSiteSearchProvider('bd', search.getDefaultSiteSearchProviders()).name,
+  'Baidu',
+  'Baidu should use bd as its short trigger'
+);
+assert.ok(
+  search.isAiSiteSearchProvider(
+    search.getDefaultSiteSearchProviders().find((provider) => provider.key === 'pplx')
+  ),
+  'direct-query AI providers should be classified explicitly'
+);
+['pplx', 'metaso', 'felo'].forEach((providerKey) => {
+  const provider = search.getDefaultSiteSearchProviders().find((item) => item.key === providerKey);
+  assert.ok(provider, `${providerKey} should be bundled`);
+  assert.strictEqual(provider.category, 'aiSearch');
+  assert.strictEqual(
+    search.isInteractiveSiteSearchProvider(provider),
+    false,
+    `${providerKey} should use its stable query URL without DOM submission`
+  );
+  assert.match(
+    search.buildSearchUrlFromTemplate(provider.template, '中文 test'),
+    /%E4%B8%AD%E6%96%87%20test/,
+    `${providerKey} should URL-encode multilingual queries`
+  );
+});
 assert.strictEqual(
   search.isSearchEngineSiteSearchProvider({
     key: 'gg',
@@ -603,8 +640,8 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   search.getSiteSearchProviderDisplayNameMessage({ key: 'jd' }),
-  { messageKey: 'site_search_name_juejin', fallback: 'Juejin' },
-  'legacy juejin key should resolve from shared mapping'
+  { messageKey: 'site_search_name_jd', fallback: 'JD.com' },
+  'JD should resolve from the shared localized provider mapping'
 );
 assert.deepStrictEqual(
   search.getSiteSearchProviderDisplayNameMessage({ key: 'wx' }),

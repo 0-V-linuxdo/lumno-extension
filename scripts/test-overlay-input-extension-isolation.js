@@ -31,8 +31,9 @@ assert.ok(
 );
 assert.ok(
   handlerSource.includes("if (e.type === 'keydown')") &&
-    handlerSource.includes('handleSearchInputKeydown(e);'),
-  'captured keydown events should still run Lumno input behavior'
+    handlerSource.includes('handleSearchInputKeydown(e);') &&
+    handlerSource.includes('inputModeController.handleModeMenuKeyEvent(e);'),
+  'captured keydown events should still run Lumno input and scope-panel behavior'
 );
 assert.ok(
   handlerSource.includes('e.stopImmediatePropagation();'),
@@ -66,14 +67,18 @@ const overlay = document.getElementById('overlay');
 const host = document.getElementById('lumno-host');
 const shadowRoot = host.attachShadow({ mode: 'open' });
 const searchInput = document.createElement('input');
-shadowRoot.appendChild(searchInput);
+const modeMenu = document.createElement('div');
+modeMenu.tabIndex = -1;
+shadowRoot.append(searchInput, modeMenu);
 
 const handledInputKeys = [];
+const handledModeMenuKeys = [];
 const hostPageKeys = [];
 const hostPageKeyups = [];
 const createHandler = new Function(
   'overlay',
   'searchInput',
+  'inputModeController',
   'document',
   'isImeCompositionEvent',
   'handleSearchInputKeydown',
@@ -83,6 +88,19 @@ const createHandler = new Function(
 const overlayKeyCaptureHandler = createHandler(
   overlay,
   searchInput,
+  {
+    handleModeMenuKeyEvent(event) {
+      handledModeMenuKeys.push(event.key);
+      event.preventDefault();
+      if (event.key === 'Tab') {
+        searchInput.focus();
+      }
+      return true;
+    },
+    shouldHandleModeMenuKeyEvent() {
+      return shadowRoot.activeElement === modeMenu;
+    }
+  },
   document,
   (event) => Boolean(event && event.isComposing),
   (event) => {
@@ -183,6 +201,43 @@ assert.deepStrictEqual(
   hostPageKeyups,
   [],
   'double-Tab keyup events should not reach host-page shortcuts'
+);
+
+modeMenu.focus();
+['ArrowDown', 'Enter', 'Tab'].forEach((key) => {
+  modeMenu.dispatchEvent(new window.KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    key
+  }));
+  const keyupTarget = key === 'Tab' ? searchInput : modeMenu;
+  keyupTarget.dispatchEvent(new window.KeyboardEvent('keyup', {
+    bubbles: true,
+    composed: true,
+    key
+  }));
+});
+
+assert.deepStrictEqual(
+  handledModeMenuKeys,
+  ['ArrowDown', 'Enter', 'Tab'],
+  'scope-panel navigation and selection should run through the isolated handler'
+);
+assert.strictEqual(
+  shadowRoot.activeElement,
+  searchInput,
+  'scope-panel Tab should return focus to the Lumno input'
+);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'scope-panel keydown events should not reach host-page shortcuts'
+);
+assert.deepStrictEqual(
+  hostPageKeyups,
+  [],
+  'scope-panel keyup events should not reach host-page shortcuts'
 );
 
 console.log('overlay input extension isolation tests passed');
