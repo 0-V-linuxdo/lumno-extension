@@ -77,6 +77,19 @@
   const syncExportButton = document.getElementById('_x_extension_sync_export_2024_unique_');
   const syncImportButton = document.getElementById('_x_extension_sync_import_2024_unique_');
   const syncImportInput = document.getElementById('_x_extension_sync_import_input_2024_unique_');
+  const cloudStatus = document.getElementById('_x_extension_cloud_status_2026_unique_');
+  const cloudUnconfigured = document.getElementById('_x_extension_cloud_unconfigured_2026_unique_');
+  const cloudSignedOut = document.getElementById('_x_extension_cloud_signed_out_2026_unique_');
+  const cloudSignedIn = document.getElementById('_x_extension_cloud_signed_in_2026_unique_');
+  const cloudDangerCard = document.getElementById('_x_extension_cloud_danger_card_2026_unique_');
+  const cloudWebSigninButton = document.getElementById('_x_extension_cloud_web_signin_2026_unique_');
+  const cloudError = document.getElementById('_x_extension_cloud_error_2026_unique_');
+  const cloudEmailDisplay = document.getElementById('_x_extension_cloud_email_display_2026_unique_');
+  const cloudSyncDetail = document.getElementById('_x_extension_cloud_sync_detail_2026_unique_');
+  const cloudSyncNowButton = document.getElementById('_x_extension_cloud_sync_now_2026_unique_');
+  const cloudSignoutButton = document.getElementById('_x_extension_cloud_signout_2026_unique_');
+  const cloudAnalyticsToggle = document.getElementById('_x_extension_cloud_analytics_toggle_2026_unique_');
+  const cloudDeleteButton = document.getElementById('_x_extension_cloud_delete_2026_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
@@ -650,6 +663,7 @@
   });
   const SETTINGS_TAB_KEYS = Object.freeze([
     'general',
+    'account',
     'appearance',
     'shortcuts',
     'blacklist',
@@ -2143,6 +2157,180 @@
     });
   }
 
+  function sendCloudMessage(payload) {
+    return new Promise((resolve, reject) => {
+      if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        reject(new Error('cloud_runtime_unavailable'));
+        return;
+      }
+      chrome.runtime.sendMessage(payload, (response) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message || 'cloud_request_failed'));
+          return;
+        }
+        if (!response || response.ok === false) {
+          reject(new Error((response && response.error) || 'cloud_request_failed'));
+          return;
+        }
+        resolve(response);
+      });
+    });
+  }
+
+  function getCloudErrorMessage(error) {
+    const code = String((error && error.message) || error || '');
+    const messages = {
+      cloud_not_configured: getMessage('cloud_error_not_configured', '云服务尚未配置'),
+      invalid_email: getMessage('cloud_error_invalid_email', '请输入有效邮箱'),
+      invalid_verification_code: getMessage('cloud_error_invalid_code', '请输入邮件中的验证码'),
+      otp_expired: getMessage('cloud_error_code_expired', '验证码已过期，请重新发送'),
+      token_expired: getMessage('cloud_error_code_expired', '验证码已过期，请重新发送'),
+      over_email_send_rate_limit: getMessage('cloud_error_rate_limit', '发送过于频繁，请稍后再试'),
+      email_rate_limit_exceeded: getMessage('cloud_error_rate_limit', '发送过于频繁，请稍后再试'),
+      authentication_required: getMessage('cloud_error_signin_required', '登录已失效，请重新登录'),
+      web_auth_not_configured: getMessage('cloud_error_web_not_configured', '网页登录尚未完成配置'),
+      web_auth_cancelled: getMessage('cloud_error_web_cancelled', '登录已取消'),
+      oauth_state_mismatch: getMessage('cloud_error_web_security', '登录安全校验失败，请重新发起'),
+      web_auth_request_expired: getMessage('cloud_error_web_expired', '登录请求已过期，请重新发起')
+    };
+    return messages[code] || getMessage('cloud_error_generic', '操作失败，请稍后重试');
+  }
+
+  function setCloudButtonBusy(button, busy) {
+    if (!button) return;
+    button.disabled = busy === true;
+    button.setAttribute('aria-busy', busy === true ? 'true' : 'false');
+  }
+
+  function setCloudError(message) {
+    if (cloudError) cloudError.textContent = String(message || '');
+  }
+
+  function formatCloudSyncDetail(status) {
+    const sync = status && status.sync ? status.sync : {};
+    if (sync.conflictCount > 0) {
+      return formatTemplate(getMessage('cloud_sync_conflicts', '有 {count} 项配置冲突，已保留本机版本等待处理'), {
+        count: sync.conflictCount
+      });
+    }
+    if (sync.pendingCount > 0) {
+      return formatTemplate(getMessage('cloud_sync_pending', '{count} 项改动等待上传'), {
+        count: sync.pendingCount
+      });
+    }
+    const lastAt = Math.max(Number(sync.lastPushAt) || 0, Number(sync.lastPullAt) || 0);
+    return lastAt
+      ? formatTemplate(getMessage('cloud_sync_last', '最近同步：{time}'), { time: formatSyncTime(lastAt) })
+      : getMessage('cloud_sync_ready_detail', '配置已启用端到端的账号级同步');
+  }
+
+  function renderCloudAccountStatus(status) {
+    const value = status && typeof status === 'object' ? status : {};
+    const configured = value.configured === true;
+    const signedIn = configured && value.signedIn === true;
+    if (cloudUnconfigured) cloudUnconfigured.hidden = configured;
+    if (cloudSignedOut) cloudSignedOut.hidden = !configured || signedIn;
+    if (cloudSignedIn) cloudSignedIn.hidden = !signedIn;
+    if (cloudDangerCard) cloudDangerCard.hidden = !signedIn;
+    if (cloudAnalyticsToggle) {
+      cloudAnalyticsToggle.disabled = !signedIn;
+      cloudAnalyticsToggle.checked = signedIn && value.analyticsConsented === true;
+    }
+    if (cloudEmailDisplay) cloudEmailDisplay.textContent = signedIn ? String(value.email || '') : '';
+    if (cloudSyncDetail) cloudSyncDetail.textContent = signedIn ? formatCloudSyncDetail(value) : '';
+    if (cloudStatus) {
+      const syncState = signedIn && value.sync ? String(value.sync.state || 'idle') : 'idle';
+      cloudStatus.setAttribute('data-state', syncState);
+      cloudStatus.textContent = !configured
+        ? getMessage('cloud_status_unconfigured', '未配置')
+        : (signedIn
+          ? (syncState === 'error'
+            ? getMessage('cloud_status_error', '同步异常')
+            : getMessage('cloud_status_connected', '已连接'))
+          : getMessage('cloud_status_signed_out', '未登录'));
+    }
+  }
+
+  function loadCloudAccountStatus() {
+    return sendCloudMessage({ action: 'cloudGetStatus' })
+      .then((status) => {
+        renderCloudAccountStatus(status);
+        return status;
+      })
+      .catch((error) => {
+        renderCloudAccountStatus({ configured: false, signedIn: false });
+        setCloudError(getCloudErrorMessage(error));
+        return null;
+      });
+  }
+
+  function initializeCloudAccountControls() {
+    if (cloudWebSigninButton) {
+      cloudWebSigninButton.addEventListener('click', () => {
+        setCloudError('');
+        setCloudButtonBusy(cloudWebSigninButton, true);
+        sendCloudMessage({ action: 'cloudSignInWithWeb' }).then((status) => {
+          renderCloudAccountStatus(status);
+          showToast(getMessage('cloud_signin_done', '登录成功，配置已开始同步'), false);
+        }).catch((error) => setCloudError(getCloudErrorMessage(error)))
+          .finally(() => setCloudButtonBusy(cloudWebSigninButton, false));
+      });
+    }
+    if (cloudSyncNowButton) {
+      cloudSyncNowButton.addEventListener('click', () => {
+        setCloudButtonBusy(cloudSyncNowButton, true);
+        sendCloudMessage({ action: 'cloudSyncNow' })
+          .then(() => loadCloudAccountStatus())
+          .then(() => showToast(getMessage('cloud_sync_done', '云端同步完成'), false))
+          .catch((error) => showToast(getCloudErrorMessage(error), true))
+          .finally(() => setCloudButtonBusy(cloudSyncNowButton, false));
+      });
+    }
+    if (cloudSignoutButton) {
+      cloudSignoutButton.addEventListener('click', () => {
+        setCloudButtonBusy(cloudSignoutButton, true);
+        sendCloudMessage({ action: 'cloudSignOut' })
+          .then(() => loadCloudAccountStatus())
+          .then(() => showToast(getMessage('cloud_signout_done', '已退出登录，本机配置仍然保留'), false))
+          .catch((error) => showToast(getCloudErrorMessage(error), true))
+          .finally(() => setCloudButtonBusy(cloudSignoutButton, false));
+      });
+    }
+    if (cloudAnalyticsToggle) {
+      cloudAnalyticsToggle.addEventListener('change', () => {
+        const consented = cloudAnalyticsToggle.checked;
+        cloudAnalyticsToggle.disabled = true;
+        sendCloudMessage({ action: 'cloudSetAnalyticsConsent', consented })
+          .then(() => showToast(
+            consented
+              ? getMessage('cloud_analytics_enabled', '产品使用统计已开启')
+              : getMessage('cloud_analytics_disabled', '使用统计已关闭，本地待上传计数已清除'),
+            false
+          ))
+          .catch((error) => {
+            cloudAnalyticsToggle.checked = !consented;
+            showToast(getCloudErrorMessage(error), true);
+          })
+          .finally(() => { cloudAnalyticsToggle.disabled = false; });
+      });
+    }
+    if (cloudDeleteButton) {
+      cloudDeleteButton.addEventListener('click', () => {
+        const confirmation = window.prompt(
+          getMessage('cloud_delete_confirm', '此操作无法撤销。请输入 DELETE 确认永久删除账号：')
+        );
+        if (confirmation !== 'DELETE') return;
+        setCloudButtonBusy(cloudDeleteButton, true);
+        sendCloudMessage({ action: 'cloudDeleteAccount' })
+          .then(() => loadCloudAccountStatus())
+          .then(() => showToast(getMessage('cloud_delete_done', '账号和云端数据已删除'), false))
+          .catch((error) => showToast(getCloudErrorMessage(error), true))
+          .finally(() => setCloudButtonBusy(cloudDeleteButton, false));
+      });
+    }
+    loadCloudAccountStatus();
+  }
+
   function setSyncButtonEnabled(button, enabled) {
     if (!button) {
       return;
@@ -3157,6 +3345,12 @@
         labelKey: 'settings_tab_general',
         label: getMessage('settings_tab_general', '常规'),
         iconClass: 'ri-icon ri-command-fill'
+      },
+      {
+        key: 'account',
+        labelKey: 'settings_tab_account',
+        label: getMessage('settings_tab_account', '账号与隐私'),
+        iconClass: 'ri-icon ri-user-3-line'
       },
       {
         key: 'appearance',
@@ -4194,6 +4388,7 @@
 
   loadCurrentShortcut();
   renderShortcutReferenceList();
+  initializeCloudAccountControls();
   requestAnimationFrame(syncFallbackShortcutWrapWidth);
   window.addEventListener('focus', () => {
     loadCurrentShortcut();

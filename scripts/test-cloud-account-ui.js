@@ -1,0 +1,40 @@
+const assert = require('assert');
+const fs = require('fs');
+
+const html = fs.readFileSync('src/options/options.html', 'utf8');
+const runtime = fs.readFileSync('src/options/options.js', 'utf8');
+
+function run() {
+  [
+    '_x_extension_cloud_web_signin_2026_unique_',
+    '_x_extension_cloud_analytics_toggle_2026_unique_',
+    '_x_extension_cloud_delete_2026_unique_'
+  ].forEach((id) => assert(html.includes(`id="${id}"`), `${id} should exist`));
+
+  assert.match(html, /data-tab="account"/);
+  assert.match(html, /data-content="account"/);
+  assert.match(
+    runtime,
+    /SETTINGS_TAB_KEYS\s*=\s*Object\.freeze\(\[\s*'general',\s*'account',/,
+    'account should be accepted as a settings route'
+  );
+  assert.match(
+    runtime,
+    /key:\s*'account',[\s\S]*?labelKey:\s*'settings_tab_account'/,
+    'React navigation should render the account tab'
+  );
+  assert.match(html, /浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie/);
+  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox" disabled/);
+  assert.match(html, /推荐使用 Google 或 GitHub/);
+  assert.match(html, /邮箱验证码作为内测入口/);
+  assert.match(runtime, /action: 'cloudSignInWithWeb'/);
+  assert.doesNotMatch(runtime, /action: 'cloudRequestOtp'/);
+  assert.doesNotMatch(runtime, /action: 'cloudVerifyOtp'/);
+  assert.match(runtime, /action: 'cloudSetAnalyticsConsent', consented/);
+  assert.match(runtime, /confirmation !== 'DELETE'/,
+    'permanent deletion should require an explicit typed confirmation');
+
+  console.log('cloud account UI tests passed');
+}
+
+run();

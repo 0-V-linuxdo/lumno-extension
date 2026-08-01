@@ -53,6 +53,7 @@
       return false;
     }
   }
+  sendRuntimeMessage({ action: 'cloudRecordUsage', metric: 'newtab_opened' });
   function getNewtabVisualViewportInsets() {
     const visualViewport = window.visualViewport;
     if (!visualViewport) {
@@ -4290,9 +4291,16 @@
 
   if (chrome && chrome.runtime && chrome.runtime.onMessage && typeof chrome.runtime.onMessage.addListener === 'function') {
     chrome.runtime.onMessage.addListener((message) => {
-      if (!message || message.action !== 'lumno:newtab-refresh-sections') {
+      if (!message) {
         return;
       }
+      if (message.action === 'lumno:wallpapers-updated') {
+        if (wallpaperRuntime && typeof wallpaperRuntime.refreshCustomWallpapers === 'function') {
+          wallpaperRuntime.refreshCustomWallpapers();
+        }
+        return;
+      }
+      if (message.action !== 'lumno:newtab-refresh-sections') return;
       const section = message.section || 'all';
       if (section === 'recent' || section === 'all') {
         markRecentDataDirty();

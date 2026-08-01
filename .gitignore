@@ -13,4 +13,13 @@ docs/*
 !docs/
 !docs/telemetry-plan.md
 !docs/codex-debug-bridge.md
+!docs/account-sync-architecture.md
+!docs/supabase-deployment.md
+!docs/privacy-policy-draft.md
+!docs/chrome-web-store-data-disclosure.md
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.local
+supabase/.env.*.local
 search-rule-changes-*.md

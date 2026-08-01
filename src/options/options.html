@@ -2381,6 +2381,99 @@
       ._x_extension_toggle_2024_unique_ input:checked::after {
         transform: translateX(18px);
       }
+      ._x_extension_cloud_stack_2026_unique_ {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      ._x_extension_cloud_card_2026_unique_ {
+        padding: 16px;
+        border: 1px solid var(--setting-divider);
+        border-radius: 14px;
+        background: var(--control-bg);
+      }
+      ._x_extension_cloud_card_2026_unique_[hidden],
+      ._x_extension_cloud_field_2026_unique_[hidden],
+      #_x_extension_cloud_verify_2026_unique_[hidden] {
+        display: none !important;
+      }
+      ._x_extension_cloud_header_2026_unique_,
+      ._x_extension_cloud_actions_2026_unique_ {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      ._x_extension_cloud_status_2026_unique_ {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--panel-subtext);
+        font-size: 12px;
+      }
+      ._x_extension_cloud_status_2026_unique_::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #94a3b8;
+      }
+      ._x_extension_cloud_status_2026_unique_[data-state="ready"]::before {
+        background: #22c55e;
+      }
+      ._x_extension_cloud_status_2026_unique_[data-state="error"]::before,
+      ._x_extension_cloud_status_2026_unique_[data-state="conflict"]::before {
+        background: #ef4444;
+      }
+      ._x_extension_cloud_form_2026_unique_ {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      ._x_extension_cloud_field_2026_unique_ {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      ._x_extension_cloud_input_2026_unique_ {
+        width: 100%;
+        min-height: 38px;
+        box-sizing: border-box;
+        border: 1px solid var(--setting-divider);
+        border-radius: 10px;
+        background: var(--panel-bg);
+        color: var(--panel-text);
+        padding: 8px 11px;
+        font: inherit;
+      }
+      ._x_extension_cloud_input_2026_unique_:focus {
+        outline: 2px solid var(--input-focus-color);
+        outline-offset: 1px;
+      }
+      ._x_extension_cloud_error_2026_unique_ {
+        min-height: 18px;
+        margin: 8px 0 0;
+        color: #dc2626;
+        font-size: 12px;
+      }
+      ._x_extension_cloud_disclosure_2026_unique_ {
+        margin: 8px 0 0;
+        padding-left: 20px;
+        color: var(--panel-subtext);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      ._x_extension_cloud_danger_2026_unique_ {
+        color: #dc2626 !important;
+        border-color: rgba(220, 38, 38, 0.3) !important;
+      }
+      @media (max-width: 560px) {
+        ._x_extension_cloud_form_2026_unique_ {
+          grid-template-columns: 1fr;
+        }
+      }
       ._x_extension_setting_divider_2024_unique_ {
         height: 0.5px;
         width: calc(100% - 28px);
@@ -2413,6 +2506,10 @@
           <button class="_x_extension_settings_tab_button_2024_unique_" data-tab="general" data-active="false">
             <i class="_x_extension_tab_icon_2024_unique_ ri-icon ri-command-fill" aria-hidden="true"></i>
             <span data-i18n="settings_tab_general">常规</span>
+          </button>
+          <button class="_x_extension_settings_tab_button_2024_unique_" data-tab="account" data-active="false">
+            <i class="_x_extension_tab_icon_2024_unique_ ri-icon ri-user-3-line" aria-hidden="true"></i>
+            <span data-i18n="settings_tab_account">账号与隐私</span>
           </button>
           <button class="_x_extension_settings_tab_button_2024_unique_" data-tab="appearance" data-active="true">
             <i class="_x_extension_tab_icon_2024_unique_ ri-icon ri-moon-clear-fill" aria-hidden="true"></i>
@@ -2661,6 +2758,80 @@
               <input id="_x_extension_overlay_tab_quick_switch_2024_unique_" type="checkbox" checked>
               <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
             </label>
+          </div>
+        </div>
+        <div class="_x_extension_settings_content_2024_unique_" data-content="account" data-active="false">
+          <div class="_x_extension_cloud_stack_2026_unique_">
+            <div class="_x_extension_setting_row_2024_unique_">
+              <div>
+                <p class="_x_extension_section_title_2024_unique_" data-i18n="cloud_account_section_title">账号与跨设备同步</p>
+                <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_account_section_desc">登录后同步 Lumno 配置和自定义壁纸；浏览历史、网页标题和搜索内容不会上传。</p>
+              </div>
+              <span id="_x_extension_cloud_status_2026_unique_" class="_x_extension_cloud_status_2026_unique_" data-state="idle" data-i18n="cloud_status_loading">正在检查</span>
+            </div>
+
+            <div id="_x_extension_cloud_unconfigured_2026_unique_" class="_x_extension_cloud_card_2026_unique_" hidden>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_unconfigured_title">云服务尚未连接</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_unconfigured_desc">当前仍使用浏览器自带的配置同步。部署 Supabase 并填入公开项目地址与 Publishable Key 后，账号功能会自动启用。</p>
+            </div>
+
+            <div id="_x_extension_cloud_signed_out_2026_unique_" class="_x_extension_cloud_card_2026_unique_" hidden>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_signin_title">通过 Lumno 网页登录</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_signin_desc">推荐使用 Google 或 GitHub；邮箱验证码作为内测入口收在登录页下方。</p>
+              <button id="_x_extension_cloud_web_signin_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_" type="button">
+                <i class="ri-icon ri-external-link-line" aria-hidden="true"></i>
+                <span data-i18n="cloud_web_signin">打开安全登录页</span>
+              </button>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_web_signin_security">授权完成后会自动返回插件；密码和第三方凭据不会交给插件。</p>
+              <p id="_x_extension_cloud_error_2026_unique_" class="_x_extension_cloud_error_2026_unique_" role="alert"></p>
+            </div>
+
+            <div id="_x_extension_cloud_signed_in_2026_unique_" class="_x_extension_cloud_card_2026_unique_" hidden>
+              <div class="_x_extension_cloud_header_2026_unique_">
+                <div>
+                  <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_signed_in_title">已登录</p>
+                  <p id="_x_extension_cloud_email_display_2026_unique_" class="_x_extension_setting_desc_2024_unique_"></p>
+                </div>
+                <div class="_x_extension_cloud_actions_2026_unique_">
+                  <button id="_x_extension_cloud_sync_now_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_" type="button" data-i18n="cloud_sync_now">立即同步</button>
+                  <button id="_x_extension_cloud_signout_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_" type="button" data-i18n="cloud_signout">退出登录</button>
+                </div>
+              </div>
+              <p id="_x_extension_cloud_sync_detail_2026_unique_" class="_x_extension_setting_desc_2024_unique_"></p>
+            </div>
+
+            <div class="_x_extension_cloud_card_2026_unique_">
+              <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
+                <div>
+                  <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_analytics_title">可选产品使用统计</p>
+                  <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_analytics_desc">仅在登录后且你主动开启时，上传与账号关联的功能次数、配置布尔值、枚举和数量，明细最多保留 24 个月。不会上传 URL、搜索词、网页标题、历史记录或书签内容。</p>
+                </div>
+                <label class="_x_extension_switch_2024_unique_" for="_x_extension_cloud_analytics_toggle_2026_unique_">
+                  <input id="_x_extension_cloud_analytics_toggle_2026_unique_" type="checkbox" disabled>
+                  <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="_x_extension_cloud_card_2026_unique_">
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_data_scope_title">数据范围</p>
+              <ul class="_x_extension_cloud_disclosure_2026_unique_">
+                <li data-i18n="cloud_data_scope_sync">同步数据：Lumno 配置、自定义快捷方式、黑名单规则，以及你主动上传的壁纸。</li>
+                <li data-i18n="cloud_data_scope_identity">识别数据：邮箱、系统生成的用户 ID、设备 ID、插件版本和粗粒度平台类型。</li>
+                <li data-i18n="cloud_data_scope_excluded">明确不采集：浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie。</li>
+                <li data-i18n="cloud_data_scope_control">你可以随时关闭统计、退出登录、导出本机配置或永久删除账号。</li>
+              </ul>
+            </div>
+
+            <div id="_x_extension_cloud_danger_card_2026_unique_" class="_x_extension_cloud_card_2026_unique_" hidden>
+              <div class="_x_extension_cloud_header_2026_unique_">
+                <div>
+                  <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_delete_title">永久删除账号</p>
+                  <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_delete_desc">删除云端配置、媒体、统计聚合和登录身份。本机配置会保留。</p>
+                </div>
+                <button id="_x_extension_cloud_delete_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_ _x_extension_cloud_danger_2026_unique_" type="button" data-i18n="cloud_delete_action">删除账号</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="_x_extension_settings_content_2024_unique_" data-content="appearance" data-active="true">

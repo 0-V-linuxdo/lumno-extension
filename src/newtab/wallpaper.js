@@ -3335,6 +3335,19 @@
       }
     }
 
+    function sendCloudWallpaperMessage(message) {
+      if (!chromeObj || !chromeObj.runtime || typeof chromeObj.runtime.sendMessage !== 'function') {
+        return;
+      }
+      try {
+        chromeObj.runtime.sendMessage(message, () => {
+          if (chromeObj.runtime.lastError) return;
+        });
+      } catch (_error) {
+        // Local wallpaper behavior must not depend on cloud availability.
+      }
+    }
+
     function bindCustomWallpaperUploadTile(tile) {
       if (!tile) {
         return;
@@ -3376,6 +3389,7 @@
           throw new Error('Invalid wallpaper record.');
         }
         customWallpapers = customWallpapers.concat(nextWallpaper);
+        sendCloudWallpaperMessage({ action: 'cloudUploadWallpaper', record: nextWallpaper });
         persistNewtabWallpaper(nextWallpaper.id);
         renderCustomWallpaperTiles();
         showToast(t('newtab_wallpaper_import_done', 'Wallpaper imported'), false);
@@ -3397,6 +3411,7 @@
       }
       hideTopActionTooltip();
       deleteCustomWallpaperRecord(targetWallpaper).then(() => {
+        sendCloudWallpaperMessage({ action: 'cloudDeleteWallpaper', id: targetWallpaper.id });
         customWallpapers = customWallpapers.filter((item) => item && item.id !== targetWallpaper.id);
         renderCustomWallpaperTiles();
         const overrides = getWritableLocalWallpaperOverrides();
@@ -4266,6 +4281,7 @@
       updateAppearanceSelectionUi: updateWallpaperAppearanceSelectionUi,
       updateSearchWidthUi: updateWallpaperSearchWidthControlUi,
       updateTopContentModeUi,
+      refreshCustomWallpapers: loadCustomWallpapers,
       bootstrapInitialWallpaper,
       bootstrapInitialWallpaperOverlay,
       bootstrapInitialWallpaperEffect,
