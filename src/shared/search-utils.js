@@ -2333,7 +2333,6 @@
     { key: 'br', aliases: ['brave', 'brave search'], name: 'Brave Search', template: 'https://search.brave.com/search?q={query}', category: 'searchEngine' },
     { key: 'eco', aliases: ['ecosia'], name: 'Ecosia', template: 'https://www.ecosia.org/search?q={query}', category: 'searchEngine' },
     { key: 'sg', aliases: ['sogou', '搜狗'], name: 'Sogou', template: 'https://www.sogou.com/web?query={query}', category: 'searchEngine' },
-    { key: 'so360', aliases: ['360', 'so.com', 'haosou', '360搜索'], name: '360 Search', template: 'https://www.so.com/s?q={query}', category: 'searchEngine' },
     { key: 'yh', aliases: ['yahoo'], name: 'Yahoo', template: 'https://search.yahoo.com/search?p={query}', category: 'searchEngine' },
     { key: 'yx', aliases: ['yandex'], name: 'Yandex', template: 'https://yandex.com/search/?text={query}', category: 'searchEngine' },
     { key: 'sm', aliases: ['shenma', '神马'], name: 'Shenma', template: 'https://m.sm.cn/s?q={query}', category: 'searchEngine' },
@@ -2365,7 +2364,6 @@
     metaso: ['site_search_name_metaso', 'Metaso AI Search'],
     bd: ['site_search_name_baidu', 'Baidu'],
     sg: ['site_search_name_sogou', 'Sogou'],
-    so360: ['site_search_name_360', '360 Search'],
     sm: ['site_search_name_shenma', 'Shenma'],
     zh: ['site_search_name_zhihu', 'Zhihu'],
     db: ['site_search_name_douban', 'Douban'],
@@ -2439,11 +2437,19 @@
     'br',
     'eco',
     'sg',
-    'so360',
     'yh',
     'yx',
     'sm'
   ]);
+
+  function isRetiredSearchEngineState(searchEngineState) {
+    const state = searchEngineState && typeof searchEngineState === 'object'
+      ? searchEngineState
+      : {};
+    const stateId = String(state.id || '').trim().toLowerCase();
+    const stateHost = normalizeHost(state.host) || getUrlHost(state.searchTemplate);
+    return stateId === 'so' || stateHost === 'so.com' || stateHost.endsWith('.so.com');
+  }
 
   function isSearchEngineSiteSearchProvider(provider) {
     if (!provider) {
@@ -2467,6 +2473,10 @@
     const engineProviders = (Array.isArray(providers) ? providers : [])
       .filter(isSearchEngineSiteSearchProvider);
     const stateHost = normalizeHost(state.host) || getUrlHost(state.searchTemplate);
+    const fallbackProvider = findSiteSearchProvider('google', engineProviders);
+    if (isRetiredSearchEngineState(state)) {
+      return fallbackProvider || null;
+    }
     if (stateHost) {
       const hostMatch = engineProviders.find((provider) => siteSearchHostsMatch(
         stateHost,
@@ -2495,7 +2505,6 @@
         return aliasMatch;
       }
     }
-    const fallbackProvider = findSiteSearchProvider('google', engineProviders);
     const normalizedTemplate = normalizeSiteSearchTemplate(state.searchTemplate);
     if (!normalizedTemplate || !normalizedTemplate.includes('{query}')) {
       return fallbackProvider || null;
@@ -2977,6 +2986,7 @@
     inheritSiteSearchProviderBehavior,
     isAiSiteSearchProvider,
     isSearchEngineSiteSearchProvider,
+    isRetiredSearchEngineState,
     isInteractiveSiteSearchProvider,
     isInteractiveSiteSearchSubmitStrategy,
     isKeywordSearchSuggestion,

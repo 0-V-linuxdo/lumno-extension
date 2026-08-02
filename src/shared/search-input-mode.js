@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-02-scope-chip-v28';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-02-scope-chip-v29';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -2699,7 +2699,7 @@
       );
     }
 
-    function scrollModeMenuButtonIntoView(button) {
+    function scrollModeMenuButtonIntoView(button, scrollOptions) {
       if (!button || !modeMenuContent ||
           typeof button.getBoundingClientRect !== 'function' ||
           typeof modeMenuContent.getBoundingClientRect !== 'function') {
@@ -2710,14 +2710,35 @@
       const topBoundary = contentRect.top + DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT;
       const bottomBoundary = contentRect.bottom -
         DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT;
+      let scrollDelta = 0;
       if (buttonRect.top < topBoundary) {
-        modeMenuContent.scrollTop -= topBoundary - buttonRect.top;
+        scrollDelta = buttonRect.top - topBoundary;
       } else if (buttonRect.bottom > bottomBoundary) {
-        modeMenuContent.scrollTop += buttonRect.bottom - bottomBoundary;
+        scrollDelta = buttonRect.bottom - bottomBoundary;
+      }
+      if (scrollDelta === 0) {
+        return;
+      }
+      const targetScrollTop = Math.max(
+        0,
+        (Number(modeMenuContent.scrollTop) || 0) + scrollDelta
+      );
+      const prefersReducedMotion = typeof win.matchMedia === 'function' &&
+        win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const shouldSmoothScroll = scrollOptions &&
+        scrollOptions.smooth === true &&
+        !prefersReducedMotion;
+      if (shouldSmoothScroll && typeof modeMenuContent.scrollTo === 'function') {
+        modeMenuContent.scrollTo({
+          behavior: 'smooth',
+          top: targetScrollTop
+        });
+      } else {
+        modeMenuContent.scrollTop = targetScrollTop;
       }
     }
 
-    function focusModeMenuButton(index) {
+    function focusModeMenuButton(index, focusOptions) {
       const buttons = getModeMenuButtons();
       if (buttons.length === 0) {
         return false;
@@ -2727,7 +2748,9 @@
         button.tabIndex = buttonIndex === normalizedIndex ? 0 : -1;
       });
       buttons[normalizedIndex].focus({ preventScroll: true });
-      scrollModeMenuButtonIntoView(buttons[normalizedIndex]);
+      scrollModeMenuButtonIntoView(buttons[normalizedIndex], {
+        smooth: Boolean(focusOptions && focusOptions.smoothScroll)
+      });
       return true;
     }
 
@@ -3480,7 +3503,7 @@
           currentIndex,
           event.key
         );
-        focusModeMenuButton(nextIndex);
+        focusModeMenuButton(nextIndex, { smoothScroll: true });
         return true;
       } else if (event.key === 'Home' || event.key === 'End') {
         stopModeMenuKeyEvent(event);

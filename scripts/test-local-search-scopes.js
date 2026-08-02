@@ -66,8 +66,13 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function scrollModeMenuButtonIntoView\(button\)[\s\S]*?DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT[\s\S]*?DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT[\s\S]*?buttonRect\.top < topBoundary[\s\S]*?buttonRect\.bottom > bottomBoundary/,
+  /function scrollModeMenuButtonIntoView\(button, scrollOptions\)[\s\S]*?DEFAULT_MODE_MENU_SCROLL_TOP_CONTEXT[\s\S]*?DEFAULT_MODE_MENU_SCROLL_BOTTOM_CONTEXT[\s\S]*?buttonRect\.top < topBoundary[\s\S]*?buttonRect\.bottom > bottomBoundary/,
   'keyboard scrolling should preserve group-title context above and panel padding below'
+);
+assert.match(
+  inputModeSource,
+  /prefers-reduced-motion: reduce[\s\S]*?scrollOptions\.smooth === true[\s\S]*?modeMenuContent\.scrollTo\(\{[\s\S]*?behavior: 'smooth'/,
+  'arrow-key scope navigation should scroll smoothly unless reduced motion is requested'
 );
 assert.match(
   inputModeCss,

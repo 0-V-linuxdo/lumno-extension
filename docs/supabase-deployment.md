@@ -1,13 +1,13 @@
 # Lumno Supabase 部署手册
 
-更新日期：2026-08-02
+更新日期：2026-08-03
 
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608020004` 已应用；`202608020005_full_configuration_and_media_assets.sql` 已在仓库中完成，发布含本次客户端变更前必须先推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
-- Storage：`lumno-user-media` 为私有 Bucket，5 MiB 单文件上限，4 条所有者策略；待 `202608020005` 推送后，metadata 将区分壁纸与快捷方式图标，并分别限制为 20 个。
-- Edge Functions：`telemetry-ingest`、`delete-account` 均为 ACTIVE；无身份请求返回 401。
+- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006_media_gateway_and_resource_limits.sql` 已在仓库中完成，发布本次客户端前必须推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸 2 MiB、缩略图 160 KiB、图标 96 KiB，账号活跃媒体合计 48 MiB。
+- Edge Functions：当前生产的 `telemetry-ingest`、`delete-account` 为 ACTIVE；`media-asset` 及新的递归账号清理必须随迁移 `006` 部署并完成未认证 401 验收。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
 - Auth：仅开放 Google 与 GitHub；邮箱登录和新邮箱注册已关闭。Google 与 GitHub 返回同一已验证邮箱时，Supabase 会把两种身份自动关联到同一用户。
@@ -73,6 +73,7 @@ npx supabase@latest db push
 
 ```bash
 npx supabase@latest functions deploy telemetry-ingest
+npx supabase@latest functions deploy media-asset
 npx supabase@latest functions deploy delete-account
 ```
 
@@ -87,6 +88,20 @@ curl -i -X POST "https://<project-ref>.supabase.co/functions/v1/telemetry-ingest
 ```
 
 没有用户 Token 时必须返回 401。
+
+### 媒体内容审核（上线阻断项）
+
+`media-asset` 会把客户端已压缩的实际图片字节发送给内容安全服务，并只接受形如 `{ "allowed": true }` 的成功响应。生产环境必须设置：
+
+```bash
+npx supabase@latest secrets set \
+  LUMNO_MEDIA_MODERATION_URL="https://<moderation-provider>/..." \
+  LUMNO_MEDIA_MODERATION_SECRET="<server-only-secret>"
+```
+
+审核请求不跟随重定向，8 秒超时，未配置、超时、异常或不明确允许时均拒绝上传。本地 Supabase 只有同时满足回环地址且显式设置 `LUMNO_MEDIA_MODERATION_ALLOW_LOCAL=true` 才能跳过，生产项目不能设置该开关。
+
+审核处理方是隐私和合规上的产品选择：部署前必须在隐私政策中补齐其法定名称、处理区域、保留期、子处理方和申诉机制。没有完成这项选择时，可以部署数据库限制，但不要启用云媒体上传。
 
 ## 5. 配置登录提供商
 
@@ -113,6 +128,8 @@ const OAUTH_CLIENT_IDS = {
 
 当前生产公开配置已经填入。任何时候都只能提交 Publishable Key；Secret Key、legacy service-role JWT、数据库密码、SMTP 密码和 CLI Token 都禁止进入插件包。
 
+开源仓库和发布包采用三层隔离：仓库可包含迁移与 Edge Function 源码，但不包含运行时 Secret；商店 ZIP 只包含 `src`、`_locales`、`assets`，并移除开发版 manifest key 和 debug 连接；开发版与商店版使用不同 OAuth Public Client。外部贡献者、Fork 和 CI 不得获得生产 Service Role，需要云端集成测试时使用独立 Supabase 开发项目与独立 OAuth Client。
+
 生产后端可重复冒烟：
 
 ```bash
@@ -138,6 +155,9 @@ node scripts/smoke-supabase-remote.js
 11. 退出登录后确认插件继续以游客模式工作。
 12. 分别用 Google 与 GitHub 从插件发起网页登录，确认出现正确授权范围并返回插件。
 13. 篡改回调 `state` 或使用另一个扩展 ID 的回调，确认登录失败且不保存会话。
+14. 上传 SVG、伪 MIME、带尾随数据的 PNG/WebP、超尺寸图片和审核拒绝样本，确认都不会产生 Storage 对象或活跃 metadata。
+15. 直接用用户 JWT 调 Storage 上传/下载/删除及 `lumno_assets`/`lumno_devices` 写入，确认均为 401/403；仅 Edge 网关可执行媒体操作。
+16. 创建任意 `user_id/legacy/nested/...` 测试对象后删除账号，确认整个用户前缀为零对象。
 
 当前已完成开发版扩展的 Google 真实账号链路；Chrome Web Store 版仍需在商店 ID 对应的 Public Client 上做一次发布包验收。
 

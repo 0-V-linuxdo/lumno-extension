@@ -115,7 +115,7 @@ async function run() {
     webAuth: {
       async signIn() {
         calls.push('web-auth');
-        session = { user: { id: 'user-one', email: 'web@example.com' } };
+        session = { user: { id: 'user-one', email: 'web@example.com', provider: 'google' } };
         return session;
       }
     },
@@ -182,10 +182,15 @@ async function run() {
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session], undefined);
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.cacheOwner], 'user-one',
     'sign-out should retain the cache owner marker so another account cannot inherit media');
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.lastSignInProvider], 'google',
+    'sign-out should retain only the provider name needed to guide the next sign-in');
+  const signedOutStatus = await controller.getStatus();
+  assert.strictEqual(signedOutStatus.lastSignInProvider, 'google');
 
   const webSignedIn = await controller.signInWithWeb(consentVersion);
   assert.strictEqual(webSignedIn.signedIn, true);
   assert.strictEqual(webSignedIn.email, 'web@example.com');
+  assert.strictEqual(webSignedIn.lastSignInProvider, 'google');
   assert(calls.includes('web-auth'));
 
   const manualSyncOptionsBefore = syncOptions.length;

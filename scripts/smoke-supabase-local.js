@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const { smokeMediaGateway } = require('./helpers/media-gateway-smoke.js');
 const { execFileSync } = require('child_process');
 
 const ROOT = new URL('../', `file://${__filename}`).pathname;
@@ -120,54 +121,11 @@ async function main() {
     }]
   });
 
-  const image = Uint8Array.from(Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-    'base64'
-  ));
-  const assetId = crypto.randomUUID();
-  const clientAssetId = `custom-wallpaper-${crypto.randomUUID()}`;
-  const storagePath = `${session.user.id}/wallpapers/${clientAssetId}.png`;
-  await requestJson(`${apiUrl}/rest/v1/lumno_assets?on_conflict=user_id,client_asset_id`, publishableKey, {
-    method: 'POST',
-    headers: {
-      ...authHeaders,
-      Prefer: 'resolution=merge-duplicates,return=representation'
-    },
-    body: [{
-      id: assetId,
-      user_id: session.user.id,
-      client_asset_id: clientAssetId,
-      original_name: 'smoke.png',
-      storage_path: storagePath,
-      thumbnail_path: null,
-      sha256: crypto.createHash('sha256').update(image).digest('hex'),
-      mime_type: 'image/png',
-      byte_size: image.byteLength,
-      width: 1,
-      height: 1,
-      deleted_at: null
-    }]
+  await smokeMediaGateway({
+    projectUrl: apiUrl,
+    publishableKey,
+    accessToken: session.access_token
   });
-  const uploadResponse = await fetch(
-    `${apiUrl}/storage/v1/object/lumno-user-media/${storagePath}`,
-    {
-      method: 'POST',
-      headers: {
-        apikey: publishableKey,
-        Authorization: authHeaders.Authorization,
-        'Content-Type': 'image/png',
-        'x-upsert': 'false'
-      },
-      body: image
-    }
-  );
-  assert.equal(uploadResponse.ok, true, `wallpaper upload should pass RLS: ${await uploadResponse.text()}`);
-  const downloadResponse = await fetch(
-    `${apiUrl}/storage/v1/object/authenticated/lumno-user-media/${storagePath}`,
-    { headers: { apikey: publishableKey, ...authHeaders } }
-  );
-  assert.equal(downloadResponse.ok, true, 'private wallpaper should be downloadable by its owner');
-  assert.equal((await downloadResponse.arrayBuffer()).byteLength, image.byteLength);
 
   const configuration = {
     schema_version: 1,

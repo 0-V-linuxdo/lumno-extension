@@ -909,6 +909,10 @@ describe('Shared search scope menu', () => {
         toJSON: () => ({})
       });
     });
+    const smoothScrollTo = vi.fn((options: ScrollToOptions) => {
+      menuContent!.scrollTop = Number(options.top) || 0;
+    });
+    menuContent!.scrollTo = smoothScrollTo as unknown as HTMLElement['scrollTo'];
 
     menuContent!.scrollTop = 200;
     controller.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
@@ -918,6 +922,10 @@ describe('Shared search scope menu', () => {
     }));
     expect(document.activeElement).toBe(buttons[0]);
     expect(menuContent!.scrollTop).toBe(166);
+    expect(smoothScrollTo).toHaveBeenLastCalledWith({
+      behavior: 'smooth',
+      top: 166
+    });
 
     menuContent!.scrollTop = 100;
     buttons[0].dispatchEvent(new KeyboardEvent('keydown', {
@@ -927,6 +935,7 @@ describe('Shared search scope menu', () => {
     }));
     expect(document.activeElement).toBe(buttons[2]);
     expect(menuContent!.scrollTop).toBe(106);
+    expect(smoothScrollTo).toHaveBeenCalledTimes(1);
     controller.destroy();
   });
 

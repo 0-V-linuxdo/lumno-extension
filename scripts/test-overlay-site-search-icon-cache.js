@@ -133,23 +133,23 @@ assert.match(
 
 assert.match(
   backgroundSource,
-  /function resolveShortcutFaviconData\(pageUrl, preferredTheme, signal, explicitIconUrl\)[\s\S]*?source: 'explicit'[\s\S]*?result \|\| resolveFromPageOrProxy\(\)/,
-  'background warming should validate explicit artwork before page discovery and the 128px proxy fallback'
+  /function resolveShortcutFaviconData\(pageUrl, preferredTheme, signal, explicitIconUrl\)[\s\S]*?getGstaticFaviconUrl\(pageUrl\)[\s\S]*?source: 'proxy'/,
+  'background warming should use only the fixed 128px proxy instead of arbitrary provider URLs'
 );
 assert.match(
   backgroundSource,
-  /function canFetchShortcutFaviconUrl\(url\)[\s\S]*?policy\.ok[\s\S]*?!policy\.directFetchBlocked[\s\S]*?canFetchPageForFavicon\(url\)/,
-  'provider icon discovery should centralize its safe fetch policy'
+  /function fetchShortcutFaviconDocument\(pageUrl, signal\) \{\s*return Promise\.resolve\(null\);\s*\}/,
+  'provider page HTML discovery should make no privileged network request'
 );
 assert.match(
   backgroundSource,
-  /const resolvedPageUrl =[\s\S]*?canFetchShortcutFaviconUrl\(resolvedPageUrl\)[\s\S]*?const resolvedManifestUrl =[\s\S]*?canFetchShortcutFaviconUrl\(resolvedManifestUrl\)[\s\S]*?const resolvedSourceUrl =[\s\S]*?canFetchShortcutFaviconUrl\(resolvedSourceUrl\)/,
-  'provider icon discovery should revalidate every URL after redirects'
+  /function fetchShortcutFaviconManifest\(manifestUrl, signal\) \{\s*return Promise\.resolve\(\[\]\);\s*\}/,
+  'provider manifests should make no privileged network request'
 );
 assert.match(
   backgroundSource,
-  /readShortcutFaviconResponsePrefix\(\s*response,\s*SHORTCUT_FAVICON_MANIFEST_MAX_BYTES\s*\)[\s\S]*?JSON\.parse\(text\)/,
-  'provider icon manifests should be read through the bounded response reader'
+  /function fetchShortcutFaviconResource\([\s\S]*?!isAllowedFaviconProxyRequestUrl\(sourceUrl\)[\s\S]*?redirect: 'error'[\s\S]*?isAllowedFaviconProxyRequestUrl\(resolvedSourceUrl\)/,
+  'fixed proxy icon requests should reject redirects and revalidate the response URL'
 );
 
 assert.match(

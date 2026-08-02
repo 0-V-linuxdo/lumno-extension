@@ -63,5 +63,8 @@ verify_jwt = false
 [functions.delete-account]
 verify_jwt = false
 
+[functions.media-asset]
+verify_jwt = false
+
 [analytics]
 enabled = false

@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const { smokeMediaGateway } = require('./helpers/media-gateway-smoke.js');
 const { execFileSync } = require('child_process');
 
 const cloudConfig = require('../src/shared/cloud-config.js');
@@ -150,58 +151,11 @@ async function main() {
       }
     );
 
-    const image = Uint8Array.from(Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-      'base64'
-    ));
-    const assetId = crypto.randomUUID();
-    const clientAssetId = `custom-wallpaper-${crypto.randomUUID()}`;
-    const storagePath = `${userId}/wallpapers/${clientAssetId}.png`;
-    await requestJson(
-      `${config.projectUrl}/rest/v1/lumno_assets?on_conflict=user_id,client_asset_id`,
-      config.publishableKey,
-      {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          Prefer: 'resolution=merge-duplicates,return=representation'
-        },
-        body: [{
-          id: assetId,
-          user_id: userId,
-          client_asset_id: clientAssetId,
-          original_name: 'remote-smoke.png',
-          storage_path: storagePath,
-          thumbnail_path: null,
-          sha256: crypto.createHash('sha256').update(image).digest('hex'),
-          mime_type: 'image/png',
-          byte_size: image.byteLength,
-          width: 1,
-          height: 1,
-          deleted_at: null
-        }]
-      }
-    );
-    const uploadResponse = await fetch(
-      `${config.projectUrl}/storage/v1/object/${config.mediaBucket}/${storagePath}`,
-      {
-        method: 'POST',
-        headers: {
-          apikey: config.publishableKey,
-          Authorization: authHeaders.Authorization,
-          'Content-Type': 'image/png',
-          'x-upsert': 'false'
-        },
-        body: image
-      }
-    );
-    assert.equal(uploadResponse.ok, true, `remote wallpaper upload should pass RLS: ${await uploadResponse.text()}`);
-    const downloadResponse = await fetch(
-      `${config.projectUrl}/storage/v1/object/authenticated/${config.mediaBucket}/${storagePath}`,
-      { headers: { apikey: config.publishableKey, ...authHeaders } }
-    );
-    assert.equal(downloadResponse.ok, true, 'owner should download the private remote wallpaper');
-    assert.equal((await downloadResponse.arrayBuffer()).byteLength, image.byteLength);
+    await smokeMediaGateway({
+      projectUrl: config.projectUrl,
+      publishableKey: config.publishableKey,
+      accessToken: session.access_token
+    });
 
     const telemetry = await requestJson(
       `${config.projectUrl}/functions/v1/telemetry-ingest`,

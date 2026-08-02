@@ -279,19 +279,22 @@ assert.strictEqual(
   'gg',
   'known current engines should reuse their library provider'
 );
-const detected360 = search.getSearchEngineSiteSearchProvider({
+const retired360 = search.getSearchEngineSiteSearchProvider({
   id: 'so',
   host: 'www.so.com',
   name: '360搜索',
   searchTemplate: 'https://www.so.com/s?q={query}'
 }, providers);
 assert.strictEqual(
-  detected360.key,
-  'so360',
-  'a detected browser engine should reuse the matching built-in provider when available'
+  search.isRetiredSearchEngineState({ id: 'so', host: 'www.so.com' }),
+  true,
+  '360 should remain retired even when an older stored engine state is restored'
 );
-assert.strictEqual(detected360.name, '360 Search');
-assert.strictEqual(detected360.category, 'searchEngine');
+assert.strictEqual(
+  retired360.key,
+  'gg',
+  'the retired 360 engine should fall back to Google instead of reappearing dynamically'
+);
 const detectedUnlistedEngine = search.getSearchEngineSiteSearchProvider({
   id: 'private-engine',
   host: 'search.example.test',

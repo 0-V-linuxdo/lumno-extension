@@ -35,8 +35,12 @@
   const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
   const SHORTCUT_ICON_STORAGE_KEY = wallpaperApi && wallpaperApi.SHORTCUT_ICON_STORAGE_KEY ||
     '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const PERSISTENT_LOCAL_KEYS = new Set([
+    schema.CLOUD_LOCAL_KEYS.cacheOwner,
+    schema.CLOUD_LOCAL_KEYS.lastSignInProvider
+  ]);
   const PRIVATE_LOCAL_KEYS = Object.freeze(
-    Object.values(schema.CLOUD_LOCAL_KEYS).filter((key) => key !== schema.CLOUD_LOCAL_KEYS.cacheOwner)
+    Object.values(schema.CLOUD_LOCAL_KEYS).filter((key) => !PERSISTENT_LOCAL_KEYS.has(key))
   );
 
   function safeJson(value) {
@@ -45,6 +49,11 @@
     } catch (_error) {
       return '';
     }
+  }
+
+  function normalizeSignInProvider(value) {
+    const provider = String(value || '').trim().toLowerCase();
+    return provider === 'google' || provider === 'github' ? provider : '';
   }
 
   function detectClientInfo(chromeApi, navigatorLike) {
@@ -279,7 +288,8 @@
           schema.CLOUD_LOCAL_KEYS.consent,
           schema.CLOUD_LOCAL_KEYS.conflicts,
           schema.CLOUD_LOCAL_KEYS.outbox,
-          schema.CLOUD_LOCAL_KEYS.account
+          schema.CLOUD_LOCAL_KEYS.account,
+          schema.CLOUD_LOCAL_KEYS.lastSignInProvider
         ])
       ]);
       const status = local[schema.CLOUD_LOCAL_KEYS.status] || {};
@@ -295,11 +305,16 @@
       ).trim();
       const sessionAccountId = getSessionUserId(session);
       const signedIn = Boolean(sessionAccountId && sessionAccountId === storedAccountId);
+      const lastSignInProvider = normalizeSignInProvider(
+        signedIn && session && session.user && session.user.provider ||
+        local[schema.CLOUD_LOCAL_KEYS.lastSignInProvider]
+      );
       return {
         ok: true,
         configured: Boolean(transport.config && transport.config.configured),
         signedIn,
         email: signedIn && session.user ? session.user.email : '',
+        lastSignInProvider,
         mode,
         syncProvider: mode === repositoryApi.MODE_CLOUD ? 'lumno' : 'chrome',
         analyticsConsented: Boolean(
@@ -461,13 +476,18 @@
         await wallpaper.clearLocal();
       }
       await acceptCombinedCloudConsent();
-      await writeLocal({
+      const signInProvider = normalizeSignInProvider(session && session.user && session.user.provider);
+      const accountState = {
         [schema.CLOUD_LOCAL_KEYS.account]: {
           id: session.user.id,
           email: session.user.email || ''
         },
         [schema.CLOUD_LOCAL_KEYS.cacheOwner]: session.user.id
-      });
+      };
+      if (signInProvider) {
+        accountState[schema.CLOUD_LOCAL_KEYS.lastSignInProvider] = signInProvider;
+      }
+      await writeLocal(accountState);
       const migration = await runtime.enableCloudMode(
         identityTransition.replacedAccount
           ? { resetCloudCache: true }
@@ -728,6 +748,7 @@
     PERIODIC_SYNC_MINUTES,
     CLOUD_COMBINED_CONSENT_VERSION,
     detectClientInfo,
+    normalizeSignInProvider,
     isTrustedExtensionSender,
     createTrackedArea,
     createController

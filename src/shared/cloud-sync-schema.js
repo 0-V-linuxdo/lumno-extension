@@ -68,6 +68,7 @@
     conflicts: '_lumno_cloud_conflicts_v1_',
     consent: '_lumno_cloud_consent_v1_',
     device: '_lumno_cloud_device_v1_',
+    lastSignInProvider: '_lumno_cloud_last_sign_in_provider_v1_',
     mode: '_lumno_cloud_mode_v1_',
     outbox: '_lumno_cloud_outbox_v1_',
     pullCursor: '_lumno_cloud_pull_cursor_v1_',

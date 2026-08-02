@@ -35,6 +35,15 @@ function jsonResponse(status, body) {
 async function run() {
   assert.strictEqual(transportApi.normalizeEmail(' Alice@Example.COM '), 'alice@example.com');
   assert.strictEqual(transportApi.normalizeEmail('not-an-email'), '');
+  assert.strictEqual(transportApi.normalizeAuthProvider(' Google '), 'google');
+  assert.strictEqual(transportApi.normalizeAuthProvider('email'), '');
+  assert.strictEqual(transportApi.getAuthProvider({
+    app_metadata: { provider: 'google' },
+    identities: [
+      { provider: 'google', last_sign_in_at: '2026-08-01T00:00:00Z' },
+      { provider: 'github', last_sign_in_at: '2026-08-02T00:00:00Z' }
+    ]
+  }), 'github', 'the most recently used identity should win over the account metadata fallback');
 
   const localArea = createArea({});
   const requests = [];
@@ -52,6 +61,28 @@ async function run() {
     }
     if (url.endsWith('/rest/v1/rpc/lumno_pull_setting_changes')) {
       return jsonResponse(200, [{ key: schema.STORAGE_KEYS.themeMode, value: 'dark', change_id: 1 }]);
+    }
+    if (url.endsWith('/functions/v1/media-asset') && body instanceof FormData) {
+      return jsonResponse(200, {
+        ok: true,
+        asset: {
+          id: '22222222-2222-4222-8222-222222222222',
+          client_asset_id: body.get('client_asset_id'),
+          storage_path: 'user-one/wallpapers/server-generated.webp'
+        }
+      });
+    }
+    if (url.endsWith('/functions/v1/media-asset') && body && body.action === 'download') {
+      const blob = new Blob(['downloaded'], { type: 'image/webp' });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        blob: async () => blob
+      };
+    }
+    if (url.includes('/rest/v1/lumno_assets?')) {
+      return jsonResponse(200, []);
     }
     return jsonResponse(200, {});
   };
@@ -124,7 +155,11 @@ async function run() {
       });
     }
     if (url.endsWith('/auth/v1/user')) {
-      return jsonResponse(200, { id: 'oauth-user', email: 'oauth@example.com' });
+      return jsonResponse(200, {
+        id: 'oauth-user',
+        email: 'oauth@example.com',
+        app_metadata: { provider: 'google' }
+      });
     }
     return jsonResponse(200, {});
   };
@@ -149,6 +184,7 @@ async function run() {
     redirectUri: 'https://extension.chromiumapp.org/lumno-auth'
   });
   assert.strictEqual(oauthSession.user.id, 'oauth-user');
+  assert.strictEqual(oauthSession.user.provider, 'google');
   assert.strictEqual(oauthSession.oauth_client_id, 'public-client');
   assert.strictEqual(oauthRequests[0].options.headers['Content-Type'], 'application/x-www-form-urlencoded');
   assert.strictEqual(oauthRequests[0].options.body.get('code_verifier'), 'verifier-value');
@@ -159,6 +195,33 @@ async function run() {
   assert.strictEqual(refreshedOauth.access_token, 'oauth-access-two');
   assert.strictEqual(refreshedOauth.user.email, 'oauth@example.com');
   assert.strictEqual(oauthRequests.at(-1).options.body.get('grant_type'), 'refresh_token');
+
+  const uploadedAsset = await transport.uploadAsset({
+    asset_kind: 'wallpaper',
+    client_asset_id: 'custom-wallpaper-1700000000000-abcdef',
+    original_name: 'Compressed wallpaper',
+    imageBlob: new Blob(['webp'], { type: 'image/webp' }),
+    thumbnailBlob: new Blob(['thumb'], { type: 'image/webp' })
+  });
+  assert.strictEqual(uploadedAsset.storage_path, 'user-one/wallpapers/server-generated.webp');
+  const uploadRequest = requests.at(-1);
+  assert.match(uploadRequest.url, /\/functions\/v1\/media-asset$/);
+  assert(uploadRequest.body instanceof FormData);
+  assert.strictEqual(uploadRequest.options.headers['Content-Type'], undefined,
+    'the browser should set the multipart boundary itself');
+
+  const downloadedBlob = await transport.downloadObject(uploadedAsset.storage_path);
+  assert.strictEqual(await downloadedBlob.text(), 'downloaded');
+  await transport.deleteAsset('custom-wallpaper-1700000000000-abcdef');
+  assert.deepStrictEqual(requests.at(-1).body, {
+    action: 'delete',
+    client_asset_id: 'custom-wallpaper-1700000000000-abcdef'
+  });
+  assert.strictEqual(
+    requests.some((entry) => entry.url.includes('/storage/v1/object/')),
+    false,
+    'authenticated clients should never call Storage directly'
+  );
 
   console.log('supabase transport tests passed');
 }

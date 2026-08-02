@@ -8,9 +8,11 @@
   'use strict';
 
   const DEFAULT_STORAGE_KEY = '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
   const MAX_SOURCE_DIMENSION = 4096;
   const OUTPUT_SIZE = 128;
   const MAX_STORED_DATA_URL_LENGTH = 160 * 1024;
+  const MAX_OUTPUT_BYTES = 96 * 1024;
   const ACCEPTED_MIME_TYPES = Object.freeze([
     'image/png',
     'image/jpeg',
@@ -46,6 +48,9 @@
     if (!Number.isFinite(size) || size <= 0) {
       throw createIconError('empty-file', 'Shortcut icon file is empty.');
     }
+    if (size > MAX_SOURCE_BYTES) {
+      throw createIconError('file-too-large', 'Shortcut icon source file is too large.');
+    }
     return true;
   }
 
@@ -79,10 +84,19 @@
     };
   }
 
+  function getDataUrlByteLength(value) {
+    const match = /^data:[^;,]+;base64,([a-zA-Z0-9+/]*={0,2})$/.exec(String(value || '').trim());
+    if (!match) return 0;
+    const encoded = match[1];
+    const padding = encoded.endsWith('==') ? 2 : (encoded.endsWith('=') ? 1 : 0);
+    return Math.max(0, Math.floor((encoded.length * 3) / 4) - padding);
+  }
+
   function normalizeIconDataUrl(value) {
     const dataUrl = String(value || '').trim();
     if (!dataUrl.startsWith('data:image/png;base64,') ||
-        dataUrl.length > MAX_STORED_DATA_URL_LENGTH) {
+        dataUrl.length > MAX_STORED_DATA_URL_LENGTH ||
+        getDataUrlByteLength(dataUrl) > MAX_OUTPUT_BYTES) {
       return '';
     }
     return dataUrl;
@@ -241,14 +255,17 @@
 
   return Object.freeze({
     DEFAULT_STORAGE_KEY,
+    MAX_SOURCE_BYTES,
     MAX_SOURCE_DIMENSION,
     OUTPUT_SIZE,
+    MAX_OUTPUT_BYTES,
     ACCEPTED_MIME_TYPES,
     createIconError,
     isAcceptedMimeType,
     validateSourceFile,
     validateSourceDimensions,
     getContainedRect,
+    getDataUrlByteLength,
     normalizeIconDataUrl,
     normalizeIconMap,
     createShortcutIconStore

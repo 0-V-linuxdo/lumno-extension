@@ -15,20 +15,28 @@ function getContentBlock(name) {
 }
 
 const generalContent = getContentBlock('general');
+const accountContent = getContentBlock('account');
 const labsContent = getContentBlock('labs');
 
-const syncTitleIndex = generalContent.indexOf('data-i18n="settings_sync_title"');
 const updateNoticeTitleIndex = generalContent.indexOf('data-i18n="settings_update_notice_title"');
 const autoPipTitleIndex = generalContent.indexOf('data-i18n="settings_auto_pip_title"');
 const searchResultsSectionIndex = generalContent.indexOf('data-i18n="settings_search_results_section_title"');
+const accountSectionTitleIndex = accountContent.indexOf('data-i18n="cloud_account_section_title"');
+const syncTitleIndex = accountContent.indexOf('data-i18n="settings_sync_title"');
 
-assert.notStrictEqual(syncTitleIndex, -1, 'general settings should include Lumno configuration');
 assert.notStrictEqual(updateNoticeTitleIndex, -1, 'update notice switch should live in general settings');
 assert.notStrictEqual(autoPipTitleIndex, -1, 'auto picture-in-picture should live in general settings');
 assert.notStrictEqual(searchResultsSectionIndex, -1, 'general settings should include search results section');
+assert.notStrictEqual(accountSectionTitleIndex, -1, 'account settings should include the account and sync heading');
+assert.notStrictEqual(syncTitleIndex, -1, 'account settings should include Lumno configuration');
 assert.ok(
-  syncTitleIndex < updateNoticeTitleIndex,
-  'update notice switch should appear below Lumno configuration'
+  syncTitleIndex < accountSectionTitleIndex,
+  'browser sync configuration should appear above the account sync method heading'
+);
+assert.doesNotMatch(
+  generalContent,
+  /data-i18n="settings_sync_title"/,
+  'Lumno configuration should no longer appear in general settings'
 );
 assert.ok(
   updateNoticeTitleIndex < autoPipTitleIndex,
@@ -36,7 +44,7 @@ assert.ok(
 );
 assert.ok(
   autoPipTitleIndex < searchResultsSectionIndex,
-  'auto picture-in-picture should stay in the Lumno configuration group before search results settings'
+  'auto picture-in-picture should stay in general settings before search results settings'
 );
 assert.doesNotMatch(
   labsContent,

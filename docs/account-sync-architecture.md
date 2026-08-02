@@ -1,6 +1,6 @@
 # Lumno 账号、同步与统计架构
 
-更新日期：2026-08-02
+更新日期：2026-08-03
 
 ## 1. 最终方案
 
@@ -51,7 +51,13 @@ flowchart LR
 - 用户主动导入的快捷方式自定义图标
 - 原始显示名称、MIME、尺寸、字节数、SHA-256
 
-单用户最多保存 20 张壁纸和 20 个快捷方式图标；壁纸单文件最多 5 MiB，图标最多 160 KiB。对象路径以用户 ID 开头，Bucket 不公开。
+上传前，壁纸源文件最多 25 MiB，并在客户端重新编码为 WebP（云端主图最多 2 MiB、缩略图最多 160 KiB）；快捷方式图标源文件最多 10 MiB，并重新渲染为 128×128 PNG（最多 96 KiB）。原始 EXIF、文件名内嵌内容和非图片尾随数据不会直接进入云端。单用户最多保存 20 张壁纸和 20 个快捷方式图标，活跃媒体合计最多 48 MiB。对象路径由服务端生成、以用户 ID 开头，Bucket 不公开。
+
+按全部文件都达到上限计算：`20 × (2 MiB + 160 KiB) + 20 × 96 KiB = 45 MiB`，低于 48 MiB 服务端总配额，留出的 3 MiB 用于编码和边界误差；配额按服务端收到的真实字节计算，不采用客户端声明值。
+
+客户端限制只负责体验，不能作为安全边界。`media-asset` Edge Function 会根据实际二进制重新检查格式、结构、尺寸和字节数，计算 SHA-256，执行内容安全审核，再以 Service Role 写入 Storage 和 metadata。生产环境未配置审核服务、审核超时或返回非明确允许时，上传失败关闭；不会把“扩展名/MIME 看起来像图片”当成色情、赌博、毒品或网盘滥用检测。
+
+媒体资源另有 30 次/账号/小时的上传限制和 512 MiB/账号/月的下载预算。认证客户端没有 Storage 写入、删除或直接下载权限，也不能修改 `lumno_assets`；因此自定义客户端无法通过伪造 metadata、先写后删或任意路径把 Bucket 当网盘。
 
 ### D. 随账号同步启用的使用统计
 
@@ -103,7 +109,9 @@ flowchart LR
 | 插件消息 | 只接受同扩展 ID、同 `chrome-extension://` 源的账号动作 | 普通网页和内容脚本不能触发登录、退出或同步操作；插件不提供删除账号接口 |
 | 数据库 | 所有业务表启用并强制 RLS | 用户不能读写别人的行 |
 | 配置写入 | 只允许受控 RPC | 客户端不能绕过版本检查 |
-| 媒体上传 | 私有 Bucket + 用户目录 + 台账前置检查 | 不能越权写路径或无限上传 |
+| 媒体上传 | 客户端重编码 + Edge 网关 + 实际字节/尺寸复核 + 内容审核 + 数量/容量/速率配额 | 不能越权写路径、伪造 MIME、无限上传或把服务当网盘 |
+| 媒体下载 | Edge 网关 + metadata 所有权检查 + 月度出站预算 | 不能绕过计费边界批量消耗 Storage 流量 |
+| 开源仓库 | 商店包仅打包 `src/_locales/assets`，剥离开发 key/debug 连接；仓库和客户端仅含 Publishable Key | 开源代码不会暴露 Service Role、数据库密码或部署资产 |
 | 统计入口 | 客户端、Edge Function、数据库三层白名单 | 即使一层出错也不接收浏览内容 |
 | 管理权限 | Secret/Service Role 仅在 Edge Function | 插件永远拿不到 RLS 绕过权限 |
 
@@ -125,7 +133,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - 首次登录先拉云端，再把合并后的本机快照补齐到云端；已存在键以云端为准，本机独有键会上传。
 - 壁纸是不可变导入项：每次导入生成新 ID，不做同 ID 的图片编辑。
 - 删除壁纸先删 Storage 对象，再把 metadata 标为墓碑；其他设备同步到墓碑后删除本机 IndexedDB 副本，避免长期离线设备把旧资源复活。墓碑保留到账号删除。
-- 删除账号只能在已认证的 Lumno Web 账号中心完成。Web 调用 Edge Function，先清理两个媒体目录再删除 Auth 用户，数据库行通过外键级联清理；插件只有跳转链接，没有直接删除能力。
+- 删除账号只能在已认证的 Lumno Web 账号中心完成。Web 调用 Edge Function，递归枚举并清理该 `user_id/` 下的全部对象（包括未来目录、旧路径和无引用对象），再删除 Auth 用户；数据库行通过外键级联清理。插件只有跳转链接，没有直接删除能力。
 - 退出登录不会删除本机配置；永久删除账号也保留本机配置，方便用户继续使用游客模式。
 
 ## 8. 主要风险和控制
@@ -138,6 +146,8 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 | 跨境与地区合规 | 本地优先；隐私政策面向所有用户披露东京区域、境外接收方、数据类型、目的和权利 | 服务地区、处理规模或接收方变化时重新评估适用法律；若大陆性能是硬指标，再评估 CloudBase |
 | 云服务暂停/故障 | 15 秒超时、指数退避、本机 Outbox；不自动双写 Chrome | 生产付费计划、异地数据库导出、恢复演练与可用性监控 |
 | 配置包含敏感 URL | 只用于用户主动同步、RLS 隔离 | 隐私政策必须明确披露，不得复用于统计 |
+| 非扩展用途或违法图片 | 固定图片格式、48 MiB 总配额、上传/下载预算、生产内容审核失败关闭 | 上线前必须选择审核处理方并在隐私政策中填写名称、区域、保留期和申诉流程 |
+| 开源代码被二次打包 | 公共客户端标识不视为秘密；所有授权、配额和内容判断在服务端；商店包不包含后端/部署文件 | 外部贡献者或 CI 若需端到端云测试，应使用独立 Supabase 开发项目，禁止给生产 Service Role |
 | 统计口径膨胀 | 固定白名单、未知字段拒绝 | 新指标必须经过隐私评审和 schema 变更 |
 | 多设备冲突体验 | 不静默覆盖，保存冲突 | 后续增加逐项冲突 UI |
 | 账号枚举/暴力请求 | Auth 速率限制，错误文案不暴露账号存在 | 上线后观察 Auth 日志并调限额 |
@@ -160,14 +170,15 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `src/background/cloud-account-controller.js`：MV3 生命周期和账号编排。
 - `src/background/web-auth-flow.js`：OAuth 2.1 Authorization Code、PKCE、state 和 Chrome 回调校验。
 - `src/background/secure-session-store.js`：扩展源私有 IndexedDB 会话存储和旧会话迁移。
-- `src/background/supabase-transport.js`：Auth、REST、Storage、Functions HTTPS 传输。
+- `src/background/supabase-transport.js`：Auth、REST 和 Edge Functions HTTPS 传输；认证客户端不直连 Storage。
 - `src/background/cloud-wallpaper-runtime.js`：用户媒体同步；负责壁纸 IndexedDB 与快捷方式图标本地存储的上传、下载、删除和账号隔离。
 - `src/background/usage-analytics-runtime.js`：同意门和每日计数器。
 - `supabase/migrations/202608010001_lumno_cloud.sql`：表、索引、RLS、RPC 和 Storage 策略。
 - `supabase/migrations/202608020002_data_retention.sql`：24 个月明细保留、匿名月度汇总以及 30/90 天幂等记录清理。
 - `supabase/migrations/202608020005_full_configuration_and_media_assets.sql`：补齐配置白名单，并为壁纸和快捷方式图标建立分类型媒体约束与独立配额。
+- `supabase/migrations/202608030006_media_gateway_and_resource_limits.sql`：撤销客户端媒体/设备写权限，加入 48 MiB 媒体总量、速率/出站预算、10 台设备和 JSONB 大小/深度限制。
 - `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：保留已部署的历史同意字段；当前客户端不再展示或写入地区专属同意。
-- `supabase/functions/`：统计入口与账号删除。
+- `supabase/functions/`：统计入口、媒体上传/下载/删除网关与账号删除。
 
 ## 11. 生产验收记录
 
