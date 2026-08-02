@@ -89,6 +89,7 @@
   const cloudSyncDetail = document.getElementById('_x_extension_cloud_sync_detail_2026_unique_');
   const cloudSyncNowButton = document.getElementById('_x_extension_cloud_sync_now_2026_unique_');
   const cloudSignoutButton = document.getElementById('_x_extension_cloud_signout_2026_unique_');
+  const cloudAnalyticsCard = document.getElementById('_x_extension_cloud_analytics_card_2026_unique_');
   const cloudAnalyticsToggle = document.getElementById('_x_extension_cloud_analytics_toggle_2026_unique_');
   const cloudDeleteButton = document.getElementById('_x_extension_cloud_delete_2026_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
@@ -2246,10 +2247,17 @@
     currentCloudAccountStatus = value;
     const configured = value.configured === true;
     const signedIn = configured && value.signedIn === true;
+    const syncState = signedIn && value.sync ? String(value.sync.state || 'idle') : 'idle';
     if (cloudUnconfigured) cloudUnconfigured.hidden = configured;
     if (cloudSignedOut) cloudSignedOut.hidden = !configured || signedIn;
-    if (cloudSignedIn) cloudSignedIn.hidden = !signedIn;
+    if (cloudSignedIn) {
+      cloudSignedIn.hidden = !signedIn;
+      cloudSignedIn.setAttribute('data-sync-state', syncState);
+    }
     if (cloudDangerCard) cloudDangerCard.hidden = !signedIn;
+    if (cloudAnalyticsCard) {
+      cloudAnalyticsCard.setAttribute('data-enabled', signedIn && value.analyticsConsented === true ? 'true' : 'false');
+    }
     if (cloudAnalyticsToggle) {
       cloudAnalyticsToggle.disabled = !signedIn;
       cloudAnalyticsToggle.checked = signedIn && value.analyticsConsented === true;
@@ -2257,7 +2265,6 @@
     if (cloudEmailDisplay) cloudEmailDisplay.textContent = signedIn ? String(value.email || '') : '';
     if (cloudSyncDetail) cloudSyncDetail.textContent = signedIn ? formatCloudSyncDetail(value) : '';
     if (cloudStatus) {
-      const syncState = signedIn && value.sync ? String(value.sync.state || 'idle') : 'idle';
       cloudStatus.setAttribute('data-state', syncState);
       cloudStatus.textContent = !configured
         ? getMessage('cloud_status_unconfigured', '未配置')
@@ -2318,15 +2325,20 @@
       cloudAnalyticsToggle.addEventListener('change', () => {
         const consented = cloudAnalyticsToggle.checked;
         cloudAnalyticsToggle.disabled = true;
+        if (cloudAnalyticsCard) cloudAnalyticsCard.setAttribute('data-enabled', consented ? 'true' : 'false');
         sendCloudMessage({ action: 'cloudSetAnalyticsConsent', consented })
-          .then(() => showToast(
-            consented
-              ? getMessage('cloud_analytics_enabled', '产品使用统计已开启')
-              : getMessage('cloud_analytics_disabled', '使用统计已关闭，本地待上传计数已清除'),
-            false
-          ))
+          .then(() => {
+            if (currentCloudAccountStatus) currentCloudAccountStatus.analyticsConsented = consented;
+            showToast(
+              consented
+                ? getMessage('cloud_analytics_enabled', '产品使用统计已开启')
+                : getMessage('cloud_analytics_disabled', '使用统计已关闭，本地待上传计数已清除'),
+              false
+            );
+          })
           .catch((error) => {
             cloudAnalyticsToggle.checked = !consented;
+            if (cloudAnalyticsCard) cloudAnalyticsCard.setAttribute('data-enabled', consented ? 'false' : 'true');
             showToast(getCloudErrorMessage(error), true);
           })
           .finally(() => { cloudAnalyticsToggle.disabled = false; });

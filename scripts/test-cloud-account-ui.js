@@ -24,13 +24,18 @@ function run() {
     'React navigation should render the account tab'
   );
   assert.match(html, /浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie/);
-  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox" disabled/);
+  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox"[^>]* disabled/);
+  assert.match(html, /cloud_status_2026_unique_"[\s\S]*role="status" aria-live="polite"/);
+  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox" aria-describedby="_x_extension_cloud_analytics_desc_2026_unique_" disabled/);
+  assert.match(html, /cloud_sync_now_2026_unique_[\s\S]*ri-refresh-line/);
   assert.match(html, /推荐使用 Google 或 GitHub/);
   assert.match(html, /邮箱验证码作为内测入口/);
   assert.match(runtime, /action: 'cloudSignInWithWeb'/);
   assert.doesNotMatch(runtime, /action: 'cloudRequestOtp'/);
   assert.doesNotMatch(runtime, /action: 'cloudVerifyOtp'/);
   assert.match(runtime, /action: 'cloudSetAnalyticsConsent', consented/);
+  assert.match(runtime, /cloudSignedIn\.setAttribute\('data-sync-state', syncState\)/);
+  assert.match(runtime, /cloudAnalyticsCard\.setAttribute\('data-enabled'/);
   assert.match(
     runtime,
     /String\(sync\.state \|\| ''\) === 'error'[\s\S]*String\(sync\.lastError \|\| ''\)\.trim\(\)/,

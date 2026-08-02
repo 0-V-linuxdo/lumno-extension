@@ -38,7 +38,7 @@ assert.match(analyticsRuntime, /usage\.clear\(\)|CLOUD_LOCAL_KEYS\.usage/,
   'pending local usage counters should be removable');
 assert.match(analyticsSchema, /FORBIDDEN_ANALYTICS_KEY_PATTERN/,
   'the analytics data contract should reject browsing-value field names');
-assert.match(accountUi, /id="_x_extension_cloud_analytics_toggle_2026_unique_" type="checkbox" disabled/,
+assert.match(accountUi, /id="_x_extension_cloud_analytics_toggle_2026_unique_" type="checkbox"[^>]* disabled/,
   'analytics consent should be off and disabled until sign-in');
 assert.match(accountUi, /不会上传 URL、搜索词、网页标题、历史记录或书签内容/,
   'the consent surface should prominently disclose excluded browsing data');
