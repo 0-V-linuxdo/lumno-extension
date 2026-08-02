@@ -65,6 +65,22 @@
   "settings_tab_labs": {
     "message": "实验室功能"
   },
+  "settings_selection_quick_actions_title": {
+    "message": "划词快捷操作"
+  },
+  "settings_selection_quick_actions_desc": {
+    "message": "根据所选文字动态显示 AI 操作，并在后台的 Lumno AI 标签组中打开结果"
+  },
+  "selection_quick_action_ask": { "message": "问 AI" },
+  "selection_quick_action_translate": { "message": "翻译" },
+  "selection_quick_action_explain": { "message": "解释" },
+  "selection_quick_action_summarize": { "message": "总结" },
+  "selection_quick_action_search": { "message": "查资料" },
+  "selection_quick_action_calculate": { "message": "换算" },
+  "selection_quick_action_open_menu": { "message": "使用 Lumno 处理所选文字" },
+  "selection_quick_action_more": { "message": "更多操作" },
+  "selection_quick_action_sending": { "message": "正在后台打开…" },
+  "selection_quick_action_failed": { "message": "发送失败，请重试" },
   "settings_global_section_title": {
     "message": "全局设置"
   },

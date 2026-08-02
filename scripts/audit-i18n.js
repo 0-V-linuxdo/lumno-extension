@@ -14,6 +14,7 @@ const ALLOWLIST = [
   'AI provider remote page selector probes in src/background/ai-provider-submit.js',
   'localized onboarding content model in src/onboarding/onboarding-content.js',
   'localized update notice fallback model in src/shared/update-notice.js',
+  'localized selection prompt model in src/shared/selection-intent.js',
   'browser built-in bookmark folder aliases used only for folder detection',
   'debug-only score reason strings when the debug flag is disabled by default',
   'Chinese search-intent tokens in src/shared/search-utils.js scoring dictionaries'
@@ -102,6 +103,9 @@ function isAllowlistedLine(file, line) {
     return true;
   }
   if (file === 'src/shared/search-utils.js') {
+    return true;
+  }
+  if (file === 'src/shared/selection-intent.js') {
     return true;
   }
   if (file === 'src/onboarding/onboarding-content.js') {

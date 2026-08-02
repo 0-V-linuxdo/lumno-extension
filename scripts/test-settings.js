@@ -131,6 +131,15 @@ assert.strictEqual(settings.normalizeTabSwitcherEnabled(true), true);
 assert.strictEqual(settings.normalizeTabSwitcherEnabled(undefined), true);
 assert.strictEqual(settings.normalizeTabSwitcherEnabled('false'), true);
 
+assert.strictEqual(settings.normalizeSelectionQuickActionsEnabled(false), false);
+assert.strictEqual(settings.normalizeSelectionQuickActionsEnabled(true), true);
+assert.strictEqual(settings.normalizeSelectionQuickActionsEnabled(undefined), true);
+assert.strictEqual(settings.normalizeSelectionQuickActionsEnabled('false'), true);
+assert.strictEqual(
+  settings.SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
+  '_x_extension_selection_quick_actions_enabled_2026_unique_'
+);
+
 assert.strictEqual(settings.normalizeThemePreference('dark'), 'dark');
 assert.strictEqual(settings.normalizeThemePreference('light'), 'light');
 assert.strictEqual(settings.normalizeThemePreference('system'), '');

@@ -51,6 +51,7 @@
   const tabSwitcherToggle = document.getElementById('_x_extension_tab_switcher_toggle_2026_unique_');
   const documentPipToggle = document.getElementById('_x_extension_document_pip_toggle_2026_unique_');
   const pinnedTabRecoveryToggle = document.getElementById('_x_extension_pinned_tab_recovery_toggle_2026_unique_');
+  const selectionQuickActionsToggle = document.getElementById('_x_extension_selection_quick_actions_toggle_2026_unique_');
   const overlayTabQuickSwitchToggle = document.getElementById('_x_extension_overlay_tab_quick_switch_2024_unique_');
   const newtabTopContentTabsWrap = document.getElementById('_x_extension_newtab_top_content_tabs_wrap_2026_unique_');
   const newtabTopContentTabsIndicator = newtabTopContentTabsWrap
@@ -302,7 +303,8 @@
     [faviconEnhancedFetchToggle, 'favicon-enhanced-fetch'],
     [tabSwitcherToggle, 'tab-switcher'],
     [documentPipToggle, 'document-pip'],
-    [pinnedTabRecoveryToggle, 'pinned-tab-recovery']
+    [pinnedTabRecoveryToggle, 'pinned-tab-recovery'],
+    [selectionQuickActionsToggle, 'selection-quick-actions']
   ].forEach(([input, kind]) => registerOptionsToggleControl(input, kind));
 
   const searchResultSourceTypeItems = searchResultSourceTypeInputs.map((input) => {
@@ -474,6 +476,8 @@
   const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
   const PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY = '_x_extension_pinned_tab_recovery_enabled_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY ||
+    '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
@@ -530,6 +534,7 @@
     TAB_SWITCHER_ENABLED_STORAGE_KEY,
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
     PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     OVERLAY_TAB_PRIORITY_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     RESTRICTED_ACTION_STORAGE_KEY,
@@ -1362,6 +1367,12 @@
 
   function normalizePinnedTabRecoveryEnabled(value) {
     return value === true;
+  }
+
+  function normalizeSelectionQuickActionsEnabled(value) {
+    return typeof SETTINGS.normalizeSelectionQuickActionsEnabled === 'function'
+      ? SETTINGS.normalizeSelectionQuickActionsEnabled(value)
+      : value !== false;
   }
 
   function normalizeSearchResultPriority(value) {
@@ -4241,6 +4252,16 @@
       storageArea.set({ [PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY]: next });
     });
   }
+  if (selectionQuickActionsToggle) {
+    selectionQuickActionsToggle.addEventListener('change', () => {
+      const next = normalizeSelectionQuickActionsEnabled(selectionQuickActionsToggle.checked);
+      setOptionsToggleState(selectionQuickActionsToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: next });
+    });
+  }
 
   if (restrictedActionSelect) {
     restrictedActionSelect.addEventListener('change', () => {
@@ -4828,6 +4849,17 @@
       }
       if (rawValue !== stored) {
         storageArea.set({ [PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY];
+      const stored = normalizeSelectionQuickActionsEnabled(rawValue);
+      if (selectionQuickActionsToggle) {
+        setOptionsToggleState(selectionQuickActionsToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -6014,6 +6046,15 @@
       setOptionsToggleState(pinnedTabRecoveryToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] && selectionQuickActionsToggle) {
+      const raw = changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeSelectionQuickActionsEnabled(raw);
+      setOptionsToggleState(selectionQuickActionsToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }

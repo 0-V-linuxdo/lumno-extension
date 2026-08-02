@@ -65,6 +65,22 @@
   "settings_tab_labs": {
     "message": "Labs"
   },
+  "settings_selection_quick_actions_title": {
+    "message": "Selection quick actions"
+  },
+  "settings_selection_quick_actions_desc": {
+    "message": "Show contextual AI actions for selected text and open results in a background Lumno AI tab group"
+  },
+  "selection_quick_action_ask": { "message": "Ask AI" },
+  "selection_quick_action_translate": { "message": "Translate" },
+  "selection_quick_action_explain": { "message": "Explain" },
+  "selection_quick_action_summarize": { "message": "Summarize" },
+  "selection_quick_action_search": { "message": "Research" },
+  "selection_quick_action_calculate": { "message": "Convert" },
+  "selection_quick_action_open_menu": { "message": "Use Lumno with selected text" },
+  "selection_quick_action_more": { "message": "More actions" },
+  "selection_quick_action_sending": { "message": "Opening in the background…" },
+  "selection_quick_action_failed": { "message": "Couldn’t send. Try again." },
   "settings_global_section_title": {
     "message": "Global Settings"
   },

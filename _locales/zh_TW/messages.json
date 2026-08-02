@@ -65,6 +65,22 @@
   "settings_tab_labs": {
     "message": "實驗室功能"
   },
+  "settings_selection_quick_actions_title": {
+    "message": "選字快捷操作"
+  },
+  "settings_selection_quick_actions_desc": {
+    "message": "根據所選文字動態顯示 AI 操作，並在背景的 Lumno AI 分頁群組中開啟結果"
+  },
+  "selection_quick_action_ask": { "message": "問 AI" },
+  "selection_quick_action_translate": { "message": "翻譯" },
+  "selection_quick_action_explain": { "message": "解釋" },
+  "selection_quick_action_summarize": { "message": "總結" },
+  "selection_quick_action_search": { "message": "查資料" },
+  "selection_quick_action_calculate": { "message": "換算" },
+  "selection_quick_action_open_menu": { "message": "使用 Lumno 處理所選文字" },
+  "selection_quick_action_more": { "message": "更多操作" },
+  "selection_quick_action_sending": { "message": "正在背景開啟…" },
+  "selection_quick_action_failed": { "message": "傳送失敗，請重試" },
   "settings_global_section_title": {
     "message": "全域設定"
   },

@@ -84,6 +84,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/shared/selection-intent.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load selection intent helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('src/shared/site-search-store.js'));
 } catch (error) {
   console.warn('Lumno: failed to load site search store.', error);
@@ -105,6 +111,12 @@ try {
   importScripts(chrome.runtime.getURL('src/background/tab-groups.js'));
 } catch (error) {
   console.warn('Lumno: failed to load tab group helpers.', error);
+}
+
+try {
+  importScripts(chrome.runtime.getURL('src/background/selection-target.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load selection target helpers.', error);
 }
 
 try {
@@ -1305,6 +1317,7 @@ const AUTO_PIP_ENABLED_STORAGE_KEY = '_x_extension_auto_pip_enabled_2026_unique_
 const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
 const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
 const PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY = '_x_extension_pinned_tab_recovery_enabled_2026_unique_';
+const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
 const FALLBACK_SHORTCUT_STORAGE_KEY = '_x_extension_fallback_hotkey_2024_unique_';
 const SEARCH_RESULT_PRIORITY_STORAGE_KEY = '_x_extension_search_result_priority_2026_unique_';
 const SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY = '_x_extension_search_result_source_types_2026_unique_';
@@ -4709,6 +4722,125 @@ function waitForTabComplete(tabId, timeoutMs) {
   });
 }
 
+function loadSelectionQuickActionsEnabled() {
+  return new Promise((resolve) => {
+    if (!storageArea || typeof storageArea.get !== 'function') {
+      resolve(true);
+      return;
+    }
+    storageArea.get([SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY], (result) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        resolve(true);
+        return;
+      }
+      resolve(!result || result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] !== false);
+    });
+  });
+}
+
+let selectionTargetOpenQueue = Promise.resolve();
+
+function queueSelectionTargetOpen(options) {
+  const task = selectionTargetOpenQueue
+    .catch(() => {})
+    .then(() => new Promise((resolve) => {
+      SELECTION_TARGET.openSelectionTarget(chrome, options, resolve);
+    }));
+  selectionTargetOpenQueue = task.then(() => undefined, () => undefined);
+  return task;
+}
+
+function selectSelectionQuickActionProvider(providers, requestedKey) {
+  const interactive = (Array.isArray(providers) ? providers : [])
+    .filter((provider) => isInteractiveSiteSearchProvider(provider));
+  const normalizedKey = String(requestedKey || '').trim().toLowerCase();
+  if (normalizedKey) {
+    const requested = interactive.find((provider) => (
+      String(provider && provider.key || '').trim().toLowerCase() === normalizedKey
+    ));
+    if (requested) {
+      return requested;
+    }
+  }
+  return interactive.find((provider) => String(provider && provider.key || '').toLowerCase() === 'gpt') ||
+    interactive[0] ||
+    null;
+}
+
+function submitSelectionPromptInTab(provider, prompt, entryUrl, tab, targetInfo) {
+  const submitStrategy = String(provider && provider.submitStrategy || '').trim();
+  if (!tab || typeof tab.id !== 'number') {
+    return Promise.resolve({ ok: false, reason: 'tab-unavailable' });
+  }
+  return waitForTabComplete(tab.id, 15000)
+    .catch(() => tab)
+    .then(() => AI_PROVIDER_SUBMIT.submitPromptInTab(
+      chrome,
+      tab.id,
+      prompt,
+      submitStrategy,
+      entryUrl
+    ))
+    .then((result) => ({
+      ok: Boolean(result && result.ok),
+      tabId: tab.id,
+      url: entryUrl,
+      strategy: submitStrategy,
+      method: result && result.method ? result.method : '',
+      reason: result && result.reason ? result.reason : '',
+      openMode: targetInfo && targetInfo.mode ? targetInfo.mode : 'tab',
+      groupId: targetInfo && typeof targetInfo.groupId === 'number' ? targetInfo.groupId : null,
+      providerKey: String(provider && provider.key || '')
+    }));
+}
+
+async function runSelectionQuickAction(request, sender) {
+  const enabled = await loadSelectionQuickActionsEnabled();
+  if (!enabled) {
+    return { ok: false, reason: 'selection-quick-actions-disabled' };
+  }
+  if (typeof SELECTION_INTENT.buildPrompt !== 'function' ||
+      typeof SELECTION_TARGET.openSelectionTarget !== 'function' ||
+      typeof AI_PROVIDER_SUBMIT.submitPromptInTab !== 'function') {
+    return { ok: false, reason: 'selection-runtime-unavailable' };
+  }
+  const rawText = typeof request.text === 'string' ? request.text : '';
+  const normalizedText = typeof SELECTION_INTENT.normalizeText === 'function'
+    ? SELECTION_INTENT.normalizeText(rawText)
+    : rawText.trim();
+  const maxLength = Number(SELECTION_INTENT.MAX_SELECTION_LENGTH) || 2400;
+  const actions = Array.isArray(SELECTION_INTENT.ACTIONS) ? SELECTION_INTENT.ACTIONS : [];
+  const intent = actions.includes(request.intent) ? request.intent : 'ask';
+  if (!normalizedText || normalizedText.length > maxLength) {
+    return { ok: false, reason: 'invalid-selection-text' };
+  }
+  const providers = await loadSiteSearchProviders();
+  const provider = selectSelectionQuickActionProvider(providers, request.providerKey);
+  if (!provider) {
+    return { ok: false, reason: 'selection-provider-unavailable' };
+  }
+  const prompt = SELECTION_INTENT.buildPrompt(intent, normalizedText, request.locale);
+  const entryUrl = getSiteSearchProviderEntryUrl(provider, prompt);
+  if (!entryUrl) {
+    return { ok: false, reason: 'selection-provider-url-unavailable' };
+  }
+  const sourceTab = sender && sender.tab ? sender.tab : null;
+  const targetInfo = await queueSelectionTargetOpen({
+    url: entryUrl,
+    sourceTab,
+    groupTitle: 'Lumno AI',
+    groupColor: 'blue',
+    splitViewAdapter: globalThis.LumnoChromeSplitViewAdapter || null
+  });
+  if (!targetInfo || targetInfo.ok === false || !targetInfo.tab) {
+    return {
+      ok: false,
+      reason: targetInfo && targetInfo.reason ? targetInfo.reason : 'selection-target-open-failed'
+    };
+  }
+  return submitSelectionPromptInTab(provider, prompt, entryUrl, targetInfo.tab, targetInfo);
+}
+
 function runInteractiveSiteSearchProvider(provider, query, sender, disposition) {
   const prompt = String(query || '').trim();
   const entryUrl = getSiteSearchProviderEntryUrl(provider, prompt);
@@ -4851,6 +4983,12 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'runSiteSearchProviderQuery'
     ],
     handler: handleSiteSearchMessage
+  },
+  selectionQuickActions: {
+    actions: [
+      'runSelectionQuickAction'
+    ],
+    handler: handleSelectionQuickActionMessage
   },
   localeAndPermissions: {
     actions: [
@@ -5386,6 +5524,27 @@ function handleSiteSearchMessage(request, sender, sendResponse) {
   }
 }
 
+function handleSelectionQuickActionMessage(request, sender, sendResponse) {
+  if (request.action !== 'runSelectionQuickAction') {
+    return sendUnknownBackgroundMessageResponse(sendResponse);
+  }
+  runSelectionQuickAction(request, sender)
+    .then((result) => {
+      if (result && result.ok) {
+        recordCloudUsageMetric('site_search_submitted');
+        recordCloudUsageMetric('ai_search_submitted');
+      }
+      sendResponse(result);
+    })
+    .catch((error) => {
+      sendResponse({
+        ok: false,
+        reason: error && error.message ? error.message : 'selection-quick-action-failed'
+      });
+    });
+  return true;
+}
+
 function handleLocaleAndPermissionMessage(request, sender, sendResponse) {
   switch (request.action) {
     case 'getLocaleMessages': {
@@ -5656,6 +5815,8 @@ const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open
 const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
 const SEARCH_UTILS = globalThis.LumnoSearchUtils || {};
 const AI_PROVIDER_SUBMIT = globalThis.LumnoAiProviderSubmit || {};
+const SELECTION_INTENT = globalThis.LumnoSelectionIntent || {};
+const SELECTION_TARGET = globalThis.LumnoSelectionTarget || {};
 const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = '_x_extension_default_search_engine_2024_unique_';
 migrateStorageIfNeeded([
   THEME_STORAGE_KEY,
@@ -5684,6 +5845,7 @@ migrateStorageIfNeeded([
   TAB_SWITCHER_ENABLED_STORAGE_KEY,
   DOCUMENT_PIP_ENABLED_STORAGE_KEY,
   PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY,
+  SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
   DEFAULT_SEARCH_ENGINE_STORAGE_KEY,
   OVERLAY_TAB_PRIORITY_STORAGE_KEY,
   TAB_RANK_SCORE_DEBUG_STORAGE_KEY,
