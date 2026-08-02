@@ -5036,6 +5036,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   cloudAccount: {
     actions: [
       'cloudGetStatus',
+      'cloudPrepareWebSignIn',
       'cloudSignInWithWeb',
       'cloudSignOut',
       'cloudSyncNow',

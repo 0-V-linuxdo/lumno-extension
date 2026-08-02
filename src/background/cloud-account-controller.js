@@ -550,6 +550,11 @@
       return initializeSignedInAccount(session);
     }
 
+    async function prepareWebSignIn() {
+      if (!webAuth || typeof webAuth.prepare !== 'function') return { ok: true };
+      return webAuth.prepare();
+    }
+
     async function signOut() {
       const consentResult = await setAnalyticsConsent(false);
       await runtime.disableCloudMode({ copyToBrowserSync: true });
@@ -645,6 +650,7 @@
     async function handleAction(request) {
       const action = String((request && request.action) || '');
       if (action === 'cloudGetStatus') return getStatus();
+      if (action === 'cloudPrepareWebSignIn') return prepareWebSignIn();
       if (action === 'cloudSignInWithWeb') return signInWithWeb(request.consentVersion);
       if (action === 'cloudSignOut') return signOut();
       if (action === 'cloudSyncNow') return syncNow({ force: true, fullPull: true });

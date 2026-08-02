@@ -2267,6 +2267,7 @@
     document.body.style.overflow = 'hidden';
     cloudConsentMask.hidden = false;
     cloudConsentMask.removeAttribute('data-show');
+    sendCloudMessage({ action: 'cloudPrepareWebSignIn' }).catch(() => {});
     requestAnimationFrame(() => {
       if (!cloudConsentMask || cloudConsentMask.hidden) return;
       cloudConsentMask.setAttribute('data-show', 'true');
