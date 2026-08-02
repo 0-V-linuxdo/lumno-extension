@@ -645,8 +645,11 @@
 .x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"]),
 .x-lumno-search-input-mode__menu-item:focus-visible:not([aria-checked="true"]) {
   background: transparent !important;
-  border-color: transparent !important;
   outline: none !important;
+}
+
+.x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"]) {
+  border-color: transparent !important;
 }
 
 .x-lumno-search-input-mode__menu-item:focus-visible {
@@ -654,7 +657,7 @@
     --x-lumno-search-mode-item-focus-ring,
     var(--x-lumno-search-mode-accent, var(--x-ext-input-caret, #2563eb))
   ) !important;
-  box-shadow: inset 0 0 0 1px color-mix(
+  box-shadow: inset 0 0 0 2px color-mix(
     in srgb,
     var(
       --x-lumno-search-mode-item-focus-ring,
@@ -678,6 +681,13 @@
     transparent
   ) !important;
   color: var(--x-nt-text, var(--x-ov-text, #0f172a)) !important;
+}
+
+.x-lumno-search-input-mode__menu-item[aria-checked="true"]:focus-visible {
+  border-color: var(
+    --x-lumno-search-mode-item-focus-ring,
+    var(--x-lumno-search-mode-accent, var(--x-ext-input-caret, #2563eb))
+  ) !important;
 }
 
 .x-lumno-search-input-mode__menu-icon {

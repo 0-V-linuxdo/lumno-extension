@@ -71,8 +71,8 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[\s\S]*?border-color:\s*var\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?box-shadow:\s*inset 0 0 0 1px color-mix\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?42%/,
-  'keyboard-focused scope cards should keep a contrast-safe theme border with a softer inner ring'
+  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[\s\S]*?border-color:\s*var\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?box-shadow:\s*inset 0 0 0 2px color-mix\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?42%/,
+  'keyboard-focused scope cards should keep a contrast-safe two-pixel outer border and inner ring'
 );
 assert.match(
   inputModeCss,
@@ -81,8 +81,13 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?border-color:\s*transparent !important;/,
+  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)\s*\{[\s\S]*?border-color:\s*transparent !important;/,
   'scope menu hover should keep its border transparent'
+);
+assert.doesNotMatch(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item:focus-visible:not\(\[aria-checked="true"\]\)\s*\{[^}]*border-color:\s*transparent !important;/,
+  'keyboard focus should not be suppressed by the transparent hover border rule'
 );
 assert.match(
   inputModeCss,
