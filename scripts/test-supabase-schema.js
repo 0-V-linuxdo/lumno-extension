@@ -7,11 +7,33 @@ const migrationPath = 'supabase/migrations/202608010001_lumno_cloud.sql';
 const sql = fs.readFileSync(migrationPath, 'utf8');
 const retentionMigrationPath = 'supabase/migrations/202608020002_data_retention.sql';
 const retentionSql = fs.readFileSync(retentionMigrationPath, 'utf8');
+const syncAllowlistMigrationPath =
+  'supabase/migrations/202608020003_selection_quick_actions_sync_key.sql';
+const syncAllowlistSql = fs.readFileSync(syncAllowlistMigrationPath, 'utf8');
 
 function run() {
+  const syncSchemaSql = `${sql}\n${syncAllowlistSql}`;
   schema.SYNC_KEYS.forEach((key) => {
-    assert(sql.includes(`'${key}'`), `database sync allowlist should include ${key}`);
+    assert(syncSchemaSql.includes(`'${key}'`), `database sync allowlist should include ${key}`);
   });
+  const initialSyncFunctionSql = sql.slice(
+    sql.indexOf('create or replace function public.lumno_is_sync_key'),
+    sql.indexOf('create or replace function public.lumno_is_usage_metric')
+  );
+  const extractSyncKeys = (source) => Array.from(
+    source.matchAll(/'(_x_extension_[^']+)'/g),
+    (match) => match[1]
+  );
+  const expectedFollowupKeys = new Set([
+    ...extractSyncKeys(initialSyncFunctionSql),
+    '_x_extension_selection_quick_actions_enabled_2026_unique_'
+  ]);
+  const actualFollowupKeys = new Set(extractSyncKeys(syncAllowlistSql));
+  assert.deepStrictEqual(
+    Array.from(actualFollowupKeys).sort(),
+    Array.from(expectedFollowupKeys).sort(),
+    'the follow-up migration should replace the complete sync allowlist without dropping legacy keys'
+  );
   schema.USAGE_METRICS.forEach((metric) => {
     assert(sql.includes(`'${metric}'`), `database usage allowlist should include ${metric}`);
   });
