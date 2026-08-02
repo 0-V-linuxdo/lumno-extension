@@ -134,7 +134,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 | OAuth 回调被劫持 | 每个扩展环境独立公共 Client ID、精确 `chromiumapp.org` 回调、PKCE/state | 发布新渠道时必须单独注册客户端，不能复用模糊回调 |
 | 社交账号供应链 | Google 与 GitHub 只申请基本身份；插件不接触第三方密码和第三方 Token；Google 品牌已验证并显示 Lumno | 后续若修改名称、图标、首页、隐私链接或回调域名，需重新评估品牌验证 |
 | 同邮箱身份关联 | 仅依赖 Supabase 对已验证邮箱的自动身份关联；相同邮箱共享同一个用户 ID 和同一份同步数据 | 不提供不同邮箱账号的手工合并；身份提供商邮箱变化时需做账号恢复评估 |
-| 中国大陆可用性与合规 | 本地优先；简体中文 Web 登录前展示东京跨境接收方、数据类型、目的和权利并取得单独确认；不满 14 周岁不开放云功能 | 流量达到适用阈值或接收方变化时重新做跨境机制评估；若大陆性能是硬指标，再评估 CloudBase |
+| 跨境与地区合规 | 本地优先；隐私政策面向所有用户披露东京区域、境外接收方、数据类型、目的和权利 | 服务地区、处理规模或接收方变化时重新评估适用法律；若大陆性能是硬指标，再评估 CloudBase |
 | 云服务暂停/故障 | 15 秒超时、指数退避、本机 Outbox；不自动双写 Chrome | 生产付费计划、异地数据库导出、恢复演练与可用性监控 |
 | 配置包含敏感 URL | 只用于用户主动同步、RLS 隔离 | 隐私政策必须明确披露，不得复用于统计 |
 | 统计口径膨胀 | 固定白名单、未知字段拒绝 | 新指标必须经过隐私评审和 schema 变更 |
@@ -164,7 +164,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `src/background/usage-analytics-runtime.js`：同意门和每日计数器。
 - `supabase/migrations/202608010001_lumno_cloud.sql`：表、索引、RLS、RPC 和 Storage 策略。
 - `supabase/migrations/202608020002_data_retention.sql`：24 个月明细保留、匿名月度汇总以及 30/90 天幂等记录清理。
-- `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：中国大陆跨境处理与年龄确认的版本化同意记录。
+- `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：保留已部署的历史同意字段；当前客户端不再展示或写入地区专属同意。
 - `supabase/functions/`：统计入口与账号删除。
 
 ## 11. 生产验收记录
