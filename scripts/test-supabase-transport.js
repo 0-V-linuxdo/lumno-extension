@@ -83,7 +83,10 @@ async function run() {
 
   const session = await transport.verifyOtp('alice@example.com', '123456');
   assert.strictEqual(session.user.id, 'user-one');
-  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session].access_token, 'access-one');
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session], undefined,
+    'refresh tokens must never be persisted in content-script-readable local storage');
+  assert.strictEqual((await transport.getSession({ refresh: false })).access_token, 'access-one',
+    'the volatile fallback should preserve the active service-worker session');
 
   const pull = await transport.pullSettings({ device_id: 'device-one', cursor: 0 });
   assert.strictEqual(pull.rows.length, 1);

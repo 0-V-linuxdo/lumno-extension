@@ -72,6 +72,26 @@ async function run() {
   await usage.clear();
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.usage], undefined);
 
+  localArea.values[schema.CLOUD_LOCAL_KEYS.consent] = { analytics: true };
+  await usage.record('command_bar_opened');
+  await usage.withdrawConsent({
+    analytics: false,
+    privacy_notice_version: '2026-08-02',
+    updated_at: Date.parse('2026-08-02T00:00:00Z')
+  });
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.consent].analytics, false);
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.usage], undefined);
+  assert.deepStrictEqual(await usage.record('command_bar_opened'), { recorded: false },
+    'withdrawal and metric admission must share one exclusive state transition');
+
+  localArea.values[schema.CLOUD_LOCAL_KEYS.consent] = { analytics: true };
+  await Promise.all([
+    usage.record('command_bar_opened'),
+    usage.withdrawConsent({ analytics: false, updated_at: Date.now() })
+  ]);
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.usage], undefined,
+    'an event already queued when withdrawal starts must be cleared by the same exclusive transition');
+
   console.log('usage analytics runtime tests passed');
 }
 

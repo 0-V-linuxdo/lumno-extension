@@ -90,6 +90,23 @@
       ));
     }
 
+    async function withdrawConsent(consentRecord) {
+      const source = consentRecord && typeof consentRecord === 'object' ? consentRecord : {};
+      const record = {
+        ...source,
+        analytics: false
+      };
+      return runExclusive(async () => {
+        await writeLocal({ [schema.CLOUD_LOCAL_KEYS.consent]: record });
+        await repositoryApi.mutateArea(
+          localArea,
+          'remove',
+          [schema.CLOUD_LOCAL_KEYS.usage]
+        );
+        return { ok: true, analyticsConsented: false };
+      });
+    }
+
     async function record(metricValue, countValue) {
       return runExclusive(async () => {
         const metric = String(metricValue || '').trim();
@@ -149,7 +166,8 @@
       isConsented,
       record,
       flush,
-      clear
+      clear,
+      withdrawConsent
     });
   }
 

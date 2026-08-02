@@ -234,7 +234,38 @@
     };
   }
 
-  function submitPromptInTab(chromeApi, tabId, prompt, strategyName) {
+  function getHttpOrigin(urlValue) {
+    try {
+      const url = new URL(String(urlValue || ''));
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        return '';
+      }
+      return url.origin;
+    } catch (_error) {
+      return '';
+    }
+  }
+
+  function getCurrentTab(chromeApi, tabId) {
+    return new Promise((resolve) => {
+      if (!chromeApi || !chromeApi.tabs || typeof chromeApi.tabs.get !== 'function') {
+        resolve({ ok: false, reason: 'tab-query-unavailable' });
+        return;
+      }
+      chromeApi.tabs.get(tabId, (tab) => {
+        const runtimeError = chromeApi.runtime && chromeApi.runtime.lastError;
+        if (runtimeError) {
+          resolve({ ok: false, reason: runtimeError.message || 'tab-unavailable' });
+          return;
+        }
+        resolve(tab && typeof tab === 'object'
+          ? { ok: true, tab }
+          : { ok: false, reason: 'tab-unavailable' });
+      });
+    });
+  }
+
+  async function submitPromptInTab(chromeApi, tabId, prompt, strategyName, expectedUrl) {
     const promptText = String(prompt || '').trim();
     const config = getStrategyConfig(strategyName);
     if (!promptText) {
@@ -246,10 +277,24 @@
     if (config.urlOnly) {
       return Promise.resolve({ ok: true, method: 'url' });
     }
+    const expectedOrigin = getHttpOrigin(expectedUrl);
+    if (!expectedOrigin) {
+      return { ok: false, reason: 'invalid-expected-origin' };
+    }
+    const currentTab = await getCurrentTab(chromeApi, tabId);
+    if (!currentTab.ok) {
+      return currentTab;
+    }
+    if (getHttpOrigin(currentTab.tab.url) !== expectedOrigin) {
+      return { ok: false, reason: 'unexpected-tab-origin' };
+    }
     return new Promise((resolve) => {
       chromeApi.scripting.executeScript({
         target: { tabId: tabId },
-        func: async (rawPrompt, strategyConfig) => {
+        func: async (allowedOrigin, rawPrompt, strategyConfig) => {
+          if (!window.location || window.location.origin !== allowedOrigin) {
+            return { ok: false, reason: 'unexpected-document-origin' };
+          }
           const promptText = String(rawPrompt || '').trim();
           if (!promptText) {
             return { ok: false, reason: 'empty-prompt' };
@@ -523,7 +568,7 @@
           }
           return { ok: false, reason: 'editor-not-found' };
         },
-        args: [promptText, config]
+        args: [expectedOrigin, promptText, config]
       }, (results) => {
         if (chromeApi.runtime && chromeApi.runtime.lastError) {
           resolve({ ok: false, reason: chromeApi.runtime.lastError.message || 'execute-script-failed' });
@@ -536,6 +581,7 @@
   }
 
   return Object.freeze({
+    getHttpOrigin,
     getStrategyConfig,
     submitPromptInTab
   });

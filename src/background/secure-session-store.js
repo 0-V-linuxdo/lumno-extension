@@ -17,10 +17,13 @@
     const indexedDBApi = settings.indexedDBApi || null;
     const fallbackArea = settings.fallbackArea || null;
     const fallbackKey = String(settings.fallbackKey || 'lumno-session');
+    const hasTrustedDatabase = Boolean(indexedDBApi && typeof indexedDBApi.open === 'function');
     let databasePromise = null;
+    let volatileSession = null;
+    let fallbackAccessPromise = null;
 
     function openDatabase() {
-      if (!indexedDBApi || typeof indexedDBApi.open !== 'function') return Promise.resolve(null);
+      if (!hasTrustedDatabase) return Promise.resolve(null);
       if (databasePromise) return databasePromise;
       databasePromise = new Promise((resolve, reject) => {
         const request = indexedDBApi.open(DATABASE_NAME, DATABASE_VERSION);
@@ -37,7 +40,7 @@
       return databasePromise;
     }
 
-    function useFallback(method, value) {
+    function callFallback(method) {
       if (!fallbackArea || typeof fallbackArea[method] !== 'function') {
         return method === 'get' ? Promise.resolve(null) : Promise.resolve();
       }
@@ -53,9 +56,66 @@
           resolve(method === 'get' ? ((result && result[fallbackKey]) || null) : undefined);
         };
         if (method === 'get') fallbackArea.get([fallbackKey], callback);
-        else if (method === 'set') fallbackArea.set({ [fallbackKey]: value }, callback);
         else fallbackArea.remove([fallbackKey], callback);
       });
+    }
+
+    function restrictFallbackAccess() {
+      if (!fallbackArea || typeof fallbackArea.setAccessLevel !== 'function') {
+        return Promise.resolve(false);
+      }
+      if (fallbackAccessPromise) return fallbackAccessPromise;
+      fallbackAccessPromise = new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (error) => {
+          if (settled) return;
+          settled = true;
+          if (error) reject(error);
+          else resolve(true);
+        };
+        const callback = () => {
+          const runtimeError = typeof chrome !== 'undefined' && chrome.runtime
+            ? chrome.runtime.lastError
+            : null;
+          finish(runtimeError
+            ? new Error(runtimeError.message || 'secure_session_access_level_failed')
+            : null);
+        };
+        try {
+          const result = fallbackArea.setAccessLevel(
+            { accessLevel: 'TRUSTED_CONTEXTS' },
+            callback
+          );
+          if (result && typeof result.then === 'function') {
+            result.then(() => finish(null), finish);
+          }
+        } catch (error) {
+          finish(error);
+        }
+      });
+      return fallbackAccessPromise;
+    }
+
+    restrictFallbackAccess()
+      .then((protectedAccess) => protectedAccess ? undefined : removeLegacyFallback())
+      .catch(() => removeLegacyFallback().catch(() => {}));
+
+    async function removeLegacyFallback() {
+      await callFallback('remove');
+    }
+
+    async function readProtectedLegacyFallback() {
+      let protectedAccess = false;
+      try {
+        protectedAccess = await restrictFallbackAccess();
+      } catch (_error) {
+        protectedAccess = false;
+      }
+      if (!protectedAccess) {
+        await removeLegacyFallback();
+        return null;
+      }
+      return callFallback('get');
     }
 
     async function transact(mode, operation) {
@@ -83,26 +143,34 @@
     }
 
     async function get() {
-      if (!indexedDBApi) return useFallback('get');
+      if (!hasTrustedDatabase) {
+        await removeLegacyFallback();
+        return volatileSession;
+      }
       const stored = await transact('readonly', (store) => store.get(SESSION_KEY));
       if (stored) return stored;
-      const legacy = await useFallback('get');
+      const legacy = await readProtectedLegacyFallback();
       if (legacy) {
         await set(legacy);
-        await useFallback('remove');
+        await removeLegacyFallback();
       }
       return legacy || null;
     }
 
     async function set(value) {
-      if (!indexedDBApi) return useFallback('set', value);
+      if (!hasTrustedDatabase) {
+        volatileSession = value;
+        await removeLegacyFallback();
+        return;
+      }
       await transact('readwrite', (store) => store.put(value, SESSION_KEY));
-      await useFallback('remove');
+      await removeLegacyFallback();
     }
 
     async function remove() {
-      if (indexedDBApi) await transact('readwrite', (store) => store.delete(SESSION_KEY));
-      await useFallback('remove');
+      volatileSession = null;
+      if (hasTrustedDatabase) await transact('readwrite', (store) => store.delete(SESSION_KEY));
+      await removeLegacyFallback();
     }
 
     return Object.freeze({ get, set, remove });

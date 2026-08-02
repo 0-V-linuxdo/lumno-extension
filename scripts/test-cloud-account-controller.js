@@ -49,6 +49,7 @@ async function run() {
   const queued = [];
   const calls = [];
   let session = null;
+  let failConsentDisable = false;
   const runtime = {
     async ensureDevice() {
       return { id: '00000000-0000-4000-8000-000000000001', display_name: 'Lumno browser' };
@@ -85,7 +86,14 @@ async function run() {
     },
     async registerDevice() { calls.push('register'); },
     async signOut() { session = null; calls.push('signout'); },
-    async setAnalyticsConsent(value) { calls.push(`consent:${value}`); },
+    async setAnalyticsConsent(value) {
+      calls.push(`consent:${value}`);
+      if (!value && failConsentDisable) {
+        const error = new Error('consent-service-offline');
+        error.code = 'consent-service-offline';
+        throw error;
+      }
+    },
     async deleteAccount() { session = null; calls.push('delete'); }
   };
   const controller = controllerApi.createController({
@@ -129,6 +137,19 @@ async function run() {
 
   await controller.setAnalyticsConsent(true);
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.consent].analytics, true);
+  await controller.recordUsage('command_bar_opened');
+  assert(localArea.values[schema.CLOUD_LOCAL_KEYS.usage], 'enabled analytics should create a local batch');
+  failConsentDisable = true;
+  const withdrawn = await controller.setAnalyticsConsent(false);
+  assert.strictEqual(withdrawn.ok, true, 'local withdrawal must succeed while the service is offline');
+  assert.strictEqual(withdrawn.analyticsConsented, false);
+  assert.strictEqual(withdrawn.remoteWarning, 'consent-service-offline');
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.consent].analytics, false);
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.usage], undefined,
+    'withdrawal must clear queued metrics before remote acknowledgement');
+  assert.deepStrictEqual(await controller.recordUsage('command_bar_opened'), { recorded: false },
+    'new metrics must be rejected after an offline withdrawal');
+  failConsentDisable = false;
   await controller.signOut();
   assert.strictEqual(await repository.getMode(), repositoryApi.MODE_GUEST);
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session], undefined);
@@ -137,6 +158,92 @@ async function run() {
   assert.strictEqual(webSignedIn.signedIn, true);
   assert.strictEqual(webSignedIn.email, 'web@example.com');
   assert(calls.includes('web-auth'));
+
+  const accountADevice = { id: 'account-a-device', display_name: 'Old browser' };
+  const transitionLocalArea = createArea({
+    [schema.CLOUD_LOCAL_KEYS.account]: { id: 'account-a', email: 'a@example.com' },
+    [schema.CLOUD_LOCAL_KEYS.device]: accountADevice,
+    [schema.CLOUD_LOCAL_KEYS.pullCursor]: 42,
+    [schema.CLOUD_LOCAL_KEYS.outbox]: [{ operation_id: 'account-a-operation' }],
+    [schema.CLOUD_LOCAL_KEYS.versions]: { [themeKey]: 7 },
+    [schema.CLOUD_LOCAL_KEYS.conflicts]: [{ key: themeKey }],
+    [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_CLOUD
+  });
+  const transitionSyncArea = createArea({ [themeKey]: 'dark' });
+  const transitionRepository = repositoryApi.createRepository({
+    localArea: transitionLocalArea,
+    syncArea: transitionSyncArea
+  });
+  const registeredDeviceIds = [];
+  const replacementQueuedSettings = [];
+  const accountBSession = { user: { id: 'account-b', email: 'b@example.com' } };
+  const transitionRuntime = {
+    async ensureDevice() {
+      const existing = transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.device];
+      if (existing) return existing;
+      const device = { id: 'account-b-device', display_name: 'New browser' };
+      transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.device] = device;
+      return device;
+    },
+    async enableCloudMode() { return transitionRepository.enterCloudMode(); },
+    async pull() { return { ok: true, pulled: 0 }; },
+    async queueSettingChange(key, value) {
+      replacementQueuedSettings.push({ key, value });
+      return true;
+    },
+    async syncNow() { return { ok: true }; },
+    async disableCloudMode(options) { return transitionRepository.leaveCloudMode(options); }
+  };
+  const transitionController = controllerApi.createController({
+    chromeApi: { runtime: { id: 'extension-id', getManifest: () => ({ version: '1.2.3' }) } },
+    localArea: transitionLocalArea,
+    syncArea: transitionSyncArea,
+    repository: transitionRepository,
+    runtime: transitionRuntime,
+    transport: {
+      config: { configured: true },
+      async getSession() { return accountBSession; },
+      async registerDevice(device) { registeredDeviceIds.push(device.id); },
+      async setSyncConsent() {},
+      async setAnalyticsConsent() {},
+      async ingestUsage() {}
+    },
+    webAuth: { async signIn() { return accountBSession; } },
+    setTimeout: () => 1,
+    clearTimeout: () => {}
+  });
+  const blockedTransitionSync = await transitionController.syncNow();
+  assert.deepStrictEqual(blockedTransitionSync, {
+    skipped: true,
+    reason: 'account-transition-required'
+  });
+  assert.deepStrictEqual(registeredDeviceIds, [],
+    'a session/account mismatch must be blocked before device registration or sync');
+  const accountBStatus = await transitionController.signInWithWeb();
+  assert.strictEqual(accountBStatus.signedIn, true);
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.account].id, 'account-b');
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor], undefined);
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.outbox], undefined);
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.versions], undefined);
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts], undefined);
+  assert(registeredDeviceIds.length > 0);
+  assert(registeredDeviceIds.every((id) => id === 'account-b-device'),
+    'the replacement account must never register or push with Account A device state');
+  assert.deepStrictEqual(replacementQueuedSettings, [],
+    'the replacement account must not upload the previous account browser snapshot');
+
+  transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor] = 99;
+  transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.outbox] = [{ operation_id: 'account-b-operation' }];
+  await transitionController.signInWithWeb();
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor], 99,
+    'reauthenticating the same account must preserve its cursor');
+  assert.deepStrictEqual(
+    transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.outbox],
+    [{ operation_id: 'account-b-operation' }],
+    'reauthenticating the same account must preserve its outbox'
+  );
+  assert(replacementQueuedSettings.length > 0,
+    'same-account reauthentication should preserve the normal snapshot queue behavior');
 
   assert.strictEqual(controllerApi.isTrustedExtensionSender({
     id: 'extension-id',

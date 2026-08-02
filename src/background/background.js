@@ -4735,7 +4735,13 @@ function runInteractiveSiteSearchProvider(provider, query, sender, disposition) 
       }
       waitForTabComplete(tab.id, 15000)
         .catch(() => tab)
-        .then(() => AI_PROVIDER_SUBMIT.submitPromptInTab(chrome, tab.id, prompt, submitStrategy))
+        .then(() => AI_PROVIDER_SUBMIT.submitPromptInTab(
+          chrome,
+          tab.id,
+          prompt,
+          submitStrategy,
+          entryUrl
+        ))
         .then((result) => {
           finish({
             ok: Boolean(result && result.ok),

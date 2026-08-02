@@ -218,6 +218,40 @@
       await writeLocal({ [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_GUEST });
     }
 
+    function getSessionUserId(session) {
+      return String(session && session.user && session.user.id || '').trim();
+    }
+
+    async function getStoredAccountId() {
+      const local = await readLocal([schema.CLOUD_LOCAL_KEYS.account]);
+      return String(
+        local[schema.CLOUD_LOCAL_KEYS.account] &&
+        local[schema.CLOUD_LOCAL_KEYS.account].id || ''
+      ).trim();
+    }
+
+    async function prepareAccountIdentity(session) {
+      const nextAccountId = getSessionUserId(session);
+      if (!nextAccountId) {
+        const error = new Error('invalid_session_identity');
+        error.code = 'invalid_session_identity';
+        throw error;
+      }
+      const previousAccountId = await getStoredAccountId();
+      if (previousAccountId !== nextAccountId) {
+        await clearIdentityState();
+      }
+      return {
+        nextAccountId,
+        replacedAccount: Boolean(previousAccountId && previousAccountId !== nextAccountId)
+      };
+    }
+
+    async function sessionMatchesStoredAccount(session) {
+      const sessionAccountId = getSessionUserId(session);
+      return Boolean(sessionAccountId && sessionAccountId === await getStoredAccountId());
+    }
+
     async function registerCurrentDevice() {
       const device = await runtime.ensureDevice();
       await transport.registerDevice({ ...device, ...clientInfo });
@@ -232,7 +266,8 @@
           schema.CLOUD_LOCAL_KEYS.status,
           schema.CLOUD_LOCAL_KEYS.consent,
           schema.CLOUD_LOCAL_KEYS.conflicts,
-          schema.CLOUD_LOCAL_KEYS.outbox
+          schema.CLOUD_LOCAL_KEYS.outbox,
+          schema.CLOUD_LOCAL_KEYS.account
         ])
       ]);
       const status = local[schema.CLOUD_LOCAL_KEYS.status] || {};
@@ -242,11 +277,17 @@
       const outbox = Array.isArray(local[schema.CLOUD_LOCAL_KEYS.outbox])
         ? local[schema.CLOUD_LOCAL_KEYS.outbox]
         : [];
+      const storedAccountId = String(
+        local[schema.CLOUD_LOCAL_KEYS.account] &&
+        local[schema.CLOUD_LOCAL_KEYS.account].id || ''
+      ).trim();
+      const sessionAccountId = getSessionUserId(session);
+      const signedIn = Boolean(sessionAccountId && sessionAccountId === storedAccountId);
       return {
         ok: true,
         configured: Boolean(transport.config && transport.config.configured),
-        signedIn: Boolean(session),
-        email: session && session.user ? session.user.email : '',
+        signedIn,
+        email: signedIn && session.user ? session.user.email : '',
         mode,
         analyticsConsented: Boolean(
           local[schema.CLOUD_LOCAL_KEYS.consent] &&
@@ -270,6 +311,9 @@
       const session = await transport.getSession();
       if (!session) {
         return { skipped: true, reason: 'authentication-required' };
+      }
+      if (!(await sessionMatchesStoredAccount(session))) {
+        return { skipped: true, reason: 'account-transition-required' };
       }
       await registerCurrentDevice();
       const result = await runtime.syncNow();
@@ -346,6 +390,7 @@
     }
 
     async function initializeSignedInAccount(session) {
+      const identityTransition = await prepareAccountIdentity(session);
       if (typeof transport.setSyncConsent === 'function') {
         await transport.setSyncConsent('2026-08-02');
       }
@@ -358,9 +403,11 @@
       await runtime.enableCloudMode();
       await registerCurrentDevice();
       await runtime.pull();
-      const snapshot = await repository.get(schema.SYNC_KEYS);
-      for (const [key, value] of Object.entries(schema.copySyncSettings(snapshot))) {
-        await runtime.queueSettingChange(key, value);
+      if (!identityTransition.replacedAccount) {
+        const snapshot = await repository.get(schema.SYNC_KEYS);
+        for (const [key, value] of Object.entries(schema.copySyncSettings(snapshot))) {
+          await runtime.queueSettingChange(key, value);
+        }
       }
       await syncNow();
       return getStatus();
@@ -434,18 +481,33 @@
 
     async function setAnalyticsConsent(consented) {
       const enabled = consented === true;
-      await transport.setAnalyticsConsent(enabled, '2026-08-02');
-      await writeLocal({
-        [schema.CLOUD_LOCAL_KEYS.consent]: {
-          analytics: enabled,
-          privacy_notice_version: '2026-08-02',
-          updated_at: Date.now()
-        }
-      });
-      if (!enabled && usage && typeof usage.clear === 'function') {
-        await usage.clear();
+      const consentRecord = {
+        analytics: enabled,
+        privacy_notice_version: '2026-08-02',
+        updated_at: Date.now()
+      };
+      if (enabled) {
+        await transport.setAnalyticsConsent(true, '2026-08-02');
+        await writeLocal({ [schema.CLOUD_LOCAL_KEYS.consent]: consentRecord });
+        return { ok: true, analyticsConsented: true };
       }
-      return { ok: true, analyticsConsented: enabled };
+      if (usage && typeof usage.withdrawConsent === 'function') {
+        await usage.withdrawConsent(consentRecord);
+      } else {
+        await writeLocal({ [schema.CLOUD_LOCAL_KEYS.consent]: consentRecord });
+        if (usage && typeof usage.clear === 'function') {
+          await usage.clear();
+        }
+      }
+      let remoteWarning = '';
+      try {
+        await transport.setAnalyticsConsent(false, '2026-08-02');
+      } catch (error) {
+        remoteWarning = String(
+          error && (error.code || error.message) || 'remote_consent_withdrawal_failed'
+        ).slice(0, 100);
+      }
+      return { ok: true, analyticsConsented: false, remoteWarning };
     }
 
     async function deleteAccount() {

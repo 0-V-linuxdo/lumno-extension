@@ -83,7 +83,8 @@ class FakeElement {
   }
 }
 
-function withFakePromptDom(callback) {
+function withFakePromptDom(callback, options) {
+  const settings = options && typeof options === 'object' ? options : {};
   const original = {
     document: global.document,
     window: global.window,
@@ -135,6 +136,9 @@ function withFakePromptDom(callback) {
     return 1;
   };
   global.window = {
+    location: {
+      origin: settings.documentOrigin || 'https://chatgpt.com'
+    },
     getComputedStyle(element) {
       const visible = element.name !== 'sendButton' || env.isSendButtonVisible();
       return {
@@ -186,18 +190,30 @@ function withFakePromptDom(callback) {
     });
 }
 
-function submitWithFakeChrome(strategyName, prompt) {
+function submitWithFakeChrome(strategyName, prompt, options) {
+  const settings = options && typeof options === 'object' ? options : {};
+  const expectedUrl = settings.expectedUrl || 'https://chatgpt.com/';
+  const observations = settings.observations || {};
+  observations.tabGetCount = 0;
+  observations.executeCount = 0;
   const chromeApi = {
     runtime: {},
+    tabs: {
+      get(tabId, callback) {
+        observations.tabGetCount += 1;
+        callback({ id: tabId, url: settings.tabUrl || expectedUrl });
+      }
+    },
     scripting: {
       executeScript(details, callback) {
+        observations.executeCount += 1;
         Promise.resolve(details.func(...details.args))
           .then((result) => callback([{ result }]))
           .catch((error) => callback([{ result: { ok: false, reason: error.message } }]));
       }
     }
   };
-  return submitRuntime.submitPromptInTab(chromeApi, 1, prompt, strategyName);
+  return submitRuntime.submitPromptInTab(chromeApi, 1, prompt, strategyName, expectedUrl);
 }
 
 async function run() {
@@ -211,6 +227,42 @@ async function run() {
     );
     assert.strictEqual(env.sendButton.clickCount, 1, 'Gemini send button should be clicked once it appears');
   });
+
+  const redirectedObservations = {};
+  const redirected = await submitWithFakeChrome('chatgptPrompt', 'Private prompt', {
+    expectedUrl: 'https://chatgpt.com/',
+    tabUrl: 'https://attacker.example/redirected',
+    observations: redirectedObservations
+  });
+  assert.deepStrictEqual(redirected, { ok: false, reason: 'unexpected-tab-origin' });
+  assert.strictEqual(redirectedObservations.tabGetCount, 1);
+  assert.strictEqual(redirectedObservations.executeCount, 0,
+    'a redirected tab must be rejected before prompt-bearing script injection');
+
+  await withFakePromptDom(async (env) => {
+    const observations = {};
+    const navigatedDuringInjection = await submitWithFakeChrome('chatgptPrompt', 'Private prompt', {
+      expectedUrl: 'https://chatgpt.com/',
+      tabUrl: 'https://chatgpt.com/conversation',
+      observations
+    });
+    assert.deepStrictEqual(navigatedDuringInjection, { ok: false, reason: 'unexpected-document-origin' });
+    assert.strictEqual(observations.executeCount, 1);
+    assert.strictEqual(env.editor.innerText, '',
+      'the document-side check must run before the prompt is written');
+  }, { documentOrigin: 'https://attacker.example' });
+
+  const invalidExpected = await submitWithFakeChrome('chatgptPrompt', 'Private prompt', {
+    expectedUrl: 'chrome://newtab/'
+  });
+  assert.deepStrictEqual(invalidExpected, { ok: false, reason: 'invalid-expected-origin' });
+
+  const alternatePort = await submitWithFakeChrome('chatgptPrompt', 'Private prompt', {
+    expectedUrl: 'https://chatgpt.com/',
+    tabUrl: 'https://chatgpt.com:444/conversation'
+  });
+  assert.deepStrictEqual(alternatePort, { ok: false, reason: 'unexpected-tab-origin' },
+    'origin validation must include the effective port');
 
   console.log('ai provider submit tests passed');
 }
