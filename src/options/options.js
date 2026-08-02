@@ -490,6 +490,7 @@
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const BLACKLIST_UTILS = globalThis.LumnoBlacklistUtils || {};
   let currentMessages = null;
+  let currentCloudAccountStatus = null;
   let currentLanguageMode = 'system';
   if (searchResultSourceTypeController) {
     renderSearchResultSourceTypeControl(
@@ -2226,6 +2227,7 @@
 
   function renderCloudAccountStatus(status) {
     const value = status && typeof status === 'object' ? status : {};
+    currentCloudAccountStatus = value;
     const configured = value.configured === true;
     const signedIn = configured && value.signedIn === true;
     if (cloudUnconfigured) cloudUnconfigured.hidden = configured;
@@ -2765,6 +2767,9 @@
         }
       }
       applyI18n();
+      if (currentCloudAccountStatus) {
+        renderCloudAccountStatus(currentCloudAccountStatus);
+      }
       renderFeedbackSupport();
       refreshCustomSelects();
       scheduleTabsIndicatorsRefresh(2);

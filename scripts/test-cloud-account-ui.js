@@ -31,6 +31,11 @@ function run() {
   assert.doesNotMatch(runtime, /action: 'cloudRequestOtp'/);
   assert.doesNotMatch(runtime, /action: 'cloudVerifyOtp'/);
   assert.match(runtime, /action: 'cloudSetAnalyticsConsent', consented/);
+  assert.match(
+    runtime,
+    /applyI18n\(\);\s*if \(currentCloudAccountStatus\) \{\s*renderCloudAccountStatus\(currentCloudAccountStatus\);/,
+    'late locale loading should not overwrite the rendered cloud connection state'
+  );
   assert.match(runtime, /confirmation !== 'DELETE'/,
     'permanent deletion should require an explicit typed confirmation');
 
