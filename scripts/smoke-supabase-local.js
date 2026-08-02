@@ -5,7 +5,6 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
 const ROOT = new URL('../', `file://${__filename}`).pathname;
-const EMAIL_TIMEOUT_MS = 10000;
 
 function readLocalStatus() {
   const raw = execFileSync(
@@ -18,24 +17,6 @@ function readLocalStatus() {
     throw new Error('Supabase CLI did not return local status JSON');
   }
   return JSON.parse(raw.slice(jsonStart));
-}
-
-async function waitForOtp(mailpitUrl, email) {
-  const deadline = Date.now() + EMAIL_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const response = await fetch(`${mailpitUrl}/api/v1/messages`);
-    assert.equal(response.ok, true, 'Mailpit message list should be available');
-    const inbox = await response.json();
-    const message = (inbox.messages || []).find((item) => (
-      (item.To || []).some((recipient) => recipient.Address === email)
-    ));
-    const token = message && String(message.Subject || '').match(/^(\d{6,8})\b/)?.[1];
-    if (token) {
-      return token;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for the OTP email for ${email}`);
 }
 
 async function requestJson(url, publishableKey, options = {}) {
@@ -64,20 +45,21 @@ async function main() {
   const apiUrl = status.API_URL;
   const functionsUrl = status.FUNCTIONS_URL || `${apiUrl}/functions/v1`;
   const publishableKey = status.PUBLISHABLE_KEY || status.ANON_KEY;
-  const mailpitUrl = status.MAILPIT_URL || status.INBUCKET_URL;
-  assert(apiUrl && publishableKey && mailpitUrl, 'local Supabase services should be running');
+  const serviceRoleKey = status.SERVICE_ROLE_KEY;
+  assert(apiUrl && publishableKey && serviceRoleKey, 'local Supabase services should be running');
 
   const email = `lumno-smoke-${Date.now()}@example.com`;
-  await requestJson(`${apiUrl}/auth/v1/otp`, publishableKey, {
+  const password = `Lumno-${crypto.randomBytes(20).toString('hex')}!`;
+  await requestJson(`${apiUrl}/auth/v1/admin/users`, serviceRoleKey, {
     method: 'POST',
-    body: { email, create_user: true }
+    headers: { Authorization: `Bearer ${serviceRoleKey}` },
+    body: { email, password, email_confirm: true }
   });
-  const token = await waitForOtp(mailpitUrl, email);
-  const session = await requestJson(`${apiUrl}/auth/v1/verify`, publishableKey, {
+  const session = await requestJson(`${apiUrl}/auth/v1/token?grant_type=password`, publishableKey, {
     method: 'POST',
-    body: { email, token, type: 'email' }
+    body: { email, password }
   });
-  assert(session.access_token && session.user?.id, 'OTP verification should return a session');
+  assert(session.access_token && session.user?.id, 'admin-created test fixture should return a session');
 
   const authHeaders = { Authorization: `Bearer ${session.access_token}` };
   const deviceId = crypto.randomUUID();
@@ -236,7 +218,7 @@ async function main() {
   });
   assert.equal(deletion.ok, true, 'account deletion should clean up the smoke-test account');
 
-  console.log('local Supabase smoke test passed: OTP, sync, private media, analytics, deletion');
+  console.log('local Supabase smoke test passed: auth fixture, sync, private media, analytics, deletion');
 }
 
 main().catch((error) => {

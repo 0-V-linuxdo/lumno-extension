@@ -453,15 +453,6 @@
       return wallpaper.deleteRecord(clientAssetId);
     }
 
-    async function requestOtp(email) {
-      return transport.requestOtp(email);
-    }
-
-    async function verifyOtp(email, token) {
-      const session = await transport.verifyOtp(email, token);
-      return initializeSignedInAccount(session);
-    }
-
     async function signInWithWeb() {
       if (!webAuth || typeof webAuth.signIn !== 'function') {
         const error = new Error('web_auth_not_configured');
@@ -620,8 +611,6 @@
       queueExternalChanges,
       handleStorageChanged,
       handleAlarm,
-      requestOtp,
-      verifyOtp,
       signInWithWeb,
       signOut,
       setSyncProvider,

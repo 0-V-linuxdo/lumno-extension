@@ -32,7 +32,7 @@
 
 - 数据仅用于向用户提供或改进已明确披露的 Lumno 单一用途；
 - 不出售或转让用户数据，不用于个性化广告、信用评估或与单一用途无关的画像；
-- 除提供服务所需的 Supabase、Google、GitHub 和 Resend 外，不向第三方披露；
+- 除提供服务所需的 Supabase、Google 和 GitHub 外，不向第三方披露；
 - 遵守 Chrome Web Store User Data Policy 的 Limited Use 要求；
 - 传输使用 HTTPS，账号业务表与内部保留期表强制 RLS，壁纸 Bucket 为私有；
 - 用户可关闭统计、退出登录或永久删除账号和云端数据。

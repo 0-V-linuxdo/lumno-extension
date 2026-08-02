@@ -1,6 +1,5 @@
 const assert = require('assert');
 const fs = require('fs');
-const path = require('path');
 
 const schema = require('../src/shared/cloud-sync-schema.js');
 
@@ -35,11 +34,15 @@ function run() {
   assert.match(authorization, /SUPABASE_PUBLISHABLE_KEYS/);
   assert.match(authorization, /SUPABASE_SECRET_KEYS/);
 
-  const templatePath = supabaseConfig.match(/content_path\s*=\s*"([^"]+)"/)?.[1];
-  assert(templatePath, 'Supabase config should declare an OTP email template');
-  assert(
-    fs.existsSync(path.resolve(templatePath)),
-    `Supabase OTP template should resolve from the repository root: ${templatePath}`
+  assert.match(
+    supabaseConfig,
+    /\[auth\.email\][\s\S]*?enable_signup\s*=\s*false/,
+    'new email signups must remain disabled'
+  );
+  assert.doesNotMatch(
+    supabaseConfig,
+    /\[auth\.email\.template\.|content_path\s*=/,
+    'retired email OTP templates must not remain in deployable config'
   );
 
   const removeObjectsAt = deletion.indexOf('.remove(');

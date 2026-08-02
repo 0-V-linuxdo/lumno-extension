@@ -78,12 +78,6 @@ async function run() {
   const transport = {
     config: { configured: true },
     async getSession() { return session; },
-    async requestOtp(email) { calls.push(`otp:${email}`); return { ok: true }; },
-    async verifyOtp(email) {
-      calls.push(`verify:${email}`);
-      session = { user: { id: 'user-one', email } };
-      return session;
-    },
     async registerDevice() { calls.push('register'); },
     async signOut() { session = null; calls.push('signout'); },
     async setAnalyticsConsent(value) {
@@ -115,10 +109,10 @@ async function run() {
     clearTimeout: () => {}
   });
 
-  const signedIn = await controller.verifyOtp('alice@example.com', '123456');
+  const signedIn = await controller.signInWithWeb();
   assert.strictEqual(signedIn.signedIn, true);
   assert.deepStrictEqual(calls.slice(0, 6), [
-    'verify:alice@example.com', 'enable', 'register', 'pull', 'register', 'sync'
+    'web-auth', 'enable', 'register', 'pull', 'register', 'sync'
   ]);
   assert(queued.some((item) => item.key === themeKey && item.value === 'light'));
 

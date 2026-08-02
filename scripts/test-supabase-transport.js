@@ -42,17 +42,6 @@ async function run() {
   const fetchImpl = async (url, options) => {
     const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
     requests.push({ url, options, body });
-    if (url.endsWith('/auth/v1/otp')) {
-      return jsonResponse(200, {});
-    }
-    if (url.endsWith('/auth/v1/verify')) {
-      return jsonResponse(200, {
-        access_token: 'access-one',
-        refresh_token: 'refresh-one',
-        expires_in: 3600,
-        user: { id: 'user-one', email: 'alice@example.com' }
-      });
-    }
     if (url.includes('/auth/v1/token?grant_type=refresh_token')) {
       return jsonResponse(200, {
         access_token: 'access-two',
@@ -66,8 +55,19 @@ async function run() {
     }
     return jsonResponse(200, {});
   };
+  let storedSession = {
+    access_token: 'access-one',
+    refresh_token: 'refresh-one',
+    expires_at: Math.floor(now / 1000) + 3600,
+    user: { id: 'user-one', email: 'alice@example.com' }
+  };
   const transport = transportApi.createTransport({
     localArea,
+    sessionStore: {
+      async get() { return storedSession; },
+      async set(value) { storedSession = value; },
+      async remove() { storedSession = null; }
+    },
     fetchImpl,
     now: () => now,
     config: {
@@ -77,12 +77,6 @@ async function run() {
   });
 
   assert.strictEqual(transport.config.configured, true);
-  await transport.requestOtp('Alice@Example.com');
-  assert.deepStrictEqual(requests[0].body, { email: 'alice@example.com', create_user: true });
-  assert.strictEqual(requests[0].options.headers.apikey, 'public-key');
-
-  const session = await transport.verifyOtp('alice@example.com', '123456');
-  assert.strictEqual(session.user.id, 'user-one');
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session], undefined,
     'refresh tokens must never be persisted in content-script-readable local storage');
   assert.strictEqual((await transport.getSession({ refresh: false })).access_token, 'access-one',
@@ -102,7 +96,12 @@ async function run() {
     fetchImpl,
     config: { projectUrl: 'http://insecure.invalid', publishableKey: 'invalid' }
   });
-  await assert.rejects(() => disabled.requestOtp('alice@example.com'), /cloud_not_configured/);
+  await assert.rejects(() => disabled.exchangeOAuthCode({
+    code: 'code',
+    codeVerifier: 'verifier',
+    clientId: 'client',
+    redirectUri: 'https://extension.chromiumapp.org/lumno-auth'
+  }), /cloud_not_configured/);
 
   let secureSession = null;
   const oauthRequests = [];

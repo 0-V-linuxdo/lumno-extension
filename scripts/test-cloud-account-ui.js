@@ -30,8 +30,8 @@ function run() {
   assert.match(html, /cloud_status_2026_unique_"[\s\S]*role="status" aria-live="polite"/);
   assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox" aria-describedby="_x_extension_cloud_analytics_desc_2026_unique_" disabled/);
   assert.match(html, /cloud_sync_now_2026_unique_[\s\S]*ri-refresh-line/);
-  assert.match(html, /推荐使用 Google 或 GitHub/);
-  assert.match(html, /邮箱验证码作为内测入口/);
+  assert.match(html, /Google 或 GitHub/);
+  assert.match(html, /相同已验证邮箱会自动关联到同一 Lumno 账号/);
   assert.match(runtime, /action: 'cloudSignInWithWeb'/);
   assert.doesNotMatch(runtime, /action: 'cloudRequestOtp'/);
   assert.doesNotMatch(runtime, /action: 'cloudVerifyOtp'/);
@@ -54,6 +54,8 @@ function run() {
     'the account screen should link to the full privacy policy');
   assert.doesNotMatch(runtime, /cloudDeleteAccount/);
   assert.doesNotMatch(controller, /cloudDeleteAccount/);
+  assert.doesNotMatch(controller, /requestOtp|verifyOtp/);
+  assert.doesNotMatch(transport, /requestOtp|verifyOtp|\/auth\/v1\/otp|\/auth\/v1\/verify/);
   assert.doesNotMatch(transport, /async function deleteAccount/,
     'the extension transport must not retain direct account deletion authority');
 

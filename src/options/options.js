@@ -2208,10 +2208,6 @@
     const code = String((error && error.message) || error || '');
     const messages = {
       cloud_not_configured: getMessage('cloud_error_not_configured', '云服务尚未配置'),
-      invalid_email: getMessage('cloud_error_invalid_email', '请输入有效邮箱'),
-      invalid_verification_code: getMessage('cloud_error_invalid_code', '请输入邮件中的验证码'),
-      otp_expired: getMessage('cloud_error_code_expired', '验证码已过期，请重新发送'),
-      token_expired: getMessage('cloud_error_code_expired', '验证码已过期，请重新发送'),
       over_email_send_rate_limit: getMessage('cloud_error_rate_limit', '发送过于频繁，请稍后再试'),
       email_rate_limit_exceeded: getMessage('cloud_error_rate_limit', '发送过于频繁，请稍后再试'),
       authentication_required: getMessage('cloud_error_signin_required', '登录已失效，请重新登录'),
