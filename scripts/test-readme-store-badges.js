@@ -27,7 +27,7 @@ assert.ok(
 
 assert.ok(
   new RegExp(
-    `microsoft-edge-addons-badge\\.png[\\s\\S]*?<p align="center">当前版本：<code>${escapedVersion}<\\/code><\\/p>`
+    `microsoft-edge-addons-badge\\.png[\\s\\S]*?<p align="center">Current version: <code>${escapedVersion}<\\/code><\\/p>`
   ).test(readme),
   'the current version must be centered below the store badges'
 );
