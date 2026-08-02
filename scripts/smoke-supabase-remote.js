@@ -60,23 +60,23 @@ async function main() {
   assert(keys.serviceRole, 'a server-only service-role JWT should be available for test setup');
 
   const email = `lumno-remote-smoke-${Date.now()}@example.com`;
-  const password = crypto.randomBytes(24).toString('base64url');
   let userId = '';
   let deleted = false;
 
   try {
-    const user = await requestJson(`${config.projectUrl}/auth/v1/admin/users`, keys.serviceRole, {
+    const fixture = await requestJson(`${config.projectUrl}/auth/v1/admin/generate_link`, keys.serviceRole, {
       method: 'POST',
       headers: { Authorization: `Bearer ${keys.serviceRole}` },
-      body: { email, password, email_confirm: true }
+      body: { type: 'magiclink', email }
     });
-    userId = user.id;
-    assert(userId, 'admin test setup should create an auth user');
+    userId = fixture.id;
+    assert(userId && fixture.hashed_token,
+      'admin test setup should create a user and a non-delivered test token');
 
     const session = await requestJson(
-      `${config.projectUrl}/auth/v1/token?grant_type=password`,
+      `${config.projectUrl}/auth/v1/verify`,
       config.publishableKey,
-      { method: 'POST', body: { email, password } }
+      { method: 'POST', body: { token_hash: fixture.hashed_token, type: 'email' } }
     );
     assert(session.access_token && session.user?.id === userId, 'test user should receive a session');
     const authHeaders = { Authorization: `Bearer ${session.access_token}` };
