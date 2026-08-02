@@ -3,6 +3,8 @@ const fs = require('fs');
 
 const html = fs.readFileSync('src/options/options.html', 'utf8');
 const runtime = fs.readFileSync('src/options/options.js', 'utf8');
+const controller = fs.readFileSync('src/background/cloud-account-controller.js', 'utf8');
+const transport = fs.readFileSync('src/background/supabase-transport.js', 'utf8');
 
 function run() {
   [
@@ -46,8 +48,14 @@ function run() {
     /applyI18n\(\);\s*if \(currentCloudAccountStatus\) \{\s*renderCloudAccountStatus\(currentCloudAccountStatus\);/,
     'late locale loading should not overwrite the rendered cloud connection state'
   );
-  assert.match(runtime, /confirmation !== 'DELETE'/,
-    'permanent deletion should require an explicit typed confirmation');
+  assert.match(html, /href="https:\/\/lumno\.kubai\.design\/account\/"/,
+    'account deletion should be delegated to the authenticated web portal');
+  assert.match(html, /href="https:\/\/lumno\.kubai\.design\/privacy\/"/,
+    'the account screen should link to the full privacy policy');
+  assert.doesNotMatch(runtime, /cloudDeleteAccount/);
+  assert.doesNotMatch(controller, /cloudDeleteAccount/);
+  assert.doesNotMatch(transport, /async function deleteAccount/,
+    'the extension transport must not retain direct account deletion authority');
 
   console.log('cloud account UI tests passed');
 }

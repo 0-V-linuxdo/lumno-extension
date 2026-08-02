@@ -8,9 +8,15 @@
     document.body.removeAttribute('data-nt-ready');
   }
 
-  const storageArea = (chrome && chrome.storage && chrome.storage.sync)
-    ? chrome.storage.sync
-    : (chrome && chrome.storage ? chrome.storage.local : null);
+  const settingsRuntimeApi = globalThis.LumnoSettings || {};
+  const providerStorageRuntime = typeof settingsRuntimeApi.createProviderStorageRuntime === 'function'
+    ? settingsRuntimeApi.createProviderStorageRuntime(chrome)
+    : null;
+  const storageArea = providerStorageRuntime
+    ? providerStorageRuntime.area
+    : ((chrome && chrome.storage && chrome.storage.sync)
+        ? chrome.storage.sync
+        : (chrome && chrome.storage ? chrome.storage.local : null));
   const localStorageArea = (chrome && chrome.storage && chrome.storage.local)
     ? chrome.storage.local
     : storageArea;
@@ -19,12 +25,17 @@
       ? chrome.storage.local
       : null;
   const recentSitesStorageArea = storageArea || localStorageArea;
-  const storageAreaName = storageArea
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
     ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
-    : null;
-  const recentSitesStorageAreaName = recentSitesStorageArea
+    : null);
+  const recentSitesStorageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (recentSitesStorageArea
     ? (recentSitesStorageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
-    : null;
+    : null);
+  function isPrimaryStorageAreaName(areaName) {
+    return providerStorageRuntime
+      ? providerStorageRuntime.isActiveAreaName(areaName)
+      : Boolean(storageAreaName) && areaName === storageAreaName;
+  }
   function addStorageChangeListener(listener) {
     if (!chrome || !chrome.storage || !chrome.storage.onChanged ||
         typeof chrome.storage.onChanged.addListener !== 'function') {
@@ -99,7 +110,7 @@
     );
   }
 
-  const SETTINGS = globalThis.LumnoSettings || {};
+  const SETTINGS = settingsRuntimeApi;
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
@@ -654,15 +665,12 @@
 
   function persistBookmarkViewMode(value) {
     const mode = normalizeBookmarkViewMode(value);
-    const syncArea = chrome && chrome.storage && chrome.storage.sync
-      ? chrome.storage.sync
-      : storageArea;
-    if (!syncArea || typeof syncArea.set !== 'function') {
+    if (!storageArea || typeof storageArea.set !== 'function') {
       return false;
     }
-    syncArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
+    storageArea.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
     if (chrome && chrome.storage && chrome.storage.local &&
-        chrome.storage.local !== syncArea) {
+        chrome.storage.local !== storageArea) {
       chrome.storage.local.set({ [BOOKMARK_VIEW_MODE_STORAGE_KEY]: mode });
     }
     return true;
@@ -4067,17 +4075,17 @@
       }
     }
     handleBookmarkTopbarSurfaceColorStorageChanges(changes, areaName);
-    const isPrimaryArea = Boolean(storageAreaName) && areaName === storageAreaName;
+    const isPrimaryArea = isPrimaryStorageAreaName(areaName);
     if (!isPrimaryArea) {
       if (recentSitesStorageAreaName &&
-          areaName === recentSitesStorageAreaName &&
+          isPrimaryStorageAreaName(areaName) &&
           changes[PINNED_RECENT_SITES_STORAGE_KEY]) {
         pinnedRecentSites = normalizePinnedRecentSites(changes[PINNED_RECENT_SITES_STORAGE_KEY].newValue);
         recentRenderSignature = '';
         renderRecentSites(recentSourceItems);
       }
       if (recentSitesStorageAreaName &&
-          areaName === recentSitesStorageAreaName &&
+          isPrimaryStorageAreaName(areaName) &&
           changes[HIDDEN_RECENT_SITES_STORAGE_KEY]) {
         hiddenRecentSites = normalizeHiddenRecentSites(changes[HIDDEN_RECENT_SITES_STORAGE_KEY].newValue);
         recentRenderSignature = '';
@@ -4845,7 +4853,7 @@
   loadDefaultSearchEngineState();
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     addStorageChangeListener((changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName) {
+      if (!isPrimaryStorageAreaName(areaName)) {
         return;
       }
       if (changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
@@ -15530,7 +15538,7 @@
   getSiteSearchProviders();
 
   addStorageChangeListener((changes, areaName) => {
-    if (!storageAreaName || areaName !== storageAreaName ||
+    if (!isPrimaryStorageAreaName(areaName) ||
         (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY])) {
       return;
     }

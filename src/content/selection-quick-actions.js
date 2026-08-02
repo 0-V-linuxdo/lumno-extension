@@ -20,12 +20,18 @@
   const POINTER_CONFIRM_DISTANCE_PX = 52;
   const DOT_DISMISS_MS = 2200;
   const CHIP_DISMISS_MS = 3600;
-  const storageArea = chrome && chrome.storage && chrome.storage.sync
-    ? chrome.storage.sync
-    : (chrome && chrome.storage ? chrome.storage.local : null);
-  const storageAreaName = storageArea && storageArea === (chrome && chrome.storage ? chrome.storage.sync : null)
+  const providerStorageRuntime = globalThis.LumnoSettings &&
+    typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
+    ? globalThis.LumnoSettings.createProviderStorageRuntime(chrome)
+    : null;
+  const storageArea = providerStorageRuntime
+    ? providerStorageRuntime.area
+    : (chrome && chrome.storage && chrome.storage.sync
+        ? chrome.storage.sync
+        : (chrome && chrome.storage ? chrome.storage.local : null));
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea && storageArea === (chrome && chrome.storage ? chrome.storage.sync : null)
     ? 'sync'
-    : 'local';
+    : 'local');
 
   let enabled = true;
   let languageMode = 'system';
@@ -655,7 +661,9 @@
 
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== storageAreaName) {
+      if (providerStorageRuntime
+        ? !providerStorageRuntime.isActiveAreaName(areaName)
+        : areaName !== storageAreaName) {
         return;
       }
       if (changes[ENABLED_STORAGE_KEY]) {

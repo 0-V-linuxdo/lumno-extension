@@ -16,8 +16,8 @@ const selectionContentScript = manifest.content_scripts.find((entry) => (
 assert(selectionContentScript, 'manifest should inject the selection quick actions content script');
 assert.deepStrictEqual(
   selectionContentScript.js,
-  ['src/shared/selection-intent.js', 'src/content/selection-quick-actions.js'],
-  'selection classifier should load before the content interaction runtime'
+  ['src/shared/settings.js', 'src/shared/selection-intent.js', 'src/content/selection-quick-actions.js'],
+  'provider-aware settings and the selection classifier should load before the content interaction runtime'
 );
 assert.strictEqual(selectionContentScript.run_at, 'document_idle');
 

@@ -192,6 +192,11 @@ async function run() {
       return true;
     },
     async syncNow() { return { ok: true }; },
+    async getState() {
+      return {
+        conflicts: transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts] || []
+      };
+    },
     async disableCloudMode(options) { return transitionRepository.leaveCloudMode(options); }
   };
   const transitionController = controllerApi.createController({
@@ -244,6 +249,14 @@ async function run() {
   );
   assert(replacementQueuedSettings.length > 0,
     'same-account reauthentication should preserve the normal snapshot queue behavior');
+
+  transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts] = [{ key: themeKey }];
+  await assert.rejects(
+    () => transitionController.setSyncProvider('chrome'),
+    (error) => error && error.code === 'sync_conflicts_must_be_resolved' && error.conflictCount === 1
+  );
+  assert.strictEqual(await transitionRepository.getMode(), repositoryApi.MODE_CLOUD,
+    'switching back to Chrome Sync must be blocked until all Lumno conflicts are resolved');
 
   assert.strictEqual(controllerApi.isTrustedExtensionSender({
     id: 'extension-id',

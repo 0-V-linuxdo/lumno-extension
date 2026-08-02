@@ -12,6 +12,37 @@
 
   const MODE_GUEST = 'guest';
   const MODE_CLOUD = 'cloud';
+  const BROWSER_SYNC_QUOTAS = Object.freeze({
+    totalBytes: 102400,
+    bytesPerItem: 8192,
+    maxItems: 512
+  });
+
+  function jsonByteLength(value) {
+    const json = JSON.stringify(value);
+    if (typeof TextEncoder === 'function') return new TextEncoder().encode(json).byteLength;
+    return unescape(encodeURIComponent(json)).length;
+  }
+
+  function inspectBrowserSyncSnapshot(snapshot) {
+    const clean = schema.copySyncSettings(snapshot);
+    const entries = Object.entries(clean);
+    const items = entries.map(([key, value]) => ({
+      key,
+      bytes: jsonByteLength({ [key]: value })
+    }));
+    const oversizedItems = items.filter((item) => item.bytes > BROWSER_SYNC_QUOTAS.bytesPerItem);
+    const totalBytes = items.reduce((sum, item) => sum + item.bytes, 0);
+    return Object.freeze({
+      ok: entries.length <= BROWSER_SYNC_QUOTAS.maxItems &&
+        totalBytes <= BROWSER_SYNC_QUOTAS.totalBytes &&
+        oversizedItems.length === 0,
+      itemCount: entries.length,
+      totalBytes,
+      oversizedItems,
+      quotas: BROWSER_SYNC_QUOTAS
+    });
+  }
 
   function getAreaValues(area, keys) {
     return new Promise((resolve, reject) => {
@@ -144,6 +175,9 @@
       return {
         mode: MODE_CLOUD,
         migrated_keys: Object.keys(migration),
+        source: 'chrome',
+        target: 'lumno',
+        inspected_at: Date.now(),
         snapshot: schema.copySyncSettings({ ...syncValues, ...cloudValues, ...localValues })
       };
     }
@@ -155,13 +189,32 @@
         const browserSyncSnapshot = Object.fromEntries(
           Object.entries(snapshot).filter(([key]) => !localOnlyKeySet.has(key))
         );
+        const inspection = inspectBrowserSyncSnapshot(browserSyncSnapshot);
+        if (!inspection.ok) {
+          const error = new Error('browser_sync_quota_exceeded');
+          error.code = 'browser_sync_quota_exceeded';
+          error.report = inspection;
+          throw error;
+        }
         await mutateArea(syncArea, 'set', browserSyncSnapshot);
       }
       await mutateArea(localArea, 'set', { [modeKey]: MODE_GUEST });
       return {
         mode: MODE_GUEST,
-        copied_keys: Object.keys(snapshot)
+        copied_keys: Object.keys(snapshot),
+        source: 'lumno',
+        target: 'chrome',
+        inspected_at: Date.now(),
+        browser_sync: inspectBrowserSyncSnapshot(
+          Object.fromEntries(Object.entries(snapshot).filter(([key]) => !localOnlyKeySet.has(key)))
+        )
       };
+    }
+
+    async function clearCloudSnapshot() {
+      const sharedKeys = schema.SYNC_KEYS.filter((key) => !localOnlyKeySet.has(key));
+      await mutateArea(cloudArea, 'remove', sharedKeys);
+      return { cleared_keys: sharedKeys };
     }
 
     return Object.freeze({
@@ -171,13 +224,17 @@
       set,
       remove,
       enterCloudMode,
-      leaveCloudMode
+      leaveCloudMode,
+      clearCloudSnapshot
     });
   }
 
   return Object.freeze({
     MODE_GUEST,
     MODE_CLOUD,
+    BROWSER_SYNC_QUOTAS,
+    jsonByteLength,
+    inspectBrowserSyncSnapshot,
     getAreaValues,
     mutateArea,
     normalizeMode,

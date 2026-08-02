@@ -17,6 +17,8 @@
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
+  const CLOUD_SYNC_MODE_STORAGE_KEY = '_lumno_cloud_mode_v1_';
+  const CLOUD_SYNC_MODE = 'cloud';
   // Keep the original key value so existing installations migrate from boolean to mode in place.
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_TOP_CONTENT_BRAND = 'brand';
@@ -208,6 +210,93 @@
     };
   }
 
+  function createProviderStorageRuntime(chromeApi) {
+    const storage = chromeApi && chromeApi.storage ? chromeApi.storage : null;
+    const syncArea = storage && storage.sync ? storage.sync : null;
+    const localArea = storage && storage.local ? storage.local : syncArea;
+    let activeAreaName = syncArea ? 'sync' : (localArea ? 'local' : '');
+
+    const modeReady = new Promise((resolve) => {
+      if (!localArea || typeof localArea.get !== 'function') {
+        resolve(activeAreaName);
+        return;
+      }
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        activeAreaName = result && result[CLOUD_SYNC_MODE_STORAGE_KEY] === CLOUD_SYNC_MODE
+          ? 'local'
+          : (syncArea ? 'sync' : 'local');
+        resolve(activeAreaName);
+      };
+      try {
+        const maybePromise = localArea.get([CLOUD_SYNC_MODE_STORAGE_KEY], finish);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(finish).catch(() => finish({}));
+        }
+      } catch (_error) {
+        finish({});
+      }
+    });
+
+    if (storage && storage.onChanged && typeof storage.onChanged.addListener === 'function') {
+      storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local' || !changes || !changes[CLOUD_SYNC_MODE_STORAGE_KEY]) return;
+        activeAreaName = changes[CLOUD_SYNC_MODE_STORAGE_KEY].newValue === CLOUD_SYNC_MODE
+          ? 'local'
+          : (syncArea ? 'sync' : 'local');
+      });
+    }
+
+    function getActiveArea() {
+      return activeAreaName === 'local' ? localArea : (syncArea || localArea);
+    }
+
+    function invoke(method, args) {
+      const values = Array.from(args || []);
+      const callback = typeof values[values.length - 1] === 'function' ? values.pop() : null;
+      return modeReady.then(() => new Promise((resolve, reject) => {
+        const area = getActiveArea();
+        if (!area || typeof area[method] !== 'function') {
+          if (callback) callback(method === 'get' ? {} : undefined);
+          resolve(method === 'get' ? {} : undefined);
+          return;
+        }
+        let settled = false;
+        const finish = (result) => {
+          if (settled) return;
+          settled = true;
+          if (callback) callback(result);
+          resolve(result);
+        };
+        try {
+          const maybePromise = area[method](...values, finish);
+          if (maybePromise && typeof maybePromise.then === 'function') {
+            maybePromise.then(finish).catch(reject);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      }));
+    }
+
+    const area = Object.freeze({
+      get(...args) { return invoke('get', args); },
+      set(...args) { return invoke('set', args); },
+      remove(...args) { return invoke('remove', args); },
+      clear(...args) { return invoke('clear', args); }
+    });
+
+    return Object.freeze({
+      area,
+      name: 'provider',
+      ready: modeReady,
+      getActiveAreaName() { return activeAreaName; },
+      isActiveAreaName(areaName) { return String(areaName || '') === activeAreaName; }
+    });
+  }
+
   return Object.freeze({
     THEME_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
@@ -221,6 +310,7 @@
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
+    CLOUD_SYNC_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_BRAND,
     NEWTAB_TOP_CONTENT_TIME,
@@ -248,6 +338,7 @@
     normalizeSelectionQuickActionsEnabled,
     normalizeThemePreference,
     normalizeThemeMode,
-    createGlobalThemeModeStorageUpdate
+    createGlobalThemeModeStorageUpdate,
+    createProviderStorageRuntime
   });
 });

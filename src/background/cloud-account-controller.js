@@ -150,8 +150,8 @@
     const syncArea = config.syncArea || storage.sync || localArea;
     const setTimer = config.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
     const clearTimer = config.clearTimeout || (typeof clearTimeout === 'function' ? clearTimeout : null);
-    const trackedCloudArea = config.trackedCloudArea || createTrackedArea(syncArea, setTimer);
-    const trackedLocalSettingArea = config.trackedLocalSettingArea || createTrackedArea(localArea, setTimer);
+    const trackedCloudArea = config.trackedCloudArea || createTrackedArea(localArea, setTimer);
+    const trackedLocalSettingArea = config.trackedLocalSettingArea || trackedCloudArea;
     const localOnlyKeys = [schema.STORAGE_KEYS.newtabLocalWallpaper];
     const repository = config.repository || repositoryApi.createRepository({
       localArea,
@@ -289,6 +289,7 @@
         signedIn,
         email: signedIn && session.user ? session.user.email : '',
         mode,
+        syncProvider: mode === repositoryApi.MODE_CLOUD ? 'lumno' : 'chrome',
         analyticsConsented: Boolean(
           local[schema.CLOUD_LOCAL_KEYS.consent] &&
           local[schema.CLOUD_LOCAL_KEYS.consent].analytics === true
@@ -298,13 +299,16 @@
           lastError: String(status.last_error || ''),
           lastPushAt: Number(status.last_push_at) || 0,
           lastPullAt: Number(status.last_pull_at) || 0,
+          nextRetryAt: Number(status.next_retry_at) || 0,
+          failureCount: Number(status.failure_count) || 0,
           pendingCount: outbox.length,
           conflictCount: conflicts.length
         }
       };
     }
 
-    async function syncNow() {
+    async function syncNow(optionsArg) {
+      const syncOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
       if (await repository.getMode() !== repositoryApi.MODE_CLOUD) {
         return { skipped: true, reason: 'cloud-disabled' };
       }
@@ -316,7 +320,7 @@
         return { skipped: true, reason: 'account-transition-required' };
       }
       await registerCurrentDevice();
-      const result = await runtime.syncNow();
+      const result = await runtime.syncNow(syncOptions);
       let wallpaperResult = { skipped: true };
       if (wallpaper && typeof wallpaper.syncAll === 'function') {
         try {
@@ -353,8 +357,9 @@
       }, SYNC_DEBOUNCE_MS);
     }
 
-    async function queueExternalChanges(changes) {
-      if (await repository.getMode() !== repositoryApi.MODE_CLOUD) {
+    async function queueExternalChanges(changes, areaName) {
+      const sourceAreaName = areaName || 'local';
+      if (sourceAreaName !== 'local' || await repository.getMode() !== repositoryApi.MODE_CLOUD) {
         return 0;
       }
       let count = 0;
@@ -376,11 +381,11 @@
       if (areaName !== 'sync' && areaName !== 'local') {
         return;
       }
-      const trackedArea = areaName === 'local' ? trackedLocalSettingArea : trackedCloudArea;
+      const trackedArea = trackedLocalSettingArea;
       const externalChanges = typeof trackedArea.consume === 'function'
         ? trackedArea.consume(changes)
         : changes;
-      queueExternalChanges(externalChanges).catch(() => {});
+      queueExternalChanges(externalChanges, areaName).catch(() => {});
     }
 
     function handleAlarm(alarm) {
@@ -409,7 +414,7 @@
           await runtime.queueSettingChange(key, value);
         }
       }
-      await syncNow();
+      await syncNow({ force: true });
       return getStatus();
     }
 
@@ -479,6 +484,55 @@
       return { ok: true, remoteWarning };
     }
 
+    async function setSyncProvider(provider) {
+      const target = String(provider || '').trim().toLowerCase();
+      if (target !== 'chrome' && target !== 'lumno') {
+        const error = new Error('invalid_sync_provider');
+        error.code = 'invalid_sync_provider';
+        throw error;
+      }
+      const currentMode = await repository.getMode();
+      if (target === 'lumno') {
+        const session = await transport.getSession();
+        if (!session || !(await sessionMatchesStoredAccount(session))) {
+          const error = new Error('authentication_required');
+          error.code = 'authentication_required';
+          throw error;
+        }
+        if (currentMode !== repositoryApi.MODE_CLOUD) {
+          if (typeof transport.setSyncConsent === 'function') {
+            await transport.setSyncConsent('2026-08-02');
+          }
+          await runtime.enableCloudMode();
+          const snapshot = await repository.get(schema.SYNC_KEYS);
+          for (const [key, value] of Object.entries(schema.copySyncSettings(snapshot))) {
+            await runtime.queueSettingChange(key, value);
+          }
+        }
+        await syncNow({ force: true });
+        return getStatus();
+      }
+      if (currentMode === repositoryApi.MODE_CLOUD) {
+        await syncNow({ force: true });
+        const syncState = await runtime.getState();
+        if (Array.isArray(syncState && syncState.conflicts) && syncState.conflicts.length > 0) {
+          const error = new Error('sync_conflicts_must_be_resolved');
+          error.code = 'sync_conflicts_must_be_resolved';
+          error.conflictCount = syncState.conflicts.length;
+          throw error;
+        }
+        await runtime.disableCloudMode({ copyToBrowserSync: true });
+      }
+      return getStatus();
+    }
+
+    async function resolveConflict(key, resolution) {
+      const result = await runtime.resolveConflict(key, resolution);
+      if (!result || result.ok === false) return result;
+      if (String(resolution || '').toLowerCase() === 'device') await syncNow({ force: true });
+      return { ...result, status: await getStatus() };
+    }
+
     async function setAnalyticsConsent(consented) {
       const enabled = consented === true;
       const consentRecord = {
@@ -510,19 +564,14 @@
       return { ok: true, analyticsConsented: false, remoteWarning };
     }
 
-    async function deleteAccount() {
-      await transport.deleteAccount();
-      await runtime.disableCloudMode({ copyToBrowserSync: true });
-      await clearIdentityState();
-      return { ok: true };
-    }
-
     async function handleAction(request) {
       const action = String((request && request.action) || '');
       if (action === 'cloudGetStatus') return getStatus();
       if (action === 'cloudSignInWithWeb') return signInWithWeb();
       if (action === 'cloudSignOut') return signOut();
-      if (action === 'cloudSyncNow') return syncNow();
+      if (action === 'cloudSyncNow') return syncNow({ force: true });
+      if (action === 'cloudSetSyncProvider') return setSyncProvider(request.provider);
+      if (action === 'cloudResolveConflict') return resolveConflict(request.key, request.resolution);
       if (action === 'cloudSetAnalyticsConsent') return setAnalyticsConsent(request.consented === true);
       if (action === 'cloudRecordUsage') {
         return usage && typeof usage.record === 'function'
@@ -531,7 +580,6 @@
       }
       if (action === 'cloudUploadWallpaper') return uploadWallpaper(request.record);
       if (action === 'cloudDeleteWallpaper') return deleteWallpaper(request.id);
-      if (action === 'cloudDeleteAccount') return deleteAccount();
       return { ok: false, error: 'unknown_cloud_action' };
     }
 
@@ -576,11 +624,12 @@
       verifyOtp,
       signInWithWeb,
       signOut,
+      setSyncProvider,
+      resolveConflict,
       setAnalyticsConsent,
       recordUsage: usage && typeof usage.record === 'function' ? usage.record : async () => ({ recorded: false }),
       uploadWallpaper,
       deleteWallpaper,
-      deleteAccount,
       handleMessage,
       start
     });

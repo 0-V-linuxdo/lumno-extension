@@ -11,12 +11,18 @@
   const PAGE_TOAST_SHOW_DURATION_MS = 2000;
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
-  const storageArea = (chrome && chrome.storage && chrome.storage.sync)
-    ? chrome.storage.sync
-    : (chrome && chrome.storage ? chrome.storage.local : null);
-  const storageAreaName = storageArea
-    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+  const providerStorageRuntime = globalThis.LumnoSettings &&
+    typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
+    ? globalThis.LumnoSettings.createProviderStorageRuntime(chrome)
     : null;
+  const storageArea = providerStorageRuntime
+    ? providerStorageRuntime.area
+    : ((chrome && chrome.storage && chrome.storage.sync)
+        ? chrome.storage.sync
+        : (chrome && chrome.storage ? chrome.storage.local : null));
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
+    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+    : null);
   let shortcutRaw = '';
   let shortcutSpec = null;
   let lastRefreshAt = 0;
@@ -601,7 +607,9 @@
   hydrateLocaleMessages();
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (storageAreaName && areaName !== storageAreaName) {
+      if (providerStorageRuntime
+        ? !providerStorageRuntime.isActiveAreaName(areaName)
+        : storageAreaName && areaName !== storageAreaName) {
         return;
       }
       if (!changes) {

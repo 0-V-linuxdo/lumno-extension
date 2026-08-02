@@ -35,6 +35,7 @@ async function run() {
   const localArea = createArea({});
   const pushes = [];
   let pullRows = [];
+  let pushMode = 'accept';
   const runtime = runtimeApi.createRuntime({
     localArea,
     syncArea,
@@ -49,6 +50,18 @@ async function run() {
     transport: {
       async pushSettings(payload) {
         pushes.push(payload);
+        if (pushMode === 'conflict') {
+          return {
+            accepted: [],
+            conflicts: payload.changes.map((change) => ({
+              operation_id: change.operation_id,
+              key: change.key,
+              value: 'light',
+              version: 2,
+              change_id: 21
+            }))
+          };
+        }
         return {
           accepted: payload.changes.map((change, index) => ({
             operation_id: change.operation_id,
@@ -82,6 +95,19 @@ async function run() {
   assert.strictEqual(pullResult.applied, 1);
   assert.strictEqual(localArea.values[languageKey], 'ja');
   assert.strictEqual((await runtime.getState()).cursor, 20);
+
+  pushMode = 'conflict';
+  await runtime.queueSettingChange(themeKey, 'dark');
+  const conflictPush = await runtime.flush();
+  assert.strictEqual(conflictPush.conflicts.length, 1);
+  assert.strictEqual((await runtime.getState()).outbox.length, 0,
+    'rejected operations must leave the outbox to avoid a retry livelock');
+  assert.strictEqual(localArea.values[themeKey], 'light', 'the active value should follow the server');
+  await runtime.resolveConflict(themeKey, 'device');
+  assert.strictEqual((await runtime.getState()).outbox[0].base_version, 2,
+    'keeping the device value should create a fresh edit against the remote version');
+  pushMode = 'accept';
+  await runtime.flush();
 
   await runtime.disableCloudMode({ copyToBrowserSync: true });
   assert.strictEqual(syncArea.values[languageKey], 'ja');

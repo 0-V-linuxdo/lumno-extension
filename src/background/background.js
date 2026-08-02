@@ -1276,15 +1276,26 @@ function logHotkeyDebug(stage, payload) {
   }
 }
 
-const storageArea = (chrome && chrome.storage && chrome.storage.sync)
-  ? chrome.storage.sync
-  : (chrome && chrome.storage ? chrome.storage.local : null);
+const providerStorageRuntime = globalThis.LumnoSettings &&
+  typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
+  ? globalThis.LumnoSettings.createProviderStorageRuntime(chrome)
+  : null;
+const storageArea = providerStorageRuntime
+  ? providerStorageRuntime.area
+  : ((chrome && chrome.storage && chrome.storage.sync)
+      ? chrome.storage.sync
+      : (chrome && chrome.storage ? chrome.storage.local : null));
 const localStorageArea = (chrome && chrome.storage && chrome.storage.local)
   ? chrome.storage.local
   : storageArea;
-const storageAreaName = storageArea
+const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
   ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
-  : null;
+  : null);
+function isPrimaryStorageAreaName(areaName) {
+  return providerStorageRuntime
+    ? providerStorageRuntime.isActiveAreaName(areaName)
+    : Boolean(storageAreaName) && areaName === storageAreaName;
+}
 const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
 const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
 const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
@@ -5026,11 +5037,12 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'cloudSignInWithWeb',
       'cloudSignOut',
       'cloudSyncNow',
+      'cloudSetSyncProvider',
+      'cloudResolveConflict',
       'cloudSetAnalyticsConsent',
       'cloudRecordUsage',
       'cloudUploadWallpaper',
-      'cloudDeleteWallpaper',
-      'cloudDeleteAccount'
+      'cloudDeleteWallpaper'
     ],
     handler: handleCloudAccountMessage
   }
@@ -8072,7 +8084,7 @@ removeLegacySiteSearchIconCaches();
 warmSiteSearchProviderIcons();
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (!storageAreaName || areaName !== storageAreaName) {
+  if (!isPrimaryStorageAreaName(areaName)) {
     return;
   }
   if (changes[RESTRICTED_ACTION_STORAGE_KEY]) {

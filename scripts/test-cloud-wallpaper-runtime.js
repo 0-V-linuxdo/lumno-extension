@@ -87,6 +87,12 @@ async function run() {
   assert.strictEqual(secondStore.records.get(localRecord.id).name, 'My wallpaper');
   assert.match(secondStore.records.get(localRecord.id).imageDataUrl, /^data:image\/webp;base64,/);
 
+  assets[0].deleted_at = '2026-08-02T00:00:00.000Z';
+  const tombstoneSync = await secondRuntime.syncAll();
+  assert.strictEqual(tombstoneSync.deleted, 1);
+  assert.strictEqual(secondStore.records.has(localRecord.id), false,
+    'remote tombstones should remove media cached by another device');
+
   console.log('cloud wallpaper runtime tests passed');
 }
 

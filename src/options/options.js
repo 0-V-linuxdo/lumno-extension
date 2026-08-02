@@ -91,7 +91,6 @@
   const cloudSignoutButton = document.getElementById('_x_extension_cloud_signout_2026_unique_');
   const cloudAnalyticsCard = document.getElementById('_x_extension_cloud_analytics_card_2026_unique_');
   const cloudAnalyticsToggle = document.getElementById('_x_extension_cloud_analytics_toggle_2026_unique_');
-  const cloudDeleteButton = document.getElementById('_x_extension_cloud_delete_2026_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
@@ -428,12 +427,27 @@
   }
 
   const SEARCH_UTILS = globalThis.LumnoSearchUtils || {};
-  const storageArea = (chrome && chrome.storage && chrome.storage.sync)
-    ? chrome.storage.sync
-    : (chrome && chrome.storage ? chrome.storage.local : null);
-  const storageAreaName = storageArea
-    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+  const providerStorageRuntime = typeof SETTINGS.createProviderStorageRuntime === 'function'
+    ? SETTINGS.createProviderStorageRuntime(chrome)
     : null;
+  const storageArea = providerStorageRuntime
+    ? providerStorageRuntime.area
+    : ((chrome && chrome.storage && chrome.storage.sync)
+        ? chrome.storage.sync
+        : (chrome && chrome.storage ? chrome.storage.local : null));
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
+    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+    : null);
+  function getActivePrimaryAreaName() {
+    return providerStorageRuntime
+      ? providerStorageRuntime.getActiveAreaName()
+      : storageAreaName;
+  }
+  function isPrimaryStorageAreaName(areaName) {
+    return providerStorageRuntime
+      ? providerStorageRuntime.isActiveAreaName(areaName)
+      : Boolean(storageAreaName) && areaName === storageAreaName;
+  }
   function addStorageChangeListener(listener) {
     if (!chrome || !chrome.storage || !chrome.storage.onChanged ||
         typeof chrome.storage.onChanged.addListener !== 'function') {
@@ -2344,20 +2358,6 @@
           .finally(() => { cloudAnalyticsToggle.disabled = false; });
       });
     }
-    if (cloudDeleteButton) {
-      cloudDeleteButton.addEventListener('click', () => {
-        const confirmation = window.prompt(
-          getMessage('cloud_delete_confirm', '此操作无法撤销。请输入 DELETE 确认永久删除账号：')
-        );
-        if (confirmation !== 'DELETE') return;
-        setCloudButtonBusy(cloudDeleteButton, true);
-        sendCloudMessage({ action: 'cloudDeleteAccount' })
-          .then(() => loadCloudAccountStatus())
-          .then(() => showToast(getMessage('cloud_delete_done', '账号和云端数据已删除'), false))
-          .catch((error) => showToast(getCloudErrorMessage(error), true))
-          .finally(() => setCloudButtonBusy(cloudDeleteButton, false));
-      });
-    }
     loadCloudAccountStatus();
   }
 
@@ -2435,7 +2435,7 @@
       setSyncButtonEnabled(syncImportButton, false);
       return;
     }
-    if (storageAreaName !== 'sync') {
+    if (getActivePrimaryAreaName() !== 'sync') {
       updateSyncStatusText('sync_status_unavailable', '同步不可用');
       setSyncButtonEnabled(syncNowButton, false);
       setSyncButtonEnabled(syncExportButton, true);
@@ -4449,7 +4449,7 @@
 
   if (syncNowButton) {
     syncNowButton.addEventListener('click', () => {
-      if (!storageArea || storageAreaName !== 'sync') {
+      if (!storageArea || getActivePrimaryAreaName() !== 'sync') {
         updateSyncStatusText('sync_status_unavailable', '同步不可用');
         return;
       }
@@ -4597,7 +4597,7 @@
         applyLanguageMode(stored);
         return;
       }
-      if (storageArea === syncArea && localArea) {
+      if (getActivePrimaryAreaName() === 'sync' && localArea) {
         localArea.get([LANGUAGE_STORAGE_KEY], (localResult) => {
           const localHasStored = Object.prototype.hasOwnProperty.call(localResult, LANGUAGE_STORAGE_KEY);
           if (localHasStored) {
@@ -5841,7 +5841,7 @@
   */
 
   addStorageChangeListener((changes, areaName) => {
-    const isPrimaryArea = Boolean(storageAreaName) && areaName === storageAreaName;
+    const isPrimaryArea = isPrimaryStorageAreaName(areaName);
     if (!isPrimaryArea) {
       return;
     }

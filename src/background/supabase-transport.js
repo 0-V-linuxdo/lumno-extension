@@ -17,6 +17,7 @@
   'use strict';
 
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
   class CloudTransportError extends Error {
     constructor(code, status) {
@@ -68,6 +69,9 @@
       fallbackKey: schema.CLOUD_LOCAL_KEYS.session
     });
     const now = typeof settings.now === 'function' ? settings.now : () => Date.now();
+    const requestTimeoutMs = Math.max(1000, Number(settings.requestTimeoutMs) || DEFAULT_REQUEST_TIMEOUT_MS);
+    const setTimer = settings.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
+    const clearTimer = settings.clearTimeout || (typeof clearTimeout === 'function' ? clearTimeout : null);
     let refreshInFlight = null;
 
     function requireConfigured() {
@@ -99,6 +103,37 @@
       return body;
     }
 
+    async function fetchWithTimeout(url, optionsArg) {
+      const options = optionsArg && typeof optionsArg === 'object' ? { ...optionsArg } : {};
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const externalSignal = options.signal;
+      const forwardAbort = () => controller && controller.abort();
+      if (controller) {
+        options.signal = controller.signal;
+        if (externalSignal && typeof externalSignal.addEventListener === 'function') {
+          if (externalSignal.aborted) controller.abort();
+          else externalSignal.addEventListener('abort', forwardAbort, { once: true });
+        }
+      }
+      const timer = controller && setTimer
+        ? setTimer(() => controller.abort(), requestTimeoutMs)
+        : null;
+      try {
+        return await fetchImpl(url, options);
+      } catch (error) {
+        if (controller && controller.signal.aborted && !(externalSignal && externalSignal.aborted)) {
+          throw new CloudTransportError('cloud_timeout', 0);
+        }
+        if (error instanceof CloudTransportError) throw error;
+        throw new CloudTransportError('cloud_unavailable', 0);
+      } finally {
+        if (timer && clearTimer) clearTimer(timer);
+        if (externalSignal && typeof externalSignal.removeEventListener === 'function') {
+          externalSignal.removeEventListener('abort', forwardAbort);
+        }
+      }
+    }
+
     async function request(path, optionsArg) {
       requireConfigured();
       const requestOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
@@ -116,10 +151,11 @@
         headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         body = typeof body === 'string' ? body : JSON.stringify(body);
       }
-      const response = await fetchImpl(endpoint(path), {
+      const response = await fetchWithTimeout(endpoint(path), {
         method: requestOptions.method || 'GET',
         headers,
-        body
+        body,
+        signal: requestOptions.signal
       });
       return parseResponse(response);
     }
@@ -382,7 +418,7 @@
 
     async function listAssets() {
       return withAccessToken(async (accessToken) => {
-        const query = '?select=id,client_asset_id,original_name,storage_path,thumbnail_path,sha256,mime_type,byte_size,width,height,updated_at&deleted_at=is.null&order=updated_at.asc';
+        const query = '?select=id,client_asset_id,original_name,storage_path,thumbnail_path,sha256,mime_type,byte_size,width,height,updated_at,deleted_at&order=updated_at.asc&limit=1000';
         const result = await request(`/rest/v1/lumno_assets${query}`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -416,11 +452,12 @@
         if (!row) return { ok: true, deleted: false };
         await removeObjects([row.storage_path, row.thumbnail_path]);
         await request(`/rest/v1/lumno_assets?id=eq.${encodeURIComponent(row.id)}`, {
-          method: 'DELETE',
+          method: 'PATCH',
           headers: {
             Authorization: `Bearer ${accessToken}`,
             Prefer: 'return=minimal'
-          }
+          },
+          body: { deleted_at: new Date(now()).toISOString() }
         });
         return { ok: true, deleted: true };
       });
@@ -431,7 +468,7 @@
       if (!objectPath) throw new CloudTransportError('invalid_asset_path', 400);
       return withAccessToken(async (accessToken) => {
         requireConfigured();
-        const response = await fetchImpl(endpoint(
+        const response = await fetchWithTimeout(endpoint(
           `/storage/v1/object/authenticated/${encodeURIComponent(cloudConfig.mediaBucket)}/${objectPath}`
         ), {
           headers: {
@@ -452,16 +489,6 @@
         headers: { Authorization: `Bearer ${accessToken}` },
         body: batch
       }));
-    }
-
-    async function deleteAccount() {
-      const result = await withAccessToken((accessToken) => request('/functions/v1/delete-account', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: { confirmation: 'DELETE' }
-      }));
-      await sessionStore.remove();
-      return result;
     }
 
     async function uploadObject(path, blob, contentType) {
@@ -496,7 +523,6 @@
       setAnalyticsConsent,
       setSyncConsent,
       ingestUsage,
-      deleteAccount,
       uploadObject,
       upsertAsset,
       listAssets,
@@ -508,6 +534,7 @@
 
   return Object.freeze({
     CloudTransportError,
+    DEFAULT_REQUEST_TIMEOUT_MS,
     normalizeEmail,
     normalizeSession,
     createTransport

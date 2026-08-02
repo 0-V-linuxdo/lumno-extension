@@ -38,12 +38,12 @@
    "content_scripts": [
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/content/hotkey-listener.js" ],
+         "js": [ "src/shared/settings.js", "src/content/hotkey-listener.js" ],
          "run_at": "document_start"
       },
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/selection-intent.js", "src/content/selection-quick-actions.js" ],
+         "js": [ "src/shared/settings.js", "src/shared/selection-intent.js", "src/content/selection-quick-actions.js" ],
          "run_at": "document_idle"
       },
       {
@@ -75,12 +75,12 @@
             "*://*.bilibili.com/*",
             "*://*.bilibili.tv/*"
          ],
-         "js": [ "src/content/auto-pip-blacklist.js", "src/content/site-auto-pip.js" ],
+         "js": [ "src/shared/settings.js", "src/content/auto-pip-blacklist.js", "src/content/site-auto-pip.js" ],
          "run_at": "document_idle"
       },
       {
          "matches": [ "*://*.youtube.com/*", "*://youtube.com/*" ],
-         "js": [ "src/content/youtube-auto-pip.js" ],
+         "js": [ "src/shared/settings.js", "src/content/youtube-auto-pip.js" ],
          "run_at": "document_idle"
       }
    ],

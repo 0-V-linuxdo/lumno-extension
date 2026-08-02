@@ -253,6 +253,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const storageRuntime = overlayRuntime.getStorageArea(chrome);
   const storageArea = storageRuntime.area;
   const storageAreaName = storageRuntime.name;
+  function isPrimaryStorageAreaName(areaName) {
+    return typeof storageRuntime.isActiveAreaName === 'function'
+      ? storageRuntime.isActiveAreaName(areaName)
+      : Boolean(storageAreaName) && areaName === storageAreaName;
+  }
   const localStorageArea = chrome && chrome.storage && chrome.storage.local
     ? chrome.storage.local
     : storageArea;
@@ -3604,7 +3609,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     });
     overlayThemeStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[THEME_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[THEME_STORAGE_KEY]) {
         return;
       }
       applyOverlayTheme(changes[THEME_STORAGE_KEY].newValue || 'system');
@@ -3612,7 +3617,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     chrome.storage.onChanged.addListener(overlayThemeStorageListener);
 
     overlayLanguageStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName) {
+      if (!isPrimaryStorageAreaName(areaName)) {
         return;
       }
       if (changes[LANGUAGE_STORAGE_KEY]) {
@@ -3637,7 +3642,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       refreshOverlaySuggestionsFromLastResponse
     );
     overlaySearchEngineStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
         return;
       }
       const nextValue = changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY].newValue;
@@ -3750,7 +3755,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
     loadOverlaySearchBlacklistItems(refreshOverlaySuggestionsFromLastResponse);
     overlaySearchResultPriorityStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY]) {
         return;
       }
       overlaySearchResultPriorityMode = normalizeSearchResultPriority(changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY].newValue);
@@ -3760,7 +3765,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     chrome.storage.onChanged.addListener(overlaySearchResultPriorityStorageListener);
     overlaySearchResultSourceTypesStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]) {
         return;
       }
       enabledSearchResultSourceTypes = normalizeEnabledSearchResultSourceTypes(
@@ -3776,7 +3781,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     chrome.storage.onChanged.addListener(overlaySearchResultSourceTypesStorageListener);
     overlaySearchBlacklistStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
         return;
       }
       overlaySearchBlacklistItems = normalizeOverlaySearchBlacklistItems(
@@ -3804,7 +3809,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlayFaviconEnhancedFetchStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || (
+      if (!isPrimaryStorageAreaName(areaName) || (
         !changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] &&
         !changes[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY]
       )) {
@@ -3838,7 +3843,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlayOpenTabsDefaultVisibleStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]) {
         return;
       }
       const rawValue = changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY].newValue;
@@ -3867,7 +3872,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlayDocumentPipStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY]) {
         return;
       }
       documentPipEnabled = changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY].newValue === true;
@@ -3883,7 +3888,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlayTabPriorityStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         return;
       }
       overlayTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
@@ -3899,7 +3904,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlaySizeStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[OVERLAY_SIZE_MODE_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_SIZE_MODE_STORAGE_KEY]) {
         return;
       }
       overlaySizeMode = normalizeOverlaySizeMode(changes[OVERLAY_SIZE_MODE_STORAGE_KEY].newValue);
@@ -3912,7 +3917,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     overlayTabScoreDebugStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName || !changes[TAB_RANK_SCORE_DEBUG_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[TAB_RANK_SCORE_DEBUG_STORAGE_KEY]) {
         return;
       }
       overlayTabScoreDebugEnabled = normalizeTabRankScoreDebugMode(changes[TAB_RANK_SCORE_DEBUG_STORAGE_KEY].newValue);
@@ -5436,7 +5441,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     getSiteSearchProviders();
 
     siteSearchStorageListener = (changes, areaName) => {
-      if (!storageAreaName || areaName !== storageAreaName ||
+      if (!isPrimaryStorageAreaName(areaName) ||
           (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY])) {
         return;
       }

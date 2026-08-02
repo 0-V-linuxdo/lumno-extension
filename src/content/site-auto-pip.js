@@ -45,6 +45,10 @@
 
   const host = String(location.hostname || "").toLowerCase();
   const AUTO_PIP_ENABLED_STORAGE_KEY = "_x_extension_auto_pip_enabled_2026_unique_";
+  const providerStorageRuntime = globalThis.LumnoSettings &&
+    typeof globalThis.LumnoSettings.createProviderStorageRuntime === "function"
+    ? globalThis.LumnoSettings.createProviderStorageRuntime(chrome)
+    : null;
   let autoPipEnabled = false;
   function normalizeAutoPipEnabled(value) {
     return value !== false;
@@ -120,7 +124,9 @@
     if (!chrome || !chrome.storage) {
       return;
     }
-    const storageArea = chrome.storage.sync || chrome.storage.local;
+    const storageArea = providerStorageRuntime
+      ? providerStorageRuntime.area
+      : (chrome.storage.sync || chrome.storage.local);
     if (!storageArea || typeof storageArea.get !== "function") {
       return;
     }
@@ -135,7 +141,10 @@
     if (!chrome.storage.onChanged || typeof chrome.storage.onChanged.addListener !== "function") {
       return;
     }
-    chrome.storage.onChanged.addListener((changes) => {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (providerStorageRuntime && !providerStorageRuntime.isActiveAreaName(areaName)) {
+        return;
+      }
       if (!changes || !changes[AUTO_PIP_ENABLED_STORAGE_KEY]) {
         return;
       }

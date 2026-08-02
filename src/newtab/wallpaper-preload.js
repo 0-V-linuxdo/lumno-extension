@@ -3,6 +3,10 @@
   const PRELOAD_STORAGE_VERSION = 3;
   const FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
   const FAVICON_PRELOAD_STORAGE_KEY = '_x_extension_newtab_favicon_preload_2026_unique_';
+  const providerStorageRuntime = globalThis.LumnoSettings &&
+    typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
+    ? globalThis.LumnoSettings.createProviderStorageRuntime(window.chrome)
+    : null;
   const WALLPAPER_PATH_PATTERN = /^(?:assets\/wallpapers|output\/imagegen)\/[-.\w]+\.webp$/;
   const FAVICON_OPTIONS = {
     default: {
@@ -140,7 +144,9 @@
       applyFaviconId(cachedId);
     }
     try {
-      const storage = window.chrome && window.chrome.storage && window.chrome.storage.sync;
+      const storage = providerStorageRuntime
+        ? providerStorageRuntime.area
+        : (window.chrome && window.chrome.storage && window.chrome.storage.sync);
       if (!storage || typeof storage.get !== 'function') {
         return;
       }

@@ -16,6 +16,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function(schema, state, repositoryApi) {
   'use strict';
 
+  const RETRY_BASE_MS = 30000;
+  const RETRY_MAX_MS = 15 * 60 * 1000;
+
   function createUuid(cryptoApi) {
     const api = cryptoApi || (typeof crypto !== 'undefined' ? crypto : null);
     if (api && typeof api.randomUUID === 'function') {
@@ -33,6 +36,15 @@
         ? [[key, number]]
         : [];
     }));
+  }
+
+  function mergeConflicts(existing, incoming) {
+    const byKey = new Map();
+    [...(Array.isArray(existing) ? existing : []), ...(Array.isArray(incoming) ? incoming : [])]
+      .forEach((item) => {
+        if (item && schema.isSyncKey(item.key)) byKey.set(item.key, item);
+      });
+    return Array.from(byKey.values());
   }
 
   function createRuntime(options) {
@@ -128,6 +140,7 @@
       const accepted = Array.isArray(response && response.accepted) ? response.accepted : [];
       const conflicts = Array.isArray(response && response.conflicts) ? response.conflicts : [];
       const acceptedIds = accepted.map((item) => item && item.operation_id).filter(Boolean);
+      const conflictIds = conflicts.map((item) => item && item.operation_id).filter(Boolean);
       const nextVersions = { ...current.versions };
       let cursor = current.cursor;
       accepted.forEach((item) => {
@@ -136,13 +149,46 @@
           cursor = Math.max(cursor, Number(item.change_id) || 0);
         }
       });
+      const outboxById = new Map(current.outbox.map((item) => [item.operation_id, item]));
+      const normalizedConflicts = [];
+      const remoteUpdates = {};
+      const remoteRemovals = [];
+      conflicts.forEach((item) => {
+        if (!item || !schema.isSyncKey(item.key)) return;
+        const operation = outboxById.get(item.operation_id);
+        const remoteDeleted = Boolean(item.deleted_at || item.deleted === true);
+        const remoteVersion = Math.max(0, Number(item.version) || 0);
+        const changeId = Math.max(0, Number(item.change_id) || 0);
+        normalizedConflicts.push({
+          key: item.key,
+          operation_id: String(item.operation_id || ''),
+          local_value: operation && operation.deleted !== true ? operation.value : null,
+          local_deleted: Boolean(operation && operation.deleted === true),
+          remote_value: remoteDeleted ? null : item.value,
+          remote_deleted: remoteDeleted,
+          remote_version: remoteVersion,
+          change_id: changeId,
+          detected_at: now(),
+          status: 'pending'
+        });
+        nextVersions[item.key] = remoteVersion;
+        cursor = Math.max(cursor, changeId);
+        if (remoteDeleted) remoteRemovals.push(item.key);
+        else remoteUpdates[item.key] = item.value;
+      });
+      if (Object.keys(remoteUpdates).length > 0) await repository.set(remoteUpdates);
+      if (remoteRemovals.length > 0) await repository.remove(remoteRemovals);
+      const nextConflicts = mergeConflicts(current.conflicts, normalizedConflicts);
       await writeLocal({
-        [schema.CLOUD_LOCAL_KEYS.outbox]: state.acknowledgeOperations(current.outbox, acceptedIds),
+        [schema.CLOUD_LOCAL_KEYS.outbox]: state.acknowledgeOperations(
+          current.outbox,
+          [...acceptedIds, ...conflictIds]
+        ),
         [schema.CLOUD_LOCAL_KEYS.versions]: nextVersions,
         [schema.CLOUD_LOCAL_KEYS.pullCursor]: cursor,
-        [schema.CLOUD_LOCAL_KEYS.conflicts]: conflicts,
+        [schema.CLOUD_LOCAL_KEYS.conflicts]: nextConflicts,
         [schema.CLOUD_LOCAL_KEYS.status]: {
-          state: conflicts.length > 0 ? 'conflict' : 'ready',
+          state: nextConflicts.length > 0 ? 'conflict' : 'ready',
           last_push_at: now(),
           last_error: ''
         }
@@ -150,7 +196,7 @@
       return {
         ok: true,
         pushed: accepted.length,
-        conflicts
+        conflicts: nextConflicts
       };
     }
 
@@ -174,7 +220,11 @@
       if (applied.removals.length > 0) {
         await repository.remove(applied.removals);
       }
-      const conflicts = [...current.conflicts, ...applied.conflicts];
+      const conflicts = mergeConflicts(current.conflicts, applied.conflicts.map((item) => ({
+        ...item,
+        detected_at: now(),
+        status: 'pending'
+      })));
       await writeLocal({
         [schema.CLOUD_LOCAL_KEYS.pullCursor]: Math.max(current.cursor, applied.cursor),
         [schema.CLOUD_LOCAL_KEYS.versions]: { ...current.versions, ...applied.versions },
@@ -193,20 +243,41 @@
       };
     }
 
-    function syncNow() {
+    function syncNow(optionsArg) {
       if (activeSync) {
         return activeSync;
       }
+      const syncOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
       activeSync = (async () => {
         try {
+          const before = await getState();
+          const nextRetryAt = Number(before.status.next_retry_at) || 0;
+          if (syncOptions.force !== true && nextRetryAt > now()) {
+            return { skipped: true, reason: 'backoff', retry_at: nextRetryAt };
+          }
           const pushed = await flush();
           const pulled = await pull();
-          return { ok: true, pushed, pulled };
-        } catch (error) {
+          const completed = await getState();
           await writeLocal({
             [schema.CLOUD_LOCAL_KEYS.status]: {
+              ...completed.status,
+              failure_count: 0,
+              next_retry_at: 0,
+              last_error: ''
+            }
+          });
+          return { ok: true, pushed, pulled };
+        } catch (error) {
+          const failed = await getState();
+          const failureCount = Math.min(10, (Number(failed.status.failure_count) || 0) + 1);
+          const retryDelay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * (2 ** (failureCount - 1)));
+          await writeLocal({
+            [schema.CLOUD_LOCAL_KEYS.status]: {
+              ...failed.status,
               state: 'error',
               last_error_at: now(),
+              failure_count: failureCount,
+              next_retry_at: now() + retryDelay,
               last_error: String(error && error.message ? error.message : error || 'Unknown sync error').slice(0, 240)
             }
           });
@@ -228,6 +299,36 @@
       return repository.leaveCloudMode(options);
     }
 
+    async function resolveConflict(key, resolution) {
+      const normalizedKey = String(key || '');
+      const choice = String(resolution || '').toLowerCase();
+      const current = await getState();
+      const conflict = current.conflicts.find((item) => item && item.key === normalizedKey);
+      if (!conflict || (choice !== 'cloud' && choice !== 'device')) {
+        return { ok: false, error: 'invalid_conflict_resolution' };
+      }
+      const remaining = current.conflicts.filter((item) => item !== conflict);
+      await writeLocal({
+        [schema.CLOUD_LOCAL_KEYS.conflicts]: remaining,
+        [schema.CLOUD_LOCAL_KEYS.status]: {
+          ...current.status,
+          state: remaining.length > 0 ? 'conflict' : 'ready'
+        }
+      });
+      if (choice === 'device') {
+        const outbox = state.enqueueOperation(current.outbox, {
+          operation_id: uuid(),
+          key: normalizedKey,
+          value: conflict.local_value,
+          deleted: conflict.local_deleted === true,
+          base_version: Number(conflict.remote_version) || 0,
+          enqueued_at: now()
+        });
+        await writeLocal({ [schema.CLOUD_LOCAL_KEYS.outbox]: outbox });
+      }
+      return { ok: true, resolution: choice, key: normalizedKey };
+    }
+
     return Object.freeze({
       repository,
       ensureDevice,
@@ -237,13 +338,17 @@
       pull,
       syncNow,
       enableCloudMode,
-      disableCloudMode
+      disableCloudMode,
+      resolveConflict
     });
   }
 
   return Object.freeze({
     createUuid,
     normalizeVersions,
+    mergeConflicts,
+    RETRY_BASE_MS,
+    RETRY_MAX_MS,
     createRuntime
   });
 });

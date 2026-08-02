@@ -247,8 +247,15 @@
 
     async function runSyncAll() {
       if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
-      let remoteAssets = (await transport.listAssets()).slice(0, MAX_ASSETS);
-      let remoteByClientId = new Map(remoteAssets.map((asset) => [asset.client_asset_id, asset]));
+      let allRemoteAssets = await transport.listAssets();
+      let remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
+      let remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
+      let deleted = 0;
+      for (const tombstone of allRemoteAssets.filter((asset) => asset.deleted_at)) {
+        if (!CLIENT_ID_PATTERN.test(String(tombstone.client_asset_id || ''))) continue;
+        await store.remove(tombstone.client_asset_id);
+        deleted += 1;
+      }
       const localRecords = (await store.readAll())
         .filter((record) => CLIENT_ID_PATTERN.test(String(record && record.id || '')))
         .slice(0, MAX_ASSETS);
@@ -261,8 +268,9 @@
         }
       }
       if (uploaded > 0) {
-        remoteAssets = (await transport.listAssets()).slice(0, MAX_ASSETS);
-        remoteByClientId = new Map(remoteAssets.map((asset) => [asset.client_asset_id, asset]));
+        allRemoteAssets = await transport.listAssets();
+        remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
+        remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
       }
       const refreshedLocal = new Map((await store.readAll()).map((record) => [record.id, record]));
       let downloaded = 0;
@@ -275,7 +283,7 @@
         await downloadAsset(asset);
         downloaded += 1;
       }
-      return { ok: true, uploaded, downloaded };
+      return { ok: true, uploaded, downloaded, deleted };
     }
 
     function syncAll() {
@@ -287,7 +295,9 @@
     async function deleteRecord(clientAssetId) {
       if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
       if (!CLIENT_ID_PATTERN.test(String(clientAssetId || ''))) throw new Error('invalid_wallpaper_id');
-      return transport.deleteAsset(clientAssetId);
+      const result = await transport.deleteAsset(clientAssetId);
+      await store.remove(clientAssetId);
+      return result;
     }
 
     return Object.freeze({

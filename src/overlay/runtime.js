@@ -33,6 +33,10 @@
   }
 
   function getStorageArea(chromeApi) {
+    const settingsApi = typeof globalThis !== 'undefined' ? globalThis.LumnoSettings : null;
+    if (settingsApi && typeof settingsApi.createProviderStorageRuntime === 'function') {
+      return settingsApi.createProviderStorageRuntime(chromeApi);
+    }
     const storage = chromeApi && chromeApi.storage ? chromeApi.storage : null;
     const area = storage && storage.sync
       ? storage.sync

@@ -163,4 +163,51 @@ assert.deepStrictEqual(
   'global theme writes should normalize invalid theme modes to system'
 );
 
-console.log('settings tests passed');
+async function testProviderStorageRuntime() {
+  const listeners = [];
+  function createArea(initial) {
+    const values = { ...(initial || {}) };
+    return {
+      values,
+      get(keys, callback) {
+        const result = Object.fromEntries((Array.isArray(keys) ? keys : Object.keys(values))
+          .flatMap((key) => Object.prototype.hasOwnProperty.call(values, key) ? [[key, values[key]]] : []));
+        callback(result);
+      },
+      set(payload, callback) { Object.assign(values, payload); if (callback) callback(); },
+      remove(keys, callback) {
+        (Array.isArray(keys) ? keys : [keys]).forEach((key) => delete values[key]);
+        if (callback) callback();
+      },
+      clear(callback) { Object.keys(values).forEach((key) => delete values[key]); if (callback) callback(); }
+    };
+  }
+  const sync = createArea({});
+  const local = createArea({});
+  const chromeApi = {
+    storage: {
+      sync,
+      local,
+      onChanged: { addListener(listener) { listeners.push(listener); } }
+    }
+  };
+  const runtime = settings.createProviderStorageRuntime(chromeApi);
+  await runtime.ready;
+  await runtime.area.set({ theme: 'chrome' });
+  assert.strictEqual(sync.values.theme, 'chrome');
+  local.values[settings.CLOUD_SYNC_MODE_STORAGE_KEY] = 'cloud';
+  listeners.forEach((listener) => listener({
+    [settings.CLOUD_SYNC_MODE_STORAGE_KEY]: { newValue: 'cloud' }
+  }, 'local'));
+  await runtime.area.set({ theme: 'lumno' });
+  assert.strictEqual(local.values.theme, 'lumno');
+  assert.strictEqual(sync.values.theme, 'chrome', 'inactive Chrome Sync must not receive Lumno writes');
+  assert.strictEqual(runtime.isActiveAreaName('local'), true);
+}
+
+testProviderStorageRuntime().then(() => {
+  console.log('settings tests passed');
+}).catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
