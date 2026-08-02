@@ -267,6 +267,18 @@
   display: none !important;
 }
 
+.x-lumno-search-input-mode__prefix-icon-frame::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border: 0.5px solid currentColor !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+  opacity: 0.18 !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
 .x-lumno-search-input-mode__prefix:focus-visible {
   outline: none !important;
 }
@@ -620,7 +632,7 @@
   min-height: 86px !important;
   padding: 6px 4px !important;
   gap: 4px !important;
-  border: 1px solid transparent !important;
+  border: 2px solid transparent !important;
   border-radius: 10px !important;
   box-sizing: border-box !important;
   color: var(--x-nt-text, var(--x-ov-text, #111827)) !important;
@@ -632,13 +644,7 @@
 
 .x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"]),
 .x-lumno-search-input-mode__menu-item:focus-visible:not([aria-checked="true"]) {
-  background: var(
-    --x-lumno-search-mode-item-theme-bg,
-    var(
-      --x-lumno-search-mode-selected-bg,
-      color-mix(in srgb, var(--x-ext-input-caret, #2563eb) 8%, transparent)
-    )
-  ) !important;
+  background: transparent !important;
   border-color: transparent !important;
   outline: none !important;
 }
@@ -663,7 +669,14 @@
     --x-lumno-search-mode-selected-bg,
     color-mix(in srgb, var(--x-ext-input-caret, #2563eb) 8%, transparent)
   ) !important;
-  border-color: transparent !important;
+  border-color: color-mix(
+    in srgb,
+    var(
+      --x-lumno-search-mode-item-focus-ring,
+      var(--x-lumno-search-mode-accent, var(--x-ext-input-caret, #2563eb))
+    ) 32%,
+    transparent
+  ) !important;
   color: var(--x-nt-text, var(--x-ov-text, #0f172a)) !important;
 }
 
@@ -685,10 +698,7 @@
   height: 52px !important;
   flex: 0 0 52px !important;
   border-radius: 12px !important;
-  background: var(
-    --x-lumno-search-mode-icon-bg,
-    color-mix(in srgb, var(--x-ext-input-caret, #2563eb) 18%, white)
-  ) !important;
+  background: transparent !important;
   color: var(
     --x-lumno-search-mode-icon-color,
     var(--x-nt-text, var(--x-ov-text, #334155))
@@ -700,16 +710,6 @@
   mask-size: 100% 100% !important;
   -webkit-mask-repeat: no-repeat !important;
   mask-repeat: no-repeat !important;
-}
-
-.x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"])
-  .x-lumno-search-input-mode__menu-icon,
-.x-lumno-search-input-mode__menu-item:focus-visible:not([aria-checked="true"])
-  .x-lumno-search-input-mode__menu-icon,
-.x-lumno-search-input-mode__menu-item[aria-checked="true"]
-  .x-lumno-search-input-mode__menu-icon {
-  background: transparent !important;
-  box-shadow: none !important;
 }
 
 .x-lumno-search-input-mode__menu-favicon-mask {

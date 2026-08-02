@@ -16,52 +16,52 @@
   const GOOGLE_BRAND_ICON_URL =
     'https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png';
   const SITE_SEARCH_PINNED_ICON_ASSETS = Object.freeze({
-    yt: 'assets/images/site-search/youtube.svg',
-    bb: 'assets/images/site-search/bilibili.svg',
-    gh: 'assets/images/site-search/github.svg',
-    sf: 'assets/images/site-search/stackoverflow.svg',
-    mdn: 'assets/images/site-search/mdn.svg',
-    npm: 'assets/images/site-search/npm.svg',
-    hf: 'assets/images/site-search/huggingface.png',
-    gs: 'assets/images/site-search/google-scholar.png',
-    ss: 'assets/images/site-search/semantic-scholar.svg',
-    maps: 'assets/images/site-search/google-maps.png',
-    gpt: 'assets/images/site-search/openai.svg',
-    gm: 'assets/images/site-search/gemini.svg',
-    dbai: 'assets/images/site-search/doubao-mascot.png',
-    qw: 'assets/images/site-search/qwen.svg',
-    yb: 'assets/images/site-search/yuanbao.svg',
-    mx: 'assets/images/site-search/minimax.svg',
-    ds: 'assets/images/site-search/deepseek.svg',
-    kimi: 'assets/images/site-search/kimi.svg',
-    pplx: 'assets/images/site-search/perplexity.svg',
-    metaso: 'assets/images/site-search/metaso.svg',
-    felo: 'assets/images/site-search/felo.svg',
-    bd: 'assets/images/site-search/baidu.svg',
-    bi: 'assets/images/site-search/bing.svg',
-    gg: 'assets/images/site-search/google.svg',
-    ddg: 'assets/images/site-search/duckduckgo.svg',
-    br: 'assets/images/site-search/brave.svg',
-    eco: 'assets/images/site-search/ecosia.svg',
-    sg: 'assets/images/site-search/sogou.svg',
-    so360: 'assets/images/site-search/360-search.svg',
-    yh: 'assets/images/site-search/yahoo.svg',
-    yx: 'assets/images/site-search/yandex.svg',
-    sm: 'assets/images/site-search/shenma.svg',
-    zh: 'assets/images/site-search/zhihu.svg',
-    db: 'assets/images/site-search/douban.svg',
-    jj: 'assets/images/site-search/juejin.svg',
-    wx: 'assets/images/site-search/sogou.svg',
-    tb: 'assets/images/site-search/taobao.png',
-    tm: 'assets/images/site-search/tmall.png',
-    tw: 'assets/images/site-search/x.svg',
-    rd: 'assets/images/site-search/reddit.png',
-    wb: 'assets/images/site-search/weibo.svg',
-    xhs: 'assets/images/site-search/xiaohongshu.png',
-    dy: 'assets/images/site-search/douyin.svg',
-    jd: 'assets/images/site-search/jd.svg',
-    wk: 'assets/images/site-search/wikipedia.svg',
-    zw: 'assets/images/site-search/wikipedia.svg'
+    yt: 'assets/images/site-search/tile-yt.png',
+    bb: 'assets/images/site-search/tile-bb.png',
+    gh: 'assets/images/site-search/tile-gh.png',
+    sf: 'assets/images/site-search/tile-sf.png',
+    mdn: 'assets/images/site-search/tile-mdn.png',
+    npm: 'assets/images/site-search/tile-npm.png',
+    hf: 'assets/images/site-search/tile-hf.png',
+    gs: 'assets/images/site-search/tile-gs.png',
+    ss: 'assets/images/site-search/tile-ss.png',
+    maps: 'assets/images/site-search/tile-maps.png',
+    gpt: 'assets/images/site-search/tile-gpt.png',
+    gm: 'assets/images/site-search/tile-gm.png',
+    dbai: 'assets/images/site-search/tile-dbai.png',
+    qw: 'assets/images/site-search/tile-qw.png',
+    yb: 'assets/images/site-search/tile-yb.png',
+    mx: 'assets/images/site-search/tile-mx.png',
+    ds: 'assets/images/site-search/tile-ds.png',
+    kimi: 'assets/images/site-search/tile-kimi.png',
+    pplx: 'assets/images/site-search/tile-pplx.png',
+    metaso: 'assets/images/site-search/tile-metaso.png',
+    felo: 'assets/images/site-search/tile-felo.png',
+    bd: 'assets/images/site-search/tile-bd.png',
+    bi: 'assets/images/site-search/tile-bi.png',
+    gg: 'assets/images/site-search/tile-gg.png',
+    ddg: 'assets/images/site-search/tile-ddg.png',
+    br: 'assets/images/site-search/tile-br.png',
+    eco: 'assets/images/site-search/tile-eco.png',
+    sg: 'assets/images/site-search/tile-sg.png',
+    so360: 'assets/images/site-search/tile-so360.png',
+    yh: 'assets/images/site-search/tile-yh.png',
+    yx: 'assets/images/site-search/tile-yx.png',
+    sm: 'assets/images/site-search/tile-sm.png',
+    zh: 'assets/images/site-search/tile-zh.png',
+    db: 'assets/images/site-search/tile-db.png',
+    jj: 'assets/images/site-search/tile-jj.png',
+    wx: 'assets/images/site-search/tile-wx.png',
+    tb: 'assets/images/site-search/tile-tb.png',
+    tm: 'assets/images/site-search/tile-tm.png',
+    tw: 'assets/images/site-search/tile-tw.png',
+    rd: 'assets/images/site-search/tile-rd.png',
+    wb: 'assets/images/site-search/tile-wb.png',
+    xhs: 'assets/images/site-search/tile-xhs.png',
+    dy: 'assets/images/site-search/tile-dy.png',
+    jd: 'assets/images/site-search/tile-jd.png',
+    wk: 'assets/images/site-search/tile-wk.png',
+    zw: 'assets/images/site-search/tile-zw.png'
   });
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
   const CACHE_MAX_ENTRIES = 24;
@@ -123,6 +123,51 @@
     return String(provider && (provider.icon || provider.iconUrl) || '').trim();
   }
 
+  function getSiteSearchPinnedIconAssetPath(provider) {
+    const providerKey = String(provider && provider.key || '').trim().toLowerCase();
+    return SITE_SEARCH_PINNED_ICON_ASSETS[providerKey] || '';
+  }
+
+  function getSiteSearchIconAssetPath(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return '';
+    }
+    try {
+      return new URL(raw, 'https://lumno.invalid/').pathname.replace(/^\/+/, '');
+    } catch (error) {
+      return raw.split(/[?#]/, 1)[0].replace(/^\/+/, '');
+    }
+  }
+
+  function isSiteSearchPinnedIconAssetUrl(value) {
+    const assetPath = getSiteSearchIconAssetPath(value);
+    return Boolean(
+      assetPath && Object.values(SITE_SEARCH_PINNED_ICON_ASSETS).includes(assetPath)
+    );
+  }
+
+  function shouldHydrateSiteSearchProviderIcon(value) {
+    const iconUrl = String(value || '').trim();
+    return Boolean(
+      iconUrl &&
+      !iconUrl.startsWith('data:') &&
+      !isSiteSearchPinnedIconAssetUrl(iconUrl)
+    );
+  }
+
+  function createSiteSearchProviderIconHydrator(attachFaviconData) {
+    const attach = typeof attachFaviconData === 'function' ? attachFaviconData : null;
+    return function hydrateSiteSearchProviderIcon(icon, iconUrl, iconHost) {
+      const resolvedIconUrl = String(iconUrl || '').trim();
+      if (!attach || !shouldHydrateSiteSearchProviderIcon(resolvedIconUrl)) {
+        return false;
+      }
+      attach(icon, resolvedIconUrl, iconHost);
+      return true;
+    };
+  }
+
   function getPinnedSiteSearchProviderIcon(provider) {
     const explicitIcon = getSiteSearchProviderExplicitIcon(provider);
     if (!explicitIcon) {
@@ -135,8 +180,7 @@
   }
 
   function getSiteSearchProviderIcon(cacheMap, provider, nowValue, options) {
-    const providerKey = String(provider && provider.key || '').trim().toLowerCase();
-    const pinnedAssetPath = SITE_SEARCH_PINNED_ICON_ASSETS[providerKey] || '';
+    const pinnedAssetPath = getSiteSearchPinnedIconAssetPath(provider);
     const resolveAssetUrl = options && typeof options.resolveAssetUrl === 'function'
       ? options.resolveAssetUrl
       : null;
@@ -743,6 +787,10 @@
     getCacheKey,
     getSiteSearchProviderPageUrl,
     getSiteSearchProviderExplicitIcon,
+    getSiteSearchPinnedIconAssetPath,
+    isSiteSearchPinnedIconAssetUrl,
+    shouldHydrateSiteSearchProviderIcon,
+    createSiteSearchProviderIconHydrator,
     getPinnedSiteSearchProviderIcon,
     getSiteSearchProviderIcon,
     normalizePageUrl,

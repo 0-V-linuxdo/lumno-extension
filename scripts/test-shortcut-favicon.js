@@ -304,6 +304,55 @@ function testCanonicalProviderResolution() {
   const youtubePageUrl = shortcutFavicon.getSiteSearchProviderPageUrl(youtubeProvider);
   const googleDataUrl = 'data:image/png;base64,Z29vZ2xl';
   const youtubeDataUrl = 'data:image/png;base64,eW91dHViZQ==';
+  assert.strictEqual(
+    shortcutFavicon.getSiteSearchPinnedIconAssetPath(youtubeProvider),
+    'assets/images/site-search/tile-yt.png',
+    'the shared runtime should own the canonical built-in icon asset path'
+  );
+  assert.strictEqual(
+    shortcutFavicon.isSiteSearchPinnedIconAssetUrl(
+      'chrome-extension://lumno/assets/images/site-search/tile-yt.png'
+    ),
+    true,
+    'all surfaces should identify a resolved extension URL as the same bundled tile'
+  );
+  assert.strictEqual(
+    shortcutFavicon.shouldHydrateSiteSearchProviderIcon(
+      'chrome-extension://lumno/assets/images/site-search/tile-yt.png'
+    ),
+    false,
+    'bundled tiles should render directly without an additional favicon data request'
+  );
+  assert.strictEqual(
+    shortcutFavicon.shouldHydrateSiteSearchProviderIcon(
+      'https://custom.example/favicon.ico'
+    ),
+    true,
+    'custom remote provider icons should retain the shared hydration fallback'
+  );
+  const hydratedIcons = [];
+  const sharedHydrator = shortcutFavicon.createSiteSearchProviderIconHydrator(
+    (...args) => hydratedIcons.push(args)
+  );
+  assert.strictEqual(
+    sharedHydrator(
+      {},
+      'chrome-extension://lumno/assets/images/site-search/tile-yt.png',
+      'youtube.com'
+    ),
+    false,
+    'the shared loader should leave a bundled tile on the synchronous direct path'
+  );
+  const customIcon = {};
+  assert.strictEqual(
+    sharedHydrator(customIcon, 'https://custom.example/favicon.ico', 'custom.example'),
+    true,
+    'the shared loader should hydrate remote custom-provider artwork'
+  );
+  assert.deepStrictEqual(
+    hydratedIcons[0],
+    [customIcon, 'https://custom.example/favicon.ico', 'custom.example']
+  );
   const wrongGoogleCache = shortcutFavicon.setCachedIcon(
     {},
     googlePageUrl,
@@ -362,18 +411,18 @@ function testCanonicalProviderResolution() {
   );
 
   [
-    ['yt', youtubeProvider, 'youtube.svg'],
-    ['bd', { key: 'bd', template: 'https://www.baidu.com/s?wd={query}' }, 'baidu.svg'],
-    ['bi', { key: 'bi', template: 'https://www.bing.com/search?q={query}' }, 'bing.svg'],
-    ['gg', googleProvider, 'google.svg'],
-    ['zh', { key: 'zh', template: 'https://www.zhihu.com/search?q={query}' }, 'zhihu.svg'],
-    ['db', { key: 'db', template: 'https://www.douban.com/search?q={query}' }, 'douban.svg'],
-    ['wx', { key: 'wx', template: 'https://weixin.sogou.com/weixin?query={query}' }, 'sogou.svg'],
-    ['tb', { key: 'tb', template: 'https://s.taobao.com/search?q={query}' }, 'taobao.png'],
-    ['rd', { key: 'rd', template: 'https://www.reddit.com/search/?q={query}' }, 'reddit.png'],
-    ['wb', { key: 'wb', template: 'https://s.weibo.com/weibo?q={query}' }, 'weibo.svg'],
-    ['dy', { key: 'dy', template: 'https://www.douyin.com/search/{query}' }, 'douyin.svg'],
-    ['jd', { key: 'jd', template: 'https://search.jd.com/Search?keyword={query}' }, 'jd.svg']
+    ['yt', youtubeProvider, 'tile-yt.png'],
+    ['bd', { key: 'bd', template: 'https://www.baidu.com/s?wd={query}' }, 'tile-bd.png'],
+    ['bi', { key: 'bi', template: 'https://www.bing.com/search?q={query}' }, 'tile-bi.png'],
+    ['gg', googleProvider, 'tile-gg.png'],
+    ['zh', { key: 'zh', template: 'https://www.zhihu.com/search?q={query}' }, 'tile-zh.png'],
+    ['db', { key: 'db', template: 'https://www.douban.com/search?q={query}' }, 'tile-db.png'],
+    ['wx', { key: 'wx', template: 'https://weixin.sogou.com/weixin?query={query}' }, 'tile-wx.png'],
+    ['tb', { key: 'tb', template: 'https://s.taobao.com/search?q={query}' }, 'tile-tb.png'],
+    ['rd', { key: 'rd', template: 'https://www.reddit.com/search/?q={query}' }, 'tile-rd.png'],
+    ['wb', { key: 'wb', template: 'https://s.weibo.com/weibo?q={query}' }, 'tile-wb.png'],
+    ['dy', { key: 'dy', template: 'https://www.douyin.com/search/{query}' }, 'tile-dy.png'],
+    ['jd', { key: 'jd', template: 'https://search.jd.com/Search?keyword={query}' }, 'tile-jd.png']
   ].forEach(([, provider, assetName]) => {
     const assetPath = path.join(__dirname, '..', 'assets/images/site-search', assetName);
     assert.ok(fs.existsSync(assetPath), `${assetName} should exist as a bundled provider icon`);

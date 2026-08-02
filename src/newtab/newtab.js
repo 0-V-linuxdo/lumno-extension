@@ -12710,26 +12710,10 @@
     return true;
   }
 
-  function isBundledInputModeProviderIcon(iconUrl) {
-    try {
-      const resolvedIconUrl = new URL(String(iconUrl || ''), window.location.href);
-      const pinnedIconAssets = SHORTCUT_FAVICON.SITE_SEARCH_PINNED_ICON_ASSETS || {};
-      return Object.values(pinnedIconAssets).some((assetPath) => {
-        const bundledIconUrl = new URL(getExtensionResourceUrl(assetPath));
-        return resolvedIconUrl.href === bundledIconUrl.href;
-      });
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function attachInputModeFaviconData(icon, iconUrl, iconHost) {
-    const resolvedIconUrl = String(iconUrl || '').trim();
-    if (!resolvedIconUrl || isBundledInputModeProviderIcon(resolvedIconUrl)) {
-      return;
-    }
-    attachFaviconData(icon, resolvedIconUrl, iconHost);
-  }
+  const attachInputModeFaviconData =
+    typeof SHORTCUT_FAVICON.createSiteSearchProviderIconHydrator === 'function'
+      ? SHORTCUT_FAVICON.createSiteSearchProviderIconHydrator(attachFaviconData)
+      : attachFaviconData;
 
   function getSiteSearchProviders() {
     if (siteSearchProvidersCache) {

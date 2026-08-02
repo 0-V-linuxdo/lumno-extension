@@ -102,13 +102,15 @@ function createModeParts() {
   const input = document.createElement('input');
   input.style.paddingLeft = '44px';
   const modePrefix = document.createElement('button');
+  const modePrefixIconFrame = document.createElement('span');
   const modePrefixIcon = document.createElement('img');
+  modePrefixIconFrame.appendChild(modePrefixIcon);
   const modePrefixGlyph = document.createElement('i');
   const modePrefixText = document.createElement('span');
   const modePrefixChevron = document.createElement('i');
   const modePrefixCurrent = document.createElement('span');
   modePrefix.append(
-    modePrefixIcon,
+    modePrefixIconFrame,
     modePrefixGlyph,
     modePrefixText,
     modePrefixCurrent,
@@ -129,6 +131,7 @@ function createModeParts() {
     modePrefixChevron,
     modePrefixCurrent,
     modePrefixGlyph,
+    modePrefixIconFrame,
     modePrefixIcon,
     modePrefixText,
     modeTabHint,
@@ -1185,14 +1188,25 @@ describe('Shared search scope menu', () => {
         '.x-lumno-search-input-mode__menu-icon[data-icon-kind="builtin"]'
       )
     );
+    const builtInItems = Array.from(
+      controller.menuElement.querySelectorAll<HTMLElement>(
+        '.x-lumno-search-input-mode__menu-item'
+      )
+    );
     expect(builtInCards).toHaveLength(4);
     expect(
       builtInCards.every((card) => (
-        card.style.getPropertyValue('--x-lumno-search-mode-icon-bg').includes(
-          'var(--x-nt-text, #111827) 9%'
-        ) &&
+        card.style.getPropertyValue('--x-lumno-search-mode-icon-bg') === '' &&
+        card.style.getPropertyValue('--x-lumno-search-mode-icon-active-bg') === '' &&
         card.style.getPropertyValue('--x-lumno-search-mode-icon-color') ===
           'var(--x-nt-text, #111827)'
+      ))
+    ).toBe(true);
+    expect(
+      builtInItems.every((item) => (
+        item.style.getPropertyValue('--x-lumno-search-mode-selected-bg').includes(
+          'var(--x-nt-text, #111827) 11%'
+        )
       ))
     ).toBe(true);
     const prefixGlyph = parts.modePrefix.querySelector<SVGSVGElement>(
@@ -1208,7 +1222,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('uses the overlay theme color for built-in SVG cards in dark mode', () => {
+  it('reserves the stronger overlay theme surface for selected built-in cards', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
@@ -1234,15 +1248,14 @@ describe('Shared search scope menu', () => {
     const menuItem = controller.menuElement.querySelector<HTMLElement>(
       '.x-lumno-search-input-mode__menu-item'
     );
-    expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')).toContain(
-      'var(--x-ov-text, #111827) 14%'
-    );
+    expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')).toBe('');
+    expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-active-bg')).toBe('');
     expect(card?.style.getPropertyValue('--x-lumno-search-mode-icon-color')).toBe(
       'var(--x-ov-text, #111827)'
     );
     expect(
-      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
-    ).toContain('var(--x-ov-text, #111827) 14%');
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-selected-bg')
+    ).toContain('var(--x-ov-text, #111827) 16%');
     expect(
       menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-focus-ring')
     ).toBe('var(--x-ov-text, #111827)');
@@ -1370,7 +1383,7 @@ describe('Shared search scope menu', () => {
     ).toBe('rgba(0, 174, 236, 0.075)');
     expect(parts.modePrefix.style.color).toBe('rgb(5, 121, 169)');
     expect(parts.modePrefix.style.height).toBe('32px');
-    expect(parts.modePrefix.style.padding).toBe('0px 10px');
+    expect(parts.modePrefix.style.padding).toBe('0px 6px');
     expect(parts.modePrefix.style.borderStyle).toBe('none');
     expect(parts.modePrefix.style.boxShadow).toBe('none');
     expect(getTestContrastRatio(
@@ -2468,7 +2481,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('clips the prefix favicon with a subtle two-pixel corner mask', () => {
+  it('renders a larger prefix favicon with a six-pixel corner mask that follows the tag', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
@@ -2481,15 +2494,20 @@ describe('Shared search scope menu', () => {
       modeId: 'siteSearch'
     });
 
-    expect(parts.modePrefixIcon.style.width).toBe('16px');
-    expect(parts.modePrefixIcon.style.height).toBe('16px');
-    expect(parts.modePrefixIcon.style.borderRadius).toBe('2px');
-    expect(parts.modePrefixIcon.style.clipPath).toBe('inset(0 round 2px)');
+    expect(parts.modePrefixIcon.style.width).toBe('20px');
+    expect(parts.modePrefixIcon.style.height).toBe('20px');
+    expect(parts.modePrefixIconFrame.style.width).toBe('20px');
+    expect(parts.modePrefixIconFrame.style.height).toBe('20px');
+    expect(parts.modePrefixIconFrame.style.borderRadius).toBe('6px');
+    expect(parts.modePrefixIconFrame.style.clipPath).toBe('inset(0 round 6px)');
+    expect(parts.modePrefixIconFrame.style.isolation).toBe('isolate');
+    expect(parts.modePrefixIcon.style.borderRadius).toBe('6px');
+    expect(parts.modePrefixIcon.style.clipPath).toBe('inset(0 round 6px)');
     expect(parts.modePrefixIcon.style.overflow).toBe('hidden');
     controller.destroy();
   });
 
-  it('reuses one provider theme result for the icon and hover card', async () => {
+  it('reuses one provider theme result for the icon and selected card', async () => {
     const parts = createModeParts();
     const getThemeForProvider = vi.fn().mockResolvedValue({
       accent: 'rgb(0, 174, 236)',
@@ -2526,20 +2544,19 @@ describe('Shared search scope menu', () => {
 
     expect(getThemeForProvider).toHaveBeenCalledTimes(1);
     expect(getThemeForProvider).toHaveBeenCalledWith({ key: 'bilibili' });
-    expect(
-      icon?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')
-    ).toBe('rgb(209, 240, 252)');
+    expect(icon?.style.getPropertyValue('--x-lumno-search-mode-icon-bg')).toBe('');
+    expect(icon?.style.getPropertyValue('--x-lumno-search-mode-icon-active-bg')).toBe('');
     expect(
       icon?.style.getPropertyValue('--x-lumno-search-mode-icon-color')
-    ).toBe('#111827');
+    ).toBe('rgb(3, 148, 203)');
     expect(
-      menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-theme-bg')
-    ).toBe('rgba(0, 174, 236, 0.075)');
+      menuItem?.style.getPropertyValue('--x-lumno-search-mode-selected-bg')
+    ).toBe('rgba(0, 174, 236, 0.14)');
     const focusRingRgb = (
       menuItem?.style.getPropertyValue('--x-lumno-search-mode-item-focus-ring') || ''
     ).match(/[0-9]+/g)?.map(Number) || [];
     expect(focusRingRgb).toHaveLength(3);
-    expect(getTestContrastRatio(focusRingRgb, [236, 249, 254]))
+    expect(getTestContrastRatio(focusRingRgb, [219, 244, 252]))
       .toBeGreaterThanOrEqual(3);
     expect(menuItem?.getAttribute('aria-label')).toBe('Bilibili');
     expect(label?.textContent).toBe('Bilibili');

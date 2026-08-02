@@ -1,6 +1,6 @@
 const assert = require('assert');
 const fs = require('fs');
-const vm = require('vm');
+const shortcutFavicon = require('../src/shared/shortcut-favicon.js');
 
 const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
 const searchInputCss = fs.readFileSync('src/shared/search-input.css', 'utf8');
@@ -32,65 +32,22 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /function isBundledInputModeProviderIcon\(iconUrl\) \{[\s\S]*?SHORTCUT_FAVICON\.SITE_SEARCH_PINNED_ICON_ASSETS[\s\S]*?Object\.values\(pinnedIconAssets\)\.some[\s\S]*?resolvedIconUrl\.href === bundledIconUrl\.href[\s\S]*?function attachInputModeFaviconData\(icon, iconUrl, iconHost\) \{[\s\S]*?isBundledInputModeProviderIcon\(resolvedIconUrl\)[\s\S]*?return;[\s\S]*?attachFaviconData\(icon, resolvedIconUrl, iconHost\);[\s\S]*?attachFaviconData: attachInputModeFaviconData/,
-  'bundled New Tab provider icons should keep their layout slot instead of entering the async favicon placeholder pipeline'
-);
-const inputModeFaviconHelperStart = newtabSource.indexOf(
-  'function isBundledInputModeProviderIcon(iconUrl)'
-);
-const inputModeFaviconHelperEnd = newtabSource.indexOf(
-  '\n\n  function getSiteSearchProviders()',
-  inputModeFaviconHelperStart
-);
-assert.ok(
-  inputModeFaviconHelperStart >= 0 && inputModeFaviconHelperEnd > inputModeFaviconHelperStart,
-  'the New Tab input-mode favicon helper should be extractable for its cold-load regression test'
-);
-const attachedInputModeFavicons = [];
-const inputModeFaviconContext = {
-  SHORTCUT_FAVICON: {
-    SITE_SEARCH_PINNED_ICON_ASSETS: {
-      gg: 'assets/images/site-search/google.svg'
-    }
-  },
-  URL,
-  window: {
-    location: {
-      href: 'chrome-extension://lumno/src/newtab/newtab.html'
-    }
-  },
-  getExtensionResourceUrl(resourcePath) {
-    return `chrome-extension://lumno/${resourcePath}`;
-  },
-  attachFaviconData(...args) {
-    attachedInputModeFavicons.push(args);
-  }
-};
-vm.runInNewContext(
-  `${newtabSource.slice(inputModeFaviconHelperStart, inputModeFaviconHelperEnd)}\n` +
-    'this.attachInputModeFaviconDataForTest = attachInputModeFaviconData;',
-  inputModeFaviconContext
-);
-const providerIconElement = {};
-inputModeFaviconContext.attachInputModeFaviconDataForTest(
-  providerIconElement,
-  'chrome-extension://lumno/assets/images/site-search/google.svg',
-  'google.com'
+  /const attachInputModeFaviconData =[\s\S]*?SHORTCUT_FAVICON\.createSiteSearchProviderIconHydrator\(attachFaviconData\)[\s\S]*?attachFaviconData: attachInputModeFaviconData/,
+  'New Tab provider icons should use the shared direct-versus-hydrated loading policy'
 );
 assert.strictEqual(
-  attachedInputModeFavicons.length,
-  0,
-  'a bundled Google icon should remain a direct image so its 16px slot never collapses'
+  shortcutFavicon.shouldHydrateSiteSearchProviderIcon(
+    'chrome-extension://lumno/assets/images/site-search/tile-gg.png'
+  ),
+  false,
+  'a bundled Google tile should remain a direct image so its layout slot never collapses'
 );
-inputModeFaviconContext.attachInputModeFaviconDataForTest(
-  providerIconElement,
-  'https://example.com/favicon.ico',
-  'example.com'
-);
-assert.deepStrictEqual(
-  attachedInputModeFavicons[0],
-  [providerIconElement, 'https://example.com/favicon.ico', 'example.com'],
-  'remote provider icons should retain the existing favicon-data fallback behavior'
+assert.strictEqual(
+  shortcutFavicon.shouldHydrateSiteSearchProviderIcon(
+    'https://example.com/favicon.ico'
+  ),
+  true,
+  'remote custom provider icons should retain the shared favicon-data fallback behavior'
 );
 assert.match(
   newtabSource,

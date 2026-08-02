@@ -55,7 +55,8 @@ describe('Shared search input React island', () => {
     expect(parts.divider.style.display).toBe('none');
     expect(parts.modePrefix.parentElement).toBe(parts.container);
     expect(parts.modePrefix.tagName).toBe('BUTTON');
-    expect(parts.modePrefixIcon.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixIconFrame.parentElement).toBe(parts.modePrefix);
+    expect(parts.modePrefixIcon.parentElement).toBe(parts.modePrefixIconFrame);
     expect(parts.modePrefixGlyph.parentElement).toBe(parts.modePrefix);
     expect(parts.modePrefixText.parentElement).toBe(parts.modePrefix);
     expect(parts.modePrefixChevron.parentElement).toBe(parts.modePrefix);

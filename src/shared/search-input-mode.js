@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-01-scope-chip-v25';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-02-scope-chip-v28';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -472,6 +472,7 @@
     const siteSearchPrefixGlyph = parts.modePrefixGlyph || doc.createElement('i');
     const siteSearchPrefixLineIcon = createSvgElement('svg');
     const siteSearchPrefixIcon = parts.modePrefixIcon;
+    const siteSearchPrefixIconFrame = parts.modePrefixIconFrame || doc.createElement('span');
     const siteSearchPrefixText = applyNoTranslate(parts.modePrefixText);
     const siteSearchPrefixCurrent = applyNoTranslate(
       parts.modePrefixCurrent || doc.createElement('span')
@@ -501,6 +502,28 @@
     siteSearchPrefix.setAttribute('data-menu-open', 'false');
     siteSearchPrefix.setAttribute('data-current-visible', 'false');
     siteSearchPrefix.setAttribute('data-current-measuring', 'false');
+    siteSearchPrefixIconFrame.className = 'x-lumno-search-input-mode__prefix-icon-frame';
+    siteSearchPrefixIconFrame.setAttribute('data-search-input-mode-prefix-icon-frame', '');
+    if (!siteSearchPrefixIconFrame.parentNode) {
+      if (siteSearchPrefixIcon.parentNode) {
+        const iconParent = siteSearchPrefixIcon.parentNode;
+        if (typeof iconParent.insertBefore === 'function') {
+          iconParent.insertBefore(siteSearchPrefixIconFrame, siteSearchPrefixIcon);
+        } else {
+          if (typeof iconParent.removeChild === 'function') {
+            iconParent.removeChild(siteSearchPrefixIcon);
+          }
+          iconParent.appendChild(siteSearchPrefixIconFrame);
+        }
+      } else if (typeof siteSearchPrefix.insertBefore === 'function') {
+        siteSearchPrefix.insertBefore(siteSearchPrefixIconFrame, siteSearchPrefixText);
+      } else {
+        siteSearchPrefix.appendChild(siteSearchPrefixIconFrame);
+      }
+    }
+    if (siteSearchPrefixIcon.parentNode !== siteSearchPrefixIconFrame) {
+      siteSearchPrefixIconFrame.appendChild(siteSearchPrefixIcon);
+    }
     if (!siteSearchPrefixGlyph.parentNode) {
       if (typeof siteSearchPrefix.insertBefore === 'function') {
         siteSearchPrefix.insertBefore(siteSearchPrefixGlyph, siteSearchPrefixText);
@@ -562,7 +585,7 @@
       ['min-width', '0'],
       ['box-sizing', 'border-box'],
       ['height', '32px'],
-      ['padding', '0 10px'],
+      ['padding', '0 6px'],
       ['white-space', 'nowrap'],
       ['overflow', 'hidden'],
       ['text-overflow', 'ellipsis'],
@@ -586,7 +609,7 @@
     ], useImportantStyles);
     setStyle(siteSearchPrefix, 'justify-content', 'flex-start', useImportantStyles);
     setStyle(siteSearchPrefix, 'height', '32px', useImportantStyles);
-    setStyle(siteSearchPrefix, 'padding', '0 10px', useImportantStyles);
+    setStyle(siteSearchPrefix, 'padding', '0 6px', useImportantStyles);
     modeMenu.id = `${prefixId}-menu`;
     modeMenu.className = `x-lumno-search-input-mode__menu ${menuSurfaceClass}`;
     if (typeof menuSurface.apply === 'function') {
@@ -1142,7 +1165,7 @@
       }
       const activeIcon = [
         siteSearchPrefixLineIcon,
-        siteSearchPrefixIcon,
+        siteSearchPrefixIconFrame,
         siteSearchPrefixGlyph
       ].find((element) => isElementVisible(element));
       if (!activeIcon || typeof activeIcon.cloneNode !== 'function') {
@@ -1159,6 +1182,7 @@
       ghost.removeAttribute('data-search-input-mode-line-icon');
       ghost.removeAttribute('data-search-input-mode-prefix-glyph');
       ghost.removeAttribute('data-search-input-mode-prefix-icon');
+      ghost.removeAttribute('data-search-input-mode-prefix-icon-frame');
       ghost.setAttribute('aria-hidden', 'true');
       ghost.setAttribute('data-search-input-mode-icon-ghost', '');
       setStyle(ghost, 'position', 'absolute', useImportantStyles);
@@ -1183,7 +1207,7 @@
     function playInputModePrefixIconSwap(animateIcon, outgoingIcon) {
       const activeIcon = [
         siteSearchPrefixLineIcon,
-        siteSearchPrefixIcon,
+        siteSearchPrefixIconFrame,
         siteSearchPrefixGlyph
       ].find((element) => isElementVisible(element));
       if (!activeIcon) {
@@ -1319,6 +1343,7 @@
       if (hasBuiltInLineIcon) {
         setStyle(siteSearchPrefixLineIcon, 'display', 'inline-flex', useImportantStyles);
         setStyle(siteSearchPrefixGlyph, 'display', 'none', useImportantStyles);
+        setStyle(siteSearchPrefixIconFrame, 'display', 'none', useImportantStyles);
         setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
         siteSearchPrefixIcon.removeAttribute('src');
       } else {
@@ -1329,15 +1354,27 @@
       }
       if (!hasBuiltInLineIcon && iconUrl) {
         const icon = siteSearchPrefixIcon;
+        siteSearchPrefixIconFrame.style.cssText = cssText([
+          ['all', 'unset'],
+          ['position', 'relative'],
+          ['width', '20px'],
+          ['height', '20px'],
+          ['border-radius', '6px'],
+          ['clip-path', 'inset(0 round 6px)'],
+          ['overflow', 'hidden'],
+          ['isolation', 'isolate'],
+          ['flex', '0 0 20px'],
+          ['display', 'inline-flex']
+        ], useImportantStyles);
         icon.alt = '';
         icon.decoding = 'async';
         icon.referrerPolicy = 'no-referrer';
         icon.style.cssText = cssText([
           ['all', 'unset'],
-          ['width', '16px'],
-          ['height', '16px'],
-          ['border-radius', '2px'],
-          ['clip-path', 'inset(0 round 2px)'],
+          ['width', '20px'],
+          ['height', '20px'],
+          ['border-radius', '6px'],
+          ['clip-path', 'inset(0 round 6px)'],
           ['overflow', 'hidden'],
           ['object-fit', 'contain'],
           ['flex', '0 0 auto'],
@@ -1349,6 +1386,7 @@
             return;
           }
           removeProviderIconRuntimeFallbacks(siteSearchPrefix);
+          setStyle(siteSearchPrefixIconFrame, 'display', 'none', useImportantStyles);
           setStyle(icon, 'display', 'none', useImportantStyles);
           icon.removeAttribute('src');
           setStyle(siteSearchPrefixGlyph, 'display', 'inline-flex', useImportantStyles);
@@ -1377,10 +1415,12 @@
           }
         }
       } else if (!hasBuiltInLineIcon) {
+        setStyle(siteSearchPrefixIconFrame, 'display', 'none', useImportantStyles);
         setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
         siteSearchPrefixIcon.removeAttribute('src');
       }
       setStyle(siteSearchPrefixIcon, 'transition', 'none', useImportantStyles);
+      setStyle(siteSearchPrefixIconFrame, 'transition', 'none', useImportantStyles);
       setStyle(siteSearchPrefixGlyph, 'transition', 'none', useImportantStyles);
       setStyle(siteSearchPrefixLineIcon, 'transition', 'none', useImportantStyles);
       const text = siteSearchPrefixText;
@@ -2086,6 +2126,7 @@
       siteSearchPrefix.removeAttribute('data-mode-id');
       siteSearchPrefix.removeAttribute('aria-label');
       setStyle(siteSearchPrefixIcon, 'display', 'none', useImportantStyles);
+      setStyle(siteSearchPrefixIconFrame, 'display', 'none', useImportantStyles);
       siteSearchPrefixIcon.removeAttribute('src');
       setStyle(siteSearchPrefixGlyph, 'display', 'none', useImportantStyles);
       setStyle(siteSearchPrefixLineIcon, 'display', 'none', useImportantStyles);
@@ -2201,38 +2242,27 @@
       const accentRgb = mixRgb(resolvedAccentRgb, resolvedAccentRgb, 0);
       const darkMode = Boolean(isDarkMode());
       const panelRgb = darkMode ? [20, 20, 20] : [255, 255, 255];
-      const itemThemeOpacity = darkMode ? 0.14 : 0.075;
-      const backgroundRgb = mixRgb(
-        accentRgb,
-        darkMode ? [22, 22, 22] : [255, 255, 255],
-        darkMode ? 0.72 : 0.82
-      );
-      const itemBackgroundRgb = mixRgb(
+      const selectedBackgroundOpacity = darkMode ? 0.2 : 0.14;
+      const selectedBackgroundRgb = mixRgb(
         accentRgb,
         panelRgb,
-        1 - itemThemeOpacity
+        1 - selectedBackgroundOpacity
       );
       const focusRingRgb = getAccessibleThemeFocusRingRgb(
         accentRgb,
-        itemBackgroundRgb
-      );
-      setStyle(
-        wrap,
-        '--x-lumno-search-mode-icon-bg',
-        rgbToCss(backgroundRgb),
-        useImportantStyles
+        selectedBackgroundRgb
       );
       setStyle(
         wrap,
         '--x-lumno-search-mode-icon-color',
-        getReadableTextColor(backgroundRgb),
+        rgbToCss(focusRingRgb),
         useImportantStyles
       );
       if (menuItem) {
         setStyle(
           menuItem,
-          '--x-lumno-search-mode-item-theme-bg',
-          `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${itemThemeOpacity})`,
+          '--x-lumno-search-mode-selected-bg',
+          `rgba(${accentRgb[0]}, ${accentRgb[1]}, ${accentRgb[2]}, ${selectedBackgroundOpacity})`,
           useImportantStyles
         );
         setStyle(
@@ -2246,13 +2276,8 @@
 
     function applyModeMenuBuiltInIconTheme(wrap, menuItem) {
       const surfaceColor = getBuiltInSurfaceColor();
-      const background = `color-mix(in srgb, ${surfaceColor} ${isDarkMode() ? 14 : 9}%, transparent)`;
-      setStyle(
-        wrap,
-        '--x-lumno-search-mode-icon-bg',
-        background,
-        useImportantStyles
-      );
+      const darkMode = Boolean(isDarkMode());
+      const selectedBackground = `color-mix(in srgb, ${surfaceColor} ${darkMode ? 16 : 11}%, transparent)`;
       setStyle(
         wrap,
         '--x-lumno-search-mode-icon-color',
@@ -2262,8 +2287,8 @@
       if (menuItem) {
         setStyle(
           menuItem,
-          '--x-lumno-search-mode-item-theme-bg',
-          background,
+          '--x-lumno-search-mode-selected-bg',
+          selectedBackground,
           useImportantStyles
         );
         setStyle(

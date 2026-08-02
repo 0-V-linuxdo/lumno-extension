@@ -26,13 +26,28 @@ assert.match(
 );
 assert.match(
   inputModeSource,
+  /siteSearchPrefixIconFrame[\s\S]*?\['width', '20px'\][\s\S]*?\['height', '20px'\][\s\S]*?\['border-radius', '6px'\][\s\S]*?\['clip-path', 'inset\(0 round 6px\)'\][\s\S]*?\['isolation', 'isolate'\]/,
+  'the active scope tag favicon frame should use the larger proportional geometry shared by both surfaces'
+);
+assert.match(
+  inputModeSource,
+  /\['height', '32px'\],[\s\S]*?\['padding', '0 6px'\]/,
+  'the active scope tag should keep six-pixel inline padding equal to the icon vertical inset'
+);
+assert.match(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__prefix-icon-frame::after\s*\{[\s\S]*?border:\s*0\.5px solid currentColor !important;[\s\S]*?border-radius:\s*6px !important;[\s\S]*?opacity:\s*0\.18 !important;/,
+  'the tag favicon hairline should reuse the title color at low opacity with a radius-matched edge'
+);
+assert.match(
+  inputModeSource,
   /function removeProviderIconRuntimeFallbacks\(parent\)[\s\S]*?_x_extension_favicon_fallback_2024_unique_[\s\S]*?_x_extension_overlay_favicon_fallback_2026_unique_/,
   'provider icon fallback should remove runtime-owned fallback siblings on both search surfaces'
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?width:\s*52px !important;[\s\S]*?border-radius:\s*12px !important;[\s\S]*?--x-lumno-search-mode-icon-bg/,
-  'scope menu icons should enlarge the complete shortcut theme container with a tighter radius'
+  /\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?width:\s*52px !important;[\s\S]*?border-radius:\s*12px !important;[\s\S]*?background:\s*transparent !important/,
+  'scope menu icons should retain their layout footprint without a middle background tile'
 );
 assert.match(
   inputModeCss,
@@ -46,8 +61,8 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function applyModeMenuIconTheme\(wrap, menuItem, theme\)[\s\S]*?getAccessibleThemeFocusRingRgb\([\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-item-theme-bg[\s\S]*?--x-lumno-search-mode-item-focus-ring/,
-  'scope menu cards, icons, and contrast-safe focus rings should reuse one resolved provider theme'
+  /function applyModeMenuIconTheme\(wrap, menuItem, theme\)[\s\S]*?getAccessibleThemeFocusRingRgb\([\s\S]*?--x-lumno-search-mode-icon-color[\s\S]*?--x-lumno-search-mode-selected-bg[\s\S]*?--x-lumno-search-mode-item-focus-ring/,
+  'selected scope cards and contrast-safe focus rings should reuse one resolved provider theme'
 );
 assert.match(
   inputModeSource,
@@ -61,8 +76,8 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?--x-lumno-search-mode-item-theme-bg[\s\S]*?--x-lumno-search-mode-selected-bg/,
-  'scope menu hover should use the same themed full-card surface as selection'
+  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?background:\s*transparent !important/,
+  'scope menu hover should not add an outer card surface'
 );
 assert.match(
   inputModeCss,
@@ -71,8 +86,8 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)[\s\S]*?\.x-lumno-search-input-mode__menu-icon,[\s\S]*?\.x-lumno-search-input-mode__menu-item:focus-visible:not\(\[aria-checked="true"\]\)[\s\S]*?\.x-lumno-search-input-mode__menu-icon,[\s\S]*?\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\][\s\S]*?\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?background:\s*transparent !important;[\s\S]*?box-shadow:\s*none !important;/,
-  'hovered, keyboard-focused, and selected scopes should show only the full-card theme surface'
+  /\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?background:\s*transparent !important/,
+  'scope icons should remain background-free in default, hover, focus, and selected states'
 );
 assert.doesNotMatch(
   inputModeCss,
@@ -81,13 +96,18 @@ assert.doesNotMatch(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\]\s*\{[\s\S]*?--x-lumno-search-mode-selected-bg[\s\S]*?border-color: transparent !important;/,
-  'the active search scope should keep its themed background instead of the neutral hover surface'
+  /\.x-lumno-search-input-mode__menu-item\s*\{[\s\S]*?border:\s*2px solid transparent !important;/,
+  'scope cards should reserve a two-pixel border without shifting their contents between states'
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\][\s\S]*?\.x-lumno-search-input-mode__menu-icon\s*\{[\s\S]*?background:\s*transparent !important;[\s\S]*?box-shadow:\s*none !important;/,
-  'the active search scope should show only the full-card selection surface'
+  /\.x-lumno-search-input-mode__menu-item\[aria-checked="true"\]\s*\{[\s\S]*?--x-lumno-search-mode-selected-bg[\s\S]*?border-color:\s*color-mix\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?32%[\s\S]*?transparent[\s\S]*?\) !important;/,
+  'the active search scope should use a thicker theme-tinted outer selection border'
+);
+assert.doesNotMatch(
+  inputModeCss,
+  /--x-lumno-search-mode-icon-active-bg/,
+  'scope icons should not retain a stateful middle-square background token'
 );
 assert.match(
   inputModeCss,
@@ -307,8 +327,8 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function applyModeMenuBuiltInIconTheme\(wrap, menuItem\)[\s\S]*?--x-lumno-search-mode-icon-bg[\s\S]*?--x-lumno-search-mode-icon-color[\s\S]*?--x-lumno-search-mode-item-theme-bg/,
-  'built-in browser-content icons should use the active surface theme instead of the default blue brand fallback'
+  /function applyModeMenuBuiltInIconTheme\(wrap, menuItem\)[\s\S]*?--x-lumno-search-mode-icon-color[\s\S]*?--x-lumno-search-mode-selected-bg/,
+  'built-in browser-content selections should use the active surface theme instead of the default blue brand fallback'
 );
 
 assert.match(

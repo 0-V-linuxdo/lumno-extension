@@ -97,6 +97,15 @@ assert.strictEqual(
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    'chrome-extension://abc/assets/images/site-search/tile-ddg.png',
+    false,
+    { ownExtensionId: 'abc' }
+  ),
+  true,
+  'strict favicon mode should keep the shared bundled site-search PNG tiles'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
     'chrome-extension://other/assets/images/site-search/duckduckgo.svg',
     true,
     { ownExtensionId: 'abc' }
@@ -111,7 +120,7 @@ assert.strictEqual(
     { ownExtensionId: 'abc' }
   ),
   false,
-  'enhanced favicon mode should only allow SVG artwork from the bundled provider directory'
+  'enhanced favicon mode should only allow image artwork from the bundled provider directory'
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(

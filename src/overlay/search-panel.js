@@ -3084,6 +3084,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const requestFaviconData = overlayFaviconRuntime.requestFaviconData;
     const setFaviconSrcWithAnimation = overlayFaviconRuntime.setFaviconSrcWithAnimation;
     const attachFaviconData = overlayFaviconRuntime.attachFaviconData;
+    const attachInputModeFaviconData =
+      typeof SHORTCUT_FAVICON.createSiteSearchProviderIconHydrator === 'function'
+        ? SHORTCUT_FAVICON.createSiteSearchProviderIconHydrator(attachFaviconData)
+        : attachFaviconData;
     const attachResolvedFaviconWithFallbacks = overlayFaviconRuntime.attachResolvedFaviconWithFallbacks;
     const refreshOverlayThemeAwareFavicons = overlayFaviconRuntime.refreshOverlayThemeAwareFavicons;
     const refreshOverlayFaviconsForPolicyChange = overlayFaviconRuntime.refreshOverlayFaviconsForPolicyChange;
@@ -4676,7 +4680,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       getSiteSearchPrefixText,
       getSiteSearchDisplayName,
       isAiSiteSearchProvider,
-      attachFaviconData,
+      attachFaviconData: attachInputModeFaviconData,
       attachProviderIcon: attachInputModeProviderIcon,
       preferDirectProviderIcons: true,
       formatMessage,

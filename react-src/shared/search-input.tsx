@@ -53,6 +53,7 @@ export interface SearchInputParts {
   modePrefixChevron: HTMLElement;
   modePrefixCurrent: HTMLSpanElement;
   modePrefixGlyph: HTMLElement;
+  modePrefixIconFrame: HTMLSpanElement;
   modePrefixIcon: HTMLImageElement;
   modePrefixText: HTMLSpanElement;
   modeTabHint: HTMLSpanElement;
@@ -232,13 +233,18 @@ function SearchInput({ config }: { config: SearchInputConfig }) {
         id={modePrefixId}
         type="button"
       >
-        <img
-          alt=""
-          data-search-input-mode-prefix-icon=""
-          decoding="async"
-          referrerPolicy="no-referrer"
+        <span
+          className="x-lumno-search-input-mode__prefix-icon-frame"
+          data-search-input-mode-prefix-icon-frame=""
           style={{ display: 'none' }}
-        />
+        >
+          <img
+            alt=""
+            data-search-input-mode-prefix-icon=""
+            decoding="async"
+            referrerPolicy="no-referrer"
+          />
+        </span>
         <i
           aria-hidden="true"
           className="ri-icon ri-size-16 ri-search-line"
@@ -465,6 +471,9 @@ export function createSearchInput(
   const modePrefixIcon = container.querySelector<HTMLImageElement>(
     '[data-search-input-mode-prefix-icon]'
   );
+  const modePrefixIconFrame = container.querySelector<HTMLSpanElement>(
+    '[data-search-input-mode-prefix-icon-frame]'
+  );
   const modePrefixText = container.querySelector<HTMLSpanElement>(
     '[data-search-input-mode-prefix-text]'
   );
@@ -489,6 +498,7 @@ export function createSearchInput(
   if (
     !modePrefix ||
     !modePrefixGlyph ||
+    !modePrefixIconFrame ||
     !modePrefixIcon ||
     !modePrefixText ||
     !modePrefixChevron ||
@@ -512,6 +522,7 @@ export function createSearchInput(
     modePrefixChevron,
     modePrefixCurrent,
     modePrefixGlyph,
+    modePrefixIconFrame,
     modePrefixIcon,
     modePrefixText,
     modeTabHint,

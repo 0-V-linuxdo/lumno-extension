@@ -12,6 +12,7 @@ const inputModeCss = fs.readFileSync('src/shared/search-input.css', 'utf8');
 const searchUtilsSource = fs.readFileSync('src/shared/search-utils.js', 'utf8');
 const siteSearchSource = fs.readFileSync('assets/data/site-search.json', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+const tileGenerator = require('./generate-site-search-icon-tiles.js');
 
 assert.match(
   backgroundSource,
@@ -41,64 +42,32 @@ assert.ok(
   bundledProviderIconResourcePatterns.every((pattern) => webAccessibleResources.includes(pattern)),
   'all bundled provider artwork should remain web-accessible without per-icon manifest maintenance'
 );
-const expectedBundledProviderIcons = Object.freeze({
-  yt: 'assets/images/site-search/youtube.svg',
-  bb: 'assets/images/site-search/bilibili.svg',
-  gh: 'assets/images/site-search/github.svg',
-  sf: 'assets/images/site-search/stackoverflow.svg',
-  mdn: 'assets/images/site-search/mdn.svg',
-  npm: 'assets/images/site-search/npm.svg',
-  hf: 'assets/images/site-search/huggingface.png',
-  gs: 'assets/images/site-search/google-scholar.png',
-  ss: 'assets/images/site-search/semantic-scholar.svg',
-  maps: 'assets/images/site-search/google-maps.png',
-  gpt: 'assets/images/site-search/openai.svg',
-  gm: 'assets/images/site-search/gemini.svg',
-  dbai: 'assets/images/site-search/doubao-mascot.png',
-  qw: 'assets/images/site-search/qwen.svg',
-  yb: 'assets/images/site-search/yuanbao.svg',
-  mx: 'assets/images/site-search/minimax.svg',
-  ds: 'assets/images/site-search/deepseek.svg',
-  kimi: 'assets/images/site-search/kimi.svg',
-  pplx: 'assets/images/site-search/perplexity.svg',
-  metaso: 'assets/images/site-search/metaso.svg',
-  felo: 'assets/images/site-search/felo.svg',
-  bd: 'assets/images/site-search/baidu.svg',
-  bi: 'assets/images/site-search/bing.svg',
-  gg: 'assets/images/site-search/google.svg',
-  ddg: 'assets/images/site-search/duckduckgo.svg',
-  br: 'assets/images/site-search/brave.svg',
-  eco: 'assets/images/site-search/ecosia.svg',
-  sg: 'assets/images/site-search/sogou.svg',
-  so360: 'assets/images/site-search/360-search.svg',
-  yh: 'assets/images/site-search/yahoo.svg',
-  yx: 'assets/images/site-search/yandex.svg',
-  sm: 'assets/images/site-search/shenma.svg',
-  zh: 'assets/images/site-search/zhihu.svg',
-  db: 'assets/images/site-search/douban.svg',
-  jj: 'assets/images/site-search/juejin.svg',
-  tb: 'assets/images/site-search/taobao.png',
-  tm: 'assets/images/site-search/tmall.png',
-  wx: 'assets/images/site-search/sogou.svg',
-  tw: 'assets/images/site-search/x.svg',
-  rd: 'assets/images/site-search/reddit.png',
-  wb: 'assets/images/site-search/weibo.svg',
-  xhs: 'assets/images/site-search/xiaohongshu.png',
-  dy: 'assets/images/site-search/douyin.svg',
-  jd: 'assets/images/site-search/jd.svg',
-  wk: 'assets/images/site-search/wikipedia.svg',
-  zw: 'assets/images/site-search/wikipedia.svg'
-});
+const siteSearchProviders = JSON.parse(siteSearchSource).items;
+const expectedBundledProviderIcons = Object.freeze(Object.fromEntries(
+  siteSearchProviders.map((provider) => [
+    provider.key,
+    `assets/images/site-search/tile-${provider.key}.png`
+  ])
+));
 assert.deepStrictEqual(
   shortcutFavicon.SITE_SEARCH_PINNED_ICON_ASSETS,
   expectedBundledProviderIcons,
-  'every built-in provider should resolve to an audited local asset'
+  'every built-in provider should resolve to its self-contained local tile'
 );
-const siteSearchProviders = JSON.parse(siteSearchSource).items;
 assert.deepStrictEqual(
   siteSearchProviders.map((provider) => provider.key),
   Object.keys(expectedBundledProviderIcons),
   'the bundled provider icon map should cover the complete built-in catalog in order'
+);
+assert.deepStrictEqual(
+  tileGenerator.SITE_SEARCH_ICON_TILE_SPECS.map((spec) => spec.key),
+  siteSearchProviders.map((provider) => provider.key),
+  'the tile generator should cover the complete built-in catalog in order'
+);
+assert.strictEqual(
+  tileGenerator.TILE_SIZE,
+  144,
+  'provider tiles should retain enough pixels for 4x rendering at 36 CSS px'
 );
 siteSearchProviders.forEach((provider) => {
   assert.ok(!provider.icon && !provider.iconUrl,
@@ -110,60 +79,25 @@ searchUtils.getDefaultSiteSearchProviders().forEach((provider) => {
 });
 new Set(Object.values(expectedBundledProviderIcons)).forEach((resourcePath) => {
   assert.ok(fs.existsSync(resourcePath), `${resourcePath} should be bundled`);
+  assert.match(
+    resourcePath,
+    /^assets\/images\/site-search\/tile-[a-z0-9]+\.png$/,
+    `${resourcePath} should be a generated local PNG tile`
+  );
   assert.ok(
     webAccessibleResources.includes(resourcePath) ||
       bundledProviderIconResourcePatterns.some((pattern) => webAccessibleResources.includes(pattern)),
     `${resourcePath} should be web-accessible`
   );
-  if (resourcePath.endsWith('.svg')) {
-    const vectorSource = fs.readFileSync(resourcePath, 'utf8');
-    assert.ok(
-      /<svg[\s\S]*<path/.test(vectorSource) ||
-        /<svg[\s\S]*<image[^>]+href="[^"]+\.png"/.test(vectorSource),
-      `${resourcePath} should expose vector artwork or a bundled raster wrapper`
-    );
-    assert.match(
-      vectorSource,
-      /<svg[^>]*viewBox="-?(?:\d+\.?\d*|\.\d+) -?(?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+) (?:\d+\.?\d*|\.\d+)"/,
-      `${resourcePath} should expose a valid vector canvas`
-    );
-  } else {
-    const pngSignature = fs.readFileSync(resourcePath).subarray(0, 8);
-    assert.deepStrictEqual(
-      [...pngSignature],
-      [137, 80, 78, 71, 13, 10, 26, 10],
-      `${resourcePath} should be a valid PNG asset`
-    );
-  }
-});
-
-const framedProviderIcons = Object.freeze({
-  kimi: { background: '#000000', foreground: '#FFFFFF' },
-  tm: { background: '#FF0036', foreground: '#FFFFFF' },
-  tw: { background: '#000000', foreground: '#FFFFFF' }
-});
-Object.entries(framedProviderIcons).forEach(([providerKey, colors]) => {
-  const resourcePath = expectedBundledProviderIcons[providerKey];
-  if (resourcePath.endsWith('.png')) {
-    const pngSignature = fs.readFileSync(resourcePath).subarray(0, 8);
-    assert.deepStrictEqual(
-      [...pngSignature],
-      [137, 80, 78, 71, 13, 10, 26, 10],
-      `${providerKey} should use a valid bundled raster asset`
-    );
-    return;
-  }
-  const vectorSource = fs.readFileSync(resourcePath, 'utf8');
-  assert.match(
-    vectorSource,
-    new RegExp(`<rect[^>]+fill="${colors.background}"`),
-    `${providerKey} should carry its own brand background for light-mode contrast`
+  const pngHeader = fs.readFileSync(resourcePath).subarray(0, 33);
+  assert.deepStrictEqual(
+    [...pngHeader.subarray(0, 8)],
+    [137, 80, 78, 71, 13, 10, 26, 10],
+    `${resourcePath} should be a valid PNG asset`
   );
-  assert.ok(
-    new RegExp(`<(?:path|g)[^>]*[\\s\\S]*fill="${colors.foreground}"`).test(vectorSource) ||
-      /<image[^>]+href="[^"]+\.png"/.test(vectorSource),
-    `${providerKey} should reverse its mark for contrast on the bundled background`
-  );
+  assert.strictEqual(pngHeader.readUInt32BE(16), 144, `${resourcePath} should be 144px wide`);
+  assert.strictEqual(pngHeader.readUInt32BE(20), 144, `${resourcePath} should be 144px high`);
+  assert.strictEqual(pngHeader[25], 6, `${resourcePath} should preserve RGBA rounded corners`);
 });
 
 assert.match(
@@ -253,7 +187,25 @@ assert.match(
     /preferDirectProviderIcons:\s*true/,
     'newtab and overlay should bypass host-level favicon replacement for provider artwork'
   );
+  assert.match(
+    source,
+    /const attachInputModeFaviconData =[\s\S]*?SHORTCUT_FAVICON\.createSiteSearchProviderIconHydrator\(attachFaviconData\)/,
+    'newtab and overlay should create their provider icon loaders from one shared runtime'
+  );
+  assert.match(
+    source,
+    /attachFaviconData:\s*attachInputModeFaviconData/,
+    'newtab and overlay should attach the same provider icon loading adapter'
+  );
 });
+
+assert.strictEqual(
+  shortcutFavicon.shouldHydrateSiteSearchProviderIcon(
+    'chrome-extension://lumno/assets/images/site-search/tile-bi.png'
+  ),
+  false,
+  'the shared Bing tile should bypass asynchronous favicon hydration on both surfaces'
+);
 
 assert.match(
   newtabSource,
