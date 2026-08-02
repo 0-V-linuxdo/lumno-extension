@@ -34,6 +34,7 @@ async function run() {
   const syncArea = createArea({ [themeKey]: 'light' });
   const localArea = createArea({});
   const pushes = [];
+  const pulls = [];
   let pullRows = [];
   let pushMode = 'accept';
   const runtime = runtimeApi.createRuntime({
@@ -72,7 +73,8 @@ async function run() {
           conflicts: []
         };
       },
-      async pullSettings() {
+      async pullSettings(payload) {
+        pulls.push(payload);
         return { rows: pullRows };
       }
     }
@@ -95,6 +97,27 @@ async function run() {
   assert.strictEqual(pullResult.applied, 1);
   assert.strictEqual(localArea.values[languageKey], 'ja');
   assert.strictEqual((await runtime.getState()).cursor, 20);
+  assert.strictEqual(pulls.at(-1).cursor, 10, 'normal pulls should remain incremental');
+
+  const shortcutsKey = schema.STORAGE_KEYS.newtabShortcuts;
+  const cloudShortcuts = [{
+    id: 'shortcut-cloud',
+    title: 'Cloud shortcut',
+    url: 'https://example.com/'
+  }];
+  localArea.values[shortcutsKey] = [];
+  pullRows = [{ key: shortcutsKey, value: cloudShortcuts, version: 3, change_id: 15 }];
+  const fullPullResult = await runtime.pull({ full: true });
+  assert.strictEqual(pulls.at(-1).cursor, 0,
+    'a full pull must ignore a newer local cursor so missing cache entries can be restored');
+  assert.deepStrictEqual(localArea.values[shortcutsKey], cloudShortcuts);
+  assert.strictEqual(localArea.values[languageKey], undefined,
+    'an authoritative full pull must remove cache keys absent from the cloud snapshot');
+  assert.strictEqual(fullPullResult.full, true);
+  assert.strictEqual(fullPullResult.resetMissing, true);
+  assert.deepStrictEqual(fullPullResult.keys, [shortcutsKey]);
+  assert.strictEqual((await runtime.getState()).cursor, 20,
+    'rehydration must not move the durable cursor backwards');
 
   pushMode = 'conflict';
   await runtime.queueSettingChange(themeKey, 'dark');
@@ -110,7 +133,7 @@ async function run() {
   await runtime.flush();
 
   await runtime.disableCloudMode({ copyToBrowserSync: true });
-  assert.strictEqual(syncArea.values[languageKey], 'ja');
+  assert.strictEqual(syncArea.values[languageKey], undefined);
   await runtime.queueSettingChange(themeKey, 'light');
   const skipped = await runtime.flush();
   assert.strictEqual(skipped.skipped, true);

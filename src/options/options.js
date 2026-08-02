@@ -2,6 +2,7 @@
   const NAVIGATION_DISPOSITION = globalThis.LumnoNavigationDisposition || {};
   const COMMUNITY_LINKS = globalThis.LumnoCommunityLinks || {};
   const SETTINGS = globalThis.LumnoSettings || {};
+  const SHORTCUT_FAVICON = globalThis.LumnoShortcutFavicon || {};
   const LUMNO_FEEDBACK_SUPPORT_LINKS_FALLBACK = COMMUNITY_LINKS.FALLBACK_LINKS;
   const panel = document.getElementById('_x_extension_settings_panel_2024_unique_');
   const optionsRoot = document.getElementById('_x_extension_options_root_2024_unique_');
@@ -89,8 +90,10 @@
   const cloudSyncDetail = document.getElementById('_x_extension_cloud_sync_detail_2026_unique_');
   const cloudSyncNowButton = document.getElementById('_x_extension_cloud_sync_now_2026_unique_');
   const cloudSignoutButton = document.getElementById('_x_extension_cloud_signout_2026_unique_');
-  const cloudAnalyticsCard = document.getElementById('_x_extension_cloud_analytics_card_2026_unique_');
-  const cloudAnalyticsToggle = document.getElementById('_x_extension_cloud_analytics_toggle_2026_unique_');
+  const cloudConsentMask = document.getElementById('_x_extension_cloud_consent_mask_2026_unique_');
+  const cloudConsentDialog = document.getElementById('_x_extension_cloud_consent_dialog_2026_unique_');
+  const cloudConsentCancelButton = document.getElementById('_x_extension_cloud_consent_cancel_2026_unique_');
+  const cloudConsentContinueButton = document.getElementById('_x_extension_cloud_consent_continue_2026_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
@@ -470,9 +473,11 @@
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
   const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
   const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
+  const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
   const NEWTAB_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_';
   const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
   const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
+  const NEWTAB_FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
   const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = SETTINGS.OVERLAY_ENTER_ANIMATION_STORAGE_KEY ||
     '_x_extension_overlay_enter_animation_2026_unique_';
@@ -529,9 +534,11 @@
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
+    NEWTAB_ZEN_MODE_STORAGE_KEY,
     NEWTAB_WALLPAPER_STORAGE_KEY,
     NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
     NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
+    NEWTAB_FAVICON_STORAGE_KEY,
     OVERLAY_SIZE_MODE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     BOOKMARK_COUNT_STORAGE_KEY,
@@ -574,6 +581,7 @@
   const FORCE_TEXT_KEYCAPS_ON_MAC = false;
   const FORCE_OVERLAY_TAB_QUICK_SWITCH_ENABLED = true;
   const OPTIONS_TARGET_SITE_SEARCH_AI = 'site-search-ai';
+  const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let mediaListenerAttached = false;
   let defaultSiteSearchProviders = [];
@@ -591,6 +599,9 @@
   let siteSearchRefreshSuppressUntil = 0;
   let siteSearchRefreshTimer = null;
   let pendingOptionsScrollTarget = '';
+  let cloudConsentReturnFocus = null;
+  let cloudConsentCloseTimer = null;
+  let cloudConsentPreviousBodyOverflow = '';
   let currentShortcutLabel = null;
   let isCapturingFallbackShortcut = false;
   let cancelCaptureOnMouseLeave = false;
@@ -2229,6 +2240,104 @@
     if (cloudError) cloudError.textContent = String(message || '');
   }
 
+  function getCloudConsentFocusTargets() {
+    if (!cloudConsentDialog) return [];
+    return Array.from(cloudConsentDialog.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+  }
+
+  function isCloudConsentDialogOpen() {
+    return Boolean(cloudConsentMask && !cloudConsentMask.hidden);
+  }
+
+  function openCloudConsentDialog() {
+    if (!cloudConsentMask || !cloudConsentDialog || !cloudConsentContinueButton) {
+      setCloudError(getMessage('cloud_error_generic', '操作失败，请稍后重试'));
+      return;
+    }
+    if (cloudConsentCloseTimer) {
+      clearTimeout(cloudConsentCloseTimer);
+      cloudConsentCloseTimer = null;
+    }
+    cloudConsentReturnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : cloudWebSigninButton;
+    cloudConsentPreviousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    cloudConsentMask.hidden = false;
+    cloudConsentMask.removeAttribute('data-show');
+    requestAnimationFrame(() => {
+      if (!cloudConsentMask || cloudConsentMask.hidden) return;
+      cloudConsentMask.setAttribute('data-show', 'true');
+      cloudConsentContinueButton.focus({ preventScroll: true });
+    });
+  }
+
+  function closeCloudConsentDialog(options) {
+    if (!cloudConsentMask || cloudConsentMask.hidden) return;
+    const settings = options && typeof options === 'object' ? options : {};
+    cloudConsentMask.removeAttribute('data-show');
+    document.body.style.overflow = cloudConsentPreviousBodyOverflow;
+    cloudConsentCloseTimer = setTimeout(() => {
+      cloudConsentMask.hidden = true;
+      cloudConsentCloseTimer = null;
+    }, 180);
+    if (settings.restoreFocus !== false && cloudConsentReturnFocus && cloudConsentReturnFocus.isConnected) {
+      cloudConsentReturnFocus.focus({ preventScroll: true });
+    }
+    cloudConsentReturnFocus = null;
+  }
+
+  function handleCloudConsentKeydown(event) {
+    if (!isCloudConsentDialogOpen()) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeCloudConsentDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const targets = getCloudConsentFocusTargets();
+    if (targets.length === 0) {
+      event.preventDefault();
+      cloudConsentDialog.focus({ preventScroll: true });
+      return;
+    }
+    const first = targets[0];
+    const last = targets[targets.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  }
+
+  function startCloudWebSignIn() {
+    let signInFailed = false;
+    closeCloudConsentDialog({ restoreFocus: false });
+    setCloudError('');
+    setCloudButtonBusy(cloudWebSigninButton, true);
+    setCloudButtonBusy(cloudConsentContinueButton, true);
+    sendCloudMessage({
+      action: 'cloudSignInWithWeb',
+      consentVersion: CLOUD_COMBINED_CONSENT_VERSION
+    }).then((status) => {
+      renderCloudAccountStatus(status);
+      showToast(getMessage('cloud_signin_done', '登录成功，配置同步与产品使用统计已开启'), false);
+    }).catch((error) => {
+      signInFailed = true;
+      setCloudError(getCloudErrorMessage(error));
+    }).finally(() => {
+      setCloudButtonBusy(cloudWebSigninButton, false);
+      setCloudButtonBusy(cloudConsentContinueButton, false);
+      if (signInFailed && cloudWebSigninButton && !cloudWebSigninButton.hidden) {
+        cloudWebSigninButton.focus({ preventScroll: true });
+      }
+    });
+  }
+
   function formatCloudSyncDetail(status) {
     const sync = status && status.sync ? status.sync : {};
     if (String(sync.state || '') === 'error') {
@@ -2265,13 +2374,6 @@
       cloudSignedIn.setAttribute('data-sync-state', syncState);
     }
     if (cloudDangerCard) cloudDangerCard.hidden = !signedIn;
-    if (cloudAnalyticsCard) {
-      cloudAnalyticsCard.setAttribute('data-enabled', signedIn && value.analyticsConsented === true ? 'true' : 'false');
-    }
-    if (cloudAnalyticsToggle) {
-      cloudAnalyticsToggle.disabled = !signedIn;
-      cloudAnalyticsToggle.checked = signedIn && value.analyticsConsented === true;
-    }
     if (cloudEmailDisplay) cloudEmailDisplay.textContent = signedIn ? String(value.email || '') : '';
     if (cloudSyncDetail) cloudSyncDetail.textContent = signedIn ? formatCloudSyncDetail(value) : '';
     if (cloudStatus) {
@@ -2303,13 +2405,20 @@
     if (cloudWebSigninButton) {
       cloudWebSigninButton.addEventListener('click', () => {
         setCloudError('');
-        setCloudButtonBusy(cloudWebSigninButton, true);
-        sendCloudMessage({ action: 'cloudSignInWithWeb' }).then((status) => {
-          renderCloudAccountStatus(status);
-          showToast(getMessage('cloud_signin_done', '登录成功，配置已开始同步'), false);
-        }).catch((error) => setCloudError(getCloudErrorMessage(error)))
-          .finally(() => setCloudButtonBusy(cloudWebSigninButton, false));
+        openCloudConsentDialog();
       });
+    }
+    if (cloudConsentCancelButton) {
+      cloudConsentCancelButton.addEventListener('click', () => closeCloudConsentDialog());
+    }
+    if (cloudConsentContinueButton) {
+      cloudConsentContinueButton.addEventListener('click', startCloudWebSignIn);
+    }
+    if (cloudConsentMask) {
+      cloudConsentMask.addEventListener('click', (event) => {
+        if (event.target === cloudConsentMask) closeCloudConsentDialog();
+      });
+      cloudConsentMask.addEventListener('keydown', handleCloudConsentKeydown);
     }
     if (cloudSyncNowButton) {
       cloudSyncNowButton.addEventListener('click', () => {
@@ -2329,29 +2438,6 @@
           .then(() => showToast(getMessage('cloud_signout_done', '已退出登录，本机配置仍然保留'), false))
           .catch((error) => showToast(getCloudErrorMessage(error), true))
           .finally(() => setCloudButtonBusy(cloudSignoutButton, false));
-      });
-    }
-    if (cloudAnalyticsToggle) {
-      cloudAnalyticsToggle.addEventListener('change', () => {
-        const consented = cloudAnalyticsToggle.checked;
-        cloudAnalyticsToggle.disabled = true;
-        if (cloudAnalyticsCard) cloudAnalyticsCard.setAttribute('data-enabled', consented ? 'true' : 'false');
-        sendCloudMessage({ action: 'cloudSetAnalyticsConsent', consented })
-          .then(() => {
-            if (currentCloudAccountStatus) currentCloudAccountStatus.analyticsConsented = consented;
-            showToast(
-              consented
-                ? getMessage('cloud_analytics_enabled', '产品使用统计已开启')
-                : getMessage('cloud_analytics_disabled', '使用统计已关闭，本地待上传计数已清除'),
-              false
-            );
-          })
-          .catch((error) => {
-            cloudAnalyticsToggle.checked = !consented;
-            if (cloudAnalyticsCard) cloudAnalyticsCard.setAttribute('data-enabled', consented ? 'false' : 'true');
-            showToast(getCloudErrorMessage(error), true);
-          })
-          .finally(() => { cloudAnalyticsToggle.disabled = false; });
       });
     }
     loadCloudAccountStatus();
@@ -4930,6 +5016,13 @@
   function getSiteSearchItemIconUrl(item) {
     if (!item) {
       return '';
+    }
+    const localIconAsset = !item._xIsCustom &&
+      typeof SHORTCUT_FAVICON.getSiteSearchPinnedIconAssetPath === 'function'
+      ? SHORTCUT_FAVICON.getSiteSearchPinnedIconAssetPath(item)
+      : '';
+    if (localIconAsset) {
+      return chrome.runtime.getURL(localIconAsset);
     }
     if (item.icon) {
       return String(item.icon || '').trim();

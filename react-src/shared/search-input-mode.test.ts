@@ -34,6 +34,7 @@ interface ModeMenuItem {
 }
 
 interface ModeController {
+  beginModeMenuResultTransition(transition: { fromOffset: number }): boolean;
   clearProviderPrefix(): void;
   closeModeMenu(restoreFocus?: boolean): boolean;
   destroy(): void;
@@ -41,14 +42,21 @@ interface ModeController {
     bottomInset?: number;
     viewportBottom?: number;
   }): number | null;
+  finishModeMenuResultTransition(): boolean;
   getModeMenuFilterQuery(): string;
   handleModeMenuKeyEvent(event: KeyboardEvent): boolean;
   menuElement: HTMLDivElement;
+  isModeMenuVisible(): boolean;
   openModeMenu(focusTarget?: string): boolean;
   refreshModeMenuLanguage(): void;
   resetModeMenuDoubleTab(): boolean;
   resetModeTagRemovalConfirmation(): boolean;
   setModeMenuResultOffset(offset: number): void;
+  targetModeMenuResultTransition(transition: {
+    duration: number;
+    easing: string;
+    toOffset: number;
+  }): boolean;
   setPrefixText(
     label: string,
     theme?: object,
@@ -935,6 +943,17 @@ describe('Shared search scope menu', () => {
             label: 'Google'
           },
           {
+            group: 'Site search',
+            id: 'provider:douban',
+            kind: 'provider',
+            label: '豆瓣',
+            provider: {
+              aliases: ['douban'],
+              key: 'dban',
+              name: '豆瓣'
+            }
+          },
+          {
             group: 'AI search',
             id: 'provider:doubao',
             kind: 'provider',
@@ -991,22 +1010,38 @@ describe('Shared search scope menu', () => {
     pressMenuKey('u');
     expect(controller.getModeMenuFilterQuery()).toBe('dou');
     expect(parts.input.value).toBe('');
-    expect(getVisibleLabels()).toEqual(['豆包']);
+    expect(getVisibleLabels()).toEqual(['豆瓣', '豆包']);
+    const filteredItems = Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    ).filter((button) => !button.hidden);
+    expect(document.activeElement).toBe(filteredItems[0]);
     expect(
       controller.menuElement.querySelector(
         '.x-lumno-search-input-mode__menu-match'
       )?.textContent
     ).toBe('豆');
 
+    pressMenuKey('ArrowDown');
+    expect(document.activeElement).toBe(filteredItems[1]);
+    pressMenuKey('Enter');
+    const allMenuItems = Array.from(
+      controller.menuElement.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]'
+      )
+    );
+    expect(allMenuItems[0].getAttribute('aria-checked')).toBe('false');
+    expect(filteredItems[1].getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(filteredItems[1]);
+    pressMenuKey('ArrowUp');
+    expect(document.activeElement).toBe(filteredItems[0]);
+
     pressMenuKey('Tab');
     expect(document.activeElement).toBe(parts.input);
     expect(controller.getModeMenuFilterQuery()).toBe('dou');
 
-    const filteredItem = Array.from(
-      controller.menuElement.querySelectorAll<HTMLButtonElement>(
-        '[role="menuitemradio"]'
-      )
-    ).find((button) => !button.hidden);
+    const filteredItem = filteredItems[0];
     filteredItem?.click();
     expect(document.activeElement).toBe(parts.input);
     expect(controller.menuElement.dataset.searchActive).toBe('false');
@@ -1042,6 +1077,7 @@ describe('Shared search scope menu', () => {
     pressMenuKey('Escape');
     'zzz'.split('').forEach(pressMenuKey);
     expect(getVisibleLabels()).toEqual([]);
+    expect(document.activeElement).toBe(controller.menuElement);
     expect(
       controller.menuElement.querySelector<HTMLElement>(
         '.x-lumno-search-input-mode__menu-empty'
@@ -2263,6 +2299,66 @@ describe('Shared search scope menu', () => {
       'var(--x-lumno-search-mode-menu-result-offset, 0px)'
     );
     controller.destroy();
+  });
+
+  it('folds an opening menu into the result-height transaction before its reveal frame', () => {
+    const pendingFrames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    const requestFrameSpy = vi.spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frameId += 1;
+        pendingFrames.set(frameId, callback);
+        return frameId;
+      });
+    const cancelFrameSpy = vi.spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation((id) => {
+        pendingFrames.delete(id);
+      });
+    const parts = createModeParts();
+    const controller = window.LumnoSearchInputMode.createInputModeController(
+      parts,
+      {
+        getModeMenuItems: () => [{
+          active: true,
+          id: 'scope:history',
+          kind: 'local',
+          label: 'History'
+        }]
+      }
+    );
+
+    expect(controller.openModeMenu('none')).toBe(true);
+    expect(controller.isModeMenuVisible()).toBe(true);
+    expect(controller.menuElement.dataset.open).toBe('false');
+    expect(pendingFrames.size).toBe(1);
+
+    expect(controller.beginModeMenuResultTransition({ fromOffset: 0 })).toBe(true);
+    expect(cancelFrameSpy).toHaveBeenCalled();
+    expect(pendingFrames.size).toBe(0);
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-result-offset'
+      )
+    ).toBe('0px');
+
+    expect(controller.targetModeMenuResultTransition({
+      duration: 180,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      toOffset: 312
+    })).toBe(true);
+    expect(controller.menuElement.dataset.open).toBe('true');
+    expect(controller.menuElement.style.transition).toContain('transform 180ms');
+    expect(
+      controller.menuElement.style.getPropertyValue(
+        '--x-lumno-search-mode-menu-result-offset'
+      )
+    ).toBe('312px');
+
+    expect(controller.finishModeMenuResultTransition()).toBe(true);
+    expect(controller.menuElement.style.transition).toBe('');
+    controller.destroy();
+    requestFrameSpy.mockRestore();
+    cancelFrameSpy.mockRestore();
   });
 
   it('shows the full label bubble only when the trailing-ellipsis label overflows', () => {

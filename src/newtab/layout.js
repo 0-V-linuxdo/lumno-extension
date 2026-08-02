@@ -100,6 +100,11 @@
     let suggestionsInputSessionActive = false;
     let suggestionsInputSettleTimer = 0;
     let suggestionsInputLockedHeight = 0;
+    let suggestionsInputLockedPadding = null;
+    let suggestionsInputHeightCaptured = false;
+    let suggestionsInputAllowFromZero = false;
+    let suggestionsResizeLifecycle = null;
+    let suggestionsResizeLifecycleActive = false;
     let dockDensityPromotionLock = null;
     const getTopInsetPx = typeof options.getTopInsetPx === 'function'
       ? options.getTopInsetPx
@@ -206,6 +211,25 @@
       return Math.max(0, Number.isFinite(inlineHeight) ? inlineHeight : 0);
     }
 
+    function readVerticalPadding(element) {
+      if (!element || !windowObj || typeof windowObj.getComputedStyle !== 'function') {
+        return { top: 0, bottom: 0 };
+      }
+      const computedStyle = windowObj.getComputedStyle(element);
+      const read = (property) => Math.max(
+        0,
+        Number.parseFloat(
+          computedStyle && typeof computedStyle.getPropertyValue === 'function'
+            ? computedStyle.getPropertyValue(property)
+            : ''
+        ) || 0
+      );
+      return {
+        top: read('padding-top'),
+        bottom: read('padding-bottom')
+      };
+    }
+
     function prefersReducedMotion() {
       return Boolean(
         windowObj &&
@@ -242,8 +266,99 @@
       setFixedFrame(suggestionsOutline, surfaceFrame);
     }
 
+    function readSuggestionsSurfaceResizeFrames(fromHeight, toHeight) {
+      const suggestionsContainer = getSuggestionsContainer();
+      const inputParts = getInputParts();
+      if (!suggestionsContainer || !inputParts || !inputParts.container) {
+        return null;
+      }
+      const searchLayer = getSearchLayer();
+      const root = getRoot();
+      const suggestionsSurface = getSuggestionsSurface();
+      const suggestionsOutline = getSuggestionsOutline();
+      if (!suggestionsSurface && !suggestionsOutline) {
+        return null;
+      }
+      const anchor = searchLayer || inputParts.container;
+      const anchorRect = anchor.getBoundingClientRect();
+      const rootRect = root ? root.getBoundingClientRect() : anchorRect;
+      const suggestionsRect = suggestionsContainer.getBoundingClientRect();
+      const createFrame = (height) => ({
+        left: rootRect.left,
+        top: rootRect.top,
+        width: Math.max(0, rootRect.width),
+        height: Math.max(
+          0,
+          Math.max(rootRect.bottom, suggestionsRect.top + height) - rootRect.top
+        )
+      });
+      return {
+        from: createFrame(fromHeight),
+        to: createFrame(toHeight)
+      };
+    }
+
+    function setSuggestionsSurfaceResizeFrame(frame, transition) {
+      const elements = [getSuggestionsSurface(), getSuggestionsOutline()];
+      elements.forEach((element) => {
+        if (!element || !element.style) {
+          return;
+        }
+        element.style.setProperty('transition', transition, 'important');
+        element.style.setProperty('will-change', 'height', 'important');
+        setFixedFrame(element, frame);
+      });
+    }
+
+    function notifySuggestionsResizeLifecycle(phase, payload) {
+      if (!suggestionsResizeLifecycle ||
+          typeof suggestionsResizeLifecycle[phase] !== 'function') {
+        return;
+      }
+      suggestionsResizeLifecycle[phase](payload || {});
+    }
+
+    function setSuggestionsResizeLifecycle(lifecycle) {
+      suggestionsResizeLifecycle = lifecycle && typeof lifecycle === 'object'
+        ? lifecycle
+        : null;
+    }
+
+    function clipSuggestionsToHeight(container, height, options) {
+      if (!container || !container.style) {
+        return;
+      }
+      const clipOptions = options || {};
+      const clippedHeight = Math.max(0, Number(height) || 0);
+      const clippedPadding = clipOptions.collapsePadding === true
+        ? { top: 0, bottom: 0 }
+        : clipOptions.padding;
+      container.setAttribute('data-height-clipped', 'true');
+      container.style.setProperty('height', `${clippedHeight}px`, 'important');
+      if (clippedPadding) {
+        container.style.setProperty(
+          'padding-top',
+          `${Math.max(0, Number(clippedPadding.top) || 0)}px`,
+          'important'
+        );
+        container.style.setProperty(
+          'padding-bottom',
+          `${Math.max(0, Number(clippedPadding.bottom) || 0)}px`,
+          'important'
+        );
+      }
+      container.style.setProperty('overflow-x', 'hidden', 'important');
+      container.style.setProperty(
+        'overflow-y',
+        clipOptions.scrollable === true ? 'auto' : 'hidden',
+        'important'
+      );
+    }
+
     function cancelSuggestionsResizeAnimation(syncLayout) {
       const suggestionsContainer = getSuggestionsContainer();
+      const shouldNotifyLifecycleEnd = suggestionsResizeLifecycleActive;
+      suggestionsResizeLifecycleActive = false;
       if (suggestionsResizeAnimationFrame &&
           typeof windowObj.cancelAnimationFrame === 'function') {
         windowObj.cancelAnimationFrame(suggestionsResizeAnimationFrame);
@@ -262,15 +377,29 @@
       suggestionsResizeTransitionEndHandler = null;
       suggestionsResizeTargetHeight = 0;
       if (suggestionsContainer && suggestionsContainer.style) {
+        suggestionsContainer.removeAttribute('data-height-clipped');
         suggestionsContainer.style.removeProperty('height');
         suggestionsContainer.style.removeProperty('overflow');
         suggestionsContainer.style.removeProperty('overflow-x');
         suggestionsContainer.style.removeProperty('overflow-y');
         suggestionsContainer.style.removeProperty('transition');
+        suggestionsContainer.style.removeProperty('will-change');
+        suggestionsContainer.style.removeProperty('padding-top');
+        suggestionsContainer.style.removeProperty('padding-bottom');
         suggestionsContainer.removeAttribute('data-resizing');
       }
+      [getSuggestionsSurface(), getSuggestionsOutline()].forEach((element) => {
+        if (!element || !element.style) {
+          return;
+        }
+        element.style.removeProperty('transition');
+        element.style.removeProperty('will-change');
+      });
       if (syncLayout !== false) {
         updateSuggestionsFloatingLayout();
+      }
+      if (shouldNotifyLifecycleEnd) {
+        notifySuggestionsResizeLifecycle('onEnd');
       }
     }
 
@@ -289,23 +418,31 @@
           suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
         return false;
       }
-      if (!suggestionsInputLockedHeight) {
-        const renderedHeight = suggestionsResizeTargetHeight ||
-          getRenderedHeight(suggestionsContainer);
-        if (!renderedHeight) {
+      if (!suggestionsInputHeightCaptured) {
+        let renderedHeight = getRenderedHeight(suggestionsContainer);
+        if (renderedHeight <= 0 && !suggestionsInputAllowFromZero) {
+          renderedHeight = suggestionsResizeTargetHeight;
+        }
+        if (!renderedHeight && !suggestionsInputAllowFromZero) {
           return false;
         }
+        suggestionsInputLockedPadding = renderedHeight > 0
+          ? readVerticalPadding(suggestionsContainer)
+          : { top: 0, bottom: 0 };
         cancelSuggestionsResizeAnimation(false);
         suggestionsInputLockedHeight = renderedHeight;
+        suggestionsInputHeightCaptured = true;
       }
       suggestionsContainer.setAttribute('data-input-height-locked', 'true');
-      suggestionsContainer.style.setProperty(
-        'height',
-        `${suggestionsInputLockedHeight}px`,
-        'important'
+      clipSuggestionsToHeight(
+        suggestionsContainer,
+        suggestionsInputLockedHeight,
+        {
+          scrollable: suggestionsInputLockedHeight > 0,
+          collapsePadding: suggestionsInputLockedHeight <= 0,
+          padding: suggestionsInputLockedPadding
+        }
       );
-      suggestionsContainer.style.setProperty('overflow-x', 'hidden', 'important');
-      suggestionsContainer.style.setProperty('overflow-y', 'auto', 'important');
       suggestionsContainer.style.setProperty('transition', 'none', 'important');
       updateSuggestionsSurfaceFrame();
       return true;
@@ -315,8 +452,14 @@
       const finishOptions = options || {};
       const suggestionsContainer = getSuggestionsContainer();
       const fromHeight = suggestionsInputLockedHeight;
+      const fromPadding = suggestionsInputLockedPadding;
+      const heightWasCaptured = suggestionsInputHeightCaptured;
+      const allowFromZero = suggestionsInputAllowFromZero;
       suggestionsInputSessionActive = false;
       suggestionsInputLockedHeight = 0;
+      suggestionsInputLockedPadding = null;
+      suggestionsInputHeightCaptured = false;
+      suggestionsInputAllowFromZero = false;
       clearSuggestionsInputSettleTimer();
       if (!suggestionsContainer) {
         return false;
@@ -325,10 +468,13 @@
       cancelSuggestionsResizeAnimation(false);
       updateSuggestionsFloatingLayout();
       const targetHeight = getRenderedHeight(suggestionsContainer);
-      if (finishOptions.animate !== false && fromHeight > 0) {
+      if (finishOptions.animate !== false && heightWasCaptured &&
+          (fromHeight > 0 || allowFromZero)) {
         return animateSuggestionsResize({
           height: fromHeight,
-          targetHeight
+          targetHeight,
+          allowFromZero,
+          padding: fromPadding
         });
       }
       return false;
@@ -348,7 +494,31 @@
 
     function beginSuggestionsInputSession(options) {
       const beginOptions = options || {};
+      if (!suggestionsInputSessionActive) {
+        suggestionsInputLockedHeight = 0;
+        suggestionsInputLockedPadding = null;
+        suggestionsInputHeightCaptured = false;
+        suggestionsInputAllowFromZero = false;
+      }
       suggestionsInputSessionActive = true;
+      suggestionsInputAllowFromZero = Boolean(
+        suggestionsInputAllowFromZero || beginOptions.allowFromZero
+      );
+      if (suggestionsInputAllowFromZero && !suggestionsInputHeightCaptured) {
+        const suggestionsContainer = getSuggestionsContainer();
+        const isVisible = Boolean(
+          suggestionsContainer &&
+          suggestionsContainer.getAttribute(visibleAttribute) === 'true'
+        );
+        const initialHeight = isVisible
+          ? getRenderedHeight(suggestionsContainer)
+          : 0;
+        if (initialHeight <= 0) {
+          suggestionsInputLockedHeight = 0;
+          suggestionsInputLockedPadding = { top: 0, bottom: 0 };
+          suggestionsInputHeightCaptured = true;
+        }
+      }
       holdSuggestionsInputHeight();
       if (beginOptions.autoSettle === false) {
         clearSuggestionsInputSettleTimer();
@@ -365,18 +535,9 @@
         return null;
       }
       const height = getRenderedHeight(suggestionsContainer);
+      const padding = readVerticalPadding(suggestionsContainer);
       cancelSuggestionsResizeAnimation(false);
-      return height > 0 ? { height } : null;
-    }
-
-    function syncSuggestionsSurfaceDuringResize() {
-      if (!suggestionsResizeTargetHeight) {
-        return;
-      }
-      updateSuggestionsSurfaceFrame();
-      suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(
-        syncSuggestionsSurfaceDuringResize
-      );
+      return height > 0 ? { height, padding } : null;
     }
 
     function animateSuggestionsResize(previousState) {
@@ -385,7 +546,8 @@
         0,
         Number(previousState && previousState.height) || 0
       );
-      if (!suggestionsContainer || !fromHeight ||
+      const allowFromZero = Boolean(previousState && previousState.allowFromZero);
+      if (!suggestionsContainer || (!fromHeight && !allowFromZero) ||
           suggestionsContainer.getAttribute(visibleAttribute) !== 'true') {
         return false;
       }
@@ -394,6 +556,10 @@
       const toHeight = Number.isFinite(requestedTargetHeight) && requestedTargetHeight >= 0
         ? requestedTargetHeight
         : getRenderedHeight(suggestionsContainer);
+      const targetPadding = readVerticalPadding(suggestionsContainer);
+      const fromPadding = previousState && previousState.padding
+        ? previousState.padding
+        : (fromHeight <= 0 ? { top: 0, bottom: 0 } : targetPadding);
       if (prefersReducedMotion() ||
           suggestionsResizeDurationMs <= 0 ||
           Math.abs(toHeight - fromHeight) <= 1) {
@@ -401,25 +567,69 @@
         return false;
       }
       cancelSuggestionsResizeAnimation(false);
+      const surfaceFrames = readSuggestionsSurfaceResizeFrames(fromHeight, toHeight);
       suggestionsResizeTargetHeight = toHeight;
       suggestionsContainer.setAttribute('data-resizing', 'true');
-      suggestionsContainer.style.setProperty('height', `${fromHeight}px`, 'important');
-      suggestionsContainer.style.setProperty('overflow', 'hidden', 'important');
+      clipSuggestionsToHeight(suggestionsContainer, fromHeight, {
+        collapsePadding: fromHeight <= 0,
+        padding: fromPadding
+      });
       suggestionsContainer.style.setProperty('transition', 'none', 'important');
-      updateSuggestionsSurfaceFrame();
+      suggestionsContainer.style.setProperty('will-change', 'height', 'important');
+      suggestionsResizeLifecycleActive = true;
+      notifySuggestionsResizeLifecycle('onStart', {
+        duration: suggestionsResizeDurationMs,
+        easing: suggestionsResizeEasing,
+        fromHeight,
+        toHeight
+      });
+      if (surfaceFrames) {
+        setSuggestionsSurfaceResizeFrame(surfaceFrames.from, 'none');
+      }
       void suggestionsContainer.offsetHeight;
       suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(() => {
         suggestionsResizeAnimationFrame = 0;
+        const transitionProperties = [
+          `height ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`
+        ];
+        if (Math.abs(targetPadding.top - fromPadding.top) > 0.1) {
+          transitionProperties.push(
+            `padding-top ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`
+          );
+        }
+        if (Math.abs(targetPadding.bottom - fromPadding.bottom) > 0.1) {
+          transitionProperties.push(
+            `padding-bottom ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`
+          );
+        }
         suggestionsContainer.style.setProperty(
           'transition',
-          `height ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`,
+          transitionProperties.join(', '),
           'important'
         );
         suggestionsContainer.style.setProperty('height', `${toHeight}px`, 'important');
-        updateSuggestionsSurfaceFrame();
-        suggestionsResizeAnimationFrame = windowObj.requestAnimationFrame(
-          syncSuggestionsSurfaceDuringResize
+        suggestionsContainer.style.setProperty(
+          'padding-top',
+          `${targetPadding.top}px`,
+          'important'
         );
+        suggestionsContainer.style.setProperty(
+          'padding-bottom',
+          `${targetPadding.bottom}px`,
+          'important'
+        );
+        if (surfaceFrames) {
+          setSuggestionsSurfaceResizeFrame(
+            surfaceFrames.to,
+            `height ${suggestionsResizeDurationMs}ms ${suggestionsResizeEasing}`
+          );
+        }
+        notifySuggestionsResizeLifecycle('onTarget', {
+          duration: suggestionsResizeDurationMs,
+          easing: suggestionsResizeEasing,
+          fromHeight,
+          toHeight
+        });
       });
       suggestionsResizeTransitionEndHandler = (event) => {
         if (event && (
@@ -919,7 +1129,8 @@
       finishSuggestionsInputSession,
       holdSuggestionsInputHeight,
       captureSuggestionsResizeState,
-      animateSuggestionsResize
+      animateSuggestionsResize,
+      setSuggestionsResizeLifecycle
     };
   }
 

@@ -9,7 +9,8 @@ const transport = fs.readFileSync('src/background/supabase-transport.js', 'utf8'
 function run() {
   [
     '_x_extension_cloud_web_signin_2026_unique_',
-    '_x_extension_cloud_analytics_toggle_2026_unique_',
+    '_x_extension_cloud_consent_mask_2026_unique_',
+    '_x_extension_cloud_consent_continue_2026_unique_',
     '_x_extension_cloud_delete_2026_unique_'
   ].forEach((id) => assert(html.includes(`id="${id}"`), `${id} should exist`));
 
@@ -26,18 +27,25 @@ function run() {
     'React navigation should render the account tab'
   );
   assert.match(html, /浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie/);
-  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox"[^>]* disabled/);
+  assert.doesNotMatch(html, /cloud_analytics_toggle_2026_unique_/,
+    'usage analytics should not have a separate post-login switch');
   assert.match(html, /cloud_status_2026_unique_"[\s\S]*role="status" aria-live="polite"/);
-  assert.match(html, /cloud_analytics_toggle_2026_unique_" type="checkbox" aria-describedby="_x_extension_cloud_analytics_desc_2026_unique_" disabled/);
+  assert.match(html, /cloud_consent_dialog_2026_unique_"[\s\S]*role="dialog"[\s\S]*aria-modal="true"/);
+  assert.match(html, /产品使用统计[\s\S]*与账号关联[\s\S]*最多保留 24 个月/,
+    'the pre-auth surface should disclose account linkage and retention');
   assert.match(html, /cloud_sync_now_2026_unique_[\s\S]*ri-refresh-line/);
   assert.match(html, /Google 或 GitHub/);
-  assert.match(html, /相同已验证邮箱会自动关联到同一 Lumno 账号/);
-  assert.match(runtime, /action: 'cloudSignInWithWeb'/);
+  assert.match(html, /相同已验证邮箱会关联到同一 Lumno 账号/);
+  assert.match(runtime, /cloudWebSigninButton\.addEventListener\('click',[\s\S]*openCloudConsentDialog\(\)/,
+    'the account action must open the local disclosure before OAuth');
+  assert.match(runtime, /cloudConsentContinueButton\.addEventListener\('click', startCloudWebSignIn\)/);
+  assert.match(runtime, /action: 'cloudSignInWithWeb',[\s\S]*consentVersion: CLOUD_COMBINED_CONSENT_VERSION/);
   assert.doesNotMatch(runtime, /action: 'cloudRequestOtp'/);
   assert.doesNotMatch(runtime, /action: 'cloudVerifyOtp'/);
-  assert.match(runtime, /action: 'cloudSetAnalyticsConsent', consented/);
+  assert.doesNotMatch(runtime, /cloudSetAnalyticsConsent/);
   assert.match(runtime, /cloudSignedIn\.setAttribute\('data-sync-state', syncState\)/);
-  assert.match(runtime, /cloudAnalyticsCard\.setAttribute\('data-enabled'/);
+  assert.match(controller, /acceptCombinedCloudConsent\(\)/);
+  assert.match(controller, /cloud_consent_required/);
   assert.match(
     runtime,
     /String\(sync\.state \|\| ''\) === 'error'[\s\S]*String\(sync\.lastError \|\| ''\)\.trim\(\)/,

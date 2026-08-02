@@ -32,7 +32,12 @@
   const PERIODIC_SYNC_ALARM_NAME = 'lumno-cloud-sync-periodic-v1';
   const SYNC_DEBOUNCE_MS = 1000;
   const PERIODIC_SYNC_MINUTES = 15;
-  const PRIVATE_LOCAL_KEYS = Object.freeze(Object.values(schema.CLOUD_LOCAL_KEYS));
+  const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
+  const SHORTCUT_ICON_STORAGE_KEY = wallpaperApi && wallpaperApi.SHORTCUT_ICON_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const PRIVATE_LOCAL_KEYS = Object.freeze(
+    Object.values(schema.CLOUD_LOCAL_KEYS).filter((key) => key !== schema.CLOUD_LOCAL_KEYS.cacheOwner)
+  );
 
   function safeJson(value) {
     try {
@@ -152,7 +157,9 @@
     const clearTimer = config.clearTimeout || (typeof clearTimeout === 'function' ? clearTimeout : null);
     const trackedCloudArea = config.trackedCloudArea || createTrackedArea(localArea, setTimer);
     const trackedLocalSettingArea = config.trackedLocalSettingArea || trackedCloudArea;
-    const localOnlyKeys = [schema.STORAGE_KEYS.newtabLocalWallpaper];
+    const localOnlyKeys = Array.isArray(schema.LOCAL_ONLY_SYNC_KEYS)
+      ? schema.LOCAL_ONLY_SYNC_KEYS
+      : [schema.STORAGE_KEYS.newtabLocalWallpaper];
     const repository = config.repository || repositoryApi.createRepository({
       localArea,
       syncArea,
@@ -195,6 +202,7 @@
       ? wallpaperApi.createRuntime({
           transport,
           repository,
+          localArea,
           indexedDBApi: config.indexedDBApi || (typeof indexedDB !== 'undefined' ? indexedDB : null)
         })
       : null);
@@ -223,10 +231,14 @@
     }
 
     async function getStoredAccountId() {
-      const local = await readLocal([schema.CLOUD_LOCAL_KEYS.account]);
+      const local = await readLocal([
+        schema.CLOUD_LOCAL_KEYS.account,
+        schema.CLOUD_LOCAL_KEYS.cacheOwner
+      ]);
       return String(
         local[schema.CLOUD_LOCAL_KEYS.account] &&
-        local[schema.CLOUD_LOCAL_KEYS.account].id || ''
+        local[schema.CLOUD_LOCAL_KEYS.account].id ||
+        local[schema.CLOUD_LOCAL_KEYS.cacheOwner] || ''
       ).trim();
     }
 
@@ -325,7 +337,12 @@
       if (wallpaper && typeof wallpaper.syncAll === 'function') {
         try {
           wallpaperResult = await wallpaper.syncAll();
-          if (wallpaperResult && (wallpaperResult.downloaded > 0 || wallpaperResult.uploaded > 0)) {
+          const changedWallpapers = wallpaperResult && wallpaperResult.wallpaper
+            ? wallpaperResult.wallpaper
+            : wallpaperResult;
+          if (changedWallpapers &&
+              (changedWallpapers.downloaded > 0 || changedWallpapers.uploaded > 0 ||
+                changedWallpapers.deleted > 0)) {
             notifyWallpaperRefresh();
           }
         } catch (error) {
@@ -381,6 +398,9 @@
       if (areaName !== 'sync' && areaName !== 'local') {
         return;
       }
+      if (areaName === 'local' && changes && changes[SHORTCUT_ICON_STORAGE_KEY]) {
+        scheduleSync();
+      }
       const trackedArea = trackedLocalSettingArea;
       const externalChanges = typeof trackedArea.consume === 'function'
         ? trackedArea.consume(changes)
@@ -394,27 +414,75 @@
       }
     }
 
+    async function queueMigrationSettings(migration, pullResult) {
+      const remoteKeys = new Set(
+        Array.isArray(pullResult && pullResult.keys) ? pullResult.keys : []
+      );
+      const sourceSnapshot = schema.copySyncSettings(
+        migration && (migration.source_snapshot || migration.snapshot) || {}
+      );
+      for (const [key, value] of Object.entries(sourceSnapshot)) {
+        if (!remoteKeys.has(key)) {
+          await runtime.queueSettingChange(key, value);
+        }
+      }
+    }
+
+    async function acceptCombinedCloudConsent() {
+      if (typeof transport.setCloudConsent === 'function') {
+        await transport.setCloudConsent(CLOUD_COMBINED_CONSENT_VERSION);
+      } else {
+        if (typeof transport.setSyncConsent === 'function') {
+          await transport.setSyncConsent(CLOUD_COMBINED_CONSENT_VERSION);
+        }
+        if (typeof transport.setAnalyticsConsent === 'function') {
+          await transport.setAnalyticsConsent(true, CLOUD_COMBINED_CONSENT_VERSION);
+        }
+      }
+      await writeLocal({
+        [schema.CLOUD_LOCAL_KEYS.consent]: {
+          analytics: true,
+          combined: true,
+          privacy_notice_version: CLOUD_COMBINED_CONSENT_VERSION,
+          updated_at: Date.now()
+        }
+      });
+    }
+
     async function initializeSignedInAccount(session) {
       const identityTransition = await prepareAccountIdentity(session);
-      if (typeof transport.setSyncConsent === 'function') {
-        await transport.setSyncConsent('2026-08-02');
+      const modeAfterIdentity = await repository.getMode();
+      const browserSnapshot = !identityTransition.replacedAccount &&
+        modeAfterIdentity === repositoryApi.MODE_GUEST
+        ? await repository.get(schema.SYNC_KEYS)
+        : null;
+      if (identityTransition.replacedAccount && wallpaper &&
+          typeof wallpaper.clearLocal === 'function') {
+        await wallpaper.clearLocal();
       }
+      await acceptCombinedCloudConsent();
       await writeLocal({
         [schema.CLOUD_LOCAL_KEYS.account]: {
           id: session.user.id,
           email: session.user.email || ''
-        }
+        },
+        [schema.CLOUD_LOCAL_KEYS.cacheOwner]: session.user.id
       });
-      await runtime.enableCloudMode();
-      await registerCurrentDevice();
-      await runtime.pull();
-      if (!identityTransition.replacedAccount) {
-        const snapshot = await repository.get(schema.SYNC_KEYS);
-        for (const [key, value] of Object.entries(schema.copySyncSettings(snapshot))) {
-          await runtime.queueSettingChange(key, value);
+      const migration = await runtime.enableCloudMode(
+        identityTransition.replacedAccount
+          ? { resetCloudCache: true }
+          : (browserSnapshot === null ? undefined : { browserSnapshot })
+      );
+      const requiresBootstrap = identityTransition.replacedAccount ||
+        modeAfterIdentity !== repositoryApi.MODE_CLOUD;
+      if (requiresBootstrap) {
+        await registerCurrentDevice();
+        const pulled = await runtime.pull({ full: true, resetMissing: false });
+        if (!identityTransition.replacedAccount) {
+          await queueMigrationSettings(migration, pulled);
         }
       }
-      await syncNow({ force: true });
+      await syncNow({ force: true, fullPull: true });
       return getStatus();
     }
 
@@ -453,10 +521,29 @@
       return wallpaper.deleteRecord(clientAssetId);
     }
 
-    async function signInWithWeb() {
+    async function uploadShortcutIcon(shortcutId, dataUrl) {
+      if (!wallpaper || typeof wallpaper.uploadShortcutIcon !== 'function') {
+        return { skipped: true, reason: 'media_runtime_unavailable' };
+      }
+      return wallpaper.uploadShortcutIcon(shortcutId, dataUrl);
+    }
+
+    async function deleteShortcutIcon(shortcutId) {
+      if (!wallpaper || typeof wallpaper.deleteShortcutIcon !== 'function') {
+        return { skipped: true, reason: 'media_runtime_unavailable' };
+      }
+      return wallpaper.deleteShortcutIcon(shortcutId);
+    }
+
+    async function signInWithWeb(consentVersion) {
       if (!webAuth || typeof webAuth.signIn !== 'function') {
         const error = new Error('web_auth_not_configured');
         error.code = 'web_auth_not_configured';
+        throw error;
+      }
+      if (String(consentVersion || '') !== CLOUD_COMBINED_CONSENT_VERSION) {
+        const error = new Error('cloud_consent_required');
+        error.code = 'cloud_consent_required';
         throw error;
       }
       const session = await webAuth.signIn();
@@ -464,12 +551,13 @@
     }
 
     async function signOut() {
+      const consentResult = await setAnalyticsConsent(false);
       await runtime.disableCloudMode({ copyToBrowserSync: true });
-      let remoteWarning = '';
+      let remoteWarning = String(consentResult && consentResult.remoteWarning || '');
       try {
         await transport.signOut();
       } catch (error) {
-        remoteWarning = String((error && error.code) || 'remote_signout_failed');
+        remoteWarning = remoteWarning || String((error && error.code) || 'remote_signout_failed');
       }
       await clearIdentityState();
       return { ok: true, remoteWarning };
@@ -491,16 +579,14 @@
           throw error;
         }
         if (currentMode !== repositoryApi.MODE_CLOUD) {
-          if (typeof transport.setSyncConsent === 'function') {
-            await transport.setSyncConsent('2026-08-02');
-          }
-          await runtime.enableCloudMode();
-          const snapshot = await repository.get(schema.SYNC_KEYS);
-          for (const [key, value] of Object.entries(schema.copySyncSettings(snapshot))) {
-            await runtime.queueSettingChange(key, value);
-          }
+          await acceptCombinedCloudConsent();
+          const browserSnapshot = await repository.get(schema.SYNC_KEYS);
+          const migration = await runtime.enableCloudMode({ browserSnapshot });
+          await registerCurrentDevice();
+          const pulled = await runtime.pull({ full: true, resetMissing: false });
+          await queueMigrationSettings(migration, pulled);
         }
-        await syncNow({ force: true });
+        await syncNow({ force: true, fullPull: true });
         return getStatus();
       }
       if (currentMode === repositoryApi.MODE_CLOUD) {
@@ -528,11 +614,12 @@
       const enabled = consented === true;
       const consentRecord = {
         analytics: enabled,
-        privacy_notice_version: '2026-08-02',
+        combined: enabled,
+        privacy_notice_version: CLOUD_COMBINED_CONSENT_VERSION,
         updated_at: Date.now()
       };
       if (enabled) {
-        await transport.setAnalyticsConsent(true, '2026-08-02');
+        await transport.setAnalyticsConsent(true, CLOUD_COMBINED_CONSENT_VERSION);
         await writeLocal({ [schema.CLOUD_LOCAL_KEYS.consent]: consentRecord });
         return { ok: true, analyticsConsented: true };
       }
@@ -546,7 +633,7 @@
       }
       let remoteWarning = '';
       try {
-        await transport.setAnalyticsConsent(false, '2026-08-02');
+        await transport.setAnalyticsConsent(false, CLOUD_COMBINED_CONSENT_VERSION);
       } catch (error) {
         remoteWarning = String(
           error && (error.code || error.message) || 'remote_consent_withdrawal_failed'
@@ -558,12 +645,11 @@
     async function handleAction(request) {
       const action = String((request && request.action) || '');
       if (action === 'cloudGetStatus') return getStatus();
-      if (action === 'cloudSignInWithWeb') return signInWithWeb();
+      if (action === 'cloudSignInWithWeb') return signInWithWeb(request.consentVersion);
       if (action === 'cloudSignOut') return signOut();
-      if (action === 'cloudSyncNow') return syncNow({ force: true });
+      if (action === 'cloudSyncNow') return syncNow({ force: true, fullPull: true });
       if (action === 'cloudSetSyncProvider') return setSyncProvider(request.provider);
       if (action === 'cloudResolveConflict') return resolveConflict(request.key, request.resolution);
-      if (action === 'cloudSetAnalyticsConsent') return setAnalyticsConsent(request.consented === true);
       if (action === 'cloudRecordUsage') {
         return usage && typeof usage.record === 'function'
           ? usage.record(request.metric, request.count)
@@ -571,6 +657,10 @@
       }
       if (action === 'cloudUploadWallpaper') return uploadWallpaper(request.record);
       if (action === 'cloudDeleteWallpaper') return deleteWallpaper(request.id);
+      if (action === 'cloudUploadShortcutIcon') {
+        return uploadShortcutIcon(request.id, request.dataUrl);
+      }
+      if (action === 'cloudDeleteShortcutIcon') return deleteShortcutIcon(request.id);
       return { ok: false, error: 'unknown_cloud_action' };
     }
 
@@ -619,6 +709,8 @@
       recordUsage: usage && typeof usage.record === 'function' ? usage.record : async () => ({ recorded: false }),
       uploadWallpaper,
       deleteWallpaper,
+      uploadShortcutIcon,
+      deleteShortcutIcon,
       handleMessage,
       start
     });
@@ -628,6 +720,7 @@
     SYNC_ALARM_NAME,
     PERIODIC_SYNC_ALARM_NAME,
     PERIODIC_SYNC_MINUTES,
+    CLOUD_COMBINED_CONSENT_VERSION,
     detectClientInfo,
     isTrustedExtensionSender,
     createTrackedArea,

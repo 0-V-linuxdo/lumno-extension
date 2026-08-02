@@ -5,8 +5,8 @@
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608020004` 已应用；用户/账号业务表和内部保留期表均启用并强制 RLS。
-- Storage：`lumno-user-media` 为私有 Bucket，5 MiB 单文件上限，4 条所有者策略。
+- 数据库：迁移 `202608010001` 至 `202608020004` 已应用；`202608020005_full_configuration_and_media_assets.sql` 已在仓库中完成，发布含本次客户端变更前必须先推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- Storage：`lumno-user-media` 为私有 Bucket，5 MiB 单文件上限，4 条所有者策略；待 `202608020005` 推送后，metadata 将区分壁纸与快捷方式图标，并分别限制为 20 个。
 - Edge Functions：`telemetry-ingest`、`delete-account` 均为 ACTIVE；无身份请求返回 401。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
@@ -125,18 +125,19 @@ node scripts/smoke-supabase-remote.js
 
 用两个不同浏览器配置文件测试：
 
-1. A 设备登录并修改主题、快捷方式和壁纸。
-2. B 设备登录同一邮箱，确认设置、壁纸列表和当前选择恢复。
+1. A 设备登录并修改主题、快捷方式、快捷方式自定义图标和壁纸。
+2. B 设备登录同一邮箱，确认设置、壁纸列表、当前选择和快捷方式自定义图标恢复。
 3. A/B 同时修改同一设置，确认不会静默覆盖且显示冲突计数。
 4. 断网修改后重启浏览器，恢复网络并确认 Outbox 清空。
-5. 未开启统计时确认本地不存在 `_lumno_cloud_usage_v1_`。
-6. 开启统计后确认只出现白名单计数和枚举，不出现 URL、标题或查询。
-7. 关闭统计后确认本地待上传计数立即清除。
+5. 在插件确认弹窗中取消，确认不会启动网页登录，且本地不存在 `_lumno_cloud_usage_v1_`。
+6. 确认同步与统计范围并完成登录，确认只出现白名单计数和枚举，不出现 URL、标题或查询。
+7. 退出登录后确认本地待上传计数立即清除，之后不再产生新计数。
 8. 删除一张壁纸，确认 Storage 原图、缩略图和 metadata 都消失。
-9. 永久删除账号，确认 Auth 用户、数据库行和媒体对象全部删除，本机设置仍在。
-10. 退出登录后确认插件继续以游客模式工作。
-11. 分别用 Google 与 GitHub 从插件发起网页登录，确认出现正确授权范围并返回插件。
-12. 篡改回调 `state` 或使用另一个扩展 ID 的回调，确认登录失败且不保存会话。
+9. 删除一个快捷方式自定义图标，确认 Storage 对象和 metadata 都进入删除状态，并且其他设备不再恢复它。
+10. 永久删除账号，确认 Auth 用户、数据库行和壁纸/快捷方式图标对象全部删除，本机设置仍在。
+11. 退出登录后确认插件继续以游客模式工作。
+12. 分别用 Google 与 GitHub 从插件发起网页登录，确认出现正确授权范围并返回插件。
+13. 篡改回调 `state` 或使用另一个扩展 ID 的回调，确认登录失败且不保存会话。
 
 当前已完成开发版扩展的 Google 真实账号链路；Chrome Web Store 版仍需在商店 ID 对应的 Public Client 上做一次发布包验收。
 
@@ -144,7 +145,7 @@ node scripts/smoke-supabase-remote.js
 
 - 审核并发布 `docs/privacy-policy-draft.md` 的当前定稿内容。
 - 将隐私政策发布到 HTTPS 公共页面，并填入 Chrome Web Store Dashboard。
-- 商店页面明确描述账号同步、壁纸上传和可选聚合统计。
+- 商店页面明确描述账号同步、壁纸/快捷方式自定义图标上传和随账号同步确认启用的聚合统计。
 - 按 `docs/chrome-web-store-data-disclosure.md` 填写单一用途、权限理由与数据使用声明，并在每次发布前重新对照实际代码。
 - Dashboard 的数据使用声明与实际代码、产品内披露和隐私政策保持一致。
 - 不要把“同意统计”解释为可以收集浏览数据；Chrome Web Store 的 Limited Use 仍要求数据与单一用途必要相关。参考 [Chrome Web Store Program Policies](https://developer.chrome.com/docs/webstore/program-policies/policies)。

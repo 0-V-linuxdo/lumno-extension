@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 24" role="img" aria-label="Taobao">
-  <title>Taobao</title>
-  <defs>
-    <clipPath id="taobao-icon-clip"><rect width="25" height="24" rx="5.5"/></clipPath>
-  </defs>
-  <image href="taobao.png" x="0.5" y="0" width="24" height="24" preserveAspectRatio="xMidYMid meet" clip-path="url(#taobao-icon-clip)"/>
-</svg>

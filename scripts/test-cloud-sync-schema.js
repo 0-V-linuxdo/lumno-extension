@@ -6,6 +6,12 @@ function run() {
   assert(schema.SYNC_KEYS.length >= 40, 'the cloud schema should cover the existing settings surface');
   assert.strictEqual(new Set(schema.SYNC_KEYS).size, schema.SYNC_KEYS.length, 'sync keys must stay unique');
   assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.themeMode), true);
+  assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.newtabZenMode), true);
+  assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.newtabFavicon), true);
+  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.newtabLocalWallpaper));
+  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceMode));
+  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorLight));
+  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorDark));
   assert.strictEqual(schema.isSyncKey(schema.CLOUD_LOCAL_KEYS.session), false, 'sessions must never be sync settings');
 
   const settingsSnapshot = {

@@ -8,8 +8,8 @@ Lumno 使用 Supabase Auth + Postgres + Private Storage + Edge Functions，并�
 
 - 登录身份和同步提供方是两个状态：未选择 Lumno 同步时继续使用原有的 `chrome.storage.sync`；选择 Lumno 后改用 `chrome.storage.local` 作为本机工作副本，再通过 Outbox 异步写入 Postgres。
 - Chrome Sync 与 Lumno Sync 同一时间只能有一个接收新写入。禁止长期双写；未启用的远端保留切换前快照，但不会继续变化。
-- 自定义壁纸保存在本地 IndexedDB，同时上传到用户私有 Storage 目录。
-- 使用统计默认关闭；只有登录用户主动开启后才在本地计数并上传每日聚合。
+- 自定义壁纸保存在本地 IndexedDB，自定义快捷方式图标保存在本地扩展存储；两者都上传到用户私有 Storage 目录。
+- 插件在跳转网页登录前一次性披露同步和统计范围；用户确认并完成登录后，同时启用账号同步和每日聚合使用统计，不再提供独立统计开关。
 - Access Token、Refresh Token 只放扩展源私有的 IndexedDB；设备 ID、冲突和待发队列放 `chrome.storage.local`，均不进入浏览器同步。
 
 ```mermaid
@@ -24,9 +24,9 @@ flowchart LR
   Cache --> Outbox["Outbox 待发箱"]
   Outbox --> RPC["版本化同步 RPC"]
   RPC --> DB["Postgres + RLS"]
-  UI --> IDB["IndexedDB 壁纸"]
+  UI --> IDB["本地壁纸 / 快捷方式图标"]
   IDB --> Media["Private Storage"]
-  Counter["同意后的本地计数"] --> Edge["Telemetry Edge Function"]
+  Counter["确认同步后的本地计数"] --> Edge["Telemetry Edge Function"]
   Edge --> Daily["每日聚合表"]
 ```
 
@@ -48,13 +48,14 @@ flowchart LR
 ### C. 媒体资源
 
 - 用户主动导入的壁纸原图和缩略图
+- 用户主动导入的快捷方式自定义图标
 - 原始显示名称、MIME、尺寸、字节数、SHA-256
 
-单用户最多 20 个资源，单文件最多 5 MiB；对象路径以用户 ID 开头，Bucket 不公开。
+单用户最多保存 20 张壁纸和 20 个快捷方式图标；壁纸单文件最多 5 MiB，图标最多 160 KiB。对象路径以用户 ID 开头，Bucket 不公开。
 
-### D. 可选使用统计
+### D. 随账号同步启用的使用统计
 
-仅允许白名单计数，例如命令栏唤起、新标签页打开、搜索类型和同步结果。配置快照会被压缩成：
+用户在插件内确认同步与统计范围并完成网页登录后，客户端才开始记录和上传白名单计数，例如命令栏唤起、新标签页打开、搜索类型和同步结果。配置快照会被压缩成：
 
 - 布尔值，例如是否启用画中画；
 - 枚举，例如浅色/深色；
@@ -160,10 +161,11 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `src/background/web-auth-flow.js`：OAuth 2.1 Authorization Code、PKCE、state 和 Chrome 回调校验。
 - `src/background/secure-session-store.js`：扩展源私有 IndexedDB 会话存储和旧会话迁移。
 - `src/background/supabase-transport.js`：Auth、REST、Storage、Functions HTTPS 传输。
-- `src/background/cloud-wallpaper-runtime.js`：壁纸上传、下载和 IndexedDB 落库。
+- `src/background/cloud-wallpaper-runtime.js`：用户媒体同步；负责壁纸 IndexedDB 与快捷方式图标本地存储的上传、下载、删除和账号隔离。
 - `src/background/usage-analytics-runtime.js`：同意门和每日计数器。
 - `supabase/migrations/202608010001_lumno_cloud.sql`：表、索引、RLS、RPC 和 Storage 策略。
 - `supabase/migrations/202608020002_data_retention.sql`：24 个月明细保留、匿名月度汇总以及 30/90 天幂等记录清理。
+- `supabase/migrations/202608020005_full_configuration_and_media_assets.sql`：补齐配置白名单，并为壁纸和快捷方式图标建立分类型媒体约束与独立配额。
 - `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：保留已部署的历史同意字段；当前客户端不再展示或写入地区专属同意。
 - `supabase/functions/`：统计入口与账号删除。
 
@@ -171,7 +173,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 
 - 2026-08-02：Google Web 登录已使用真实测试账号完成，Web 正确显示 Google 身份和邮箱。
 - 2026-08-02：从开发版扩展发起 OAuth 2.1 + PKCE 授权后，成功返回扩展并显示同一账号。
-- 2026-08-02：扩展显示云端“已连接”并完成首次配置同步；统计开关保持默认关闭。
+- 2026-08-02：账号连接流程改为插件内先确认同步与统计范围，再进入网页登录；授权成功后两者同时启用，独立统计开关移除。
 - 2026-08-02：Google OAuth 已发布为正式版；Lumno 名称、图标、首页和隐私政策通过品牌验证并发布。真实登录页已确认显示 Lumno，不再以 Supabase 项目域名作为应用名称。
 
 ## 12. 变更规则

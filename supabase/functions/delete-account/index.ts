@@ -46,11 +46,12 @@ Deno.serve(async (request) => {
     }
 
     const userPrefix = authorized.user.id;
-    const [wallpapers, thumbnails] = await Promise.all([
+    const [wallpapers, thumbnails, shortcutIcons] = await Promise.all([
       listObjectPaths(authorized.admin, `${userPrefix}/wallpapers`),
-      listObjectPaths(authorized.admin, `${userPrefix}/wallpaper-thumbs`)
+      listObjectPaths(authorized.admin, `${userPrefix}/wallpaper-thumbs`),
+      listObjectPaths(authorized.admin, `${userPrefix}/shortcut-icons`)
     ]);
-    const objectPaths = [...new Set([...wallpapers, ...thumbnails])];
+    const objectPaths = [...new Set([...wallpapers, ...thumbnails, ...shortcutIcons])];
     for (let index = 0; index < objectPaths.length; index += PAGE_SIZE) {
       const { error } = await authorized.admin.storage
         .from(BUCKET)

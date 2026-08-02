@@ -338,6 +338,31 @@
       });
     }
 
+    async function setCloudConsent(noticeVersion) {
+      return withAccessToken(async (accessToken, session) => {
+        const timestamp = new Date(now()).toISOString();
+        const version = String(noticeVersion || '2026-08-02-combined-v1').slice(0, 40);
+        const body = {
+          user_id: session.user.id,
+          privacy_notice_version: version,
+          sync_terms_version: version,
+          sync_consented_at: timestamp,
+          analytics_terms_version: version,
+          analytics_consented_at: timestamp,
+          analytics_withdrawn_at: null
+        };
+        const result = await request('/rest/v1/lumno_consents?on_conflict=user_id', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Prefer: 'resolution=merge-duplicates,return=representation'
+          },
+          body: [body]
+        });
+        return Array.isArray(result) && result.length > 0 ? result[0] : body;
+      });
+    }
+
     async function setSyncConsent(noticeVersion) {
       return withAccessToken(async (accessToken, session) => {
         const timestamp = new Date(now()).toISOString();
@@ -366,6 +391,7 @@
         const body = {
           id: source.id,
           user_id: session.user.id,
+          asset_kind: source.asset_kind === 'shortcut_icon' ? 'shortcut_icon' : 'wallpaper',
           client_asset_id: source.client_asset_id,
           original_name: String(source.original_name || '').slice(0, 200),
           storage_path: source.storage_path,
@@ -391,7 +417,7 @@
 
     async function listAssets() {
       return withAccessToken(async (accessToken) => {
-        const query = '?select=id,client_asset_id,original_name,storage_path,thumbnail_path,sha256,mime_type,byte_size,width,height,updated_at,deleted_at&order=updated_at.asc&limit=1000';
+        const query = '?select=id,asset_kind,client_asset_id,original_name,storage_path,thumbnail_path,sha256,mime_type,byte_size,width,height,updated_at,deleted_at&order=updated_at.asc&limit=1000';
         const result = await request(`/rest/v1/lumno_assets${query}`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -492,6 +518,7 @@
       pushSettings,
       pullSettings,
       setAnalyticsConsent,
+      setCloudConsent,
       setSyncConsent,
       ingestUsage,
       uploadObject,

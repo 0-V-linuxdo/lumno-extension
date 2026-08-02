@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Tmall">
-  <title>Tmall</title>
-  <rect width="24" height="24" rx="5.5" fill="#FF0036"/>
-  <defs>
-    <clipPath id="tmall-icon-clip"><rect width="24" height="24" rx="5.5"/></clipPath>
-  </defs>
-  <image href="tmall.png" width="24" height="24" preserveAspectRatio="xMidYMid meet" clip-path="url(#tmall-icon-clip)"/>
-</svg>

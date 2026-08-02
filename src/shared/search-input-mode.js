@@ -109,6 +109,19 @@
     element.style.setProperty(property, value, priorityFor(useImportantStyles));
   }
 
+  function removeStyle(element, property) {
+    if (!element || !element.style) {
+      return;
+    }
+    if (typeof element.style.removeProperty === 'function') {
+      element.style.removeProperty(property);
+      return;
+    }
+    if (typeof element.style.setProperty === 'function') {
+      element.style.setProperty(property, '');
+    }
+  }
+
   function isElementVisible(element) {
     if (!element) {
       return false;
@@ -378,6 +391,9 @@
     let modeMenuOpen = false;
     let modeMenuPending = false;
     let modeMenuRequestId = 0;
+    let modeMenuRevealFrame = 0;
+    let modeMenuRevealFrameKind = '';
+    let modeMenuResultTransitionActive = false;
     let modeMenuFilterQuery = '';
     let renderedModeMenuEntries = [];
     let renderedModeMenuGroups = [];
@@ -2628,9 +2644,12 @@
       });
     }
 
+    function getAllModeMenuButtons() {
+      return Array.from(modeMenu.querySelectorAll('[role="menuitemradio"]'));
+    }
+
     function getModeMenuButtons() {
-      return Array.from(modeMenu.querySelectorAll('[role="menuitemradio"]'))
-        .filter((button) => !button.hidden);
+      return getAllModeMenuButtons().filter((button) => !button.hidden);
     }
 
     function getModeMenuActiveElement() {
@@ -2710,6 +2729,19 @@
       buttons[normalizedIndex].focus({ preventScroll: true });
       scrollModeMenuButtonIntoView(buttons[normalizedIndex]);
       return true;
+    }
+
+    function focusFirstModeMenuFilterResult() {
+      const hasFilterQuery = Boolean(
+        normalizeModeMenuSearchText(modeMenuFilterQuery)
+      );
+      if (hasFilterQuery && focusModeMenuButton(0)) {
+        modeMenuKeyboardNavigationActive = true;
+        setModeMenuSearchActive(true);
+        return true;
+      }
+      modeMenuKeyboardNavigationActive = false;
+      return focusModeMenuSearch();
     }
 
     function getModeMenuButtonLayout(button, index) {
@@ -2822,7 +2854,7 @@
     function syncModeMenuSelection(modeId) {
       const selectedModeId = String(modeId || '');
       let matched = false;
-      getModeMenuButtons().forEach((button) => {
+      getAllModeMenuButtons().forEach((button) => {
         const isSelected = Boolean(
           selectedModeId && String(button.dataset.modeId || '') === selectedModeId
         );
@@ -3115,8 +3147,99 @@
       return 0;
     }
 
+    function cancelModeMenuRevealFrame() {
+      if (!modeMenuRevealFrame || !win) {
+        modeMenuRevealFrame = 0;
+        modeMenuRevealFrameKind = '';
+        return;
+      }
+      if (modeMenuRevealFrameKind === 'animation' &&
+          typeof win.cancelAnimationFrame === 'function') {
+        win.cancelAnimationFrame(modeMenuRevealFrame);
+      } else if (modeMenuRevealFrameKind === 'timeout' &&
+          typeof win.clearTimeout === 'function') {
+        win.clearTimeout(modeMenuRevealFrame);
+      }
+      modeMenuRevealFrame = 0;
+      modeMenuRevealFrameKind = '';
+    }
+
+    function requestModeMenuRevealFrame(callback) {
+      cancelModeMenuRevealFrame();
+      let completedSynchronously = false;
+      const frame = requestModeMenuFrame(() => {
+        completedSynchronously = true;
+        modeMenuRevealFrame = 0;
+        modeMenuRevealFrameKind = '';
+        callback();
+      });
+      if (!completedSynchronously) {
+        modeMenuRevealFrame = frame;
+        modeMenuRevealFrameKind = win &&
+          typeof win.requestAnimationFrame === 'function'
+          ? 'animation'
+          : 'timeout';
+      }
+      return frame;
+    }
+
+    function isModeMenuVisible() {
+      return Boolean(!destroyed && modeMenuOpen && !modeMenu.hidden);
+    }
+
+    function clearModeMenuResultTransitionStyles() {
+      modeMenuResultTransitionActive = false;
+      modeMenu.removeAttribute('data-results-layout-transition');
+      removeStyle(modeMenu, 'transition');
+      removeStyle(modeMenu, 'will-change');
+    }
+
+    function beginModeMenuResultTransition(transition) {
+      if (!isModeMenuVisible()) {
+        return false;
+      }
+      cancelModeMenuRevealFrame();
+      clearModeMenuResultTransitionStyles();
+      modeMenuResultTransitionActive = true;
+      modeMenu.setAttribute('data-results-layout-transition', 'true');
+      modeMenu.style.setProperty('transition', 'none', 'important');
+      modeMenu.style.setProperty('will-change', 'transform', 'important');
+      setModeMenuResultOffset(transition && transition.fromOffset);
+      return true;
+    }
+
+    function targetModeMenuResultTransition(transition) {
+      if (!modeMenuResultTransitionActive || !isModeMenuVisible()) {
+        return false;
+      }
+      const duration = Math.max(0, Number(transition && transition.duration) || 0);
+      const easing = String(
+        (transition && transition.easing) || 'cubic-bezier(0.22, 1, 0.36, 1)'
+      );
+      modeMenu.style.setProperty(
+        'transition',
+        `opacity 170ms ease, transform ${duration}ms ${easing}`,
+        'important'
+      );
+      setModeMenuResultOffset(transition && transition.toOffset);
+      if (modeMenu.getAttribute('data-open') !== 'true') {
+        modeMenu.setAttribute('data-open', 'true');
+      }
+      return true;
+    }
+
+    function finishModeMenuResultTransition() {
+      const wasActive = modeMenuResultTransitionActive;
+      clearModeMenuResultTransitionStyles();
+      if (wasActive && isModeMenuVisible() &&
+          modeMenu.getAttribute('data-open') !== 'true') {
+        revealModeMenuSurface();
+      }
+      return wasActive;
+    }
+
     function revealModeMenuSurface() {
-      const guardedFrame = (callback) => requestModeMenuFrame(() => {
+      const guardedFrame = (callback) => requestModeMenuRevealFrame(() => {
         if (modeMenuOpen && !modeMenu.hidden) {
           callback();
         }
@@ -3275,6 +3398,8 @@
       resetModeMenuDoubleTab();
       resetModeTagRemovalConfirmation();
       modeMenu.removeAttribute('aria-busy');
+      cancelModeMenuRevealFrame();
+      clearModeMenuResultTransitionStyles();
       if (modeMenuCursorTooltipController &&
           typeof modeMenuCursorTooltipController.hide === 'function') {
         modeMenuCursorTooltipController.hide();
@@ -3344,7 +3469,7 @@
         const queryCharacters = Array.from(modeMenuFilterQuery);
         queryCharacters.pop();
         applyModeMenuFilter(queryCharacters.join(''));
-        focusModeMenuSearch();
+        focusFirstModeMenuFilterResult();
         return true;
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight' ||
           event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
@@ -3382,9 +3507,8 @@
           typeof event.key === 'string' && event.key.length === 1 &&
           /[a-z0-9\u3400-\u9fff\s]/i.test(event.key)) {
         stopModeMenuKeyEvent(event);
-        modeMenuKeyboardNavigationActive = false;
         applyModeMenuFilter(modeMenuFilterQuery + event.key);
-        focusModeMenuSearch();
+        focusFirstModeMenuFilterResult();
         return true;
       }
       return false;
@@ -3465,6 +3589,8 @@
       destroyed = true;
       modeMenuRequestId += 1;
       modeMenuPending = false;
+      cancelModeMenuRevealFrame();
+      clearModeMenuResultTransitionStyles();
       resetModeMenuDoubleTab();
       resetModeTagRemovalConfirmation();
       cancelInputModePrefixAnimation();
@@ -3513,8 +3639,11 @@
       setProviderPrefix,
       setPrefixText,
       clearProviderPrefix,
+      beginModeMenuResultTransition,
       closeModeMenu,
       fitModeMenuWithinViewport,
+      finishModeMenuResultTransition,
+      isModeMenuVisible,
       menuElement: modeMenu,
       getModeMenuFilterQuery: () => modeMenuFilterQuery,
       openModeMenu,
@@ -3523,6 +3652,7 @@
       resetModeMenuDoubleTab,
       resetModeTagRemovalConfirmation,
       setModeMenuResultOffset,
+      targetModeMenuResultTransition,
       setTabHintVisible,
       shouldCompleteModeMenuDoubleTab,
       shouldContainModeMenuTab,

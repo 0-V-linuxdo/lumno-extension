@@ -386,6 +386,7 @@
   let toastElement = null;
   let toastController = null;
   let layoutController = null;
+  let searchModeMenuResultResizeActive = false;
   let faviconViewRuntime = null;
   let searchEntryRestoreLayoutLockUntil = 0;
   let newtabResizeLayoutLocked = false;
@@ -4049,6 +4050,12 @@
       });
       renderShortcuts();
     }
+    if (areaName === 'local' && changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY]) {
+      newtabShortcutIcons = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(
+        changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY].newValue
+      );
+      renderShortcuts();
+    }
     if (areaName === 'local' && changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY]) {
       siteSearchIconCache = SHORTCUT_FAVICON.normalizeCacheMap(
         changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY].newValue,
@@ -4930,9 +4937,11 @@
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
+    NEWTAB_ZEN_MODE_STORAGE_KEY,
     NEWTAB_WALLPAPER_STORAGE_KEY,
     NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
     NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
+    NEWTAB_FAVICON_STORAGE_KEY,
     BOOKMARK_COUNT_STORAGE_KEY,
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
@@ -8260,6 +8269,25 @@
       leftKeys.every((key, index) => key === rightKeys[index] && left[key] === right[key]);
   }
 
+  function syncShortcutIconChanges(previousValue, nextValue) {
+    const previous = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(previousValue);
+    const next = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(nextValue);
+    Object.keys(previous).forEach((shortcutId) => {
+      if (!next[shortcutId]) {
+        sendRuntimeMessage({ action: 'cloudDeleteShortcutIcon', id: shortcutId });
+      }
+    });
+    Object.entries(next).forEach(([shortcutId, dataUrl]) => {
+      if (previous[shortcutId] !== dataUrl) {
+        sendRuntimeMessage({
+          action: 'cloudUploadShortcutIcon',
+          id: shortcutId,
+          dataUrl
+        });
+      }
+    });
+  }
+
   function persistShortcuts(nextShortcuts, toastMessage, iconChange) {
     const options = getShortcutStoreOptions();
     const normalized = NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(nextShortcuts, options);
@@ -8286,6 +8314,7 @@
       })
       .then((items) => {
         newtabShortcuts = Array.isArray(items) ? items : normalized;
+        if (iconsChanged) syncShortcutIconChanges(previousIcons, nextIcons);
         pruneShortcutFavicons(newtabShortcuts);
         renderShortcuts();
         if (toastMessage) {
@@ -11407,9 +11436,51 @@
     return Math.max(0, Number(rect && rect.height) || 0);
   }
 
+  function clearSearchModeMenuResultResize() {
+    searchModeMenuResultResizeActive = false;
+    if (inputModeController &&
+        typeof inputModeController.finishModeMenuResultTransition === 'function') {
+      inputModeController.finishModeMenuResultTransition();
+    }
+  }
+
+  function beginSearchModeMenuResultResize(transition) {
+    clearSearchModeMenuResultResize();
+    if (!inputModeController ||
+        typeof inputModeController.beginModeMenuResultTransition !== 'function') {
+      return;
+    }
+    searchModeMenuResultResizeActive = inputModeController.beginModeMenuResultTransition({
+      fromOffset: transition.fromHeight
+    });
+  }
+
+  function targetSearchModeMenuResultResize(transition) {
+    if (!searchModeMenuResultResizeActive || !inputModeController ||
+        typeof inputModeController.targetModeMenuResultTransition !== 'function') {
+      return;
+    }
+    inputModeController.targetModeMenuResultTransition({
+      duration: transition.duration,
+      easing: transition.easing,
+      toOffset: transition.toHeight
+    });
+  }
+
+  function finishSearchModeMenuResultResize() {
+    const wasActive = searchModeMenuResultResizeActive;
+    clearSearchModeMenuResultResize();
+    if (wasActive) {
+      syncSearchModeMenuResultOffset();
+    }
+  }
+
   function syncSearchModeMenuResultOffset() {
     if (!inputModeController ||
         typeof inputModeController.setModeMenuResultOffset !== 'function') {
+      return;
+    }
+    if (searchModeMenuResultResizeActive) {
       return;
     }
     const fitMaxHeightProperty =
@@ -13056,7 +13127,10 @@
     searchModeResultTransitionQuery = query;
     if (layoutController &&
         typeof layoutController.beginSuggestionsInputSession === 'function') {
-      layoutController.beginSuggestionsInputSession({ autoSettle: false });
+      layoutController.beginSuggestionsInputSession({
+        allowFromZero: true,
+        autoSettle: false
+      });
     }
     return true;
   }
@@ -15301,6 +15375,14 @@
     onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
+  if (layoutController &&
+      typeof layoutController.setSuggestionsResizeLifecycle === 'function') {
+    layoutController.setSuggestionsResizeLifecycle({
+      onStart: beginSearchModeMenuResultResize,
+      onTarget: targetSearchModeMenuResultResize,
+      onEnd: finishSearchModeMenuResultResize
+    });
+  }
   syncSearchModeMenuResultOffset();
   if (typeof window.ResizeObserver === 'function') {
     const searchModeMenuResultResizeObserver = new window.ResizeObserver(

@@ -1308,9 +1308,11 @@ const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = (
 ) || '_x_extension_newtab_wordmark_visible_2026_unique_';
 const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
 const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
+const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
 const NEWTAB_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_';
 const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
 const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
+const NEWTAB_FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
 const OVERLAY_SIZE_MODE_STORAGE_KEY = '_x_extension_overlay_size_mode_2026_unique_';
 const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
 const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
@@ -5039,10 +5041,11 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'cloudSyncNow',
       'cloudSetSyncProvider',
       'cloudResolveConflict',
-      'cloudSetAnalyticsConsent',
       'cloudRecordUsage',
       'cloudUploadWallpaper',
-      'cloudDeleteWallpaper'
+      'cloudDeleteWallpaper',
+      'cloudUploadShortcutIcon',
+      'cloudDeleteShortcutIcon'
     ],
     handler: handleCloudAccountMessage
   }
@@ -5841,9 +5844,11 @@ migrateStorageIfNeeded([
   NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
   NEWTAB_THEME_MODE_STORAGE_KEY,
   NEWTAB_THEME_SCOPE_STORAGE_KEY,
+  NEWTAB_ZEN_MODE_STORAGE_KEY,
   NEWTAB_WALLPAPER_STORAGE_KEY,
   NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
   NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
+  NEWTAB_FAVICON_STORAGE_KEY,
   OVERLAY_SIZE_MODE_STORAGE_KEY,
   OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
   BOOKMARK_COUNT_STORAGE_KEY,

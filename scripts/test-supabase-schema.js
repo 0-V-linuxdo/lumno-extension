@@ -10,9 +10,12 @@ const retentionSql = fs.readFileSync(retentionMigrationPath, 'utf8');
 const syncAllowlistMigrationPath =
   'supabase/migrations/202608020003_selection_quick_actions_sync_key.sql';
 const syncAllowlistSql = fs.readFileSync(syncAllowlistMigrationPath, 'utf8');
+const fullConfigurationMigrationPath =
+  'supabase/migrations/202608020005_full_configuration_and_media_assets.sql';
+const fullConfigurationSql = fs.readFileSync(fullConfigurationMigrationPath, 'utf8');
 
 function run() {
-  const syncSchemaSql = `${sql}\n${syncAllowlistSql}`;
+  const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}`;
   schema.SYNC_KEYS.forEach((key) => {
     assert(syncSchemaSql.includes(`'${key}'`), `database sync allowlist should include ${key}`);
   });
@@ -24,15 +27,12 @@ function run() {
     source.matchAll(/'(_x_extension_[^']+)'/g),
     (match) => match[1]
   );
-  const expectedFollowupKeys = new Set([
-    ...extractSyncKeys(initialSyncFunctionSql),
-    '_x_extension_selection_quick_actions_enabled_2026_unique_'
-  ]);
-  const actualFollowupKeys = new Set(extractSyncKeys(syncAllowlistSql));
+  const expectedFollowupKeys = new Set(schema.SYNC_KEYS);
+  const actualFollowupKeys = new Set(extractSyncKeys(fullConfigurationSql));
   assert.deepStrictEqual(
     Array.from(actualFollowupKeys).sort(),
     Array.from(expectedFollowupKeys).sort(),
-    'the follow-up migration should replace the complete sync allowlist without dropping legacy keys'
+    'the latest follow-up migration should replace the complete sync allowlist without dropping keys'
   );
   schema.USAGE_METRICS.forEach((metric) => {
     assert(sql.includes(`'${metric}'`), `database usage allowlist should include ${metric}`);
@@ -84,6 +84,14 @@ function run() {
     'wallpaper ids must remain stable across devices');
   assert.match(sql, /A user may store at most 20 active media assets/,
     'the database should enforce a per-user media count cap');
+  assert.match(fullConfigurationSql, /asset_kind in \('wallpaper', 'shortcut_icon'\)/,
+    'private media should distinguish wallpapers from shortcut icons');
+  assert.match(fullConfigurationSql, /\^shortcut-icon-\[0-9a-f\]\{64\}\$/,
+    'shortcut icon asset ids should be deterministic and constrained');
+  assert.match(fullConfigurationSql, /byte_size <= 163840/,
+    'shortcut icons should retain their tighter client-side size limit in the database');
+  assert.match(fullConfigurationSql, /asset_kind = new\.asset_kind/,
+    'wallpapers and shortcut icons should each receive an independent asset quota');
   assert.match(sql, /storage_path = name or thumbnail_path = name/,
     'storage uploads must have an owned metadata row before accepting bytes');
 

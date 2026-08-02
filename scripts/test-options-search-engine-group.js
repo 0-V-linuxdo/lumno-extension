@@ -44,6 +44,16 @@ assert.match(
 );
 assert.match(
   optionsHtml,
+  /<script src="\.\.\/shared\/shortcut-favicon\.js"><\/script>/,
+  'Options should load the shared provider icon catalog'
+);
+assert.match(
+  optionsJs,
+  /SHORTCUT_FAVICON\.getSiteSearchPinnedIconAssetPath\(item\)/,
+  'Options should reuse the exact same bundled provider tiles as the search-scope panel'
+);
+assert.match(
+  optionsHtml,
   /data-site-search-category="site"[\s\S]*data-site-search-category="searchEngine"/,
   'The unified custom form should let users choose its search panel group'
 );

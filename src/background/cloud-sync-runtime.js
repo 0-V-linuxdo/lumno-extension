@@ -200,25 +200,40 @@
       };
     }
 
-    async function pull() {
+    async function pull(optionsArg) {
       if (await repository.getMode() !== repositoryApi.MODE_CLOUD ||
           !transport || typeof transport.pullSettings !== 'function') {
         return { skipped: true, reason: 'cloud-disabled' };
       }
+      const pullOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      const full = pullOptions.full === true;
+      const resetMissing = full && pullOptions.resetMissing !== false;
       const current = await getState();
       const device = await ensureDevice();
       const response = await transport.pullSettings({
         device_id: device.id,
-        cursor: current.cursor
+        cursor: full ? 0 : current.cursor
       });
       const rows = Array.isArray(response && response.rows) ? response.rows : [];
       const localSnapshot = await repository.get(schema.SYNC_KEYS);
       const applied = state.applyRemoteRows(localSnapshot, rows, current.outbox);
+      const remoteKeys = new Set(rows
+        .map((row) => String(row && row.key || ''))
+        .filter((key) => schema.isSyncKey(key)));
+      const pendingKeys = new Set(current.outbox.map((operation) => String(operation && operation.key || '')));
+      const missingRemovals = resetMissing
+        ? schema.SYNC_KEYS.filter((key) => (
+            Object.prototype.hasOwnProperty.call(localSnapshot, key) &&
+            !remoteKeys.has(key) &&
+            !pendingKeys.has(key)
+          ))
+        : [];
       if (Object.keys(applied.updates).length > 0) {
         await repository.set(applied.updates);
       }
-      if (applied.removals.length > 0) {
-        await repository.remove(applied.removals);
+      const removals = [...new Set([...applied.removals, ...missingRemovals])];
+      if (removals.length > 0) {
+        await repository.remove(removals);
       }
       const conflicts = mergeConflicts(current.conflicts, applied.conflicts.map((item) => ({
         ...item,
@@ -227,7 +242,9 @@
       })));
       await writeLocal({
         [schema.CLOUD_LOCAL_KEYS.pullCursor]: Math.max(current.cursor, applied.cursor),
-        [schema.CLOUD_LOCAL_KEYS.versions]: { ...current.versions, ...applied.versions },
+        [schema.CLOUD_LOCAL_KEYS.versions]: resetMissing
+          ? applied.versions
+          : { ...current.versions, ...applied.versions },
         [schema.CLOUD_LOCAL_KEYS.conflicts]: conflicts,
         [schema.CLOUD_LOCAL_KEYS.status]: {
           state: conflicts.length > 0 ? 'conflict' : 'ready',
@@ -237,8 +254,11 @@
       });
       return {
         ok: true,
+        full,
+        resetMissing,
         pulled: rows.length,
-        applied: Object.keys(applied.updates).length + applied.removals.length,
+        applied: Object.keys(applied.updates).length + removals.length,
+        keys: [...remoteKeys],
         conflicts
       };
     }
@@ -256,7 +276,10 @@
             return { skipped: true, reason: 'backoff', retry_at: nextRetryAt };
           }
           const pushed = await flush();
-          const pulled = await pull();
+          const pulled = await pull({
+            full: syncOptions.fullPull === true,
+            resetMissing: syncOptions.fullPull === true
+          });
           const completed = await getState();
           await writeLocal({
             [schema.CLOUD_LOCAL_KEYS.status]: {
@@ -289,8 +312,8 @@
       return activeSync;
     }
 
-    async function enableCloudMode() {
-      const migration = await repository.enterCloudMode();
+    async function enableCloudMode(options) {
+      const migration = await repository.enterCloudMode(options);
       const device = await ensureDevice();
       return { ...migration, device };
     }

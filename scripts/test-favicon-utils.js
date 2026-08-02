@@ -88,12 +88,12 @@ assert.strictEqual(
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
-    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+    'chrome-extension://abc/assets/images/site-search/tile-gg.png',
     false,
     { ownExtensionId: 'abc' }
   ),
   true,
-  'strict favicon mode should keep bundled site-search SVG artwork'
+  'strict favicon mode should keep bundled site-search tile artwork'
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
@@ -106,7 +106,7 @@ assert.strictEqual(
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
-    'chrome-extension://other/assets/images/site-search/duckduckgo.svg',
+    'chrome-extension://other/assets/images/site-search/tile-ddg.png',
     true,
     { ownExtensionId: 'abc' }
   ),
@@ -249,11 +249,11 @@ assert.strictEqual(
 );
 assert.strictEqual(
   strictResolver.getSafeFaviconCandidateUrl(
-    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
-    'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+    'chrome-extension://abc/assets/images/site-search/tile-ddg.png',
+    'chrome-extension://abc/assets/images/site-search/tile-ddg.png',
     'bundled-provider'
   ),
-  'chrome-extension://abc/assets/images/site-search/duckduckgo.svg',
+  'chrome-extension://abc/assets/images/site-search/tile-ddg.png',
   'strict resolver should retain bundled site-search artwork'
 );
 assert.strictEqual(

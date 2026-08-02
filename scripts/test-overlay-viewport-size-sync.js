@@ -247,13 +247,13 @@ assert.match(
 );
 assert.match(
   sharedSearchInputSource,
-  /\.x-lumno-search-input-mode__menu:not\(\[hidden\]\) \{[\s\S]*?transition: opacity 170ms ease, transform 180ms ease-in-out !important;/,
-  'an open search-mode panel should use ease-in-out when following result-height changes'
+  /\.x-lumno-search-input-mode__menu:not\(\[hidden\]\) \{[\s\S]*?transition: opacity 170ms ease,[\s\S]*?transform 360ms cubic-bezier\(0\.2, 1\.45, 0\.35, 1\) !important;/,
+  'ordinary scope-menu entry should retain the shared spring-like transform transition'
 );
-assert.match(
+assert.doesNotMatch(
   sharedSearchInputSource,
-  /\.x-lumno-search-input-mode__menu\[data-open="true"\] \{[\s\S]*?animation: _x_lumno_search_mode_menu_entry_2026_unique_[\s\S]*?360ms cubic-bezier\(0\.2, 1\.45, 0\.35, 1\);[\s\S]*?@keyframes _x_lumno_search_mode_menu_entry_2026_unique_[\s\S]*?--x-extension-menu-surface-closed-transform[\s\S]*?--x-extension-menu-surface-open-transform/,
-  'the search-mode panel should reserve spring motion for its initial closed-to-open entry'
+  /_x_lumno_search_mode_menu_entry_2026_unique_|\.x-lumno-search-input-mode__menu\[data-open="true"\][\s\S]*?animation:/,
+  'scope-menu transform must not be owned by a competing keyframe and transition at the same time'
 );
 assert.match(
   sharedSearchInputSource,
@@ -287,8 +287,8 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function captureSuggestionsHeightState\(container\)[\s\S]*?suggestionsHeightAnimationTargetIsCapped[\s\S]*?state\.heldHeight[\s\S]*?suggestionsHeightAnimationTarget[\s\S]*?cancelSuggestionsHeightAnimation\(container\)/,
-  'overlay suggestion rerenders should preserve the intended animation target instead of treating its intermediate height as stable'
+  /function captureSuggestionsHeightState\(container\)[\s\S]*?suggestionsHeightAnimationTargetIsCapped[\s\S]*?state\.heldHeight = metrics\.height;[\s\S]*?state\.padding = readSuggestionsVerticalPadding\(container\)[\s\S]*?cancelSuggestionsHeightAnimation\(container\)/,
+  'interrupted overlay animation should restart from its current rendered box and padding'
 );
 assert.match(
   searchPanelSource,
@@ -297,12 +297,12 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function reconcileSuggestionsHeightAfterRender\(previousState, query, options\)[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\(suggestionsContainer, previousState\.height\)/,
+  /function reconcileSuggestionsHeightAfterRender\(previousState, query, options\)[\s\S]*?holdSuggestionsHeightForRemoteMix\([\s\S]*?animateSuggestionsHeight\(suggestionsContainer, previousState\)/,
   'overlay result renderers should share one measured-height reconciliation pipeline'
 );
 assert.match(
   searchPanelSource,
-  /function holdSuggestionsHeightForRemoteMix\(container, previousState, query, enabled\)[\s\S]*?shouldHold[\s\S]*?suggestionsHeightInputLockedHeight[\s\S]*?previousState\.heldHeight[\s\S]*?height.*heldHeight[\s\S]*?transition', 'none'/,
+  /function holdSuggestionsHeightForRemoteMix\(container, previousState, query, enabled\)[\s\S]*?shouldHold[\s\S]*?previousState\.heldHeight[\s\S]*?heldPadding[\s\S]*?clipSuggestionsToHeight\(container, heldHeight, \{[\s\S]*?scrollable: true,[\s\S]*?padding: heldPadding[\s\S]*?transition', 'none'/,
   'intermediate URL and remote result renders should keep the prior input-session height while mixing'
 );
 assert.match(
@@ -332,13 +332,13 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function animateSuggestionsHeight\(container, fromHeight\)[\s\S]*?const targetMetrics = readSuggestionsHeightMetrics\(container\);\s*const toHeight = targetMetrics\.height;/,
+  /function animateSuggestionsHeight\(container, previousState\)[\s\S]*?const fromHeight =[\s\S]*?const targetMetrics = readSuggestionsHeightMetrics\(container\);\s*const toHeight = targetMetrics\.height;/,
   'overlay result animations should use the same layout-space height for both measurement and CSS writes'
 );
 assert.match(
   searchPanelSource,
   /suggestionsHeightAnimationTarget = toHeight;[\s\S]*?suggestionsHeightAnimationTargetIsCapped = targetMetrics\.atMaxHeight;/,
-  'height animations should track their intended target so rapid typing cannot restart from an in-flight pixel value'
+  'height animations should retain target metadata while interruption capture uses the live rendered height'
 );
 assert.match(
   searchPanelSource,
@@ -352,22 +352,22 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const searchPanelsLayoutTransitionDurationMs = 220;[\s\S]*?const searchPanelsLayoutTransitionEasing =[\s\S]*?'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/,
+  /const searchPanelsLayoutTransitionDurationMs = 180;[\s\S]*?const searchPanelsLayoutTransitionEasing =[\s\S]*?'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/,
   'the result surface and scope panel should share one layout-transition rhythm'
 );
 assert.match(
   searchPanelSource,
-  /function scheduleSearchPanelsLayoutTransition\(container, fromHeight, targetMetrics, modeMenu\)[\s\S]*?modeMenu\.style\.setProperty\('transition', 'none', 'important'\)[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?`height \$\{searchPanelsLayoutTransitionDurationMs\}ms \$\{searchPanelsLayoutTransitionEasing\}`[\s\S]*?`opacity 170ms ease, transform \$\{searchPanelsLayoutTransitionDurationMs\}ms \$\{searchPanelsLayoutTransitionEasing\}`[\s\S]*?setModeMenuResultOffset\(toHeight\)/,
-  'one animation frame should start result height and scope-panel displacement with identical timing'
+  /function scheduleSearchPanelsLayoutTransition\([\s\S]*?beginModeMenuResultTransition\(\{ fromOffset: fromHeight \}\)[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?getSuggestionsHeightTransitionProperties\([\s\S]*?searchPanelsLayoutTransitionDurationMs[\s\S]*?targetModeMenuResultTransition\(\{[\s\S]*?duration: searchPanelsLayoutTransitionDurationMs,[\s\S]*?toOffset: toHeight/,
+  'one animation frame should target result height and shared scope-panel displacement with identical timing'
 );
 assert.match(
   searchPanelSource,
-  /function scheduleStandaloneSuggestionsHeightTransition\(container, fromHeight, targetMetrics\)[\s\S]*?const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180;[\s\S]*?transitionEasing = 'ease-in-out'/,
+  /function scheduleStandaloneSuggestionsHeightTransition\(container, previousState, targetMetrics\)[\s\S]*?const isLargeShrink = toHeight < fromHeight - Math\.max\(104, fromHeight \* 0\.35\);[\s\S]*?transitionDurationMs = isLargeShrink \? 100 : 180;[\s\S]*?transitionEasing = 'ease-in-out'/,
   'results without an open scope panel should retain the ordinary search height rhythm'
 );
 assert.match(
   searchPanelSource,
-  /const modeMenu = getSearchPanelsLayoutTransitionMenu\(\);\s*if \(modeMenu\) \{\s*scheduleSearchPanelsLayoutTransition\([\s\S]*?modeMenu[\s\S]*?return;\s*\}\s*scheduleStandaloneSuggestionsHeightTransition\(/,
+  /const modeMenu = getSearchPanelsLayoutTransitionMenu\(\);[\s\S]*?if \(modeMenu\) \{\s*scheduleSearchPanelsLayoutTransition\([\s\S]*?targetMetrics[\s\S]*?return;\s*\}\s*scheduleStandaloneSuggestionsHeightTransition\(/,
   'the coordinated scheduler should only run while the scope panel is actually open'
 );
 assert.match(

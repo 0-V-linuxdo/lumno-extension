@@ -12,7 +12,6 @@ const inputModeCss = fs.readFileSync('src/shared/search-input.css', 'utf8');
 const searchUtilsSource = fs.readFileSync('src/shared/search-utils.js', 'utf8');
 const siteSearchSource = fs.readFileSync('assets/data/site-search.json', 'utf8');
 const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-const tileGenerator = require('./generate-site-search-icon-tiles.js');
 
 assert.match(
   backgroundSource,
@@ -35,7 +34,6 @@ assert.doesNotMatch(
 const webAccessibleResources = (manifest.web_accessible_resources || [])
   .flatMap((entry) => entry && Array.isArray(entry.resources) ? entry.resources : []);
 const bundledProviderIconResourcePatterns = [
-  'assets/images/site-search/*.svg',
   'assets/images/site-search/*.png'
 ];
 assert.ok(
@@ -58,16 +56,6 @@ assert.deepStrictEqual(
   siteSearchProviders.map((provider) => provider.key),
   Object.keys(expectedBundledProviderIcons),
   'the bundled provider icon map should cover the complete built-in catalog in order'
-);
-assert.deepStrictEqual(
-  tileGenerator.SITE_SEARCH_ICON_TILE_SPECS.map((spec) => spec.key),
-  siteSearchProviders.map((provider) => provider.key),
-  'the tile generator should cover the complete built-in catalog in order'
-);
-assert.strictEqual(
-  tileGenerator.TILE_SIZE,
-  144,
-  'provider tiles should retain enough pixels for 4x rendering at 36 CSS px'
 );
 siteSearchProviders.forEach((provider) => {
   assert.ok(!provider.icon && !provider.iconUrl,

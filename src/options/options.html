@@ -2547,27 +2547,8 @@
       ._x_extension_cloud_sync_action_2026_unique_[aria-busy="true"] .ri-refresh-line {
         animation: _x_extension_cloud_spin_2026_unique_ 850ms linear infinite;
       }
-      ._x_extension_cloud_analytics_card_2026_unique_,
       ._x_extension_cloud_scope_card_2026_unique_ {
         min-height: 152px;
-      }
-      ._x_extension_cloud_analytics_card_2026_unique_[data-enabled="true"] {
-        border-color: color-mix(in srgb, var(--cloud-sage) 38%, var(--setting-divider));
-        background:
-          radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--cloud-sage) 14%, transparent), transparent 48%),
-          color-mix(in srgb, var(--control-bg) 94%, var(--cloud-sage-soft));
-      }
-      ._x_extension_cloud_analytics_layout_2026_unique_ {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 18px;
-      }
-      ._x_extension_cloud_analytics_copy_2026_unique_ {
-        display: flex;
-        align-items: flex-start;
-        gap: 11px;
-        min-width: 0;
       }
       ._x_extension_cloud_form_2026_unique_ {
         display: grid;
@@ -2625,6 +2606,131 @@
         border-radius: 999px;
         background: color-mix(in srgb, var(--cloud-sage) 68%, var(--panel-subtext));
       }
+      ._x_extension_cloud_consent_mask_2026_unique_ {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding:
+          max(18px, env(safe-area-inset-top))
+          max(18px, env(safe-area-inset-right))
+          max(18px, env(safe-area-inset-bottom))
+          max(18px, env(safe-area-inset-left));
+        overflow: auto;
+        overscroll-behavior: contain;
+        background: rgba(15, 23, 42, 0.48);
+        opacity: 0;
+        transition: opacity 180ms ease;
+      }
+      ._x_extension_cloud_consent_mask_2026_unique_[hidden] {
+        display: none !important;
+      }
+      ._x_extension_cloud_consent_mask_2026_unique_[data-show="true"] {
+        opacity: 1;
+      }
+      ._x_extension_cloud_consent_dialog_2026_unique_ {
+        width: min(520px, 100%);
+        max-height: calc(100dvh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        box-sizing: border-box;
+        overflow: hidden auto;
+        padding: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 20px;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+        transition: opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      ._x_extension_cloud_consent_mask_2026_unique_[data-show="true"] ._x_extension_cloud_consent_dialog_2026_unique_ {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      body[data-theme="dark"] ._x_extension_cloud_consent_dialog_2026_unique_ {
+        border-color: rgba(148, 163, 184, 0.22);
+        background: #151515;
+        color: #f3f4f6;
+        box-shadow: 0 26px 68px rgba(0, 0, 0, 0.5);
+      }
+      ._x_extension_cloud_consent_header_2026_unique_ {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+      }
+      ._x_extension_cloud_consent_icon_2026_unique_ {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border: 1px solid color-mix(in srgb, #778873 24%, rgba(148, 163, 184, 0.3));
+        border-radius: 14px;
+        background: color-mix(in srgb, #778873 13%, transparent);
+        color: #536451;
+        font-size: 20px;
+      }
+      body[data-theme="dark"] ._x_extension_cloud_consent_icon_2026_unique_ {
+        color: #aab8a4;
+      }
+      ._x_extension_cloud_consent_title_2026_unique_ {
+        margin: 1px 0 5px;
+        font-size: 17px;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      ._x_extension_cloud_consent_intro_2026_unique_,
+      ._x_extension_cloud_consent_control_2026_unique_ {
+        margin: 0;
+        color: color-mix(in srgb, currentColor 68%, transparent);
+        font-size: 12.5px;
+        line-height: 1.6;
+      }
+      ._x_extension_cloud_consent_list_2026_unique_ {
+        display: grid;
+        margin: 18px 0 0;
+        padding: 0;
+        border-block: 1px solid rgba(148, 163, 184, 0.2);
+        list-style: none;
+      }
+      ._x_extension_cloud_consent_list_2026_unique_ li {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 12px 0;
+        color: color-mix(in srgb, currentColor 79%, transparent);
+        font-size: 12.5px;
+        line-height: 1.55;
+      }
+      ._x_extension_cloud_consent_list_2026_unique_ li + li {
+        border-top: 1px solid rgba(148, 163, 184, 0.16);
+      }
+      ._x_extension_cloud_consent_list_2026_unique_ i {
+        margin-top: 1px;
+        color: #657561;
+        font-size: 17px;
+      }
+      body[data-theme="dark"] ._x_extension_cloud_consent_list_2026_unique_ i {
+        color: #aab8a4;
+      }
+      ._x_extension_cloud_consent_control_2026_unique_ {
+        margin-top: 14px;
+      }
+      ._x_extension_cloud_consent_actions_2026_unique_ {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      ._x_extension_cloud_consent_actions_2026_unique_ button {
+        min-height: 40px;
+        border-radius: 12px !important;
+      }
       ._x_extension_cloud_danger_card_2026_unique_ {
         padding-block: 17px;
         border-style: dashed;
@@ -2650,6 +2756,10 @@
         }
         ._x_extension_cloud_sync_action_2026_unique_[aria-busy="true"] .ri-refresh-line {
           animation: none;
+        }
+        ._x_extension_cloud_consent_mask_2026_unique_,
+        ._x_extension_cloud_consent_dialog_2026_unique_ {
+          transition: none;
         }
       }
       @media (max-width: 900px) {
@@ -2685,8 +2795,15 @@
         ._x_extension_cloud_sync_detail_2026_unique_ {
           margin-left: 0;
         }
-        ._x_extension_cloud_analytics_layout_2026_unique_ {
-          gap: 12px;
+        ._x_extension_cloud_consent_dialog_2026_unique_ {
+          padding: 18px;
+          border-radius: 17px;
+        }
+        ._x_extension_cloud_consent_actions_2026_unique_ {
+          flex-direction: column-reverse;
+        }
+        ._x_extension_cloud_consent_actions_2026_unique_ button {
+          width: 100%;
         }
       }
       ._x_extension_setting_divider_2024_unique_ {
@@ -2980,7 +3097,7 @@
             <div class="_x_extension_setting_row_2024_unique_ _x_extension_cloud_intro_2026_unique_">
               <div>
                 <p class="_x_extension_section_title_2024_unique_" data-i18n="cloud_account_section_title">账号与跨设备同步</p>
-                <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_account_section_desc">登录后同步 Lumno 配置和自定义壁纸；浏览历史、网页标题和搜索内容不会上传。</p>
+                <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_account_section_desc">确认开启后，同步 Lumno 配置和自定义壁纸，并上传产品使用统计；浏览历史、网页标题和搜索内容不会上传。</p>
               </div>
               <span id="_x_extension_cloud_status_2026_unique_" class="_x_extension_cloud_status_2026_unique_" data-state="idle" data-i18n="cloud_status_loading" role="status" aria-live="polite">正在检查</span>
             </div>
@@ -2991,11 +3108,11 @@
             </div>
 
             <div id="_x_extension_cloud_signed_out_2026_unique_" class="_x_extension_cloud_card_2026_unique_ _x_extension_cloud_card_full_2026_unique_" hidden>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_signin_title">通过 Lumno 网页登录</p>
-              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_signin_desc">可使用 Google 或 GitHub 登录；相同已验证邮箱会自动关联到同一 Lumno 账号。</p>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_signin_title">登录并开启账号同步</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_signin_desc">先确认同步和统计的数据范围，再使用 Google 或 GitHub 登录；相同已验证邮箱会关联到同一 Lumno 账号。</p>
               <button id="_x_extension_cloud_web_signin_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_ _x_extension_cloud_action_2026_unique_" type="button">
                 <i class="ri-icon ri-external-link-line" aria-hidden="true"></i>
-                <span data-i18n="cloud_web_signin">打开安全登录页</span>
+                <span data-i18n="cloud_web_signin">开启账号同步</span>
               </button>
               <p class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_web_signin_security">授权完成后会自动返回插件；密码和第三方凭据不会交给插件。</p>
               <p id="_x_extension_cloud_error_2026_unique_" class="_x_extension_cloud_error_2026_unique_" role="alert"></p>
@@ -3028,25 +3145,7 @@
               </div>
             </div>
 
-            <div id="_x_extension_cloud_analytics_card_2026_unique_" class="_x_extension_cloud_card_2026_unique_ _x_extension_cloud_analytics_card_2026_unique_" data-enabled="false">
-              <div class="_x_extension_cloud_analytics_layout_2026_unique_">
-                <div class="_x_extension_cloud_analytics_copy_2026_unique_">
-                  <span class="_x_extension_cloud_card_icon_2026_unique_" aria-hidden="true">
-                    <i class="ri-icon ri-bar-chart-box-line"></i>
-                  </span>
-                  <div>
-                    <p class="_x_extension_setting_title_2024_unique_" data-i18n="cloud_analytics_title">可选产品使用统计</p>
-                    <p id="_x_extension_cloud_analytics_desc_2026_unique_" class="_x_extension_setting_desc_2024_unique_" data-i18n="cloud_analytics_desc">仅在登录后且你主动开启时，上传与账号关联的功能次数、配置布尔值、枚举和数量，明细最多保留 24 个月。不会上传 URL、搜索词、网页标题、历史记录或书签内容。</p>
-                  </div>
-                </div>
-                <label class="_x_extension_switch_2024_unique_" for="_x_extension_cloud_analytics_toggle_2026_unique_">
-                  <input id="_x_extension_cloud_analytics_toggle_2026_unique_" type="checkbox" aria-describedby="_x_extension_cloud_analytics_desc_2026_unique_" disabled>
-                  <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="_x_extension_cloud_card_2026_unique_ _x_extension_cloud_scope_card_2026_unique_">
+            <div class="_x_extension_cloud_card_2026_unique_ _x_extension_cloud_card_full_2026_unique_ _x_extension_cloud_scope_card_2026_unique_">
               <div class="_x_extension_cloud_card_heading_2026_unique_">
                 <span class="_x_extension_cloud_card_icon_2026_unique_" aria-hidden="true">
                   <i class="ri-icon ri-shield-check-line"></i>
@@ -3056,8 +3155,9 @@
               <ul class="_x_extension_cloud_disclosure_2026_unique_">
                 <li data-i18n="cloud_data_scope_sync">同步数据：Lumno 配置、自定义快捷方式、黑名单规则，以及你主动上传的壁纸。</li>
                 <li data-i18n="cloud_data_scope_identity">识别数据：邮箱、系统生成的用户 ID、设备 ID、插件版本和粗粒度平台类型。</li>
+                <li data-i18n="cloud_data_scope_usage">使用统计：与账号关联的功能次数、配置布尔值、枚举和数量，明细最多保留 24 个月。</li>
                 <li data-i18n="cloud_data_scope_excluded">明确不采集：浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie。</li>
-                <li data-i18n="cloud_data_scope_control">你可以随时关闭统计、退出登录、导出本机配置或永久删除账号。</li>
+                <li data-i18n="cloud_data_scope_control">你可以随时退出登录以停止同步和统计、导出本机配置或永久删除账号。</li>
               </ul>
               <p class="_x_extension_setting_desc_2024_unique_">
                 <a href="https://lumno.kubai.design/privacy/" target="_blank" rel="noopener noreferrer" data-i18n="cloud_privacy_policy_link">查看隐私政策与完整上传数据清单</a>
@@ -3517,6 +3617,49 @@
         </div>
       </div>
     </div>
+    <div id="_x_extension_cloud_consent_mask_2026_unique_" class="_x_extension_cloud_consent_mask_2026_unique_" hidden>
+      <section
+        id="_x_extension_cloud_consent_dialog_2026_unique_"
+        class="_x_extension_cloud_consent_dialog_2026_unique_"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="_x_extension_cloud_consent_title_2026_unique_"
+        aria-describedby="_x_extension_cloud_consent_intro_2026_unique_ _x_extension_cloud_consent_control_2026_unique_"
+        tabindex="-1"
+      >
+        <div class="_x_extension_cloud_consent_header_2026_unique_">
+          <span class="_x_extension_cloud_consent_icon_2026_unique_" aria-hidden="true">
+            <i class="ri-icon ri-cloud-line"></i>
+          </span>
+          <div>
+            <h2 id="_x_extension_cloud_consent_title_2026_unique_" class="_x_extension_cloud_consent_title_2026_unique_" data-i18n="cloud_consent_title">开启账号同步</h2>
+            <p id="_x_extension_cloud_consent_intro_2026_unique_" class="_x_extension_cloud_consent_intro_2026_unique_" data-i18n="cloud_consent_intro">继续后将打开 Lumno 安全登录页。授权成功后，账号同步和产品使用统计会同时开启。</p>
+          </div>
+        </div>
+        <ul class="_x_extension_cloud_consent_list_2026_unique_">
+          <li>
+            <i class="ri-icon ri-refresh-line" aria-hidden="true"></i>
+            <span data-i18n="cloud_consent_sync">同步到账号：Lumno 配置、自定义快捷方式、黑名单规则，以及你主动上传的壁纸。</span>
+          </li>
+          <li>
+            <i class="ri-icon ri-bar-chart-box-line" aria-hidden="true"></i>
+            <span data-i18n="cloud_consent_analytics">产品使用统计：上传与账号关联的功能次数、配置布尔值、枚举和数量，明细最多保留 24 个月。</span>
+          </li>
+          <li>
+            <i class="ri-icon ri-shield-check-line" aria-hidden="true"></i>
+            <span data-i18n="cloud_consent_excluded">不会上传：浏览历史、当前网页、网页标题、标签页内容、搜索词、书签内容和 Cookie。</span>
+          </li>
+        </ul>
+        <p id="_x_extension_cloud_consent_control_2026_unique_" class="_x_extension_cloud_consent_control_2026_unique_" data-i18n="cloud_consent_control">退出登录会停止同步和统计，本机配置仍会保留。</p>
+        <div class="_x_extension_cloud_consent_actions_2026_unique_">
+          <button id="_x_extension_cloud_consent_cancel_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_" type="button" data-i18n="cloud_consent_cancel">取消</button>
+          <button id="_x_extension_cloud_consent_continue_2026_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_submit_primary_2024_unique_" type="button">
+            <span data-i18n="cloud_consent_continue">同意并继续登录</span>
+            <i class="ri-icon ri-arrow-right-line" aria-hidden="true"></i>
+          </button>
+        </div>
+      </section>
+    </div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_"></div>
     <!--
     <div id="_x_extension_confirm_mask_2024_unique_" class="_x_extension_confirm_mask_2024_unique_">
@@ -3535,6 +3678,7 @@
     <script src="../shared/community-links.js"></script>
     <script src="../shared/settings.js"></script>
     <script src="../shared/search-utils.js"></script>
+    <script src="../shared/shortcut-favicon.js"></script>
     <script src="../shared/tooltip.js"></script>
     <script src="../shared/menu-surface.js"></script>
     <script src="../shared/shortcut-display.js"></script>

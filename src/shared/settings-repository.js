@@ -157,20 +157,54 @@
       ]);
     }
 
-    async function enterCloudMode() {
+    async function enterCloudMode(options) {
+      const enterOptions = options && typeof options === 'object' ? options : {};
+      const resetCloudCache = enterOptions.resetCloudCache === true;
+      const hasBrowserSnapshot = Object.prototype.hasOwnProperty.call(enterOptions, 'browserSnapshot') &&
+        enterOptions.browserSnapshot && typeof enterOptions.browserSnapshot === 'object' &&
+        !Array.isArray(enterOptions.browserSnapshot);
       const sharedKeys = schema.SYNC_KEYS.filter((key) => !localOnlyKeySet.has(key));
       const localKeys = schema.SYNC_KEYS.filter((key) => localOnlyKeySet.has(key));
       const syncValues = await getAreaValues(syncArea, sharedKeys);
       const cloudValues = await getAreaValues(cloudArea, sharedKeys);
       const localValues = await getAreaValues(localSettingArea, localKeys);
       const migration = {};
-      sharedKeys.forEach((key) => {
-        if (!Object.prototype.hasOwnProperty.call(cloudValues, key) &&
-            Object.prototype.hasOwnProperty.call(syncValues, key)) {
-          migration[key] = syncValues[key];
-        }
-      });
-      await mutateArea(cloudArea, 'set', migration);
+      let sourceSnapshot;
+      let snapshot;
+      if (resetCloudCache) {
+        // Account transitions must not inherit settings or local-only visual
+        // state from the previous account. A subsequent full pull rebuilds the
+        // cache; keys absent from that account stay absent and use defaults.
+        await mutateArea(cloudArea, 'remove', sharedKeys);
+        await mutateArea(localSettingArea, 'remove', localKeys);
+        sourceSnapshot = {};
+        snapshot = {};
+      } else if (hasBrowserSnapshot) {
+        sourceSnapshot = schema.copySyncSettings(enterOptions.browserSnapshot);
+        const browserValues = {};
+        sharedKeys.forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(sourceSnapshot, key)) {
+            browserValues[key] = sourceSnapshot[key];
+            migration[key] = sourceSnapshot[key];
+          }
+        });
+        // A guest-to-cloud transition must rebuild the shared cache from the
+        // active browser source. Otherwise stale local values can masquerade as
+        // the current device settings and hide Chrome Sync values.
+        await mutateArea(cloudArea, 'remove', sharedKeys);
+        await mutateArea(cloudArea, 'set', browserValues);
+        snapshot = schema.copySyncSettings({ ...sourceSnapshot, ...localValues });
+      } else {
+        sharedKeys.forEach((key) => {
+          if (!Object.prototype.hasOwnProperty.call(cloudValues, key) &&
+              Object.prototype.hasOwnProperty.call(syncValues, key)) {
+            migration[key] = syncValues[key];
+          }
+        });
+        await mutateArea(cloudArea, 'set', migration);
+        sourceSnapshot = schema.copySyncSettings({ ...syncValues, ...localValues });
+        snapshot = schema.copySyncSettings({ ...syncValues, ...cloudValues, ...localValues });
+      }
       await mutateArea(localArea, 'set', { [modeKey]: MODE_CLOUD });
       return {
         mode: MODE_CLOUD,
@@ -178,7 +212,8 @@
         source: 'chrome',
         target: 'lumno',
         inspected_at: Date.now(),
-        snapshot: schema.copySyncSettings({ ...syncValues, ...cloudValues, ...localValues })
+        source_snapshot: sourceSnapshot,
+        snapshot
       };
     }
 

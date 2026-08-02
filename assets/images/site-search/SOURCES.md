@@ -1,8 +1,8 @@
-# Built-in search icon sources
+# Built-in search icon provenance
 
-All runtime artwork in this directory is bundled locally. Brand names and marks remain the property of their respective owners.
+The only runtime artwork in this directory is the bundled `tile-<key>.png` set. Options, new tab, and the search-scope panel all resolve icons through the same shared key-to-tile map. Each 144px RGBA tile bakes in its background and clipping mask so the artwork remains legible in both light and dark themes.
 
-The extension reads the generated `tile-<key>.png` files at runtime instead of interpreting SVGs or fetching provider favicons. Run `npm run generate:site-search-icons` to rebuild all 46 self-contained 144px RGBA tiles from the frozen source artwork below. Each output bakes in a rounded-rectangle background and clipping mask, so transparent marks remain legible in both light and dark themes.
+The notes below record the provenance of those frozen tiles. Brand names and marks remain the property of their respective owners.
 
 - AI providers: version-pinned `@lobehub/icons-static-svg@1.94.0` assets from [Lobe Icons](https://github.com/lobehub/lobe-icons) (`openai`, `gemini-color`, `yuanbao-color`, `deepseek-color`, and `kimi-color`). Kimi uses the black-field treatment from its current light-theme favicon so the white mark remains legible.
 - Doubao's search-scope artwork uses the anthropomorphic mascot from the official Doubao CDN (`https://lf-flow-web-cdn.doubao.com/obj/flow-doubao/favicon/new-doubao/180x180.png`), bundled locally as `doubao-mascot.png`.

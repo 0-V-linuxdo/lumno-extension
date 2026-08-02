@@ -71,8 +71,13 @@ assert.match(
 );
 assert.match(
   inputModeCss,
-  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[\s\S]*?border-color:\s*var\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?box-shadow:\s*inset 0 0 0 2px color-mix\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?42%/,
-  'keyboard-focused scope cards should keep a contrast-safe two-pixel outer border and inner ring'
+  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[\s\S]*?border-color:\s*var\([\s\S]*?--x-lumno-search-mode-item-focus-ring[\s\S]*?box-shadow:\s*none !important;/,
+  'keyboard-focused scope cards should use a single contrast-safe two-pixel theme border'
+);
+assert.doesNotMatch(
+  inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item:focus-visible\s*\{[^}]*box-shadow:\s*inset/,
+  'keyboard focus should not add a second inset ring'
 );
 assert.match(
   inputModeCss,
@@ -123,6 +128,16 @@ assert.match(
   inputModeSource,
   /function buildModeMenuSearchIndex\(item\)[\s\S]*?getModeMenuPinyinSyllable\(character\)[\s\S]*?function applyModeMenuFilter\(query, filterOptions\)[\s\S]*?entry\.button\.hidden = !match\.matched/,
   'the shared scope panel should filter its rendered cards with direct and pinyin indexes'
+);
+assert.match(
+  inputModeSource,
+  /function focusFirstModeMenuFilterResult\(\)[\s\S]*?focusModeMenuButton\(0\)[\s\S]*?modeMenuKeyboardNavigationActive = true[\s\S]*?function handleMenuKeydown\(event\)[\s\S]*?applyModeMenuFilter\(modeMenuFilterQuery \+ event\.key\);[\s\S]*?focusFirstModeMenuFilterResult\(\)/,
+  'panel filtering should focus the first match and hand subsequent arrow keys to menu navigation'
+);
+assert.match(
+  inputModeSource,
+  /function getAllModeMenuButtons\(\)[\s\S]*?function getModeMenuButtons\(\)[\s\S]*?getAllModeMenuButtons\(\)\.filter[\s\S]*?function syncModeMenuSelection\(modeId\)[\s\S]*?getAllModeMenuButtons\(\)\.forEach/,
+  'filtered keyboard selection should clear checked state from hidden menu items too'
 );
 assert.match(
   inputModeSource,

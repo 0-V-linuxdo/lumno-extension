@@ -10,8 +10,12 @@ function run() {
   assert.match(wallpaper, /action: 'cloudDeleteWallpaper', id: targetWallpaper\.id/);
   assert.match(wallpaper, /refreshCustomWallpapers: loadCustomWallpapers/);
   assert.match(newtab, /message\.action === 'lumno:wallpapers-updated'/);
+  assert.match(newtab, /action: 'cloudUploadShortcutIcon'/);
+  assert.match(newtab, /action: 'cloudDeleteShortcutIcon'/);
   assert.match(background, /'cloudUploadWallpaper'/);
   assert.match(background, /'cloudDeleteWallpaper'/);
+  assert.match(background, /'cloudUploadShortcutIcon'/);
+  assert.match(background, /'cloudDeleteShortcutIcon'/);
   assert.match(background, /cloud-wallpaper-runtime\.js/);
 
   console.log('cloud wallpaper integration tests passed');

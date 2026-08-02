@@ -2392,13 +2392,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let suggestionsHeightAnimationTarget = 0;
     let suggestionsHeightAnimationTargetIsCapped = false;
     let searchPanelsLayoutTransitionActive = false;
-    let searchPanelsLayoutTransitionMenu = null;
-    const searchPanelsLayoutTransitionDurationMs = 220;
+    const searchPanelsLayoutTransitionDurationMs = 180;
     const searchPanelsLayoutTransitionEasing =
       'cubic-bezier(0.22, 1, 0.36, 1)';
     const suggestionsHeightInputSettleMs = 280;
     let suggestionsHeightInputSettleTimer = 0;
     let suggestionsHeightInputLockedHeight = 0;
+    let suggestionsHeightInputLockedPadding = null;
     let deferredSuggestionsHeightQuery = '';
     const inputDivider = inputParts.divider;
     overlayWheelIsolationHandler = createOverlayWheelIsolationHandler(overlay);
@@ -6953,28 +6953,73 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function getSearchPanelsLayoutTransitionMenu() {
       if (!inputModeController ||
-          typeof inputModeController.setModeMenuResultOffset !== 'function') {
+          typeof inputModeController.isModeMenuVisible !== 'function' ||
+          !inputModeController.isModeMenuVisible()) {
         return null;
       }
       const menu = inputModeController && inputModeController.menuElement
         ? inputModeController.menuElement
         : inputParts.modeMenu;
-      if (!menu || menu.hidden || menu.getAttribute('data-open') !== 'true') {
-        return null;
-      }
-      return menu;
+      return menu && !menu.hidden ? menu : null;
     }
 
     function clearSearchPanelsLayoutTransitionStyles() {
-      const menu = searchPanelsLayoutTransitionMenu;
       searchPanelsLayoutTransitionActive = false;
-      searchPanelsLayoutTransitionMenu = null;
-      if (!menu) {
+      if (inputModeController &&
+          typeof inputModeController.finishModeMenuResultTransition === 'function') {
+        inputModeController.finishModeMenuResultTransition();
+      }
+    }
+
+    function readSuggestionsVerticalPadding(container) {
+      if (!container) {
+        return { top: 0, bottom: 0 };
+      }
+      const computedStyle = window.getComputedStyle(container);
+      const read = (property) => Math.max(
+        0,
+        Number.parseFloat(
+          computedStyle && typeof computedStyle.getPropertyValue === 'function'
+            ? computedStyle.getPropertyValue(property)
+            : ''
+        ) || 0
+      );
+      return {
+        top: read('padding-top'),
+        bottom: read('padding-bottom')
+      };
+    }
+
+    function clipSuggestionsToHeight(container, height, options) {
+      if (!container) {
         return;
       }
-      menu.removeAttribute('data-results-layout-transition');
-      menu.style.removeProperty('transition');
-      menu.style.removeProperty('will-change');
+      const clipOptions = options || {};
+      const clippedHeight = Math.max(0, Number(height) || 0);
+      const clippedPadding = clipOptions.collapsePadding === true
+        ? { top: 0, bottom: 0 }
+        : clipOptions.padding;
+      container.setAttribute('data-height-clipped', 'true');
+      container.style.setProperty('flex', '0 0 auto', 'important');
+      container.style.setProperty('height', `${clippedHeight}px`, 'important');
+      if (clippedPadding) {
+        container.style.setProperty(
+          'padding-top',
+          `${Math.max(0, Number(clippedPadding.top) || 0)}px`,
+          'important'
+        );
+        container.style.setProperty(
+          'padding-bottom',
+          `${Math.max(0, Number(clippedPadding.bottom) || 0)}px`,
+          'important'
+        );
+      }
+      container.style.setProperty('overflow-x', 'hidden', 'important');
+      container.style.setProperty(
+        'overflow-y',
+        clipOptions.scrollable === true ? 'auto' : 'hidden',
+        'important'
+      );
     }
 
     function cancelSuggestionsHeightAnimation(container) {
@@ -6995,11 +7040,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       suggestionsHeightAnimationTarget = 0;
       suggestionsHeightAnimationTargetIsCapped = false;
+      container.removeAttribute('data-height-clipped');
+      container.style.removeProperty('flex');
       container.style.removeProperty('height');
       container.style.removeProperty('overflow');
       container.style.removeProperty('overflow-x');
       container.style.removeProperty('overflow-y');
       container.style.removeProperty('transition');
+      container.style.removeProperty('will-change');
+      container.style.removeProperty('padding-top');
+      container.style.removeProperty('padding-bottom');
       clearSearchPanelsLayoutTransitionStyles();
     }
 
@@ -7036,7 +7086,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const state = {
         height: 0,
         heldHeight: 0,
-        atMaxHeight: false
+        atMaxHeight: false,
+        padding: null
       };
       if (!container) {
         return state;
@@ -7049,9 +7100,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         state.atMaxHeight = hasTrackedAnimationTarget
           ? suggestionsHeightAnimationTargetIsCapped
           : metrics.atMaxHeight;
-        state.heldHeight = hasTrackedAnimationTarget
-          ? suggestionsHeightAnimationTarget
-          : metrics.height;
+        state.heldHeight = metrics.height;
+        state.padding = readSuggestionsVerticalPadding(container);
       }
       cancelSuggestionsHeightAnimation(container);
       return state;
@@ -7071,13 +7121,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           Number(previousState.heldHeight) ||
           previousState.height
       );
+      const heldPadding = suggestionsHeightInputLockedPadding ||
+        previousState.padding ||
+        readSuggestionsVerticalPadding(container);
       if (suggestionsHeightInputSettleTimer && !suggestionsHeightInputLockedHeight) {
         suggestionsHeightInputLockedHeight = heldHeight;
       }
       cancelSuggestionsHeightAnimation(container);
-      container.style.setProperty('height', `${heldHeight}px`, 'important');
-      container.style.setProperty('overflow-x', 'hidden', 'important');
-      container.style.setProperty('overflow-y', 'auto', 'important');
+      clipSuggestionsToHeight(container, heldHeight, {
+        scrollable: true,
+        padding: heldPadding
+      });
       container.style.setProperty('transition', 'none', 'important');
       deferredSuggestionsHeightQuery = query;
       return true;
@@ -7102,7 +7156,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (deferredSuggestionsHeightQuery === query) {
         deferredSuggestionsHeightQuery = '';
       }
-      animateSuggestionsHeight(suggestionsContainer, previousState.height);
+      animateSuggestionsHeight(suggestionsContainer, previousState);
       return false;
     }
 
@@ -7119,10 +7173,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const finishOptions = options || {};
       clearSuggestionsHeightInputSettleTimer();
       suggestionsHeightInputLockedHeight = 0;
+      suggestionsHeightInputLockedPadding = null;
       deferredSuggestionsHeightQuery = '';
       const previousState = captureSuggestionsHeightState(suggestionsContainer);
       if (finishOptions.animate !== false && latestOverlayQuery) {
-        animateSuggestionsHeight(suggestionsContainer, previousState.height);
+        animateSuggestionsHeight(suggestionsContainer, previousState);
       }
     }
 
@@ -7134,16 +7189,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           0,
           Number(previousState.heldHeight) || previousState.height
         );
+        suggestionsHeightInputLockedPadding = previousState.padding;
       }
       if (suggestionsHeightInputLockedHeight > 0) {
         cancelSuggestionsHeightAnimation(suggestionsContainer);
-        suggestionsContainer.style.setProperty(
-          'height',
-          `${suggestionsHeightInputLockedHeight}px`,
-          'important'
+        clipSuggestionsToHeight(
+          suggestionsContainer,
+          suggestionsHeightInputLockedHeight,
+          {
+            scrollable: true,
+            padding: suggestionsHeightInputLockedPadding
+          }
         );
-        suggestionsContainer.style.setProperty('overflow-x', 'hidden', 'important');
-        suggestionsContainer.style.setProperty('overflow-y', 'auto', 'important');
         suggestionsContainer.style.setProperty('transition', 'none', 'important');
         deferredSuggestionsHeightQuery = query;
       }
@@ -7164,43 +7221,72 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       deferredSuggestionsHeightQuery = '';
       const previousState = captureSuggestionsHeightState(suggestionsContainer);
-      animateSuggestionsHeight(suggestionsContainer, previousState.height);
+      animateSuggestionsHeight(suggestionsContainer, previousState);
     }
 
-    function scheduleSearchPanelsLayoutTransition(container, fromHeight, targetMetrics, modeMenu) {
+    function getSuggestionsHeightTransitionProperties(
+      duration,
+      easing,
+      fromPadding,
+      targetPadding
+    ) {
+      const properties = [`height ${duration}ms ${easing}`];
+      if (Math.abs(targetPadding.top - fromPadding.top) > 0.1) {
+        properties.push(`padding-top ${duration}ms ${easing}`);
+      }
+      if (Math.abs(targetPadding.bottom - fromPadding.bottom) > 0.1) {
+        properties.push(`padding-bottom ${duration}ms ${easing}`);
+      }
+      return properties.join(', ');
+    }
+
+    function scheduleSearchPanelsLayoutTransition(
+      container,
+      previousState,
+      targetMetrics
+    ) {
+      const fromHeight = previousState.height;
       const toHeight = targetMetrics.height;
+      const targetPadding = readSuggestionsVerticalPadding(container);
+      const fromPadding = previousState.padding ||
+        (fromHeight <= 0 ? { top: 0, bottom: 0 } : targetPadding);
       cancelSuggestionsHeightAnimation(container);
       suggestionsHeightAnimationTarget = toHeight;
       suggestionsHeightAnimationTargetIsCapped = targetMetrics.atMaxHeight;
-      container.style.setProperty('height', `${fromHeight}px`, 'important');
-      container.style.setProperty('overflow', 'hidden', 'important');
+      clipSuggestionsToHeight(container, fromHeight, {
+        collapsePadding: fromHeight <= 0,
+        padding: fromPadding
+      });
       container.style.setProperty('transition', 'none', 'important');
-      searchPanelsLayoutTransitionActive = true;
-      searchPanelsLayoutTransitionMenu = modeMenu;
-      modeMenu.setAttribute('data-results-layout-transition', 'true');
-      modeMenu.style.setProperty('transition', 'none', 'important');
-      modeMenu.style.setProperty('will-change', 'transform', 'important');
-      inputModeController.setModeMenuResultOffset(fromHeight);
+      container.style.setProperty('will-change', 'height', 'important');
+      searchPanelsLayoutTransitionActive = Boolean(
+        inputModeController &&
+        typeof inputModeController.beginModeMenuResultTransition === 'function' &&
+        inputModeController.beginModeMenuResultTransition({ fromOffset: fromHeight })
+      );
       void container.offsetHeight;
-      void modeMenu.offsetHeight;
       suggestionsHeightAnimationFrame = requestAnimationFrame(() => {
         suggestionsHeightAnimationFrame = 0;
         container.style.setProperty(
           'transition',
-          `height ${searchPanelsLayoutTransitionDurationMs}ms ${searchPanelsLayoutTransitionEasing}`,
+          getSuggestionsHeightTransitionProperties(
+            searchPanelsLayoutTransitionDurationMs,
+            searchPanelsLayoutTransitionEasing,
+            fromPadding,
+            targetPadding
+          ),
           'important'
         );
         container.style.setProperty('height', `${toHeight}px`, 'important');
-        if (searchPanelsLayoutTransitionActive &&
-            searchPanelsLayoutTransitionMenu === modeMenu &&
-            inputModeController &&
-            typeof inputModeController.setModeMenuResultOffset === 'function') {
-          modeMenu.style.setProperty(
-            'transition',
-            `opacity 170ms ease, transform ${searchPanelsLayoutTransitionDurationMs}ms ${searchPanelsLayoutTransitionEasing}`,
-            'important'
-          );
-          inputModeController.setModeMenuResultOffset(toHeight);
+        container.style.setProperty('padding-top', `${targetPadding.top}px`, 'important');
+        container.style.setProperty('padding-bottom', `${targetPadding.bottom}px`, 'important');
+        if (searchPanelsLayoutTransitionActive && inputModeController &&
+            typeof inputModeController.targetModeMenuResultTransition === 'function') {
+          inputModeController.targetModeMenuResultTransition({
+            duration: searchPanelsLayoutTransitionDurationMs,
+            easing: searchPanelsLayoutTransitionEasing,
+            toOffset: toHeight
+          });
         }
       });
       suggestionsHeightTransitionEndHandler = (event) => {
@@ -7216,26 +7302,40 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }, searchPanelsLayoutTransitionDurationMs + 60);
     }
 
-    function scheduleStandaloneSuggestionsHeightTransition(container, fromHeight, targetMetrics) {
+    function scheduleStandaloneSuggestionsHeightTransition(container, previousState, targetMetrics) {
+      const fromHeight = previousState.height;
       const toHeight = targetMetrics.height;
+      const targetPadding = readSuggestionsVerticalPadding(container);
+      const fromPadding = previousState.padding ||
+        (fromHeight <= 0 ? { top: 0, bottom: 0 } : targetPadding);
       const isLargeShrink = toHeight < fromHeight - Math.max(104, fromHeight * 0.35);
       const transitionDurationMs = isLargeShrink ? 100 : 180;
       const transitionEasing = 'ease-in-out';
       cancelSuggestionsHeightAnimation(container);
       suggestionsHeightAnimationTarget = toHeight;
       suggestionsHeightAnimationTargetIsCapped = targetMetrics.atMaxHeight;
-      container.style.setProperty('height', `${fromHeight}px`, 'important');
-      container.style.setProperty('overflow', 'hidden', 'important');
+      clipSuggestionsToHeight(container, fromHeight, {
+        collapsePadding: fromHeight <= 0,
+        padding: fromPadding
+      });
       container.style.setProperty('transition', 'none', 'important');
+      container.style.setProperty('will-change', 'height', 'important');
       void container.offsetHeight;
       suggestionsHeightAnimationFrame = requestAnimationFrame(() => {
         suggestionsHeightAnimationFrame = 0;
         container.style.setProperty(
           'transition',
-          `height ${transitionDurationMs}ms ${transitionEasing}`,
+          getSuggestionsHeightTransitionProperties(
+            transitionDurationMs,
+            transitionEasing,
+            fromPadding,
+            targetPadding
+          ),
           'important'
         );
         container.style.setProperty('height', `${toHeight}px`, 'important');
+        container.style.setProperty('padding-top', `${targetPadding.top}px`, 'important');
+        container.style.setProperty('padding-bottom', `${targetPadding.bottom}px`, 'important');
       });
       suggestionsHeightTransitionEndHandler = (event) => {
         if (event && event.propertyName && event.propertyName !== 'height') {
@@ -7249,14 +7349,24 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }, transitionDurationMs + 60);
     }
 
-    function animateSuggestionsHeight(container, fromHeight) {
-      fromHeight = Math.max(0, Number(fromHeight) || 0);
-      const allowFromZero = Boolean(
-        container && container.getAttribute('data-scope-result-enter') === 'run'
+    function animateSuggestionsHeight(container, previousState) {
+      const normalizedPreviousState = previousState && typeof previousState === 'object'
+        ? previousState
+        : { height: Math.max(0, Number(previousState) || 0), padding: null };
+      const fromHeight = Math.max(0, Number(normalizedPreviousState.height) || 0);
+      if (!container || container.getAttribute('data-collapsed') === 'true') {
+        return;
+      }
+      const modeMenu = getSearchPanelsLayoutTransitionMenu();
+      const hasRenderedContent = Boolean(
+        container.children && container.children.length > 0
       );
-      if (!container ||
-          (!fromHeight && !allowFromZero) ||
-          container.getAttribute('data-collapsed') === 'true') {
+      const allowFromZero = Boolean(
+        container.getAttribute('data-scope-result-enter') === 'run' ||
+        (modeMenu && hasRenderedContent)
+      );
+      if (!fromHeight && !allowFromZero) {
+        syncSearchModeMenuResultOffset();
         return;
       }
       const targetMetrics = readSuggestionsHeightMetrics(container);
@@ -7266,19 +7376,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         syncSearchModeMenuResultOffset();
         return;
       }
-      const modeMenu = getSearchPanelsLayoutTransitionMenu();
       if (modeMenu) {
         scheduleSearchPanelsLayoutTransition(
           container,
-          fromHeight,
-          targetMetrics,
-          modeMenu
+          normalizedPreviousState,
+          targetMetrics
         );
         return;
       }
       scheduleStandaloneSuggestionsHeightTransition(
         container,
-        fromHeight,
+        normalizedPreviousState,
         targetMetrics
       );
     }

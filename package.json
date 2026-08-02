@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "build:react": "vite build --config vite.react.config.mjs && vite build --config vite.overlay-react.config.mjs",
-    "generate:site-search-icons": "node scripts/generate-site-search-icon-tiles.js",
     "typecheck:react": "tsc --project tsconfig.react.json --noEmit",
     "test": "npm run build:react && npm run test:legacy && npm run test:react",
     "test:legacy": "node scripts/run-tests.js",

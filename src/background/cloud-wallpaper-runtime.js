@@ -13,10 +13,19 @@
   const DB_NAME = 'lumno-newtab-wallpaper';
   const DB_VERSION = 1;
   const STORE_NAME = 'wallpapers';
-  const CLIENT_ID_PATTERN = /^custom-wallpaper-[a-zA-Z0-9-]{1,100}$/;
+  const WALLPAPER_KIND = 'wallpaper';
+  const SHORTCUT_ICON_KIND = 'shortcut_icon';
+  const WALLPAPER_CLIENT_ID_PATTERN = /^custom-wallpaper-[a-zA-Z0-9-]{1,100}$/;
+  const SHORTCUT_ICON_CLIENT_ID_PATTERN = /^shortcut-icon-[0-9a-f]{64}$/;
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const SHORTCUT_ICON_STORAGE_KEY = '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
+  const SHORTCUT_ICON_META_KEY = '_lumno_cloud_shortcut_icon_meta_v1_';
+  const MEDIA_DELETIONS_KEY = '_lumno_cloud_media_deletions_v1_';
   const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+  const MAX_SHORTCUT_ICON_BYTES = 160 * 1024;
+  const MAX_SHORTCUT_ICON_DATA_URL_LENGTH = 160 * 1024;
   const MAX_ASSETS = 20;
 
   function hasImageSignature(bytes, mimeType) {
@@ -70,19 +79,77 @@
     return `data:${blob.type};base64,${btoa(binary)}`;
   }
 
-  async function sha256Hex(blob, cryptoApi) {
+  async function sha256Bytes(bytes, cryptoApi) {
     const api = cryptoApi || (typeof crypto !== 'undefined' ? crypto : null);
     if (!api || !api.subtle) throw new Error('crypto_unavailable');
-    const digest = await api.subtle.digest('SHA-256', await blob.arrayBuffer());
+    const digest = await api.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest))
       .map((byte) => byte.toString(16).padStart(2, '0'))
       .join('');
+  }
+
+  function sha256Hex(blob, cryptoApi) {
+    return blob.arrayBuffer().then((bytes) => sha256Bytes(bytes, cryptoApi));
+  }
+
+  function sha256Text(value, cryptoApi) {
+    const text = String(value || '');
+    const bytes = typeof TextEncoder === 'function'
+      ? new TextEncoder().encode(text)
+      : Uint8Array.from(unescape(encodeURIComponent(text)), (character) => character.charCodeAt(0));
+    return sha256Bytes(bytes, cryptoApi);
   }
 
   function extensionForMime(mimeType) {
     if (mimeType === 'image/png') return 'png';
     if (mimeType === 'image/jpeg') return 'jpg';
     return 'webp';
+  }
+
+  function getAssetKind(asset) {
+    const explicit = String(asset && asset.asset_kind || '');
+    if (explicit === SHORTCUT_ICON_KIND || explicit === WALLPAPER_KIND) return explicit;
+    const clientAssetId = String(asset && asset.client_asset_id || '');
+    return SHORTCUT_ICON_CLIENT_ID_PATTERN.test(clientAssetId)
+      ? SHORTCUT_ICON_KIND
+      : WALLPAPER_KIND;
+  }
+
+  function normalizeShortcutId(value) {
+    const id = String(value || '').trim();
+    return id && id.length <= 200 && !/[\u0000-\u001f\u007f]/.test(id) ? id : '';
+  }
+
+  function normalizeShortcutIconMap(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const result = {};
+    Object.entries(source).slice(0, MAX_ASSETS * 2).forEach(([rawId, rawDataUrl]) => {
+      const shortcutId = normalizeShortcutId(rawId);
+      const dataUrl = String(rawDataUrl || '').trim();
+      if (shortcutId && dataUrl.startsWith('data:image/png;base64,') &&
+          dataUrl.length <= MAX_SHORTCUT_ICON_DATA_URL_LENGTH) {
+        result[shortcutId] = dataUrl;
+      }
+    });
+    return result;
+  }
+
+  function normalizeShortcutIconMeta(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const result = {};
+    Object.entries(source).forEach(([rawId, rawMeta]) => {
+      const shortcutId = normalizeShortcutId(rawId);
+      const meta = rawMeta && typeof rawMeta === 'object' ? rawMeta : {};
+      const clientAssetId = String(meta.clientAssetId || '');
+      if (!shortcutId || !SHORTCUT_ICON_CLIENT_ID_PATTERN.test(clientAssetId)) return;
+      result[shortcutId] = {
+        clientAssetId,
+        cloudAssetId: String(meta.cloudAssetId || ''),
+        cloudUpdatedAt: String(meta.cloudUpdatedAt || ''),
+        sha256: /^[0-9a-f]{64}$/.test(String(meta.sha256 || '')) ? String(meta.sha256) : ''
+      };
+    });
+    return result;
   }
 
   function createIndexedDbStore(indexedDBApi) {
@@ -141,7 +208,8 @@
     return {
       readAll,
       write(record) { return transact('readwrite', (store) => store.put(record)); },
-      remove(key) { return transact('readwrite', (store) => store.delete(key)); }
+      remove(key) { return transact('readwrite', (store) => store.delete(key)); },
+      clear() { return transact('readwrite', (store) => store.clear()); }
     };
   }
 
@@ -157,6 +225,7 @@
     const config = options && typeof options === 'object' ? options : {};
     const transport = config.transport;
     const repository = config.repository;
+    const localArea = config.localArea || null;
     const store = config.store || createIndexedDbStore(config.indexedDBApi ||
       (typeof indexedDB !== 'undefined' ? indexedDB : null));
     const cryptoApi = config.cryptoApi || (typeof crypto !== 'undefined' ? crypto : null);
@@ -166,9 +235,73 @@
       : defaultGetImageDimensions;
     let activeSync = null;
 
+    async function readLocal(keys) {
+      return repositoryApi.getAreaValues(localArea, keys);
+    }
+
+    async function writeLocal(values) {
+      return repositoryApi.mutateArea(localArea, 'set', values);
+    }
+
+    async function removeLocal(keys) {
+      return repositoryApi.mutateArea(localArea, 'remove', keys);
+    }
+
+    async function readShortcutIconState() {
+      const values = await readLocal([SHORTCUT_ICON_STORAGE_KEY, SHORTCUT_ICON_META_KEY]);
+      return {
+        icons: normalizeShortcutIconMap(values[SHORTCUT_ICON_STORAGE_KEY]),
+        meta: normalizeShortcutIconMeta(values[SHORTCUT_ICON_META_KEY])
+      };
+    }
+
+    async function writeShortcutIconState(icons, meta) {
+      await writeLocal({
+        [SHORTCUT_ICON_STORAGE_KEY]: normalizeShortcutIconMap(icons),
+        [SHORTCUT_ICON_META_KEY]: normalizeShortcutIconMeta(meta)
+      });
+    }
+
+    async function getShortcutIconClientAssetId(shortcutId) {
+      const normalized = normalizeShortcutId(shortcutId);
+      if (!normalized) throw new Error('invalid_shortcut_icon_id');
+      return `shortcut-icon-${await sha256Text(normalized, cryptoApi)}`;
+    }
+
     async function canSync() {
       if (!transport || !repository || await repository.getMode() !== repositoryApi.MODE_CLOUD) return null;
       return transport.getSession();
+    }
+
+    async function enqueueDeletion(kind, clientAssetId) {
+      const values = await readLocal([MEDIA_DELETIONS_KEY]);
+      const current = Array.isArray(values[MEDIA_DELETIONS_KEY]) ? values[MEDIA_DELETIONS_KEY] : [];
+      const next = current.filter((item) => item && item.client_asset_id !== clientAssetId);
+      next.push({ kind, client_asset_id: clientAssetId });
+      await writeLocal({ [MEDIA_DELETIONS_KEY]: next.slice(-MAX_ASSETS * 2) });
+    }
+
+    async function removeQueuedDeletion(clientAssetId) {
+      const values = await readLocal([MEDIA_DELETIONS_KEY]);
+      const current = Array.isArray(values[MEDIA_DELETIONS_KEY]) ? values[MEDIA_DELETIONS_KEY] : [];
+      const next = current.filter((item) => item && item.client_asset_id !== clientAssetId);
+      if (next.length === 0) await removeLocal([MEDIA_DELETIONS_KEY]);
+      else await writeLocal({ [MEDIA_DELETIONS_KEY]: next });
+    }
+
+    async function flushDeletions() {
+      const values = await readLocal([MEDIA_DELETIONS_KEY]);
+      const current = Array.isArray(values[MEDIA_DELETIONS_KEY]) ? values[MEDIA_DELETIONS_KEY] : [];
+      let deleted = 0;
+      for (const item of current) {
+        const clientAssetId = String(item && item.client_asset_id || '');
+        if (!WALLPAPER_CLIENT_ID_PATTERN.test(clientAssetId) &&
+            !SHORTCUT_ICON_CLIENT_ID_PATTERN.test(clientAssetId)) continue;
+        await transport.deleteAsset(clientAssetId);
+        deleted += 1;
+      }
+      if (current.length > 0) await removeLocal([MEDIA_DELETIONS_KEY]);
+      return deleted;
     }
 
     async function uploadRecord(recordValue) {
@@ -176,7 +309,7 @@
       if (!session) return { skipped: true, reason: 'cloud-disabled' };
       const record = recordValue && typeof recordValue === 'object' ? recordValue : {};
       const clientAssetId = String(record.id || '').trim();
-      if (!CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
+      if (!WALLPAPER_CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
       const imageBlob = dataUrlToBlob(record.imageDataUrl);
       const thumbnailBlob = dataUrlToBlob(record.thumbnailDataUrl || record.imageDataUrl);
       const dimensions = await getImageDimensions(imageBlob);
@@ -190,6 +323,7 @@
       const sha256 = await sha256Hex(imageBlob, cryptoApi);
       const asset = await transport.upsertAsset({
         id: assetId,
+        asset_kind: WALLPAPER_KIND,
         client_asset_id: clientAssetId,
         original_name: String(record.name || '').slice(0, 200),
         storage_path: storagePath,
@@ -217,12 +351,13 @@
         cloudUpdatedAt: String(asset.updated_at || new Date().toISOString())
       };
       await store.write(nextRecord);
+      await removeQueuedDeletion(clientAssetId);
       return { ok: true, asset, record: nextRecord };
     }
 
     async function downloadAsset(asset) {
       const clientAssetId = String(asset && asset.client_asset_id || '');
-      if (!CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
+      if (!WALLPAPER_CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
       const [imageBlob, thumbnailBlob] = await Promise.all([
         transport.downloadObject(asset.storage_path),
         asset.thumbnail_path
@@ -245,19 +380,112 @@
       return record;
     }
 
-    async function runSyncAll() {
-      if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
-      let allRemoteAssets = await transport.listAssets();
+    async function uploadShortcutIcon(shortcutIdValue, dataUrlValue) {
+      const session = await canSync();
+      if (!session) return { skipped: true, reason: 'cloud-disabled' };
+      const shortcutId = normalizeShortcutId(shortcutIdValue);
+      if (!shortcutId) throw new Error('invalid_shortcut_icon_id');
+      const imageBlob = dataUrlToBlob(dataUrlValue);
+      if (imageBlob.type !== 'image/png' || imageBlob.size > MAX_SHORTCUT_ICON_BYTES) {
+        throw new Error('invalid_shortcut_icon_data');
+      }
+      const state = await readShortcutIconState();
+      const clientAssetId = await getShortcutIconClientAssetId(shortcutId);
+      const currentMeta = state.meta[shortcutId] || {};
+      let existingAsset = null;
+      if (typeof transport.listAssets === 'function') {
+        existingAsset = (await transport.listAssets()).find((item) => (
+          !item.deleted_at && String(item.client_asset_id || '') === clientAssetId
+        )) || null;
+      }
+      let assetId = UUID_PATTERN.test(String(currentMeta.cloudAssetId || ''))
+        ? currentMeta.cloudAssetId
+        : '';
+      if (!assetId && existingAsset && UUID_PATTERN.test(String(existingAsset.id || ''))) {
+        assetId = existingAsset.id;
+      }
+      if (!assetId) assetId = uuid();
+      const storagePath = existingAsset && String(existingAsset.storage_path || '') ||
+        `${session.user.id}/shortcut-icons/${assetId}.png`;
+      const sha256 = await sha256Hex(imageBlob, cryptoApi);
+      const assetPayload = {
+        id: assetId,
+        asset_kind: SHORTCUT_ICON_KIND,
+        client_asset_id: clientAssetId,
+        original_name: shortcutId,
+        storage_path: storagePath,
+        thumbnail_path: null,
+        sha256,
+        mime_type: 'image/png',
+        byte_size: imageBlob.size,
+        width: 128,
+        height: 128
+      };
+      let asset;
+      if (existingAsset) {
+        // An existing metadata row already authorizes this object path. Upload
+        // the bytes first so a failed transfer cannot publish a hash that does
+        // not match the still-current object.
+        await transport.uploadObject(storagePath, imageBlob, 'image/png');
+        asset = await transport.upsertAsset(assetPayload);
+      } else {
+        asset = await transport.upsertAsset(assetPayload);
+        try {
+          await transport.uploadObject(storagePath, imageBlob, 'image/png');
+        } catch (error) {
+          await transport.deleteAsset(clientAssetId).catch(() => {});
+          throw error;
+        }
+      }
+      const latest = await readShortcutIconState();
+      latest.icons[shortcutId] = String(dataUrlValue || '');
+      latest.meta[shortcutId] = {
+        clientAssetId,
+        cloudAssetId: String(asset.id || assetId),
+        cloudUpdatedAt: String(asset.updated_at || new Date().toISOString()),
+        sha256
+      };
+      await writeShortcutIconState(latest.icons, latest.meta);
+      await removeQueuedDeletion(clientAssetId);
+      return { ok: true, asset, shortcutId };
+    }
+
+    async function downloadShortcutIcon(asset) {
+      const shortcutId = normalizeShortcutId(asset && asset.original_name);
+      const clientAssetId = String(asset && asset.client_asset_id || '');
+      if (!shortcutId || !SHORTCUT_ICON_CLIENT_ID_PATTERN.test(clientAssetId)) {
+        throw new Error('invalid_shortcut_icon_asset');
+      }
+      const imageBlob = await transport.downloadObject(asset.storage_path);
+      if (imageBlob.type !== 'image/png' || imageBlob.size > MAX_SHORTCUT_ICON_BYTES) {
+        throw new Error('invalid_shortcut_icon_blob');
+      }
+      const dataUrl = await blobToDataUrl(imageBlob);
+      const state = await readShortcutIconState();
+      state.icons[shortcutId] = dataUrl;
+      state.meta[shortcutId] = {
+        clientAssetId,
+        cloudAssetId: String(asset.id || ''),
+        cloudUpdatedAt: String(asset.updated_at || ''),
+        sha256: String(asset.sha256 || '')
+      };
+      await writeShortcutIconState(state.icons, state.meta);
+      return { shortcutId, dataUrl };
+    }
+
+    async function syncWallpapers() {
+      let allRemoteAssets = (await transport.listAssets())
+        .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
       let remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
       let remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
       let deleted = 0;
       for (const tombstone of allRemoteAssets.filter((asset) => asset.deleted_at)) {
-        if (!CLIENT_ID_PATTERN.test(String(tombstone.client_asset_id || ''))) continue;
+        if (!WALLPAPER_CLIENT_ID_PATTERN.test(String(tombstone.client_asset_id || ''))) continue;
         await store.remove(tombstone.client_asset_id);
         deleted += 1;
       }
       const localRecords = (await store.readAll())
-        .filter((record) => CLIENT_ID_PATTERN.test(String(record && record.id || '')))
+        .filter((record) => WALLPAPER_CLIENT_ID_PATTERN.test(String(record && record.id || '')))
         .slice(0, MAX_ASSETS);
       let uploaded = 0;
       for (const record of localRecords) {
@@ -268,7 +496,8 @@
         }
       }
       if (uploaded > 0) {
-        allRemoteAssets = await transport.listAssets();
+        allRemoteAssets = (await transport.listAssets())
+          .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
         remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
         remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
       }
@@ -277,13 +506,122 @@
       for (const asset of remoteAssets) {
         const local = refreshedLocal.get(asset.client_asset_id);
         if (local && String(local.cloudAssetId || '') === String(asset.id || '') &&
-            String(local.cloudUpdatedAt || '') === String(asset.updated_at || '')) {
-          continue;
-        }
+            String(local.cloudUpdatedAt || '') === String(asset.updated_at || '')) continue;
         await downloadAsset(asset);
         downloaded += 1;
       }
       return { ok: true, uploaded, downloaded, deleted };
+    }
+
+    async function syncShortcutIcons() {
+      if (!localArea || !repository || typeof repository.get !== 'function') {
+        return { skipped: true, uploaded: 0, downloaded: 0, deleted: 0 };
+      }
+      const settings = await repository.get([SHORTCUTS_STORAGE_KEY]);
+      const shortcuts = settings[SHORTCUTS_STORAGE_KEY];
+      const validShortcutIds = new Set((Array.isArray(shortcuts) ? shortcuts : [])
+        .map((item) => normalizeShortcutId(item && item.id))
+        .filter(Boolean)
+        .slice(0, MAX_ASSETS));
+      let state = await readShortcutIconState();
+      let allRemoteAssets = (await transport.listAssets())
+        .filter((asset) => getAssetKind(asset) === SHORTCUT_ICON_KIND);
+      let uploaded = 0;
+      let downloaded = 0;
+      let deleted = 0;
+      const matchedMeta = {};
+
+      for (const tombstone of allRemoteAssets.filter((asset) => asset.deleted_at)) {
+        const clientAssetId = String(tombstone.client_asset_id || '');
+        const tombstoneShortcutId = normalizeShortcutId(tombstone.original_name);
+        if (tombstoneShortcutId) {
+          delete state.icons[tombstoneShortcutId];
+          delete state.meta[tombstoneShortcutId];
+        }
+        Object.entries(state.meta).forEach(([shortcutId, meta]) => {
+          if (meta.clientAssetId === clientAssetId) {
+            delete state.icons[shortcutId];
+            delete state.meta[shortcutId];
+          }
+        });
+      }
+
+      for (const shortcutId of Object.keys(state.icons)) {
+        if (!validShortcutIds.has(shortcutId)) {
+          delete state.icons[shortcutId];
+          delete state.meta[shortcutId];
+        }
+      }
+
+      const remoteByShortcutId = new Map();
+      for (const asset of allRemoteAssets.filter((item) => !item.deleted_at).slice(0, MAX_ASSETS)) {
+        const shortcutId = normalizeShortcutId(asset.original_name);
+        if (!shortcutId || !validShortcutIds.has(shortcutId)) {
+          // A shortcut setting and its media upload travel through separate
+          // endpoints. Ignoring an as-yet-unreferenced icon avoids deleting it
+          // during that short propagation window; explicit local removal
+          // creates the durable media tombstone.
+          continue;
+        }
+        remoteByShortcutId.set(shortcutId, asset);
+      }
+
+      await writeShortcutIconState(state.icons, state.meta);
+      for (const shortcutId of validShortcutIds) {
+        const localDataUrl = state.icons[shortcutId];
+        const remote = remoteByShortcutId.get(shortcutId);
+        if (localDataUrl && !remote) {
+          await uploadShortcutIcon(shortcutId, localDataUrl);
+          uploaded += 1;
+          continue;
+        }
+        if (!localDataUrl && remote) {
+          await downloadShortcutIcon(remote);
+          downloaded += 1;
+          continue;
+        }
+        if (!localDataUrl || !remote) continue;
+        const localSha256 = await sha256Hex(dataUrlToBlob(localDataUrl), cryptoApi);
+        if (localSha256 === String(remote.sha256 || '')) {
+          matchedMeta[shortcutId] = {
+            clientAssetId: String(remote.client_asset_id || ''),
+            cloudAssetId: String(remote.id || ''),
+            cloudUpdatedAt: String(remote.updated_at || ''),
+            sha256: localSha256
+          };
+          continue;
+        }
+        const meta = state.meta[shortcutId];
+        if (meta && meta.cloudAssetId === String(remote.id || '') &&
+            meta.cloudUpdatedAt === String(remote.updated_at || '')) {
+          await uploadShortcutIcon(shortcutId, localDataUrl);
+          uploaded += 1;
+        } else {
+          await downloadShortcutIcon(remote);
+          downloaded += 1;
+        }
+      }
+      state = await readShortcutIconState();
+      Object.entries(matchedMeta).forEach(([shortcutId, meta]) => {
+        if (state.icons[shortcutId]) state.meta[shortcutId] = meta;
+      });
+      await writeShortcutIconState(state.icons, state.meta);
+      return { ok: true, uploaded, downloaded, deleted };
+    }
+
+    async function runSyncAll() {
+      if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
+      const queuedDeleted = await flushDeletions();
+      const wallpaper = await syncWallpapers();
+      const shortcutIcons = await syncShortcutIcons();
+      return {
+        ok: true,
+        uploaded: wallpaper.uploaded + shortcutIcons.uploaded,
+        downloaded: wallpaper.downloaded + shortcutIcons.downloaded,
+        deleted: queuedDeleted + wallpaper.deleted + shortcutIcons.deleted,
+        wallpaper,
+        shortcutIcons
+      };
     }
 
     function syncAll() {
@@ -292,32 +630,80 @@
       return activeSync;
     }
 
-    async function deleteRecord(clientAssetId) {
-      if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
-      if (!CLIENT_ID_PATTERN.test(String(clientAssetId || ''))) throw new Error('invalid_wallpaper_id');
-      const result = await transport.deleteAsset(clientAssetId);
+    async function deleteRecord(clientAssetIdValue) {
+      const clientAssetId = String(clientAssetIdValue || '');
+      if (!WALLPAPER_CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
       await store.remove(clientAssetId);
+      if (!(await canSync())) {
+        await enqueueDeletion(WALLPAPER_KIND, clientAssetId);
+        return { queued: true, reason: 'cloud-disabled' };
+      }
+      const result = await transport.deleteAsset(clientAssetId);
+      await removeQueuedDeletion(clientAssetId);
       return result;
+    }
+
+    async function deleteShortcutIcon(shortcutIdValue) {
+      const shortcutId = normalizeShortcutId(shortcutIdValue);
+      if (!shortcutId) throw new Error('invalid_shortcut_icon_id');
+      const clientAssetId = await getShortcutIconClientAssetId(shortcutId);
+      const state = await readShortcutIconState();
+      delete state.icons[shortcutId];
+      delete state.meta[shortcutId];
+      await writeShortcutIconState(state.icons, state.meta);
+      if (!(await canSync())) {
+        await enqueueDeletion(SHORTCUT_ICON_KIND, clientAssetId);
+        return { queued: true, reason: 'cloud-disabled' };
+      }
+      const result = await transport.deleteAsset(clientAssetId);
+      await removeQueuedDeletion(clientAssetId);
+      return result;
+    }
+
+    async function clearLocal() {
+      if (store && typeof store.clear === 'function') await store.clear();
+      else {
+        const records = store && typeof store.readAll === 'function' ? await store.readAll() : [];
+        for (const record of records) {
+          if (record && typeof store.remove === 'function') await store.remove(record.key || record.id);
+        }
+      }
+      await removeLocal([SHORTCUT_ICON_STORAGE_KEY, SHORTCUT_ICON_META_KEY, MEDIA_DELETIONS_KEY]);
+      return { ok: true };
     }
 
     return Object.freeze({
       store,
       uploadRecord,
       downloadAsset,
+      uploadShortcutIcon,
+      downloadShortcutIcon,
+      deleteShortcutIcon,
       syncAll,
-      deleteRecord
+      deleteRecord,
+      clearLocal
     });
   }
 
   return Object.freeze({
     DB_NAME,
     STORE_NAME,
+    WALLPAPER_KIND,
+    SHORTCUT_ICON_KIND,
+    SHORTCUT_ICON_STORAGE_KEY,
+    SHORTCUTS_STORAGE_KEY,
+    SHORTCUT_ICON_META_KEY,
+    MEDIA_DELETIONS_KEY,
     MAX_ASSET_BYTES,
+    MAX_SHORTCUT_ICON_BYTES,
+    MAX_SHORTCUT_ICON_DATA_URL_LENGTH,
     MAX_ASSETS,
     hasImageSignature,
     dataUrlToBlob,
     blobToDataUrl,
     sha256Hex,
+    sha256Text,
+    normalizeShortcutIconMap,
     createIndexedDbStore,
     createRuntime
   });

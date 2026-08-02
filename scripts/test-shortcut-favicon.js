@@ -440,14 +440,6 @@ function testCanonicalProviderResolution() {
       'bundled providers should resolve instantly without a network or cache lookup'
     );
   });
-  assert.match(
-    fs.readFileSync(
-      path.join(__dirname, '..', 'assets/images/site-search/taobao.svg'),
-      'utf8'
-    ),
-    /viewBox="0 0 25 24"/,
-    'Taobao artwork should use a canvas wide enough to avoid clipping its right edge'
-  );
   assert.match(shortcutFavicon.SITE_SEARCH_STORAGE_KEY, /canonical/);
 }
 

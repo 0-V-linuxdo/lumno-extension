@@ -92,7 +92,9 @@ class FakeElement {
       get display() {
         return config.display || 'block';
       },
-      getPropertyValue: (name) => this.computed[name] || ''
+      getPropertyValue: (name) => (
+        this.style.getPropertyValue(name) || this.computed[name] || ''
+      )
     };
   }
 
@@ -234,7 +236,9 @@ function createFixture(options) {
   recentSection.setAttribute('data-visible', 'true');
 
   const suggestionsContainer = new FakeElement({
-    rect: { left: 180, top: 255, width: 720, height: 0 }
+    rect: { left: 180, top: 255, width: 720, height: 0 },
+    paddingTop: '8px',
+    paddingBottom: '12px'
   });
   const suggestionsSurface = new FakeElement();
   const suggestionsOutline = new FakeElement();
@@ -283,6 +287,9 @@ function createFixture(options) {
     },
     pendingTimerCount() {
       return timers.size;
+    },
+    pendingAnimationFrameCount() {
+      return animationFrames.size;
     }
   };
 }
@@ -398,7 +405,7 @@ function testSuggestionAppendAnimatesContainerAndSurfaceFrame() {
   const previousState = controller.captureSuggestionsResizeState();
   assert.deepStrictEqual(
     previousState,
-    { height: 120 },
+    { height: 120, padding: { top: 8, bottom: 12 } },
     'visible suggestions should expose their rendered height before rows are appended'
   );
 
@@ -435,6 +442,43 @@ function testSuggestionAppendAnimatesContainerAndSurfaceFrame() {
 }
 
 testSuggestionAppendAnimatesContainerAndSurfaceFrame();
+
+function testInterruptedSuggestionResizeRestartsFromRenderedHeight() {
+  const {
+    controller,
+    suggestionsContainer,
+    flushAnimationFrames
+  } = createFixture({ deferAnimationFrame: true });
+  suggestionsContainer.setAttribute('data-visible', 'true');
+  suggestionsContainer.setRect({ top: 254, height: 120, bottom: 374 });
+  suggestionsContainer.scrollHeight = 120;
+
+  const firstState = controller.captureSuggestionsResizeState();
+  suggestionsContainer.setRect({ top: 254, height: 320, bottom: 574 });
+  suggestionsContainer.scrollHeight = 320;
+  assert.strictEqual(controller.animateSuggestionsResize(firstState), true);
+  flushAnimationFrames();
+
+  suggestionsContainer.setRect({ top: 254, height: 184, bottom: 438 });
+  suggestionsContainer.scrollHeight = 320;
+  const interruptedState = controller.captureSuggestionsResizeState();
+  assert.strictEqual(
+    interruptedState.height,
+    184,
+    'an interrupted transition should capture the current rendered height, not its old 320px target'
+  );
+
+  suggestionsContainer.setRect({ top: 254, height: 236, bottom: 490 });
+  suggestionsContainer.scrollHeight = 236;
+  assert.strictEqual(controller.animateSuggestionsResize(interruptedState), true);
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '184px',
+    'the replacement transition should continue from the visible intermediate frame'
+  );
+}
+
+testInterruptedSuggestionResizeRestartsFromRenderedHeight();
 
 function testTypingSessionKeepsSuggestionHeightStable() {
   const {
@@ -536,10 +580,147 @@ function testDeferredSearchModeSessionWaitsForTargetRender() {
 
 testDeferredSearchModeSessionWaitsForTargetRender();
 
+function testDeferredSearchModeSessionClipsZeroHeightUntilTargetResize() {
+  const {
+    controller,
+    suggestionsContainer,
+    flushAnimationFrames,
+    pendingAnimationFrameCount
+  } = createFixture({ deferAnimationFrame: true });
+  const lifecycleEvents = [];
+  controller.setSuggestionsResizeLifecycle({
+    onStart(transition) {
+      lifecycleEvents.push(['start', transition.fromHeight, transition.toHeight]);
+    },
+    onTarget(transition) {
+      lifecycleEvents.push(['target', transition.fromHeight, transition.toHeight]);
+    },
+    onEnd() {
+      lifecycleEvents.push(['end']);
+    }
+  });
+
+  controller.beginSuggestionsInputSession({
+    allowFromZero: true,
+    autoSettle: false
+  });
+  suggestionsContainer.setAttribute('data-visible', 'true');
+  suggestionsContainer.setRect({ top: 254, height: 472, bottom: 726 });
+  suggestionsContainer.scrollHeight = 472;
+
+  assert.strictEqual(
+    controller.holdSuggestionsInputHeight(),
+    true,
+    'a deferred empty-to-results switch should retain the captured zero-height start'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '0px',
+    'new rows should stay clipped before the resize transaction starts'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('overflow-y'),
+    'hidden',
+    'content larger than the zero-height container must not paint over the open scope panel'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('padding-top'),
+    '0px',
+    'a zero-height result box must also collapse its top padding'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('padding-bottom'),
+    '0px',
+    'a zero-height result box must also collapse its bottom padding'
+  );
+  assert.strictEqual(
+    suggestionsContainer.getAttribute('data-height-clipped'),
+    'true',
+    'the zero-height lock should use the same explicit clipping contract as nonzero resizes'
+  );
+
+  assert.strictEqual(
+    controller.finishSuggestionsInputSession(),
+    true,
+    'the target render should animate from zero when the scope transition opted into it'
+  );
+  assert.deepStrictEqual(
+    lifecycleEvents,
+    [['start', 0, 472]],
+    'the result container and its dependent panel should receive one shared start state'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '0px',
+    'the browser should retain the clipped start until the coordinated animation frame'
+  );
+
+  flushAnimationFrames();
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('height'),
+    '472px',
+    'the coordinated frame should reveal the full result height'
+  );
+  assert.match(
+    suggestionsContainer.style.getPropertyValue('transition'),
+    /padding-top 180ms[\s\S]*padding-bottom 180ms/,
+    'height and padding should expand in the same transaction from a physical zero box'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('padding-top'),
+    '8px'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('padding-bottom'),
+    '12px'
+  );
+  assert.strictEqual(
+    pendingAnimationFrameCount(),
+    0,
+    'surface geometry should target once instead of running a per-frame layout loop'
+  );
+  assert.deepStrictEqual(
+    lifecycleEvents.slice(0, 2),
+    [['start', 0, 472], ['target', 0, 472]],
+    'the dependent panel should target the new height in the same frame as the container'
+  );
+
+  controller.setSuggestionsVisible(false);
+  assert.deepStrictEqual(
+    lifecycleEvents,
+    [['start', 0, 472], ['target', 0, 472], ['end']],
+    'closing or interrupting the result surface should finish the shared resize transaction once'
+  );
+  assert.strictEqual(
+    suggestionsContainer.getAttribute('data-height-clipped'),
+    null,
+    'transaction cleanup should release the explicit clip contract'
+  );
+  assert.strictEqual(
+    suggestionsContainer.style.getPropertyValue('overflow-y'),
+    '',
+    'transaction cleanup should restore the container scroll policy'
+  );
+}
+
+testDeferredSearchModeSessionClipsZeroHeightUntilTargetResize();
+
 assert.match(
   newtabHtml,
   /max-height:\s*min\([\s\S]*?--x-nt-suggestions-max-height[\s\S]*?--x-nt-suggestions-viewport-fit-max-height[\s\S]*?--x-nt-suggestions-menu-fit-max-height/,
   'new-tab suggestions should combine content, viewport, and open scope-panel height limits'
+);
+
+assert.match(
+  newtabSource,
+  /function beginSearchModeResultTransition\(rawQuery\)[\s\S]*?beginSuggestionsInputSession\(\{[\s\S]*?allowFromZero: true,[\s\S]*?autoSettle: false/,
+  'scope transitions should preserve zero as a real captured height instead of treating it as unset'
+);
+
+assert.match(
+  newtabSource,
+  /setSuggestionsResizeLifecycle\(\{[\s\S]*?onStart: beginSearchModeMenuResultResize,[\s\S]*?onTarget: targetSearchModeMenuResultResize,[\s\S]*?onEnd: finishSearchModeMenuResultResize/,
+  'new-tab result height and the open scope panel should share one resize lifecycle'
 );
 
 assert.match(
@@ -559,7 +740,7 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /function beginSearchModeResultTransition\(rawQuery\)[\s\S]*?beginSuggestionsInputSession\(\{ autoSettle: false \}\)[\s\S]*?const preserveResults = beginSearchModeResultTransition\(rawQuery\);[\s\S]*?activateLocalSearchScope\([\s\S]*?\{ preserveResults \}[\s\S]*?activateSiteSearch\(item\.provider, \{ preserveResults \}\)/,
+  /function beginSearchModeResultTransition\(rawQuery\)[\s\S]*?beginSuggestionsInputSession\(\{[\s\S]*?allowFromZero: true,[\s\S]*?autoSettle: false[\s\S]*?const preserveResults = beginSearchModeResultTransition\(rawQuery\);[\s\S]*?activateLocalSearchScope\([\s\S]*?\{ preserveResults \}[\s\S]*?activateSiteSearch\(item\.provider, \{ preserveResults \}\)/,
   'every non-empty scope switch should preserve the old result frame until the target renders'
 );
 assert.match(

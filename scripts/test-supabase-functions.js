@@ -52,6 +52,7 @@ function run() {
   assert.match(deletion, /confirmation[^\n]+!== 'DELETE'/);
   assert.match(deletion, /\$\{userPrefix\}\/wallpapers/);
   assert.match(deletion, /\$\{userPrefix\}\/wallpaper-thumbs/);
+  assert.match(deletion, /\$\{userPrefix\}\/shortcut-icons/);
 
   console.log('supabase Edge Function tests passed');
 }

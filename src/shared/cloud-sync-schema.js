@@ -20,16 +20,21 @@
     newtabSearchWidth: '_x_extension_newtab_search_width_2026_unique_',
     newtabThemeMode: '_x_extension_newtab_theme_mode_2026_unique_',
     newtabThemeScope: '_x_extension_newtab_theme_scope_2026_unique_',
+    newtabZenMode: '_x_extension_newtab_zen_mode_2026_unique_',
     newtabWallpaper: '_x_extension_newtab_wallpaper_2026_unique_',
     newtabLocalWallpaper: '_x_extension_newtab_local_wallpaper_2026_unique_',
     newtabWallpaperOverlay: '_x_extension_newtab_wallpaper_overlay_2026_unique_',
     newtabWallpaperEffect: '_x_extension_newtab_wallpaper_effect_2026_unique_',
+    newtabFavicon: '_x_extension_newtab_favicon_2026_unique_',
     overlaySizeMode: '_x_extension_overlay_size_mode_2026_unique_',
     overlayEnterAnimation: '_x_extension_overlay_enter_animation_2026_unique_',
     bookmarkCount: '_x_extension_bookmark_count_2024_unique_',
     bookmarkColumns: '_x_extension_bookmark_columns_2024_unique_',
     bookmarkViewMode: '_x_extension_bookmark_view_mode_2026_unique_',
     bookmarkFolderIconsVisible: '_x_extension_bookmark_folder_icons_visible_2026_unique_',
+    bookmarkTopbarSurfaceMode: '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
+    bookmarkTopbarSurfaceColorLight: '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
+    bookmarkTopbarSurfaceColorDark: '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
     pinnedRecentSites: '_x_extension_newtab_pinned_recent_sites_2026_unique_',
     hiddenRecentSites: '_x_extension_newtab_hidden_recent_sites_2026_unique_',
     newtabShortcuts: '_x_extension_newtab_shortcuts_2026_unique_',
@@ -59,6 +64,7 @@
 
   const CLOUD_LOCAL_KEYS = Object.freeze({
     account: '_lumno_cloud_account_v1_',
+    cacheOwner: '_lumno_cloud_cache_owner_v1_',
     conflicts: '_lumno_cloud_conflicts_v1_',
     consent: '_lumno_cloud_consent_v1_',
     device: '_lumno_cloud_device_v1_',
@@ -73,6 +79,12 @@
 
   const SYNC_KEYS = Object.freeze(Object.values(STORAGE_KEYS));
   const SYNC_KEY_SET = new Set(SYNC_KEYS);
+  const LOCAL_ONLY_SYNC_KEYS = Object.freeze([
+    STORAGE_KEYS.newtabLocalWallpaper,
+    STORAGE_KEYS.bookmarkTopbarSurfaceMode,
+    STORAGE_KEYS.bookmarkTopbarSurfaceColorLight,
+    STORAGE_KEYS.bookmarkTopbarSurfaceColorDark
+  ]);
 
   const USAGE_METRICS = Object.freeze([
     'command_bar_opened',
@@ -283,6 +295,7 @@
     STORAGE_KEYS,
     CLOUD_LOCAL_KEYS,
     SYNC_KEYS,
+    LOCAL_ONLY_SYNC_KEYS,
     USAGE_METRICS,
     FORBIDDEN_ANALYTICS_KEY_PATTERN,
     isSyncKey,

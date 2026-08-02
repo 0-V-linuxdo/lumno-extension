@@ -38,8 +38,12 @@ async function run() {
   assert.strictEqual(detected.extension_version, '1.2.3');
 
   const themeKey = schema.STORAGE_KEYS.themeMode;
+  const shortcutsKey = schema.STORAGE_KEYS.newtabShortcuts;
   const localArea = createArea({});
-  const syncArea = createArea({ [themeKey]: 'light' });
+  const syncArea = createArea({
+    [themeKey]: 'light',
+    [shortcutsKey]: [{ id: 'device-shortcut', title: 'Device', url: 'https://device.example/' }]
+  });
   const trackedArea = controllerApi.createTrackedArea(syncArea, () => 1);
   const repository = repositoryApi.createRepository({
     localArea,
@@ -48,30 +52,37 @@ async function run() {
   });
   const queued = [];
   const calls = [];
+  const enableOptions = [];
+  const pullOptions = [];
+  const syncOptions = [];
   let session = null;
   let failConsentDisable = false;
+  const consentVersion = controllerApi.CLOUD_COMBINED_CONSENT_VERSION;
   const runtime = {
     async ensureDevice() {
       return { id: '00000000-0000-4000-8000-000000000001', display_name: 'Lumno browser' };
     },
-    async enableCloudMode() {
+    async enableCloudMode(options) {
       calls.push('enable');
-      return repository.enterCloudMode();
+      enableOptions.push(options);
+      return repository.enterCloudMode(options);
     },
     async disableCloudMode(options) {
       calls.push('disable');
       return repository.leaveCloudMode(options);
     },
-    async pull() {
+    async pull(options) {
       calls.push('pull');
-      return { ok: true, pulled: 0 };
+      pullOptions.push(options);
+      return { ok: true, pulled: 1, keys: [shortcutsKey] };
     },
     async queueSettingChange(key, value, options) {
       queued.push({ key, value, deleted: Boolean(options && options.deleted) });
       return true;
     },
-    async syncNow() {
+    async syncNow(options) {
       calls.push('sync');
+      syncOptions.push(options);
       return { ok: true };
     }
   };
@@ -80,6 +91,9 @@ async function run() {
     async getSession() { return session; },
     async registerDevice() { calls.push('register'); },
     async signOut() { session = null; calls.push('signout'); },
+    async setCloudConsent(version) {
+      calls.push(`cloud-consent:${version}`);
+    },
     async setAnalyticsConsent(value) {
       calls.push(`consent:${value}`);
       if (!value && failConsentDisable) {
@@ -109,12 +123,31 @@ async function run() {
     clearTimeout: () => {}
   });
 
-  const signedIn = await controller.signInWithWeb();
+  await assert.rejects(
+    () => controller.signInWithWeb(),
+    (error) => error && error.code === 'cloud_consent_required',
+    'web authentication must not start without the current combined consent version'
+  );
+  assert(!calls.includes('web-auth'));
+
+  const signedIn = await controller.signInWithWeb(consentVersion);
   assert.strictEqual(signedIn.signedIn, true);
-  assert.deepStrictEqual(calls.slice(0, 6), [
-    'web-auth', 'enable', 'register', 'pull', 'register', 'sync'
+  assert.deepStrictEqual(calls.slice(0, 7), [
+    'web-auth', `cloud-consent:${consentVersion}`, 'enable', 'register', 'pull', 'register', 'sync'
   ]);
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.consent].analytics, true,
+    'the combined sync confirmation must enable usage analytics after OAuth succeeds');
+  assert.strictEqual(
+    localArea.values[schema.CLOUD_LOCAL_KEYS.consent].privacy_notice_version,
+    consentVersion
+  );
+  assert.deepStrictEqual(pullOptions[0], { full: true, resetMissing: false });
+  assert.strictEqual(syncOptions[0].fullPull, true);
+  assert.strictEqual(enableOptions[0].browserSnapshot[themeKey], 'light',
+    'first Lumno login must pass the Chrome Sync snapshot as the migration baseline');
   assert(queued.some((item) => item.key === themeKey && item.value === 'light'));
+  assert(!queued.some((item) => item.key === shortcutsKey),
+    'a Chrome migration must not overwrite a shortcut record that already exists in Lumno');
 
   const queuedBeforeInternalWrite = queued.length;
   trackedArea.set({ [themeKey]: 'dark' }, () => {});
@@ -147,14 +180,31 @@ async function run() {
   await controller.signOut();
   assert.strictEqual(await repository.getMode(), repositoryApi.MODE_GUEST);
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.session], undefined);
+  assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.cacheOwner], 'user-one',
+    'sign-out should retain the cache owner marker so another account cannot inherit media');
 
-  const webSignedIn = await controller.signInWithWeb();
+  const webSignedIn = await controller.signInWithWeb(consentVersion);
   assert.strictEqual(webSignedIn.signedIn, true);
   assert.strictEqual(webSignedIn.email, 'web@example.com');
   assert(calls.includes('web-auth'));
 
+  const manualSyncOptionsBefore = syncOptions.length;
+  const manualSyncResponse = await new Promise((resolve) => {
+    controller.handleMessage(
+      { action: 'cloudSyncNow' },
+      { id: 'extension-id', url: 'chrome-extension://extension-id/src/options/options.html' },
+      resolve
+    );
+  });
+  assert.strictEqual(manualSyncResponse.ok, true);
+  assert.strictEqual(syncOptions.length, manualSyncOptionsBefore + 1);
+  assert.strictEqual(syncOptions.at(-1).fullPull, true,
+    'the visible Sync now action must rebuild the local cache from a full cloud snapshot');
+
   const accountADevice = { id: 'account-a-device', display_name: 'Old browser' };
   const transitionLocalArea = createArea({
+    [themeKey]: 'stale-local-cache',
+    [schema.STORAGE_KEYS.language]: 'stale-account-language',
     [schema.CLOUD_LOCAL_KEYS.account]: { id: 'account-a', email: 'a@example.com' },
     [schema.CLOUD_LOCAL_KEYS.device]: accountADevice,
     [schema.CLOUD_LOCAL_KEYS.pullCursor]: 42,
@@ -170,6 +220,8 @@ async function run() {
   });
   const registeredDeviceIds = [];
   const replacementQueuedSettings = [];
+  const transitionEnableOptions = [];
+  let clearedMediaCount = 0;
   const accountBSession = { user: { id: 'account-b', email: 'b@example.com' } };
   const transitionRuntime = {
     async ensureDevice() {
@@ -179,8 +231,15 @@ async function run() {
       transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.device] = device;
       return device;
     },
-    async enableCloudMode() { return transitionRepository.enterCloudMode(); },
-    async pull() { return { ok: true, pulled: 0 }; },
+    async enableCloudMode(options) {
+      transitionEnableOptions.push(options);
+      return transitionRepository.enterCloudMode(options);
+    },
+    async pull(options) {
+      assert.deepStrictEqual(options, { full: true, resetMissing: false });
+      transitionLocalArea.values[themeKey] = 'dark';
+      return { ok: true, pulled: 1, keys: [themeKey] };
+    },
     async queueSettingChange(key, value) {
       replacementQueuedSettings.push({ key, value });
       return true;
@@ -203,11 +262,16 @@ async function run() {
       config: { configured: true },
       async getSession() { return accountBSession; },
       async registerDevice(device) { registeredDeviceIds.push(device.id); },
+      async setCloudConsent() {},
       async setSyncConsent() {},
       async setAnalyticsConsent() {},
       async ingestUsage() {}
     },
     webAuth: { async signIn() { return accountBSession; } },
+    wallpaperRuntime: {
+      async clearLocal() { clearedMediaCount += 1; },
+      async syncAll() { return { ok: true, downloaded: 0, uploaded: 0 }; }
+    },
     setTimeout: () => 1,
     clearTimeout: () => {}
   });
@@ -218,12 +282,20 @@ async function run() {
   });
   assert.deepStrictEqual(registeredDeviceIds, [],
     'a session/account mismatch must be blocked before device registration or sync');
-  const accountBStatus = await transitionController.signInWithWeb();
+  const accountBStatus = await transitionController.signInWithWeb(consentVersion);
   assert.strictEqual(accountBStatus.signedIn, true);
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.account].id, 'account-b');
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor], undefined);
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.outbox], undefined);
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.versions], undefined);
+  assert.strictEqual(transitionLocalArea.values[themeKey], 'dark',
+    'switching accounts must rebuild the cache from the new account device baseline');
+  assert.strictEqual(transitionLocalArea.values[schema.STORAGE_KEYS.language], undefined,
+    'settings absent from the replacement account must not survive from the old cache');
+  assert.deepStrictEqual(transitionEnableOptions[0], { resetCloudCache: true });
+  assert.strictEqual(clearedMediaCount, 1,
+    'wallpaper and shortcut-icon caches must be cleared when the cache owner changes');
+  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.cacheOwner], 'account-b');
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts], undefined);
   assert(registeredDeviceIds.length > 0);
   assert(registeredDeviceIds.every((id) => id === 'account-b-device'),
@@ -233,7 +305,7 @@ async function run() {
 
   transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor] = 99;
   transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.outbox] = [{ operation_id: 'account-b-operation' }];
-  await transitionController.signInWithWeb();
+  await transitionController.signInWithWeb(consentVersion);
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.pullCursor], 99,
     'reauthenticating the same account must preserve its cursor');
   assert.deepStrictEqual(
@@ -241,8 +313,8 @@ async function run() {
     [{ operation_id: 'account-b-operation' }],
     'reauthenticating the same account must preserve its outbox'
   );
-  assert(replacementQueuedSettings.length > 0,
-    'same-account reauthentication should preserve the normal snapshot queue behavior');
+  assert.deepStrictEqual(replacementQueuedSettings, [],
+    'same-account reauthentication must not rewrite every cloud setting or advance versions');
 
   transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts] = [{ key: themeKey }];
   await assert.rejects(

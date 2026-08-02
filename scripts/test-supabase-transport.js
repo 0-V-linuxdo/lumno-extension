@@ -86,6 +86,13 @@ async function run() {
   assert.strictEqual(pull.rows.length, 1);
   assert.match(requests.at(-1).options.headers.Authorization, /^Bearer access-one$/);
 
+  await transport.setCloudConsent('2026-08-02-combined-v1');
+  const combinedConsentRequest = requests.at(-1);
+  assert.match(combinedConsentRequest.url, /\/rest\/v1\/lumno_consents\?on_conflict=user_id$/);
+  assert.strictEqual(combinedConsentRequest.body[0].sync_terms_version, '2026-08-02-combined-v1');
+  assert.strictEqual(combinedConsentRequest.body[0].analytics_terms_version, '2026-08-02-combined-v1');
+  assert.strictEqual(combinedConsentRequest.body[0].analytics_withdrawn_at, null);
+
   now += 3_599_500;
   const refreshed = await transport.getSession();
   assert.strictEqual(refreshed.access_token, 'access-two');
