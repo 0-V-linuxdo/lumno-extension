@@ -57,7 +57,7 @@
     "message": "More settings"
   },
   "settings_tab_shortcuts": {
-    "message": "Site Search / AI Search"
+    "message": "Search sources"
   },
   "settings_tab_blacklist": {
     "message": "Blacklist"
@@ -1889,7 +1889,7 @@
   "command_tabs_action": { "message": "Search tabs" },
   "command_copy_title": { "message": "Copy current page link" },
   "command_copy_action": { "message": "Copy link" },
-  "settings_tab_account": { "message": "Account & privacy" },
+  "settings_tab_account": { "message": "Account & sync" },
   "cloud_account_section_title": { "message": "Account and cross-device sync" },
   "cloud_account_section_desc": { "message": "After confirmation, Lumno syncs settings and custom wallpapers and uploads product usage analytics. Browsing history, page titles, and search content are never uploaded." },
   "cloud_status_loading": { "message": "Checking" },

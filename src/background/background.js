@@ -4738,15 +4738,15 @@ function waitForTabComplete(tabId, timeoutMs) {
 function loadSelectionQuickActionsEnabled() {
   return new Promise((resolve) => {
     if (!storageArea || typeof storageArea.get !== 'function') {
-      resolve(true);
+      resolve(false);
       return;
     }
     storageArea.get([SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY], (result) => {
       if (chrome.runtime && chrome.runtime.lastError) {
-        resolve(true);
+        resolve(false);
         return;
       }
-      resolve(!result || result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] !== false);
+      resolve(Boolean(result && result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] === true));
     });
   });
 }

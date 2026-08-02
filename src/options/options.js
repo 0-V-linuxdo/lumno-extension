@@ -1398,7 +1398,7 @@
   function normalizeSelectionQuickActionsEnabled(value) {
     return typeof SETTINGS.normalizeSelectionQuickActionsEnabled === 'function'
       ? SETTINGS.normalizeSelectionQuickActionsEnabled(value)
-      : value !== false;
+      : value === true;
   }
 
   function normalizeSearchResultPriority(value) {
@@ -3464,7 +3464,7 @@
       {
         key: 'account',
         labelKey: 'settings_tab_account',
-        label: getMessage('settings_tab_account', '账号与隐私'),
+        label: getMessage('settings_tab_account', '账号与同步'),
         iconClass: 'ri-icon ri-user-3-line'
       },
       {
@@ -3476,7 +3476,7 @@
       {
         key: 'shortcuts',
         labelKey: 'settings_tab_shortcuts',
-        label: getMessage('settings_tab_shortcuts', '站内搜索/AI 搜索'),
+        label: getMessage('settings_tab_shortcuts', '搜索源'),
         iconClass: 'ri-icon ri-search-line'
       },
       {

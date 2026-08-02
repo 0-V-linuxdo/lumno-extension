@@ -17,6 +17,16 @@ function run() {
   assert.match(html, /data-tab="account"/);
   assert.match(html, /data-content="account"/);
   assert.match(
+    html,
+    /\._x_extension_cloud_stack_2026_unique_\s*\{[\s\S]*?padding-inline:\s*14px;/,
+    'account content should use the same horizontal inset as standard settings rows'
+  );
+  assert.match(
+    html,
+    /\._x_extension_cloud_intro_2026_unique_\s*\{[\s\S]*?padding:\s*12px 0;/,
+    'account title should use the same vertical inset as standard settings rows'
+  );
+  assert.match(
     runtime,
     /SETTINGS_TAB_KEYS\s*=\s*Object\.freeze\(\[\s*'general',\s*'account',/,
     'account should be accepted as a settings route'

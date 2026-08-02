@@ -42,7 +42,9 @@ function wait(ms) {
         addListener() {}
       },
       sync: {
-        get(_keys, callback) { callback({}); }
+        get(_keys, callback) {
+          callback({ _x_extension_selection_quick_actions_enabled_2026_unique_: true });
+        }
       }
     }
   };

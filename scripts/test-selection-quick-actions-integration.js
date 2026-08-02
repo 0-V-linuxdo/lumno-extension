@@ -21,10 +21,14 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(selectionContentScript.run_at, 'document_idle');
 
-assert.match(
-  optionsHtml,
-  /id="_x_extension_selection_quick_actions_toggle_2026_unique_"[^>]*type="checkbox"[^>]*checked/,
-  'Labs should show the selection quick actions toggle as enabled by default'
+const optionsToggleTag = optionsHtml.match(
+  /<input\b[^>]*id="_x_extension_selection_quick_actions_toggle_2026_unique_"[^>]*>/
+);
+assert(optionsToggleTag, 'Labs should render the selection quick actions toggle');
+assert.doesNotMatch(
+  optionsToggleTag[0],
+  /\bchecked\b/,
+  'Labs should show the selection quick actions toggle as disabled by default'
 );
 assert(optionsSource.includes(storageKey), 'options should persist the selection setting');
 assert(
@@ -49,6 +53,15 @@ assert(
 assert(contentSource.includes("document.addEventListener('copy', hideSurface"));
 assert(contentSource.includes("document.addEventListener('scroll', hideSurface"));
 assert(contentSource.includes("event.key === 'Escape'"));
+assert(contentSource.includes('let enabled = false;'), 'content runtime should start disabled');
+assert(
+  contentSource.includes('result[ENABLED_STORAGE_KEY] === true'),
+  'content runtime should require an explicit enabled setting'
+);
+assert(
+  backgroundSource.includes('result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] === true'),
+  'background actions should require an explicit enabled setting'
+);
 
 localeNames.forEach((locale) => {
   const messages = JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'));

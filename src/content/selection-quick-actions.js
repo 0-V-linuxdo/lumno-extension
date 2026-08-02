@@ -33,7 +33,7 @@
     ? 'sync'
     : 'local');
 
-  let enabled = true;
+  let enabled = false;
   let languageMode = 'system';
   let localeMessages = null;
   let showTimer = null;
@@ -635,7 +635,7 @@
       if (chrome.runtime && chrome.runtime.lastError) {
         return;
       }
-      enabled = !result || result[ENABLED_STORAGE_KEY] !== false;
+      enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
       languageMode = result && result[LANGUAGE_STORAGE_KEY]
         ? String(result[LANGUAGE_STORAGE_KEY])
         : 'system';
@@ -667,7 +667,7 @@
         return;
       }
       if (changes[ENABLED_STORAGE_KEY]) {
-        enabled = changes[ENABLED_STORAGE_KEY].newValue !== false;
+        enabled = changes[ENABLED_STORAGE_KEY].newValue === true;
         if (!enabled) {
           hideSurface();
         }

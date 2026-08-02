@@ -57,7 +57,7 @@
     "message": "更多设置"
   },
   "settings_tab_shortcuts": {
-    "message": "站内搜索/AI 搜索"
+    "message": "搜索源"
   },
   "settings_tab_blacklist": {
     "message": "黑名单"
@@ -1889,7 +1889,7 @@
   "command_tabs_action": { "message": "搜索标签页" },
   "command_copy_title": { "message": "复制当前页面链接" },
   "command_copy_action": { "message": "复制链接" },
-  "settings_tab_account": { "message": "账号与隐私" },
+  "settings_tab_account": { "message": "账号与同步" },
   "cloud_account_section_title": { "message": "账号与跨设备同步" },
   "cloud_account_section_desc": { "message": "确认开启后，同步 Lumno 配置和自定义壁纸，并上传产品使用统计；浏览历史、网页标题和搜索内容不会上传。" },
   "cloud_status_loading": { "message": "正在检查" },

@@ -57,7 +57,7 @@
     "message": "その他の設定"
   },
   "settings_tab_shortcuts": {
-    "message": "サイト内検索 / AI検索"
+    "message": "検索ソース"
   },
   "settings_tab_blacklist": {
     "message": "非表示リスト"
@@ -1889,7 +1889,7 @@
   "command_tabs_action": { "message": "タブを検索" },
   "command_copy_title": { "message": "現在のページのリンクをコピー" },
   "command_copy_action": { "message": "リンクをコピー" },
-  "settings_tab_account": { "message": "アカウントとプライバシー" },
+  "settings_tab_account": { "message": "アカウントと同期" },
   "cloud_account_section_title": { "message": "アカウントとデバイス間同期" },
   "cloud_account_section_desc": { "message": "確認後、Lumno の設定とカスタム壁紙を同期し、製品利用統計を送信します。閲覧履歴、ページタイトル、検索内容はアップロードされません。" },
   "cloud_status_loading": { "message": "確認中" },

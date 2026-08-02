@@ -184,7 +184,7 @@
   }
 
   function normalizeSelectionQuickActionsEnabled(value) {
-    return value !== false;
+    return value === true;
   }
 
   function normalizeThemePreference(value) {

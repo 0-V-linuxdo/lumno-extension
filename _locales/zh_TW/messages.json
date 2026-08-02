@@ -57,7 +57,7 @@
     "message": "更多設定"
   },
   "settings_tab_shortcuts": {
-    "message": "站內搜尋/AI 搜尋"
+    "message": "搜尋來源"
   },
   "settings_tab_blacklist": {
     "message": "黑名單"
@@ -1889,7 +1889,7 @@
   "command_tabs_action": { "message": "搜尋分頁" },
   "command_copy_title": { "message": "複製目前頁面連結" },
   "command_copy_action": { "message": "複製連結" },
-  "settings_tab_account": { "message": "帳號與隱私" },
+  "settings_tab_account": { "message": "帳號與同步" },
   "cloud_account_section_title": { "message": "帳號與跨裝置同步" },
   "cloud_account_section_desc": { "message": "確認開啟後，同步 Lumno 設定和自訂桌布，並上傳產品使用統計；瀏覽記錄、網頁標題和搜尋內容不會上傳。" },
   "cloud_status_loading": { "message": "正在檢查" },
