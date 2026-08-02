@@ -2209,6 +2209,11 @@
 
   function formatCloudSyncDetail(status) {
     const sync = status && status.sync ? status.sync : {};
+    if (String(sync.state || '') === 'error') {
+      const label = getMessage('cloud_status_error', '同步异常');
+      const detail = String(sync.lastError || '').trim();
+      return detail ? `${label}：${detail}` : label;
+    }
     if (sync.conflictCount > 0) {
       return formatTemplate(getMessage('cloud_sync_conflicts', '有 {count} 项配置冲突，已保留本机版本等待处理'), {
         count: sync.conflictCount

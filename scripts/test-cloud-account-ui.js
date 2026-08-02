@@ -33,6 +33,11 @@ function run() {
   assert.match(runtime, /action: 'cloudSetAnalyticsConsent', consented/);
   assert.match(
     runtime,
+    /String\(sync\.state \|\| ''\) === 'error'[\s\S]*String\(sync\.lastError \|\| ''\)\.trim\(\)/,
+    'sync errors should expose the stored diagnostic in the account card'
+  );
+  assert.match(
+    runtime,
     /applyI18n\(\);\s*if \(currentCloudAccountStatus\) \{\s*renderCloudAccountStatus\(currentCloudAccountStatus\);/,
     'late locale loading should not overwrite the rendered cloud connection state'
   );
