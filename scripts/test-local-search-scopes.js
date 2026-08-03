@@ -186,6 +186,11 @@ assert.match(
 );
 assert.match(
   inputModeCss,
+  /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?\.x-lumno-search-input-mode__menu[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'the scope menu should use the same continuous superellipse corner curve as the search input'
+);
+assert.match(
+  inputModeCss,
   /\.x-lumno-search-input-mode__menu\[data-surface="newtab"\]\s*\{\s*backdrop-filter: none !important;[\s\S]*?-webkit-backdrop-filter: none !important;/,
   'the newtab scope menu should use an opaque surface without wallpaper blur'
 );

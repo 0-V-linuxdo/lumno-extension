@@ -950,7 +950,7 @@
       'pointer-events: none !important',
       'contain: layout style paint !important'
     ].join(';');
-    const shadow = typeof host.attachShadow === 'function' ? host.attachShadow({ mode: 'open' }) : host;
+    const shadow = typeof host.attachShadow === 'function' ? host.attachShadow({ mode: 'closed' }) : host;
     const style = document.createElement('style');
     style.textContent = buildStyles();
     shadow.appendChild(style);
@@ -973,6 +973,9 @@
         renderSelection();
       },
       onActivate(index, event) {
+        if (!event || event.isTrusted !== true) {
+          return;
+        }
         stopHandledKeyEvent(event);
         selectedIndex = index;
         switchToSelected();
@@ -1067,7 +1070,7 @@
     }
 
     function handleKeydown(event) {
-      if (!event) {
+      if (!event || event.isTrusted !== true) {
         return;
       }
       const keyText = String(event.key || '').toLowerCase();
@@ -1107,7 +1110,7 @@
     }
 
     function handleKeyup(event) {
-      if (!event) {
+      if (!event || event.isTrusted !== true) {
         return;
       }
       const keyText = String(event.key || '').toLowerCase();

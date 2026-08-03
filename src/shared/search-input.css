@@ -215,6 +215,7 @@
 @supports (corner-shape: superellipse(1.25)) {
   .x-lumno-search-input,
   .x-lumno-search-input__container,
+  .x-lumno-search-input-mode__menu,
   .x-lumno-search-input__icon[data-search-scope-action="true"],
   .x-lumno-search-input__right-icon {
     corner-shape: superellipse(1.25);

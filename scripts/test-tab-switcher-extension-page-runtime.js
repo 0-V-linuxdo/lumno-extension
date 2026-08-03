@@ -14,6 +14,8 @@ const dom = new JSDOM('<!doctype html><html><body></body></html>', {
 });
 const { window } = dom;
 let createViewCalls = 0;
+let latestViewOptions = null;
+const runtimeMessages = [];
 
 window.matchMedia = () => ({
   matches: false,
@@ -32,7 +34,8 @@ window.chrome = {
     }
   },
   runtime: {
-    sendMessage(_message, callback) {
+    sendMessage(message, callback) {
+      runtimeMessages.push(message);
       callback?.();
     }
   },
@@ -69,10 +72,14 @@ assert.strictEqual(
 window.LumnoOverlayTabSwitcherView = {
   createTabSwitcherView(options) {
     createViewCalls += 1;
+    latestViewOptions = options;
     const panel = window.document.createElement('div');
     panel.id = options.panelId;
     const button = window.document.createElement('button');
     button.className = 'x-tab-switcher-card';
+    button.addEventListener('click', (event) => {
+      options.onActivate(0, event);
+    });
     panel.appendChild(button);
     options.root.appendChild(panel);
     return {
@@ -97,9 +104,42 @@ assert.deepStrictEqual(
   'the runtime should resolve a React API installed after the classic script loaded'
 );
 assert.strictEqual(createViewCalls, 1);
+const switcherHost = window.document.getElementById(
+  '_x_extension_tab_switcher_host_2026_unique_'
+);
 assert.ok(
-  window.document.getElementById('_x_extension_tab_switcher_host_2026_unique_'),
+  switcherHost,
   'the extension page should mount the switcher after React becomes ready'
+);
+assert.strictEqual(
+  switcherHost.shadowRoot,
+  null,
+  'the page must not be able to traverse the tab switcher Shadow DOM'
+);
+
+latestViewOptions.root.querySelector('.x-tab-switcher-card').click();
+window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Alt' }));
+assert.deepStrictEqual(
+  runtimeMessages,
+  [],
+  'synthetic clicks and global keyboard events must not request a privileged tab switch'
+);
+assert.ok(
+  switcherHost.isConnected,
+  'rejected synthetic events must leave the switcher available for real input'
+);
+
+latestViewOptions.onActivate(0, {
+  isTrusted: true,
+  preventDefault() {},
+  stopImmediatePropagation() {},
+  stopPropagation() {}
+});
+assert.deepStrictEqual(
+  runtimeMessages.map((message) => ({ ...message })),
+  [{ action: 'switchToTab', tabId: 1, windowId: null }],
+  'a trusted activation must preserve the normal privileged switch path'
 );
 
 dom.window.close();

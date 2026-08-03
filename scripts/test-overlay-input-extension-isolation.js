@@ -16,6 +16,13 @@ const handlerEnd = searchPanelSource.indexOf(
 assert.ok(handlerStart > 0 && handlerEnd > handlerStart, 'overlay should define an early key capture handler');
 
 const handlerSource = searchPanelSource.slice(handlerStart, handlerEnd);
+// JSDOM cannot construct an Event with isTrusted=true. The behavioral harness
+// below exercises the browser-generated input branch after the source-level
+// security contract has verified that untrusted events are rejected.
+const trustedHandlerSource = handlerSource.replace(
+  'e.isTrusted !== true',
+  'false'
+);
 assert.match(
   handlerSource,
   /if \(isImeCompositionEvent\(e\)\) \{\s*e\.stopImmediatePropagation\(\);\s*return;\s*\}/,
@@ -83,7 +90,7 @@ const createHandler = new Function(
   'isImeCompositionEvent',
   'handleSearchInputKeydown',
   'syncSuggestionActionModifiersFromEvent',
-  `let overlayKeyCaptureHandler;\n${handlerSource}\nreturn overlayKeyCaptureHandler;`
+  `let overlayKeyCaptureHandler;\n${trustedHandlerSource}\nreturn overlayKeyCaptureHandler;`
 );
 const overlayKeyCaptureHandler = createHandler(
   overlay,

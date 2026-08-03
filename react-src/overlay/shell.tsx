@@ -397,7 +397,7 @@ export function createOverlayShellApi() {
     const host = createOverlayHost(doc, options);
     const shadowRoot =
       typeof host.attachShadow === 'function'
-        ? host.attachShadow({ mode: 'open' })
+        ? host.attachShadow({ mode: 'closed' })
         : null;
     const renderRoot = shadowRoot || host;
     appendOverlayStyleNodes(doc, {
@@ -433,12 +433,8 @@ export function createOverlayShellApi() {
       _lumnoOverlayHost?: HTMLElement;
       _lumnoOverlayRoot?: ShadowRoot | null;
     };
-    const mountedHost = host as HTMLElement & {
-      _lumnoOverlayPanel?: HTMLElement;
-    };
     mountedPanel._lumnoOverlayHost = host;
     mountedPanel._lumnoOverlayRoot = shadowRoot;
-    mountedHost._lumnoOverlayPanel = mountedPanel;
     roots.set(host, reactRoot);
     panels.set(host, mountedPanel);
     return { host, panel: mountedPanel, root: shadowRoot };

@@ -34,6 +34,7 @@
   const SYNC_DEBOUNCE_MS = 1000;
   const WALLPAPER_SETTLE_MS = 30000;
   const PERIODIC_SYNC_MINUTES = 15;
+  const DEVICE_REGISTER_CACHE_MS = 60 * 60 * 1000;
   const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
   const SHORTCUT_ICON_STORAGE_KEY = wallpaperApi && wallpaperApi.SHORTCUT_ICON_STORAGE_KEY ||
     '_x_extension_newtab_shortcut_icons_2026_unique_';
@@ -222,6 +223,8 @@
     let debounceTimer = null;
     let wallpaperSettleTimer = null;
     let started = false;
+    let lastDeviceRegistrationAt = 0;
+    let lastDeviceRegistrationSignature = '';
 
     async function readLocal(keys) {
       return repositoryApi.getAreaValues(localArea, keys);
@@ -238,6 +241,8 @@
     async function clearIdentityState() {
       await removeLocal(PRIVATE_LOCAL_KEYS);
       await writeLocal({ [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_GUEST });
+      lastDeviceRegistrationAt = 0;
+      lastDeviceRegistrationSignature = '';
     }
 
     function getSessionUserId(session) {
@@ -280,7 +285,16 @@
 
     async function registerCurrentDevice() {
       const device = await runtime.ensureDevice();
-      await transport.registerDevice({ ...device, ...clientInfo });
+      const registration = { ...device, ...clientInfo };
+      const signature = safeJson(registration);
+      const now = Date.now();
+      if (signature && signature === lastDeviceRegistrationSignature &&
+          now - lastDeviceRegistrationAt < DEVICE_REGISTER_CACHE_MS) {
+        return device;
+      }
+      await transport.registerDevice(registration);
+      lastDeviceRegistrationAt = now;
+      lastDeviceRegistrationSignature = signature;
       return device;
     }
 

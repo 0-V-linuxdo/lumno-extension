@@ -88,29 +88,46 @@ async function uploadMedia(request: Request, authorized: AuthorizedClients): Pro
 
   const imageSha256 = await sha256Hex(imageBytes);
   const thumbnailSha256 = thumbnailBytes ? await sha256Hex(thumbnailBytes) : null;
-  const { error: authorizationError } = await authorized.admin.rpc('lumno_authorize_media_upload', {
-    p_user_id: authorized.user.id,
-    p_asset_kind: kind,
-    p_client_asset_id: clientAssetId,
-    p_byte_size: imageBytes.byteLength,
-    p_thumbnail_byte_size: thumbnailBytes?.byteLength || 0
-  });
-  if (authorizationError) {
-    if (authorizationError.code === '42901') throw new MediaRequestError(429, 'media_upload_rate_limited');
-    if (authorizationError.code === '23514') throw new MediaRequestError(413, 'media_quota_exceeded');
-    throw authorizationError;
+  const leaseToken = crypto.randomUUID();
+  const { data: leaseAcquired, error: leaseError } = await authorized.admin.rpc(
+    'lumno_acquire_media_upload_lease',
+    {
+      p_user_id: authorized.user.id,
+      p_client_asset_id: clientAssetId,
+      p_lease_token: leaseToken
+    }
+  );
+  if (leaseError) throw leaseError;
+  if (leaseAcquired !== true) {
+    throw new MediaRequestError(409, 'media_upload_in_progress');
   }
 
-  const objectId = crypto.randomUUID();
-  const userPrefix = authorized.user.id;
-  const storagePath = kind === 'wallpaper'
-    ? `${userPrefix}/wallpapers/${objectId}.webp`
-    : `${userPrefix}/shortcut-icons/${objectId}.png`;
-  const thumbnailPath = kind === 'wallpaper'
-    ? `${userPrefix}/wallpaper-thumbs/${objectId}.webp`
-    : null;
   const uploadedPaths: string[] = [];
   try {
+    // Acquire the logical-asset lease before recording quota usage. A burst of
+    // retries for one asset therefore consumes at most one rate-limit event.
+    const { error: authorizationError } = await authorized.admin.rpc('lumno_authorize_media_upload', {
+      p_user_id: authorized.user.id,
+      p_asset_kind: kind,
+      p_client_asset_id: clientAssetId,
+      p_byte_size: imageBytes.byteLength,
+      p_thumbnail_byte_size: thumbnailBytes?.byteLength || 0
+    });
+    if (authorizationError) {
+      if (authorizationError.code === '42901') throw new MediaRequestError(429, 'media_upload_rate_limited');
+      if (authorizationError.code === '23514') throw new MediaRequestError(413, 'media_quota_exceeded');
+      throw authorizationError;
+    }
+
+    const objectId = crypto.randomUUID();
+    const userPrefix = authorized.user.id;
+    const storagePath = kind === 'wallpaper'
+      ? `${userPrefix}/wallpapers/${objectId}.webp`
+      : `${userPrefix}/shortcut-icons/${objectId}.png`;
+    const thumbnailPath = kind === 'wallpaper'
+      ? `${userPrefix}/wallpaper-thumbs/${objectId}.webp`
+      : null;
+
     const { error: imageUploadError } = await authorized.admin.storage.from(MEDIA_BUCKET).upload(
       storagePath,
       imageBytes,
@@ -137,30 +154,31 @@ async function uploadMedia(request: Request, authorized: AuthorizedClients): Pro
       .limit(1);
     if (previousError) throw previousError;
     const previous = previousRows?.[0] || null;
-    const rowId = previous?.id || crypto.randomUUID();
-    const { data: rows, error: metadataError } = await authorized.admin
-      .from('lumno_assets')
-      .upsert({
-        id: rowId,
-        user_id: authorized.user.id,
-        asset_kind: kind,
-        client_asset_id: clientAssetId,
-        original_name: originalName,
-        storage_path: storagePath,
-        thumbnail_path: thumbnailPath,
-        sha256: imageSha256,
-        thumbnail_sha256: thumbnailSha256,
-        mime_type: image.mimeType,
-        byte_size: imageBytes.byteLength,
-        thumbnail_byte_size: thumbnailBytes?.byteLength || 0,
-        width: image.width,
-        height: image.height,
-        ingest_version: 2,
-        deleted_at: null
-      }, { onConflict: 'user_id,client_asset_id' })
-      .select('id,asset_kind,client_asset_id,original_name,storage_path,thumbnail_path,sha256,thumbnail_sha256,mime_type,byte_size,thumbnail_byte_size,width,height,updated_at,deleted_at')
-      .single();
-    if (metadataError || !rows) throw metadataError || new Error('metadata_write_failed');
+    const { data: committedAsset, error: metadataError } = await authorized.admin.rpc(
+      'lumno_commit_media_asset',
+      {
+        p_user_id: authorized.user.id,
+        p_asset_kind: kind,
+        p_client_asset_id: clientAssetId,
+        p_lease_token: leaseToken,
+        p_original_name: originalName,
+        p_storage_path: storagePath,
+        p_thumbnail_path: thumbnailPath,
+        p_sha256: imageSha256,
+        p_thumbnail_sha256: thumbnailSha256,
+        p_mime_type: image.mimeType,
+        p_byte_size: imageBytes.byteLength,
+        p_thumbnail_byte_size: thumbnailBytes?.byteLength || 0,
+        p_width: image.width,
+        p_height: image.height
+      }
+    );
+    if (metadataError) {
+      if (metadataError.code === '23514') throw new MediaRequestError(413, 'media_quota_exceeded');
+      throw metadataError;
+    }
+    const asset = Array.isArray(committedAsset) ? committedAsset[0] : committedAsset;
+    if (!asset) throw new MediaRequestError(409, 'media_upload_lease_expired');
 
     const oldPaths = [previous?.storage_path || '', previous?.thumbnail_path || '']
       .filter((path) => path && path !== storagePath && path !== thumbnailPath);
@@ -172,7 +190,7 @@ async function uploadMedia(request: Request, authorized: AuthorizedClients): Pro
       // through the gateway. Account deletion recursively removes them later.
       cleanupPending = true;
     }
-    return jsonResponse(200, { ok: true, asset: rows, cleanup_pending: cleanupPending });
+    return jsonResponse(200, { ok: true, asset, cleanup_pending: cleanupPending });
   } catch (error) {
     try {
       await removePaths(authorized.admin, uploadedPaths);
@@ -181,6 +199,18 @@ async function uploadMedia(request: Request, authorized: AuthorizedClients): Pro
       // clients and are covered by recursive account deletion.
     }
     throw error;
+  } finally {
+    // Token matching prevents a delayed request from releasing a successor's
+    // lease. Expiry recovers automatically if the Edge invocation is killed.
+    try {
+      await authorized.admin.rpc('lumno_release_media_upload_lease', {
+        p_user_id: authorized.user.id,
+        p_client_asset_id: clientAssetId,
+        p_lease_token: leaseToken
+      });
+    } catch (_error) {
+      // The short lease expiry is the recovery path for a failed release.
+    }
   }
 }
 
@@ -236,6 +266,17 @@ async function downloadMedia(body: Record<string, unknown>, authorized: Authoriz
   const expectedBytes = path === asset.thumbnail_path
     ? Number(asset.thumbnail_byte_size || 0)
     : Number(asset.byte_size || 0);
+  // Reserve egress before touching Storage so an over-quota caller cannot
+  // repeatedly force privileged downloads whose bytes are never accounted.
+  // Failed downstream reads remain conservatively charged.
+  const { error: egressError } = await authorized.admin.rpc('lumno_record_media_egress', {
+    p_user_id: authorized.user.id,
+    p_byte_size: expectedBytes
+  });
+  if (egressError) {
+    if (egressError.code === '23514') throw new MediaRequestError(429, 'media_egress_quota_exceeded');
+    throw egressError;
+  }
   const { data: blob, error: downloadError } = await authorized.admin.storage
     .from(MEDIA_BUCKET)
     .download(path);
@@ -264,14 +305,6 @@ async function downloadMedia(body: Record<string, unknown>, authorized: Authoriz
         throw new MediaRequestError(409, 'media_shape_mismatch');
       }
     }
-  }
-  const { error: egressError } = await authorized.admin.rpc('lumno_record_media_egress', {
-    p_user_id: authorized.user.id,
-    p_byte_size: expectedBytes
-  });
-  if (egressError) {
-    if (egressError.code === '23514') throw new MediaRequestError(429, 'media_egress_quota_exceeded');
-    throw egressError;
   }
   return new Response(responseBody, {
     status: 200,

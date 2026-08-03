@@ -2913,6 +2913,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const closeOtherTooltipText = () => t('overlay_close_other_tabs_tooltip', '关闭其他标签页');
       bindInputActionCursorTooltip(closeOtherTabsButton, closeOtherTooltipText);
       closeOtherTabsButton.addEventListener('click', function(event) {
+        if (!event || event.isTrusted !== true) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         hideInputActionCursorTooltip();
@@ -6408,6 +6411,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     captureTabHandler = function(e) {
+      if (!e || e.isTrusted !== true) {
+        return;
+      }
       if (e.key !== 'Tab') {
         return;
       }
@@ -6562,6 +6568,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     keydownHandler = function(e) {
+      if (!e || e.isTrusted !== true) {
+        return;
+      }
       syncSuggestionActionModifiersFromEvent(e);
       if (isImeCompositionEvent(e)) {
         return;
@@ -6848,10 +6857,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
 
     keyupHandler = function(e) {
+      if (!e || e.isTrusted !== true) {
+        return;
+      }
       syncSuggestionActionModifiersFromEvent(e);
     };
 
     overlayKeyCaptureHandler = function(e) {
+      if (!e || e.isTrusted !== true) {
+        if (e && typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
       if (!overlay || !overlay.isConnected) {
         return;
       }
@@ -7365,10 +7383,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const hasRenderedContent = Boolean(
         container.children && container.children.length > 0
       );
-      const allowFromZero = Boolean(
-        container.getAttribute('data-scope-result-enter') === 'run' ||
-        (modeMenu && hasRenderedContent)
-      );
+      // The first result render starts with a collapsed result surface. Let
+      // every rendered result type use the same measured-height transition so
+      // the overlay does not jump taller as soon as suggestions arrive.
+      const allowFromZero = hasRenderedContent;
       if (!fromHeight && !allowFromZero) {
         syncSearchModeMenuResultOffset();
         return;

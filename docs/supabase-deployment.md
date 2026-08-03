@@ -5,15 +5,15 @@
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608030009` 已应用。媒体迁移移除了未启用的第三方审核计数，并以两个活动壁纸槽位、20 个图标、账号字节预算和全局存储停写线为准；`009` 撤销了 Auth 触发器函数不需要的公开 RPC 权限。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- 数据库基线：迁移 `202608010001` 至 `202608030009` 的历史状态按部署记录保留；本次收尾新增的 `010`–`014` 已部署到远端并完成迁移历史登记，分别收口设备/统计并发限制、媒体租约、删除二次验证一次性消费、媒体计数器及软删除级联删除的计数校准。
 - Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸主图 2 MiB、缩略图 160 KiB、图标 96 KiB，账号最多两张活动壁纸、20 个图标和 10 MiB 活跃媒体。
-- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且递归账号清理已部署；当前 `media-asset` 只执行结构安全检查和资源配额，不依赖第三方审核 Secret。
+- Edge Functions 基线：`telemetry-ingest`、`media-asset`、`delete-account` 已部署为 ACTIVE，分别为当前工作区版本；不依赖第三方审核 Secret。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
 - Auth：仅开放 Google 与 GitHub；邮箱登录和新邮箱注册已关闭。Google 与 GitHub 返回同一已验证邮箱时，Supabase 会把两种身份自动关联到同一用户。
 - OAuth Server：已开启 OAuth 2.1，授权页为 `https://lumno.kubai.design/oauth/authorize/`，动态客户端注册关闭；开发版和 Chrome Web Store 版分别使用独立的 Public Client + PKCE。
 - 社交登录：Google 与 GitHub 均已接入，回调固定为 Supabase Auth callback；Google OAuth 已发布为正式版，Lumno 名称、图标、首页和隐私政策已通过品牌验证并发布。
-- 远程冒烟：`node scripts/smoke-supabase-remote.js` 已实测配置同步、私有媒体、统计和账号删除，测试数据清理为 0 遗留。
+- 远程冒烟：脚本现在验证配置同步、私有媒体、统计和“删除必须提供独立 OAuth 二次验证”的 403 防线，并始终用 Service Role 清理测试用户；真正删除成功需要带真实 OAuth step-up Token 的人工验收。
 - 生产用户验收：普通用户会话下已完成双设备同步、版本冲突、私有媒体上传下载和“未同意统计返回 403”验证，临时媒体与设备记录已清理。
 - Web/插件 OAuth 验收：Google 真实账号已完成 Web 登录；随后从开发版扩展经 OAuth 2.1 + PKCE 返回插件，插件显示同一邮箱、“已连接”和最近同步时间。GitHub 登录链路此前也已完成。
 - Google 品牌验收：真实账号选择页显示 Lumno 图标、应用名 `Lumno` 和 Lumno 隐私政策链接，不再以 Supabase 项目域名作为面向用户的应用名称。
@@ -22,11 +22,11 @@
 
 - Supabase CLI 2.111.0。
 - 首个 schema 已在本地 Supabase/Postgres 17 完整执行；当前机器 Docker 不可用，因此保留期迁移改用远程 dry-run、迁移历史核对、数据库 lint 与远程冒烟验证。
-- `supabase db lint --local --level warning` 无 schema 错误。
-- 两个 Edge Functions 在 Deno 2.1.4 兼容运行时成功启动。
+- 历史基线的 `supabase db lint --local --level warning` 无 schema 错误；本次 `010`–`014` 的本地数据库 lint 尚未执行，因为当前机器没有运行 Docker/Postgres。
+- 本次三个 Edge Function 源码已通过 esbuild bundle 校验；部署后的 Deno 启动和 SQL runtime 已在 Supabase 环境执行。
 - 未认证访问 `telemetry-ingest` 和 `delete-account` 均返回 401。
-- `node scripts/smoke-supabase-local.js` 使用仅限测试的管理员账号夹具，实测配置推拉、私有壁纸、同意后的聚合统计和账号删除。
-- 2026-08-03：远端迁移 `006`–`008` 和当前 `media-asset` 已部署；系统目录核对确认两个壁纸槽位、10 MiB 活跃额度、日/月上传、月度下载和 900 MiB 全局停写闸门生效，第三方审核对象不存在，远端冒烟完成后一次性账号与媒体零残留。
+- `node scripts/smoke-supabase-local.js` 使用仅限测试的管理员账号夹具，验证配置推拉、私有壁纸、同意后的聚合统计和删除二次验证防线；脚本失败也会在 finally 中清理测试用户。
+- 2026-08-03：远端迁移 `010`–`014` 已部署并登记，三个 Edge Function 均为 ACTIVE；系统目录核对确认租约、step-up 一次性消费、媒体计数器和 900 MiB 全局停写闸门生效。远端烟测覆盖配置同步、私有媒体、统计和删除防线，测试账号清理后零残留；计数器最终与活动资产字节数一致。
 
 可重复本地验收：
 
@@ -66,9 +66,9 @@ npx supabase@latest db push --dry-run
 npx supabase@latest db push
 ```
 
-迁移会创建表、索引、RLS、同步 RPC、私有媒体 Bucket、Storage 策略和保留期维护函数。维护函数在统计写入后至多每日运行一次：先生成匿名月度总数，再删除超过 24 个月的账号关联明细，并清理 30/90 天幂等记录。推送后在 Dashboard 的 Security Advisor 中复查告警。`db push` 的迁移历史和行为见 [CLI db push](https://supabase.com/docs/reference/cli/supabase-projects-create)。
+迁移会创建表、索引、RLS、同步 RPC、私有媒体 Bucket、Storage 策略、媒体计数器、租约提交和保留期维护函数。维护函数在统计写入后至多每日运行一次：先生成匿名月度总数，再删除超过 24 个月的账号关联明细，并清理 30/90 天幂等记录。推送后在 Dashboard 的 Security Advisor 中复查告警。`db push` 的迁移历史和行为见 [CLI db push](https://supabase.com/docs/reference/cli/supabase-projects-create)。
 
-不要并行执行同一项目的多个 CLI 数据库命令；它们可能同时轮换临时登录角色，造成凭证竞态。本次东京项目从当前网络到 Postgres 的长连接不稳定，最终通过官方 Management API 将完整 SQL 包在单个 `BEGIN/COMMIT` 中执行，验证系统目录后使用 `migration repair` 登记版本；随后 `db push --dry-run` 已确认远程最新。
+不要并行执行同一项目的多个 CLI 数据库命令；它们可能同时轮换临时登录角色，造成凭证竞态。本次东京项目从当前网络到 Postgres 的长连接不稳定，最终通过官方 Management API 将 `010`–`014` 完整 SQL 执行，验证系统目录和迁移历史后使用 `migration repair` 登记版本；最后通过 Management API 查询确认五条迁移已登记。当前机器没有远端数据库密码，因此 CLI 的直连 `db push --dry-run` 仅作为未执行的本地运维检查，不影响已完成的远端部署核验。
 
 ## 4. 部署 Edge Functions
 
@@ -79,6 +79,8 @@ npx supabase@latest functions deploy delete-account
 ```
 
 `supabase/config.toml` 已把两者设为 `verify_jwt = false`，因为函数内部会使用当前 Publishable/Secret Key 环境变量重新验证用户 JWT；这也兼容 Supabase 新式 API Key。默认环境变量说明见 [Edge Function secrets](https://supabase.com/docs/guides/functions/secrets)，部署步骤见 [Deploy Edge Functions](https://supabase.com/docs/guides/functions/deploy)。
+
+`delete-account` 的删除契约要求两个独立验证的 Supabase Access Token：请求头 `Authorization` 携带当前主会话，JSON Body 同时包含精确的 `confirmation: "DELETE"` 和 `step_up_access_token`。后者必须来自同一用户、不同 `session_id`，并携带五分钟内带时间戳的 `oauth` AMR 证据；仅通过 Refresh 新签发的 Token 或未重新完成上游 OAuth 身份验证的 Authorization Code Exchange 都不能作为二次认证。函数先通过 service-role 数据库 RPC 原子消费 `(user_id, step_up_session_id)`，再尽力以 `local` Scope 注销二次会话；一次性保证来自数据库主键消费，不依赖 Auth sign-out 的时序。缺少或无效的二次认证返回 `403 step_up_required`；客户端必须从危险操作确认页强制重新完成 Google 或 GitHub OAuth 身份验证，不得复用或刷新主会话充当证明。
 
 部署后手工验证：
 
@@ -99,6 +101,8 @@ curl -i -X POST "https://<project-ref>.supabase.co/functions/v1/telemetry-ingest
 - 每账号每小时最多 40 次上传、UTC 日最多 32 MiB、每月最多 256 MiB 上传；
 - 每账号每月最多 128 MiB 下载；
 - 项目活跃媒体达到 900 MiB 后停止新上传，为存储和运维留余量。
+
+上传路径先取得五分钟逻辑资产租约，再记录上传额度；最终 metadata 通过同一租约令牌的原子 RPC 提交。活跃数量和字节使用量由数据库计数器维护，提交事务只锁计数器行，不再对 `lumno_assets` 做全表聚合扫描。
 
 导入壁纸不会触发上传。客户端会在最后一次选择后等待约 30 秒，或在用户关闭壁纸面板时立即同步最终生效槽位；手动同步、登录和 15 分钟周期任务负责失败恢复。即使用户在本地快速试选很多张，通常也只上传最终选择。
 
@@ -150,7 +154,7 @@ node scripts/smoke-supabase-remote.js
 7. 退出登录后确认本地待上传计数立即清除，之后不再产生新计数。
 8. 连续快速切换多张本地壁纸，确认过程中不逐张上传；等待 30 秒或关闭面板后仅最终生效的浅色/深色壁纸存在于 Storage。
 9. 删除一个快捷方式自定义图标，确认 Storage 对象和 metadata 都进入删除状态，并且其他设备不再恢复它。
-10. 永久删除账号，确认 Auth 用户、数据库行和壁纸/快捷方式图标对象全部删除，本机设置仍在。
+10. 在危险操作确认页重新完成 Google/GitHub OAuth，使用独立 step-up Token 永久删除账号；确认 Auth 用户、数据库行和壁纸/快捷方式图标对象全部删除，本机设置仍在，并重复提交同一个 step-up Token 确认返回 403。
 11. 退出登录后确认插件继续以游客模式工作。
 12. 分别用 Google 与 GitHub 从插件发起网页登录，确认出现正确授权范围并返回插件。
 13. 篡改回调 `state` 或使用另一个扩展 ID 的回调，确认登录失败且不保存会话。

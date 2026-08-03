@@ -186,9 +186,11 @@ async function run() {
 
   const signedIn = await controller.signInWithWeb(consentVersion);
   assert.strictEqual(signedIn.signedIn, true);
-  assert.deepStrictEqual(calls.slice(0, 7), [
-    'web-auth', `cloud-consent:${consentVersion}`, 'enable', 'register', 'pull', 'register', 'sync'
+  assert.deepStrictEqual(calls.slice(0, 6), [
+    'web-auth', `cloud-consent:${consentVersion}`, 'enable', 'register', 'pull', 'sync'
   ]);
+  assert.strictEqual(calls.filter((call) => call === 'register').length, 1,
+    'a bootstrap pull followed by sync should not rewrite the device row twice');
   assert.strictEqual(localArea.values[schema.CLOUD_LOCAL_KEYS.consent].analytics, true,
     'the combined sync confirmation must enable usage analytics after OAuth succeeds');
   assert.strictEqual(

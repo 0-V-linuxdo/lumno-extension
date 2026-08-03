@@ -26,3 +26,15 @@ jobs:
 
       - name: Check source and resources
         run: npm run check
+
+      - name: Verify generated React bundles are committed
+        shell: bash
+        run: |
+          generated_changes="$(git status --short --untracked-files=all -- src/react)"
+          if [[ -n "$generated_changes" ]]; then
+            echo "::error title=React bundles are stale::Run npm run build:react and commit every generated change under src/react."
+            echo "Generated React bundle changes:"
+            echo "$generated_changes"
+            git diff --stat -- src/react
+            exit 1
+          fi

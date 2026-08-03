@@ -829,4 +829,76 @@ describe('Suggestions React island', () => {
     expect(items[0]._xTagContainer?.dataset.visible).toBe('true');
     expect(items[0]._xSwitchButton?.dataset.visible).toBe('false');
   });
+
+  it('applies the brand treatment to hovered search results', () => {
+    const brandTheme = {
+      _xIsBrand: true,
+      buttonText: '#14532d',
+      buttonBg: '#dcfce7',
+      buttonBorder: '#86efac',
+      tagBg: '#dcfce7',
+      tagText: '#166534',
+      tagBorder: '#86efac',
+      markBg: '#bbf7d0',
+      markText: '#14532d'
+    };
+    const markThemes: unknown[] = [];
+    const { view, items } = createView({
+      surface: 'overlay',
+      getImmediateThemeForSuggestion: () => brandTheme,
+      getThemeForMode: (theme) => theme || brandTheme,
+      getHoverColors: () => ({
+        bg: '#f0fdf4',
+        border: '#86efac'
+      }),
+      applyMarkVariables: (_item, theme) => {
+        markThemes.push(theme);
+      },
+      actionModel: {
+        createSearchActionModel: () => ({
+          actionTags: [],
+          visitButtonAction: 'openNewTab',
+          alwaysHideVisitButton: false,
+          hasActionTags: false,
+          hasSwitchAction: false
+        })
+      }
+    });
+
+    render(view, [{
+      type: 'history',
+      title: 'Example result',
+      url: 'https://example.com/'
+    }], {
+      primaryHighlightIndex: -1,
+      updateKind: 'structure'
+    });
+
+    const row = items[0];
+    const visitButton = row._xVisitButton as HTMLButtonElement;
+    const historyTag = row._xHistoryTag as HTMLSpanElement;
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+    });
+
+    expect(row.dataset.rowState).toBe('hover');
+    expect(row.style.getPropertyValue('--x-ov-suggestion-row-bg'))
+      .toBe('#f0fdf4');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-bg'
+    )).toBe('#dcfce7');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-text'
+    )).toBe('#166534');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-border'
+    )).toBe('#86efac');
+    expect(visitButton.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-bg'
+    )).toBe('#dcfce7');
+    expect(markThemes[markThemes.length - 1]).toBe(brandTheme);
+  });
 });

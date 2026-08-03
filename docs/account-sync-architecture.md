@@ -172,7 +172,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `src/shared/cloud-sync-state.js`：Outbox、版本和冲突纯逻辑。
 - `src/background/cloud-account-controller.js`：MV3 生命周期和账号编排。
 - `src/background/web-auth-flow.js`：OAuth 2.1 Authorization Code、PKCE、state 和 Chrome 回调校验。
-- `src/background/secure-session-store.js`：扩展源私有 IndexedDB 会话存储和旧会话迁移。
+- `src/background/secure-session-store.js`：扩展源私有 IndexedDB 会话存储、AES-GCM 加密和旧会话迁移。
 - `src/background/supabase-transport.js`：Auth、REST 和 Edge Functions HTTPS 传输；认证客户端不直连 Storage。
 - `src/background/cloud-wallpaper-runtime.js`：用户媒体同步；负责壁纸 IndexedDB 与快捷方式图标本地存储的上传、下载、删除和账号隔离。
 - `src/background/usage-analytics-runtime.js`：同意门和每日计数器。
@@ -181,6 +181,11 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `supabase/migrations/202608020005_full_configuration_and_media_assets.sql`：补齐配置白名单，并为壁纸和快捷方式图标建立分类型媒体约束与独立配额。
 - `supabase/migrations/202608030006_media_gateway_and_resource_limits.sql`：撤销客户端媒体/设备写权限，加入媒体速率/出站预算、10 台设备和 JSONB 大小/深度限制。
 - `supabase/migrations/202608030008_private_active_media_sync.sql`：把云端壁纸收敛为浅色/深色两个活动槽位，保留 20 个快捷方式图标，加入 10 MiB 账号额度、按日/月字节闸门和 900 MiB 全局停写线，并移除未启用的第三方审核计数。
+- `supabase/migrations/202608030010_security_boundaries.sql`：增加设备活跃写入节流和统计批次并发限制。
+- `supabase/migrations/202608030011_media_upload_leases.sql`：为同一逻辑媒体资产提供互斥租约。
+- `supabase/migrations/202608030012_delete_step_up_consumption.sql`：以数据库主键原子消费账号删除的独立 step-up 会话。
+- `supabase/migrations/202608030013_media_usage_counters.sql`：维护媒体计数器，并通过租约校验的原子 RPC 提交 metadata。
+- `supabase/migrations/202608030014_media_usage_counter_fix.sql`：修复软删除媒体随后级联删除时的重复扣减，并校准已有媒体计数器。
 - `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：保留已部署的历史同意字段；当前客户端不再展示或写入地区专属同意。
 - `supabase/functions/`：统计入口、媒体上传/下载/删除网关与账号删除。
 

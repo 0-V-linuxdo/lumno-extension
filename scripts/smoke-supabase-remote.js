@@ -52,6 +52,31 @@ async function requestJson(url, apiKey, options = {}) {
   return data;
 }
 
+async function requestJsonResult(url, apiKey, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('apikey', apiKey);
+  if (options.body !== undefined && !(options.body instanceof Uint8Array)) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    body: options.body === undefined || options.body instanceof Uint8Array
+      ? options.body
+      : JSON.stringify(options.body)
+  });
+  const responseText = await response.text();
+  let data = null;
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch (_error) {
+      data = responseText;
+    }
+  }
+  return { status: response.status, data };
+}
+
 async function main() {
   const config = cloudConfig.getConfig();
   assert(config.configured, 'cloud client configuration should be populated');
@@ -202,14 +227,15 @@ async function main() {
     );
     assert.equal(telemetry.ok, true, 'remote consented aggregate telemetry should be accepted');
 
-    const deletion = await requestJson(
+    const deletion = await requestJsonResult(
       `${config.projectUrl}/functions/v1/delete-account`,
       config.publishableKey,
       { method: 'POST', headers: authHeaders, body: { confirmation: 'DELETE' } }
     );
-    assert.equal(deletion.ok, true, 'remote account deletion should succeed');
-    deleted = true;
-    console.log('remote Supabase smoke test passed: sync, private media, analytics, deletion');
+    assert.equal(deletion.status, 403,
+      'remote account deletion must require an independent OAuth step-up token');
+    assert.deepStrictEqual(deletion.data, { ok: false, error: 'step_up_required' });
+    console.log('remote Supabase smoke test passed: sync, private media, analytics, deletion guard');
   } finally {
     if (userId && !deleted) {
       await requestJson(`${config.projectUrl}/auth/v1/admin/users/${userId}`, keys.serviceRole, {

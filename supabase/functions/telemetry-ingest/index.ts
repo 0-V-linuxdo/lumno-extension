@@ -31,9 +31,12 @@ Deno.serve(async (request) => {
     });
     if (error) {
       const denied = error.code === '42501';
-      return jsonResponse(denied ? 403 : 500, {
+      const rateLimited = error.code === '42901';
+      return jsonResponse(denied ? 403 : (rateLimited ? 429 : 500), {
         ok: false,
-        error: denied ? 'analytics_consent_required' : 'ingest_failed'
+        error: denied
+          ? 'analytics_consent_required'
+          : (rateLimited ? 'ingest_rate_limited' : 'ingest_failed')
       });
     }
     return jsonResponse(200, { ok: true, duplicate: data === false });

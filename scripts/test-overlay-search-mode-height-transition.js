@@ -217,4 +217,53 @@ assert.strictEqual(
 );
 assert.strictEqual(offsetSyncCount, 0);
 
+const standaloneCalls = [];
+const standaloneRuntimeContext = vm.createContext({
+  Boolean,
+  Math,
+  getSearchPanelsLayoutTransitionMenu: () => null,
+  readSuggestionsHeightMetrics: () => ({
+    height: 156,
+    maxHeight: 580,
+    atMaxHeight: false
+  }),
+  scheduleSearchPanelsLayoutTransition: () => {
+    throw new Error('a closed scope menu must not use the coordinated scheduler');
+  },
+  scheduleStandaloneSuggestionsHeightTransition: (...args) => {
+    standaloneCalls.push(args);
+  },
+  syncSearchModeMenuResultOffset: () => {},
+  window: {
+    matchMedia: () => ({ matches: false })
+  }
+});
+vm.runInContext(
+  `${animateSource}\nthis.animateSuggestionsHeightForTest = animateSuggestionsHeight;`,
+  standaloneRuntimeContext,
+  { filename: 'overlay-suggestions-height-standalone-animation.js' }
+);
+standaloneRuntimeContext.animateSuggestionsHeightForTest(
+  {
+    children: [{}],
+    getAttribute(name) {
+      return name === 'data-collapsed' ? 'false' : null;
+    }
+  },
+  {
+    height: 0,
+    padding: { top: 0, bottom: 0 }
+  }
+);
+assert.strictEqual(
+  standaloneCalls.length,
+  1,
+  'the first ordinary overlay result should animate from a collapsed surface'
+);
+assert.strictEqual(
+  standaloneCalls[0][1].height,
+  0,
+  'ordinary results should start their height transition at zero'
+);
+
 console.log('overlay search mode height transition tests passed');

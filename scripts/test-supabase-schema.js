@@ -25,6 +25,21 @@ const privateMediaSql = fs.readFileSync(privateMediaMigrationPath, 'utf8');
 const authTriggerHardeningMigrationPath =
   'supabase/migrations/202608030009_revoke_auth_trigger_rpc.sql';
 const authTriggerHardeningSql = fs.readFileSync(authTriggerHardeningMigrationPath, 'utf8');
+const securityBoundariesMigrationPath =
+  'supabase/migrations/202608030010_security_boundaries.sql';
+const securityBoundariesSql = fs.readFileSync(securityBoundariesMigrationPath, 'utf8');
+const mediaLeaseMigrationPath =
+  'supabase/migrations/202608030011_media_upload_leases.sql';
+const mediaLeaseSql = fs.readFileSync(mediaLeaseMigrationPath, 'utf8');
+const deletionStepUpMigrationPath =
+  'supabase/migrations/202608030012_delete_step_up_consumption.sql';
+const deletionStepUpSql = fs.readFileSync(deletionStepUpMigrationPath, 'utf8');
+const mediaUsageMigrationPath =
+  'supabase/migrations/202608030013_media_usage_counters.sql';
+const mediaUsageSql = fs.readFileSync(mediaUsageMigrationPath, 'utf8');
+const mediaUsageFixMigrationPath =
+  'supabase/migrations/202608030014_media_usage_counter_fix.sql';
+const mediaUsageFixSql = fs.readFileSync(mediaUsageFixMigrationPath, 'utf8');
 
 function run() {
   const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
@@ -156,6 +171,74 @@ function run() {
   assert.match(authTriggerHardeningSql,
     /revoke all on function public\.lumno_handle_new_user\(\)[\s\S]*?from public, anon, authenticated/,
     'the auth trigger function must not remain exposed as a public RPC');
+
+  const latestDeviceFunction = securityBoundariesSql.slice(
+    securityBoundariesSql.indexOf('create or replace function public.lumno_register_device'),
+    securityBoundariesSql.indexOf('create or replace function public.lumno_ingest_usage_batch')
+  );
+  assert.match(latestDeviceFunction, /revoked_at is not null[\s\S]*?Device has been revoked/,
+    'a revoked device must be rejected before registration can update it');
+  assert.doesNotMatch(latestDeviceFunction, /revoked_at\s*=\s*null/,
+    'device registration must never clear a revocation marker');
+  assert.match(latestDeviceFunction, /where lumno_devices\.user_id = v_user_id[\s\S]*?revoked_at is null/,
+    'the upsert conflict path must preserve both ownership and revocation boundaries');
+  assert.match(latestDeviceFunction, /last_seen_at <= now\(\) - interval '1 hour'/,
+    'device registration should throttle unchanged last-seen writes');
+  assert.match(latestDeviceFunction, /select \* into v_device[\s\S]*?Device id belongs to another account or is revoked/,
+    'a conflict skipped by the throttle must still return the existing safe device row');
+  assert.match(securityBoundariesSql,
+    /cron\.schedule\([\s\S]*?'lumno-data-retention-daily'[\s\S]*?'17 3 \* \* \*'[\s\S]*?lumno_apply_data_retention/,
+    'retention must also run from one stable daily clock-driven job');
+  assert.match(securityBoundariesSql, /:usage-ingest/,
+    'usage rate checks should serialize per account');
+  assert.match(securityBoundariesSql, /created_at >= now\(\) - interval '24 hours'\) >= 24/,
+    'telemetry should cap unique accepted batches per rolling day');
+  assert.match(securityBoundariesSql, /Daily usage metric limit exceeded/,
+    'telemetry should cap per-user daily metric inflation');
+  assert.match(mediaLeaseSql, /primary key \(user_id, client_asset_id\)/,
+    'only one upload lease may exist for a logical account asset');
+  assert.match(mediaLeaseSql, /expires_at <= now\(\)/,
+    'only an expired upload lease may be replaced');
+  assert.match(mediaLeaseSql, /lease_token = p_lease_token/,
+    'a request may release only its own upload lease');
+  assert.match(mediaLeaseSql,
+    /revoke all on function public\.lumno_acquire_media_upload_lease[\s\S]*?from public, anon, authenticated/,
+    'media lease acquisition must remain service-role-only');
+  assert.match(mediaLeaseSql, /interval '5 minutes'/,
+    'the upload lease should cover slow but bounded Edge invocations');
+  assert.match(deletionStepUpSql, /primary key \(user_id, step_up_session_id\)/,
+    'delete step-up sessions must have an atomic per-session replay barrier');
+  assert.match(deletionStepUpSql, /on conflict \(user_id, step_up_session_id\) do nothing/,
+    'a consumed delete proof must not be inserted twice');
+  assert.match(deletionStepUpSql, /p_authenticated_at < now\(\) - interval '5 minutes 30 seconds'/,
+    'the database must repeat the freshness boundary for step-up proofs');
+  assert.match(mediaUsageSql, /create table if not exists public\.lumno_media_usage/,
+    'per-account active media counters should be persisted');
+  assert.match(mediaUsageSql, /create table if not exists public\.lumno_media_global_usage/,
+    'the global active-byte counter should be persisted');
+  assert.match(mediaUsageSql, /create trigger lumno_assets_update_usage/,
+    'asset inserts, replacements, tombstones and deletes must maintain counters');
+  assert.match(mediaUsageSql, /create or replace function public\.lumno_commit_media_asset/,
+    'metadata must be committed through the lease-fenced RPC');
+  assert.match(mediaUsageSql, /from public\.lumno_media_upload_leases[\s\S]*?for update/,
+    'the metadata commit must lock and validate the current lease token');
+  assert.doesNotMatch(mediaUsageSql, /lumno:media-global/,
+    'the latest media quota path must not use the old global advisory lock');
+  const latestMediaAuthorize = mediaUsageSql.slice(
+    mediaUsageSql.indexOf('create or replace function public.lumno_authorize_media_upload'),
+    mediaUsageSql.indexOf('create or replace function public.lumno_commit_media_asset')
+  );
+  const existingAssetLookup = latestMediaAuthorize.slice(
+    latestMediaAuthorize.indexOf('select * into v_existing')
+  );
+  assert.doesNotMatch(existingAssetLookup, /select\s+(?:count|coalesce\(sum)/i,
+    'media authorization should use counters instead of recounting the asset table');
+  assert.match(mediaUsageFixSql,
+    /v_old_bytes := case when v_old_active[\s\S]*?coalesce\(old\.thumbnail_byte_size, 0\)/,
+    'deleting an inactive tombstone must not subtract its bytes a second time');
+  assert.match(mediaUsageFixSql,
+    /update public\.lumno_media_global_usage[\s\S]*?select sum\(byte_size \+ thumbnail_byte_size\)/,
+    'the counter fix should reconcile the global byte total from active metadata');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(

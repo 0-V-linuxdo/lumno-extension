@@ -41,6 +41,26 @@ async function requestJson(url, publishableKey, options = {}) {
   return data;
 }
 
+async function requestJsonResult(url, publishableKey, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('apikey', publishableKey);
+  if (options.body !== undefined && !(options.body instanceof Uint8Array)) {
+    headers.set('Content-Type', 'application/json');
+  }
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    body: options.body === undefined || options.body instanceof Uint8Array
+      ? options.body
+      : JSON.stringify(options.body)
+  });
+  const responseText = await response.text();
+  return {
+    status: response.status,
+    data: responseText ? JSON.parse(responseText) : null
+  };
+}
+
 async function main() {
   const status = readLocalStatus();
   const apiUrl = status.API_URL;
@@ -51,16 +71,21 @@ async function main() {
 
   const email = `lumno-smoke-${Date.now()}@example.com`;
   const password = `Lumno-${crypto.randomBytes(20).toString('hex')}!`;
-  await requestJson(`${apiUrl}/auth/v1/admin/users`, serviceRoleKey, {
+  const createdUser = await requestJson(`${apiUrl}/auth/v1/admin/users`, serviceRoleKey, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceRoleKey}` },
     body: { email, password, email_confirm: true }
   });
-  const session = await requestJson(`${apiUrl}/auth/v1/token?grant_type=password`, publishableKey, {
-    method: 'POST',
-    body: { email, password }
-  });
-  assert(session.access_token && session.user?.id, 'admin-created test fixture should return a session');
+  const userId = createdUser.id || createdUser.user?.id;
+  assert(userId, 'admin-created test fixture should return a user id');
+  let deleted = false;
+
+  try {
+    const session = await requestJson(`${apiUrl}/auth/v1/token?grant_type=password`, publishableKey, {
+      method: 'POST',
+      body: { email, password }
+    });
+    assert(session.access_token && session.user?.id, 'admin-created test fixture should return a session');
 
   const authHeaders = { Authorization: `Bearer ${session.access_token}` };
   const deviceId = crypto.randomUUID();
@@ -169,14 +194,23 @@ async function main() {
   });
   assert.equal(telemetry.ok, true, 'consented aggregate telemetry should be accepted');
 
-  const deletion = await requestJson(`${functionsUrl}/delete-account`, publishableKey, {
-    method: 'POST',
-    headers: authHeaders,
-    body: { confirmation: 'DELETE' }
-  });
-  assert.equal(deletion.ok, true, 'account deletion should clean up the smoke-test account');
+    const deletion = await requestJsonResult(`${functionsUrl}/delete-account`, publishableKey, {
+      method: 'POST',
+      headers: authHeaders,
+      body: { confirmation: 'DELETE' }
+    });
+    assert.equal(deletion.status, 403, 'account deletion must require an independent OAuth step-up token');
+    assert.deepStrictEqual(deletion.data, { ok: false, error: 'step_up_required' });
 
-  console.log('local Supabase smoke test passed: auth fixture, sync, private media, analytics, deletion');
+    console.log('local Supabase smoke test passed: auth fixture, sync, private media, analytics, deletion guard');
+  } finally {
+    if (!deleted && userId) {
+      await requestJson(`${apiUrl}/auth/v1/admin/users/${userId}`, serviceRoleKey, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${serviceRoleKey}` }
+      }).catch(() => {});
+    }
+  }
 }
 
 main().catch((error) => {

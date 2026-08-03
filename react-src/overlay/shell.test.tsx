@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe('Overlay React shell', () => {
-  it('creates the panel directly as a React-owned Shadow DOM node', () => {
+  it('creates the panel inside a page-inaccessible Shadow DOM', () => {
     const api = createOverlayShellApi();
     const holder: {
       value: ReturnType<typeof api.createOverlayMount>;
@@ -30,6 +30,8 @@ describe('Overlay React shell', () => {
     document.body.appendChild(mount.host);
 
     expect(api.implementation).toBe('react');
+    expect(mount.host.shadowRoot).toBeNull();
+    expect('_lumnoOverlayPanel' in mount.host).toBe(false);
     expect(mount.panel.dataset.reactIsland).toBe('overlay-shell');
     expect(mount.panel.id).toBe('overlay-panel');
     expect(mount.panel.getAttribute('data-lumno-overlay-panel')).toBe('true');

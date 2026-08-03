@@ -1035,10 +1035,14 @@ function applySearchActionStyles(
   runtime: SuggestionsRuntime,
   item: SuggestionElement,
   themeValue: ThemeValue,
-  active: boolean
+  active: boolean,
+  hovering: boolean
 ): void {
   const { options } = runtime;
   const theme = options.getThemeForMode(themeValue);
+  const themed = active || (
+    hovering && Boolean(themeValue?._xIsBrand)
+  );
   item.setAttribute('data-active', active ? 'true' : 'false');
   item.setAttribute(
     'data-has-action-tags',
@@ -1046,7 +1050,7 @@ function applySearchActionStyles(
   );
   options.applyMarkVariables(
     item,
-    active ? themeValue : options.defaultTheme
+    themed ? themeValue : options.defaultTheme
   );
   if (item._xVisitButton && item._xActionModel) {
     const visible = options.actionModel.shouldShowVisitButton
@@ -1062,7 +1066,7 @@ function applySearchActionStyles(
       'data-visible',
       visible ? 'true' : 'false'
     );
-    if (active) {
+    if (themed) {
       setPalette(
         options,
         item._xVisitButton,
@@ -1074,10 +1078,10 @@ function applySearchActionStyles(
       setPalette(options, item._xVisitButton);
     }
   }
-  applyTagStyle(options, item._xHistoryTag, theme, active);
-  applyTagStyle(options, item._xBookmarkTag, theme, active);
-  applyTagStyle(options, item._xTopSiteTag, theme, active);
-  applyTagStyle(options, item._xOpenTabTag, theme, active);
+  applyTagStyle(options, item._xHistoryTag, theme, themed);
+  applyTagStyle(options, item._xBookmarkTag, theme, themed);
+  applyTagStyle(options, item._xTopSiteTag, theme, themed);
+  applyTagStyle(options, item._xOpenTabTag, theme, themed);
   const showSourceTags = !item._xHasSwitchAction;
   [
     item._xHistoryTag,
@@ -1103,7 +1107,7 @@ function applyUtilityActionStyles(
   options: NormalizedOptions,
   item: SuggestionElement,
   theme: ThemeValue,
-  active: boolean
+  themed: boolean
 ): void {
   const visible = Boolean(item._xIsHovering);
   item._xUtilityActions?.forEach(({ slot, button }) => {
@@ -1113,7 +1117,7 @@ function applyUtilityActionStyles(
       options,
       button,
       '--x-nt-suggestion-utility-color',
-      visible && active
+      visible && themed
         ? theme?.buttonText || ''
         : surfaceCssValue(
             options,
@@ -1124,13 +1128,13 @@ function applyUtilityActionStyles(
       options,
       button,
       '--x-nt-suggestion-utility-bg',
-      visible && active ? theme?.buttonBg || '' : 'transparent'
+      visible && themed ? theme?.buttonBg || '' : 'transparent'
     );
     setSurfaceStyle(
       options,
       button,
       '--x-nt-suggestion-utility-border',
-      visible && active ? theme?.buttonBorder || '' : 'transparent'
+      visible && themed ? theme?.buttonBorder || '' : 'transparent'
     );
   });
 }
@@ -1149,7 +1153,14 @@ function updateSelectionForRuntime(
       resolvedIndex === -1 && item._xIsAutocompleteTop
     );
     const highlighted = selected || autoHighlighted;
+    const hovering = Boolean(item._xIsHovering);
     const theme = item._xTheme || options.defaultTheme;
+    const themed = highlighted || (
+      hovering && Boolean(theme?._xIsBrand)
+    );
+    const hoverColors = hovering && theme?._xIsBrand
+      ? options.getHoverColors(theme)
+      : null;
     if (highlighted) {
       item.setAttribute('data-row-state', 'active');
       if (options.surface === 'overlay') {
@@ -1168,9 +1179,23 @@ function updateSelectionForRuntime(
           options,
           item,
           '--x-nt-suggestion-active-bg',
-          item._xIsHovering
-            ? 'var(--x-ov-hover-bg, #F3F4F6)'
+          hovering
+            ? hoverColors?.bg || 'var(--x-ov-hover-bg, #F3F4F6)'
             : 'transparent'
+        );
+      } else if (hovering) {
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-hover-bg',
+          hoverColors?.bg || 'var(--x-nt-hover-bg, #F3F4F6)'
+        );
+      } else {
+        setSurfaceStyle(
+          options,
+          item,
+          '--x-nt-suggestion-hover-bg',
+          ''
         );
       }
     }
@@ -1182,10 +1207,16 @@ function updateSelectionForRuntime(
     }
     setIconEmphasis(
       item,
-      Boolean(highlighted || item._xIsHovering)
+      Boolean(highlighted || hovering)
     );
     if (item._xIsSearchSuggestion) {
-      applySearchActionStyles(runtime, item, theme, highlighted);
+      applySearchActionStyles(
+        runtime,
+        item,
+        theme,
+        highlighted,
+        hovering
+      );
       if (item._xDirectIconWrap) {
         const modeTheme = options.getThemeForMode(theme);
         setSurfaceStyle(
@@ -1193,7 +1224,7 @@ function updateSelectionForRuntime(
           item._xDirectIconWrap,
           '--x-nt-suggestion-icon-color',
           (
-            highlighted && theme?._xIsBrand
+            themed && theme?._xIsBrand
               ? modeTheme.accent || ''
               : 'var(--x-nt-subtext, #6B7280)'
           )
@@ -1234,7 +1265,7 @@ function updateSelectionForRuntime(
       options,
       item,
       theme,
-      highlighted
+      themed
     );
   });
 }
@@ -1605,10 +1636,11 @@ function SuggestionUtilityAction({
     }
     const itemIndex = options.items.indexOf(item);
     const selectedIndex = options.getSelectedIndex();
+    const theme = item._xTheme || options.defaultTheme;
     const useTheme =
       itemIndex === selectedIndex ||
-      (selectedIndex === -1 && item._xIsAutocompleteTop);
-    const theme = item._xTheme || options.defaultTheme;
+      (selectedIndex === -1 && item._xIsAutocompleteTop) ||
+      (item._xIsHovering && Boolean(theme?._xIsBrand));
     const modeTheme = options.getThemeForMode(theme);
     const hover = useTheme
       ? options.getHoverColors(theme)
