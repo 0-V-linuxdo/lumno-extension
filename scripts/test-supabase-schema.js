@@ -22,6 +22,9 @@ const retiredModerationSql = fs.readFileSync(retiredModerationMigrationPath, 'ut
 const privateMediaMigrationPath =
   'supabase/migrations/202608030008_private_active_media_sync.sql';
 const privateMediaSql = fs.readFileSync(privateMediaMigrationPath, 'utf8');
+const authTriggerHardeningMigrationPath =
+  'supabase/migrations/202608030009_revoke_auth_trigger_rpc.sql';
+const authTriggerHardeningSql = fs.readFileSync(authTriggerHardeningMigrationPath, 'utf8');
 
 function run() {
   const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
@@ -150,6 +153,9 @@ function run() {
   assert.match(privateMediaSql,
     /revoke all on function public\.lumno_authorize_media_upload[\s\S]*?from public, anon, authenticated/,
     'quota functions should remain service-role-only');
+  assert.match(authTriggerHardeningSql,
+    /revoke all on function public\.lumno_handle_new_user\(\)[\s\S]*?from public, anon, authenticated/,
+    'the auth trigger function must not remain exposed as a public RPC');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(

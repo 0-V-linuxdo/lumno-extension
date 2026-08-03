@@ -5,9 +5,9 @@
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006` 至 `202608030008` 是待部署的媒体网关与资源治理迁移。最终迁移会移除未启用的第三方审核计数，并以两个活动壁纸槽位、20 个图标、账号字节预算和全局存储停写线为准。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- 数据库：迁移 `202608010001` 至 `202608030009` 已应用。媒体迁移移除了未启用的第三方审核计数，并以两个活动壁纸槽位、20 个图标、账号字节预算和全局存储停写线为准；`009` 撤销了 Auth 触发器函数不需要的公开 RPC 权限。用户/账号业务表和内部保留期表均启用并强制 RLS。
 - Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸主图 2 MiB、缩略图 160 KiB、图标 96 KiB，账号最多两张活动壁纸、20 个图标和 10 MiB 活跃媒体。
-- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且递归账号清理已部署；部署当前 `media-asset` 后只执行结构安全检查和资源配额，不依赖第三方审核 Secret。
+- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且递归账号清理已部署；当前 `media-asset` 只执行结构安全检查和资源配额，不依赖第三方审核 Secret。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
 - Auth：仅开放 Google 与 GitHub；邮箱登录和新邮箱注册已关闭。Google 与 GitHub 返回同一已验证邮箱时，Supabase 会把两种身份自动关联到同一用户。
@@ -26,6 +26,7 @@
 - 两个 Edge Functions 在 Deno 2.1.4 兼容运行时成功启动。
 - 未认证访问 `telemetry-ingest` 和 `delete-account` 均返回 401。
 - `node scripts/smoke-supabase-local.js` 使用仅限测试的管理员账号夹具，实测配置推拉、私有壁纸、同意后的聚合统计和账号删除。
+- 2026-08-03：远端迁移 `006`–`008` 和当前 `media-asset` 已部署；系统目录核对确认两个壁纸槽位、10 MiB 活跃额度、日/月上传、月度下载和 900 MiB 全局停写闸门生效，第三方审核对象不存在，远端冒烟完成后一次性账号与媒体零残留。
 
 可重复本地验收：
 
