@@ -1,15 +1,12 @@
 import { authorizeRequest, type AuthorizedClients } from '../_shared/auth.ts';
 import { corsHeaders, handlePreflight, jsonResponse, readSmallJson } from '../_shared/http.ts';
 import {
-  assertModerationConfigured,
   assertMediaShape,
   inspectImage,
   MAX_UPLOAD_BODY_BYTES,
   MEDIA_BUCKET,
   MediaRequestError,
-  SIGHTENGINE_OPERATION_COUNT,
   type MediaKind,
-  requireModeration,
   sha256Hex
 } from '../_shared/media.ts';
 
@@ -103,23 +100,6 @@ async function uploadMedia(request: Request, authorized: AuthorizedClients): Pro
     if (authorizationError.code === '23514') throw new MediaRequestError(413, 'media_quota_exceeded');
     throw authorizationError;
   }
-
-  assertModerationConfigured();
-  const { error: moderationBudgetError } = await authorized.admin.rpc(
-    'lumno_reserve_media_moderation',
-    {
-      p_user_id: authorized.user.id,
-      p_operation_count: SIGHTENGINE_OPERATION_COUNT
-    }
-  );
-  if (moderationBudgetError) {
-    if (moderationBudgetError.code === '42902') {
-      throw new MediaRequestError(429, 'media_moderation_capacity_exceeded');
-    }
-    throw moderationBudgetError;
-  }
-
-  await requireModeration(kind, imageBytes, image.mimeType);
 
   const objectId = crypto.randomUUID();
   const userPrefix = authorized.user.id;

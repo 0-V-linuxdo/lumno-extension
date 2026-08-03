@@ -5,9 +5,9 @@
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006_media_gateway_and_resource_limits.sql` 与 `202608030007_sightengine_moderation_budget.sql` 的远程 dry-run 已通过，待 Sightengine Secrets 就绪后一起推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
-- Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸 2 MiB、缩略图 160 KiB、图标 96 KiB，账号活跃媒体合计 48 MiB。为避免在审核密钥缺失时中断现有客户端，`006`/`007` 尚未应用。
-- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且新的递归账号清理已部署；`media-asset` 在数据库迁移和 Sightengine Secrets 完成前保持失败关闭，不作为现有客户端入口。
+- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006` 至 `202608030008` 是待部署的媒体网关与资源治理迁移。最终迁移会移除未启用的第三方审核计数，并以两个活动壁纸槽位、20 个图标、账号字节预算和全局存储停写线为准。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸主图 2 MiB、缩略图 160 KiB、图标 96 KiB，账号最多两张活动壁纸、20 个图标和 10 MiB 活跃媒体。
+- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且递归账号清理已部署；部署当前 `media-asset` 后只执行结构安全检查和资源配额，不依赖第三方审核 Secret。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
 - Auth：仅开放 Google 与 GitHub；邮箱登录和新邮箱注册已关闭。Google 与 GitHub 返回同一已验证邮箱时，Supabase 会把两种身份自动关联到同一用户。
@@ -89,19 +89,17 @@ curl -i -X POST "https://<project-ref>.supabase.co/functions/v1/telemetry-ingest
 
 没有用户 Token 时必须返回 401。
 
-### 媒体内容审核（上线阻断项）
+### 私有媒体资源闸门
 
-`media-asset` 会把客户端已压缩的实际主图发送给 Sightengine 固定 HTTPS 端点，检查色情、赌博/毒品、暴力/血腥/武器/自残，以及图片内的违规或混淆文字。它会严格校验成功响应和 4 个计费模型组；字段缺失、计费组变化或命中阈值都不会写入 Storage。生产环境必须设置：
+`media-asset` 不做图片内容审核，也不需要第三方审核 Secret。它会对客户端已压缩图片的真实二进制执行 PNG/WebP 签名、结构、尺寸、元数据、尾随数据和字节检查，并由数据库原子执行以下闸门：
 
-```bash
-npx supabase@latest secrets set \
-  SIGHTENGINE_API_USER="<api-user>" \
-  SIGHTENGINE_API_SECRET="<server-only-secret>"
-```
+- 云端只保留当前生效的浅色/深色壁纸，最多两张；快捷方式自定义图标最多 20 个；
+- 每账号活跃媒体最多 10 MiB；
+- 每账号每小时最多 40 次上传、UTC 日最多 32 MiB、每月最多 256 MiB 上传；
+- 每账号每月最多 128 MiB 下载；
+- 项目活跃媒体达到 900 MiB 后停止新上传，为存储和运维留余量。
 
-Sightengine Free 当前为 1 请求/秒、500 operations/日和 2,000 operations/月的硬上限；本项目每张图占 4 operations，并在数据库串行预留最多 100 张/UTC 日、450 张/UTC 月（分别留 20% 和 10% 余量）。预算耗尽直接返回 429，Free 硬上限不会产生超额账单。审核请求不跟随重定向，8 秒超时，未配置、超时、异常或不明确允许时均拒绝上传。本地 Supabase 只有同时满足回环地址且显式设置 `LUMNO_MEDIA_MODERATION_ALLOW_LOCAL=true` 才能跳过，生产项目不能设置该开关。
-
-Sightengine 由法国 Kozelo SAS 运营。Free 默认处理区域可能是欧盟（法国、爱尔兰、德国、芬兰）、加拿大或美国，不能锁定单一区域；其公开政策没有承诺 Free 上传图片的固定删除天数，而是按提供服务、订阅约定及合理的业务/法律期限处理。因此发布前必须保留隐私政策中的跨境、保留期和申诉披露；如需地域锁定或确定的合同保留期，应停用 Free 并单独评估 Enterprise/DPA。
+导入壁纸不会触发上传。客户端会在最后一次选择后等待约 30 秒，或在用户关闭壁纸面板时立即同步最终生效槽位；手动同步、登录和 15 分钟周期任务负责失败恢复。即使用户在本地快速试选很多张，通常也只上传最终选择。
 
 ## 5. 配置登录提供商
 
@@ -143,19 +141,19 @@ node scripts/smoke-supabase-remote.js
 用两个不同浏览器配置文件测试：
 
 1. A 设备登录并修改主题、快捷方式、快捷方式自定义图标和壁纸。
-2. B 设备登录同一邮箱，确认设置、壁纸列表、当前选择和快捷方式自定义图标恢复。
+2. B 设备登录同一邮箱，确认设置、当前生效的浅色/深色壁纸和全部快捷方式自定义图标恢复；A 设备未生效的本地壁纸库不应出现。
 3. A/B 同时修改同一设置，确认不会静默覆盖且显示冲突计数。
 4. 断网修改后重启浏览器，恢复网络并确认 Outbox 清空。
 5. 在插件确认弹窗中取消，确认不会启动网页登录，且本地不存在 `_lumno_cloud_usage_v1_`。
 6. 确认同步与统计范围并完成登录，确认只出现白名单计数和枚举，不出现 URL、标题或查询。
 7. 退出登录后确认本地待上传计数立即清除，之后不再产生新计数。
-8. 删除一张壁纸，确认 Storage 原图、缩略图和 metadata 都消失。
+8. 连续快速切换多张本地壁纸，确认过程中不逐张上传；等待 30 秒或关闭面板后仅最终生效的浅色/深色壁纸存在于 Storage。
 9. 删除一个快捷方式自定义图标，确认 Storage 对象和 metadata 都进入删除状态，并且其他设备不再恢复它。
 10. 永久删除账号，确认 Auth 用户、数据库行和壁纸/快捷方式图标对象全部删除，本机设置仍在。
 11. 退出登录后确认插件继续以游客模式工作。
 12. 分别用 Google 与 GitHub 从插件发起网页登录，确认出现正确授权范围并返回插件。
 13. 篡改回调 `state` 或使用另一个扩展 ID 的回调，确认登录失败且不保存会话。
-14. 上传 SVG、伪 MIME、带尾随数据的 PNG/WebP、超尺寸图片和审核拒绝样本，确认都不会产生 Storage 对象或活跃 metadata。
+14. 上传 SVG、伪 MIME、带元数据或尾随数据的 PNG/WebP、超尺寸图片，确认都不会产生 Storage 对象或活跃 metadata；构造超频和超字节请求，确认返回资源限制错误。
 15. 直接用用户 JWT 调 Storage 上传/下载/删除及 `lumno_assets`/`lumno_devices` 写入，确认均为 401/403；仅 Edge 网关可执行媒体操作。
 16. 创建任意 `user_id/legacy/nested/...` 测试对象后删除账号，确认整个用户前缀为零对象。
 

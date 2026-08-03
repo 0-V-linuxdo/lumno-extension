@@ -20,6 +20,8 @@
   const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
   const SHORTCUT_ICON_STORAGE_KEY = '_x_extension_newtab_shortcut_icons_2026_unique_';
   const SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
+  const WALLPAPER_SELECTION_STORAGE_KEY = '_x_extension_newtab_local_wallpaper_2026_unique_';
+  const CLOUD_CONFLICTS_KEY = '_lumno_cloud_conflicts_v1_';
   const SHORTCUT_ICON_META_KEY = '_lumno_cloud_shortcut_icon_meta_v1_';
   const MEDIA_DELETIONS_KEY = '_lumno_cloud_media_deletions_v1_';
   const MAX_ASSET_BYTES = 5 * 1024 * 1024;
@@ -28,6 +30,19 @@
   const MAX_SHORTCUT_ICON_BYTES = 96 * 1024;
   const MAX_SHORTCUT_ICON_DATA_URL_LENGTH = 160 * 1024;
   const MAX_ASSETS = 20;
+  const MAX_CLOUD_WALLPAPERS = 2;
+
+  function normalizeActiveWallpaperIds(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value)
+      ? [value.light, value.dark]
+      : [value];
+    const result = [];
+    source.forEach((candidate) => {
+      const id = String(candidate || '').trim();
+      if (WALLPAPER_CLIENT_ID_PATTERN.test(id) && !result.includes(id)) result.push(id);
+    });
+    return result.slice(0, MAX_CLOUD_WALLPAPERS);
+  }
 
   function hasImageSignature(bytes, mimeType) {
     if (!bytes || bytes.length < 12) return false;
@@ -230,6 +245,7 @@
       ? config.getImageDimensions
       : defaultGetImageDimensions;
     let activeSync = null;
+    let pendingActiveWallpaperUpload = false;
 
     async function readLocal(keys) {
       return repositoryApi.getAreaValues(localArea, keys);
@@ -427,44 +443,86 @@
       return { shortcutId, dataUrl };
     }
 
-    async function syncWallpapers() {
+    async function readActiveWallpaperIds() {
+      if (!repository || typeof repository.get !== 'function') return [];
+      const settings = await repository.get([WALLPAPER_SELECTION_STORAGE_KEY]);
+      return normalizeActiveWallpaperIds(settings[WALLPAPER_SELECTION_STORAGE_KEY]);
+    }
+
+    async function hasWallpaperSelectionConflict() {
+      const values = await readLocal([CLOUD_CONFLICTS_KEY]);
+      const conflicts = Array.isArray(values[CLOUD_CONFLICTS_KEY]) ? values[CLOUD_CONFLICTS_KEY] : [];
+      return conflicts.some((item) => item && item.key === WALLPAPER_SELECTION_STORAGE_KEY);
+    }
+
+    async function syncWallpapers(optionsArg) {
+      const syncOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      const uploadActive = syncOptions.uploadActive === true;
+      const activeIds = await readActiveWallpaperIds();
+      const activeIdSet = new Set(activeIds);
+      const selectionConflict = await hasWallpaperSelectionConflict();
       let allRemoteAssets = (await transport.listAssets())
         .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
-      let remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
-      let remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
-      let deleted = 0;
-      for (const tombstone of allRemoteAssets.filter((asset) => asset.deleted_at)) {
-        if (!WALLPAPER_CLIENT_ID_PATTERN.test(String(tombstone.client_asset_id || ''))) continue;
-        await store.remove(tombstone.client_asset_id);
-        deleted += 1;
-      }
+      let remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at);
+      let remoteByClientId = new Map(remoteAssets.map((asset) => [asset.client_asset_id, asset]));
       const localRecords = (await store.readAll())
         .filter((record) => WALLPAPER_CLIENT_ID_PATTERN.test(String(record && record.id || '')))
         .slice(0, MAX_ASSETS);
+      const localByClientId = new Map(localRecords.map((record) => [record.id, record]));
       let uploaded = 0;
-      for (const record of localRecords) {
-        const remote = remoteByClientId.get(record.id);
-        if (!remote && !record.cloudAssetId) {
-          await uploadRecord(record);
-          uploaded += 1;
+      let deleted = 0;
+      if (uploadActive && !selectionConflict) {
+        // Remove no-longer-selected cloud checkpoints first so the database can
+        // enforce a hard two-wallpaper ceiling even while a slot is replaced.
+        // The local library remains untouched and a failed upload is retried by
+        // the settle/periodic sync checkpoints.
+        for (const asset of remoteAssets) {
+          if (activeIdSet.has(String(asset.client_asset_id || ''))) continue;
+          await transport.deleteAsset(asset.client_asset_id);
+          deleted += 1;
+        }
+        if (deleted > 0) {
+          allRemoteAssets = (await transport.listAssets())
+            .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
+          remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at);
+          remoteByClientId = new Map(remoteAssets.map((asset) => [asset.client_asset_id, asset]));
+        }
+        for (const clientAssetId of activeIds) {
+          const record = localByClientId.get(clientAssetId);
+          const remote = remoteByClientId.get(clientAssetId);
+          if (!remote && record) {
+            await uploadRecord(record);
+            uploaded += 1;
+          }
+        }
+        if (uploaded > 0) {
+          allRemoteAssets = (await transport.listAssets())
+            .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
+          remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at);
+          remoteByClientId = new Map(remoteAssets.map((asset) => [asset.client_asset_id, asset]));
         }
       }
-      if (uploaded > 0) {
-        allRemoteAssets = (await transport.listAssets())
-          .filter((asset) => getAssetKind(asset) === WALLPAPER_KIND);
-        remoteAssets = allRemoteAssets.filter((asset) => !asset.deleted_at).slice(0, MAX_ASSETS);
-        remoteByClientId = new Map(allRemoteAssets.map((asset) => [asset.client_asset_id, asset]));
-      }
+      const selectedRemoteAssets = remoteAssets
+        .filter((asset) => activeIdSet.has(String(asset.client_asset_id || '')))
+        .slice(0, MAX_CLOUD_WALLPAPERS);
       const refreshedLocal = new Map((await store.readAll()).map((record) => [record.id, record]));
       let downloaded = 0;
-      for (const asset of remoteAssets) {
+      for (const asset of selectedRemoteAssets) {
         const local = refreshedLocal.get(asset.client_asset_id);
         if (local && String(local.cloudAssetId || '') === String(asset.id || '') &&
             String(local.cloudUpdatedAt || '') === String(asset.updated_at || '')) continue;
         await downloadAsset(asset);
         downloaded += 1;
       }
-      return { ok: true, uploaded, downloaded, deleted };
+      return {
+        ok: true,
+        uploaded,
+        downloaded,
+        deleted,
+        active: activeIds.length,
+        deferred: !uploadActive,
+        conflict: selectionConflict
+      };
     }
 
     async function syncShortcutIcons() {
@@ -563,10 +621,11 @@
       return { ok: true, uploaded, downloaded, deleted };
     }
 
-    async function runSyncAll() {
+    async function runSyncAll(optionsArg) {
+      const syncOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
       if (!(await canSync())) return { skipped: true, reason: 'cloud-disabled' };
       const queuedDeleted = await flushDeletions();
-      const wallpaper = await syncWallpapers();
+      const wallpaper = await syncWallpapers({ uploadActive: syncOptions.uploadActive === true });
       const shortcutIcons = await syncShortcutIcons();
       return {
         ok: true,
@@ -578,9 +637,23 @@
       };
     }
 
-    function syncAll() {
-      if (activeSync) return activeSync;
-      activeSync = runSyncAll().finally(() => { activeSync = null; });
+    function syncAll(optionsArg) {
+      const syncOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      const uploadActive = syncOptions.uploadActive === true;
+      if (activeSync) {
+        if (uploadActive) pendingActiveWallpaperUpload = true;
+        return activeSync;
+      }
+      activeSync = (async () => {
+        let shouldUploadActive = uploadActive;
+        let result;
+        do {
+          pendingActiveWallpaperUpload = false;
+          result = await runSyncAll({ uploadActive: shouldUploadActive });
+          shouldUploadActive = pendingActiveWallpaperUpload;
+        } while (shouldUploadActive);
+        return result;
+      })().finally(() => { activeSync = null; });
       return activeSync;
     }
 
@@ -646,6 +719,7 @@
     SHORTCUT_ICON_KIND,
     SHORTCUT_ICON_STORAGE_KEY,
     SHORTCUTS_STORAGE_KEY,
+    WALLPAPER_SELECTION_STORAGE_KEY,
     SHORTCUT_ICON_META_KEY,
     MEDIA_DELETIONS_KEY,
     MAX_ASSET_BYTES,
@@ -654,6 +728,8 @@
     MAX_SHORTCUT_ICON_BYTES,
     MAX_SHORTCUT_ICON_DATA_URL_LENGTH,
     MAX_ASSETS,
+    MAX_CLOUD_WALLPAPERS,
+    normalizeActiveWallpaperIds,
     hasImageSignature,
     dataUrlToBlob,
     blobToDataUrl,

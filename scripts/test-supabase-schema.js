@@ -16,9 +16,12 @@ const fullConfigurationSql = fs.readFileSync(fullConfigurationMigrationPath, 'ut
 const hardeningMigrationPath =
   'supabase/migrations/202608030006_media_gateway_and_resource_limits.sql';
 const hardeningSql = fs.readFileSync(hardeningMigrationPath, 'utf8');
-const moderationBudgetMigrationPath =
+const retiredModerationMigrationPath =
   'supabase/migrations/202608030007_sightengine_moderation_budget.sql';
-const moderationBudgetSql = fs.readFileSync(moderationBudgetMigrationPath, 'utf8');
+const retiredModerationSql = fs.readFileSync(retiredModerationMigrationPath, 'utf8');
+const privateMediaMigrationPath =
+  'supabase/migrations/202608030008_private_active_media_sync.sql';
+const privateMediaSql = fs.readFileSync(privateMediaMigrationPath, 'utf8');
 
 function run() {
   const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
@@ -122,21 +125,31 @@ function run() {
     'depth validation should stop after the allowed depth instead of recursing through attacker input');
   assert.match(hardeningSql, /allowed_mime_types = array\['image\/png', 'image\/webp'\]/,
     'the private bucket should accept only normalized output formats');
-  assert.match(moderationBudgetSql, /lumno_reserve_media_moderation/,
-    'provider calls should reserve global moderation capacity atomically');
-  assert.match(moderationBudgetSql, /pg_advisory_xact_lock/,
-    'global provider rate and quota checks should be serialized');
-  assert.match(moderationBudgetSql, /v_day_requests >= 100/,
-    'the daily request budget should retain free-plan headroom');
-  assert.match(moderationBudgetSql, /v_month_requests >= 450/,
-    'the monthly request budget should retain free-plan headroom');
-  assert.match(moderationBudgetSql, /operation_count = 4/,
-    'each request should account for the four selected model groups');
-  assert.match(moderationBudgetSql, /force row level security/,
-    'moderation accounting must not be visible to authenticated clients');
-  assert.match(moderationBudgetSql,
-    /revoke all on public\.lumno_media_moderation_events from public, anon, authenticated/,
-    'moderation accounting should be service-role-only');
+  assert.doesNotMatch(retiredModerationSql, /create\s+(?:table|function)/i,
+    'the withdrawn moderation migration version should remain a no-op');
+  assert.match(privateMediaSql, /drop table if exists public\.lumno_media_moderation_events/,
+    'obsolete third-party moderation accounting should be removed');
+  assert.match(privateMediaSql, /at most two active wallpapers/,
+    'the database should enforce one active light and one active dark wallpaper');
+  assert.match(privateMediaSql, /at most 20 active shortcut icons/,
+    'all shortcut icons should retain their bounded cloud backup');
+  assert.match(privateMediaSql, /10485760/,
+    'the final schema should enforce a 10 MiB active-media budget');
+  assert.match(privateMediaSql, /943718400/,
+    'global uploads should stop before exhausting the storage allowance');
+  assert.match(privateMediaSql, /v_recent_uploads >= 40/,
+    'media uploads should retain a per-account hourly request gate');
+  assert.match(privateMediaSql, /33554432/,
+    'media uploads should have a 32 MiB daily byte budget');
+  assert.match(privateMediaSql, /268435456/,
+    'media uploads should have a 256 MiB monthly byte budget');
+  assert.match(privateMediaSql, /134217728/,
+    'media downloads should have a 128 MiB monthly egress budget');
+  assert.match(privateMediaSql, /pg_advisory_xact_lock/,
+    'global and per-user quota checks should be serialized');
+  assert.match(privateMediaSql,
+    /revoke all on function public\.lumno_authorize_media_upload[\s\S]*?from public, anon, authenticated/,
+    'quota functions should remain service-role-only');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(
