@@ -73,6 +73,41 @@
     }
   }
 
+  function getSourceSelectionGroup(chromeApi, sourceTab) {
+    const api = getChromeApi(chromeApi);
+    if (!sourceTab || typeof sourceTab.groupId !== 'number') {
+      return null;
+    }
+    const ungroupedId = api && api.tabGroups &&
+      typeof api.tabGroups.TAB_GROUP_ID_NONE === 'number'
+      ? api.tabGroups.TAB_GROUP_ID_NONE
+      : -1;
+    if (sourceTab.groupId === ungroupedId) {
+      return null;
+    }
+    return {
+      id: sourceTab.groupId,
+      preserve: true
+    };
+  }
+
+  function resolveSelectionGroup(chromeApi, settings, callback) {
+    const api = getChromeApi(chromeApi);
+    const done = typeof callback === 'function' ? callback : () => {};
+    const sourceTab = settings && settings.sourceTab && typeof settings.sourceTab === 'object'
+      ? settings.sourceTab
+      : null;
+    const sourceGroup = getSourceSelectionGroup(api, sourceTab);
+    if (sourceGroup) {
+      done(sourceGroup);
+      return;
+    }
+    const windowId = sourceTab && typeof sourceTab.windowId === 'number'
+      ? sourceTab.windowId
+      : (settings && typeof settings.windowId === 'number' ? settings.windowId : null);
+    findExistingSelectionGroup(api, windowId, settings && settings.groupTitle, done);
+  }
+
   function updateSelectionGroup(chromeApi, groupId, options, callback) {
     const api = getChromeApi(chromeApi);
     const done = typeof callback === 'function' ? callback : () => {};
@@ -126,6 +161,16 @@
           });
           return;
         }
+        if (group && group.preserve === true) {
+          done({
+            ok: true,
+            mode: 'group',
+            tab,
+            groupId,
+            reason: ''
+          });
+          return;
+        }
         updateSelectionGroup(api, groupId, options, (_updated, updateReason) => {
           done({
             ok: true,
@@ -171,7 +216,7 @@
     if (sourceTab && typeof sourceTab.id === 'number') {
       createProperties.openerTabId = sourceTab.id;
     }
-    findExistingSelectionGroup(api, windowId, settings.groupTitle, (group) => {
+    resolveSelectionGroup(api, settings, (group) => {
       try {
         api.tabs.create(createProperties, (tab) => {
           const createError = getRuntimeError(api, 'tab-create-failed');

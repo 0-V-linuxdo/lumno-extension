@@ -86,12 +86,14 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(text || '').trim());
   }
 
-  function isErrorLike(text) {
+  function isErrorLike(text, options) {
     const source = String(text || '');
-    return /\b(?:TypeError|ReferenceError|SyntaxError|RangeError|Exception|Traceback|Caused by|Unhandled|ERR_[A-Z_]+|HTTP\s*[45]\d\d)\b/i.test(source) ||
-      /\b(?:cannot|failed|failure|denied|undefined|null pointer|not found|timed? out)\b/i.test(source) ||
-      /(?:错误|异常|失败|无法|未定义|拒绝访问|超时)/.test(source) ||
+    const settings = options && typeof options === 'object' ? options : {};
+    const structuredError = /\b(?:TypeError|ReferenceError|SyntaxError|RangeError|Exception|Traceback|Caused by|Unhandled|ERR_[A-Z_]+|HTTP\s*[45]\d\d)\b/i.test(source) ||
       /(?:^|\n)\s*at\s+[\w$.<>]+\s*\([^\n]+:\d+(?::\d+)?\)/.test(source);
+    const naturalFailure = /\b(?:cannot|failed|failure|denied|undefined|null pointer|not found|timed? out)\b/i.test(source) ||
+      /(?:错误|异常|失败|无法|未定义|拒绝访问|超时)/.test(source);
+    return structuredError || (naturalFailure && (settings.insideCode === true || settings.codeLike === true));
   }
 
   function isCodeLike(text, options) {
@@ -111,7 +113,10 @@
     if (!/\d/.test(source) || source.length > 80) {
       return false;
     }
-    return /(?:[$€£¥￥]\s*\d|\d\s*(?:%|°[CF]|km|cm|mm|kg|g|lb|oz|mph|km\/h|ms|s|min|h|GB|MB|TB|USD|CNY|RMB|EUR|JPY)\b|\d\s*(?:to|in|转|换算成)\s*\w+|^[\d\s()+\-*/.^%=]+$)/i.test(source);
+    const hasUnitOrCurrency = /(?:[$€£¥￥]\s*\d|\d\s*(?:%|°[CF]|km|cm|mm|kg|g|lb|oz|mph|km\/h|ms|s|min|h|GB|MB|TB|USD|CNY|RMB|EUR|JPY)\b)/i.test(source);
+    const hasConversion = /\d\s*(?:to|in|转|换算成)\s*\w+/i.test(source);
+    const hasArithmetic = /[+\-*/.^%=]/.test(source) && /^[\d\s()+\-*/.^%=]+$/.test(source);
+    return hasUnitOrCurrency || hasConversion || hasArithmetic;
   }
 
   function getSentenceCount(text) {
@@ -156,7 +161,7 @@
     const urlLike = isUrlLike(text);
     const emailLike = isEmailLike(text);
     const codeLike = isCodeLike(text, settings);
-    const errorLike = isErrorLike(text);
+    const errorLike = isErrorLike(text, { ...settings, codeLike });
     const questionLike = isQuestionLike(text);
     const numericLike = isNumericLike(text);
     const paragraphLike = length >= 160 && (sentenceCount >= 2 || lineCount >= 3);
@@ -169,6 +174,17 @@
       !plainClauseLike &&
       symbolRatio < 0.3;
     const languageMismatch = isLanguageMismatch(text, settings, scriptStats, codeLike);
+    const strongIntentLike = questionLike ||
+      (languageMismatch && !numericLike) ||
+      (errorLike && (codeLike || !questionLike)) ||
+      codeLike ||
+      paragraphLike ||
+      numericLike;
+    const phraseLike = shortTermLike && (
+      wordCount >= 2 ||
+      (scriptStats.cjkRatio >= 0.72 && length >= 4)
+    );
+    const readableSelectionLike = scriptStats.letters >= 2 && length >= MIN_SELECTION_LENGTH;
     const suppressed = !text ||
       length < MIN_SELECTION_LENGTH ||
       length > MAX_SELECTION_LENGTH ||
@@ -242,7 +258,8 @@
         symbolRatio,
         urlLike,
         wordCount
-      })
+      }),
+      triggerable: !suppressed && (strongIntentLike || phraseLike || readableSelectionLike)
     });
   }
 

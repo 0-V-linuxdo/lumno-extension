@@ -16,8 +16,8 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /const allowFromZero = Boolean\([\s\S]*?data-scope-result-enter'\) === 'run'[\s\S]*?\(!fromHeight && !allowFromZero\)/,
-  'the tagged result row motion should stay synchronized with the panel expansion from zero height'
+  /const allowFromZero = Boolean\(hasRenderedContent && modeMenu\);[\s\S]*?\(!fromHeight && !allowFromZero\)/,
+  'only a visible scope menu should coordinate with a result expansion from zero height'
 );
 assert.match(
   overlaySource,

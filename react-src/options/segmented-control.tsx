@@ -2,6 +2,7 @@ import {
   createReactRootController,
   type ReactRootController
 } from './root-controller';
+import type { KeyboardEvent } from 'react';
 
 export interface SegmentedControlItemModel {
   iconClass?: string;
@@ -17,6 +18,7 @@ export interface SegmentedControlSelectModel {
 export interface SegmentedControlRenderModel {
   activeValue: string;
   dataAttribute: `data-${string}`;
+  disabled?: boolean;
   items: SegmentedControlItemModel[];
   select?: SegmentedControlSelectModel;
 }
@@ -36,13 +38,41 @@ function SegmentedControl({
   model: SegmentedControlRenderModel;
   onSelect(value: string): void;
 }) {
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number
+  ) => {
+    if (model.disabled || model.items.length < 2) {
+      return;
+    }
+    const { key } = event;
+    if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') {
+      return;
+    }
+    event.preventDefault();
+    const nextIndex = key === 'Home'
+      ? 0
+      : key === 'End'
+        ? model.items.length - 1
+        : (currentIndex + (key === 'ArrowRight' ? 1 : -1) + model.items.length) % model.items.length;
+    const nextItem = model.items[nextIndex];
+    const buttonGroup = event.currentTarget.parentElement;
+    onSelect(nextItem.value);
+    window.requestAnimationFrame(() => {
+      const buttons = buttonGroup?.querySelectorAll<HTMLButtonElement>(
+        `button[${model.dataAttribute}]`
+      );
+      buttons?.[nextIndex]?.focus();
+    });
+  };
+
   return (
     <>
       <span
         aria-hidden="true"
         className="_x_extension_theme_indicator_2024_unique_"
       />
-      {model.items.map((item) => {
+      {model.items.map((item, index) => {
         const active = item.value === model.activeValue;
         const dataProps = {
           [model.dataAttribute]: item.value
@@ -50,11 +80,15 @@ function SegmentedControl({
         return (
           <button
             {...dataProps}
+            aria-selected={active}
             aria-pressed={active}
             className="_x_extension_theme_option_2024_unique_"
             data-active={active ? 'true' : 'false'}
+            disabled={model.disabled}
             key={item.value}
             onClick={() => onSelect(item.value)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            role="tab"
             type="button"
           >
             {item.iconClass ? (
@@ -70,6 +104,7 @@ function SegmentedControl({
           className="_x_extension_select_2024_unique_"
           id={model.select.id}
           onChange={(event) => onSelect(event.currentTarget.value)}
+          disabled={model.disabled}
           style={{ display: 'none' }}
           tabIndex={-1}
           value={model.activeValue}

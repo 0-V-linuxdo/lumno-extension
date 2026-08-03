@@ -101,6 +101,22 @@ describe('Options segmented control React island', () => {
       .toContain('Most visited');
   });
 
+  it('supports keyboard tab navigation and disabled state', () => {
+    const { controller, host, onSelect } = createFixture();
+    act(() => controller.render(model));
+
+    const latest = host.querySelector<HTMLButtonElement>('[data-recent-mode="latest"]');
+    act(() => {
+      latest?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    });
+    expect(onSelect).toHaveBeenCalledWith('most');
+
+    act(() => controller.render({ ...model, disabled: true }));
+    expect(host.querySelector<HTMLButtonElement>('[data-recent-mode="latest"]')?.disabled)
+      .toBe(true);
+    expect(host.querySelector('select')?.disabled).toBe(true);
+  });
+
   it('unmounts cleanly', () => {
     const { controller, host } = createFixture();
     act(() => {

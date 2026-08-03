@@ -71,6 +71,14 @@
   "settings_selection_quick_actions_desc": {
     "message": "選択したテキストに応じて AI 操作を表示し、結果をバックグラウンドの Lumno AI タブグループで開きます"
   },
+  "settings_selection_quick_actions_provider_title": {
+    "message": "優先プロバイダー"
+  },
+  "settings_selection_quick_actions_icon_set_title": {
+    "message": "操作アイコン"
+  },
+  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
+  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
   "selection_quick_action_ask": { "message": "AI に質問" },
   "selection_quick_action_translate": { "message": "翻訳" },
   "selection_quick_action_explain": { "message": "説明" },

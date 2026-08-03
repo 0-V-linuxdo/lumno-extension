@@ -17,6 +17,18 @@
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_PROVIDER_KEYS = Object.freeze([
+    'gpt',
+    'gm',
+    'dbai',
+    'qw',
+    'yb',
+    'mx',
+    'ds',
+    'kimi'
+  ]);
   const CLOUD_SYNC_MODE_STORAGE_KEY = '_lumno_cloud_mode_v1_';
   const CLOUD_SYNC_MODE = 'cloud';
   // Keep the original key value so existing installations migrate from boolean to mode in place.
@@ -187,6 +199,15 @@
     return value === true;
   }
 
+  function normalizeSelectionQuickActionsProvider(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return SELECTION_QUICK_ACTIONS_PROVIDER_KEYS.includes(key) ? key : 'gpt';
+  }
+
+  function normalizeSelectionQuickActionsIconSet(value) {
+    return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
+  }
+
   function normalizeThemePreference(value) {
     if (value === 'dark') {
       return 'dark';
@@ -310,6 +331,9 @@
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
     CLOUD_SYNC_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_BRAND,
@@ -336,6 +360,8 @@
     normalizeTabRankScoreDebugMode,
     normalizeTabSwitcherEnabled,
     normalizeSelectionQuickActionsEnabled,
+    normalizeSelectionQuickActionsProvider,
+    normalizeSelectionQuickActionsIconSet,
     normalizeThemePreference,
     normalizeThemeMode,
     createGlobalThemeModeStorageUpdate,

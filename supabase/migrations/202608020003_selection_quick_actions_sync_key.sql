@@ -38,6 +38,8 @@ as $$
     '_x_extension_auto_pip_enabled_2026_unique_',
     '_x_extension_tab_switcher_enabled_2026_unique_',
     '_x_extension_selection_quick_actions_enabled_2026_unique_',
+    '_x_extension_selection_quick_actions_provider_2026_unique_',
+    '_x_extension_selection_quick_actions_icon_set_2026_unique_',
     '_x_extension_document_pip_enabled_2026_unique_',
     '_x_extension_pinned_tab_recovery_enabled_2026_unique_',
     '_x_extension_overlay_tab_priority_2024_unique_',

@@ -9,8 +9,8 @@ import {
 let controllers: SelectControlController[] = [];
 
 const items = [
-  { label: '跟随系统', labelKey: 'language_system', value: 'system' },
-  { label: '简体中文', labelKey: 'language_zh_cn', value: 'zh-CN' }
+  { iconUrl: '/system.png', label: '跟随系统', labelKey: 'language_system', value: 'system' },
+  { iconUrl: '/zh-cn.png', label: '简体中文', labelKey: 'language_zh_cn', value: 'zh-CN' }
 ];
 
 afterEach(() => {
@@ -36,6 +36,25 @@ describe('Options select control React island', () => {
     expect(host.querySelector('._x_extension_select_label_2024_unique_')?.textContent)
       .toBe('跟随系统');
     expect(host.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(host.querySelector<HTMLImageElement>('._x_extension_select_value_icon_2026_unique_')?.src)
+      .toContain('/system.png');
+    expect(host.querySelectorAll('._x_extension_select_option_icon_2026_unique_'))
+      .toHaveLength(2);
+  });
+
+  it('disables the trigger when the adapter marks the control unavailable', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const controller = createSelectControlController(host, {
+      kind: 'provider',
+      onSelect: vi.fn()
+    });
+    controllers.push(controller);
+
+    act(() => controller.render({ disabled: true, id: 'provider', items, value: 'system' }));
+
+    expect(host.dataset.disabled).toBe('true');
+    expect(host.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
   });
 
   it('opens the menu and reports a selected value', () => {

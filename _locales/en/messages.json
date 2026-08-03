@@ -71,6 +71,14 @@
   "settings_selection_quick_actions_desc": {
     "message": "Show contextual AI actions for selected text and open results in a background Lumno AI tab group"
   },
+  "settings_selection_quick_actions_provider_title": {
+    "message": "Preferred provider"
+  },
+  "settings_selection_quick_actions_icon_set_title": {
+    "message": "Action icons"
+  },
+  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
+  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
   "selection_quick_action_ask": { "message": "Ask AI" },
   "selection_quick_action_translate": { "message": "Translate" },
   "selection_quick_action_explain": { "message": "Explain" },

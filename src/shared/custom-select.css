@@ -121,6 +121,7 @@
   color: var(--panel-text, #111827);
   font-size: 13px;
   font-weight: 500;
+  gap: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -152,6 +153,16 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+._x_extension_select_value_icon_2026_unique_ {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: block;
+  border-radius: 5px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 ._x_extension_select_menu_2024_unique_ {
@@ -208,6 +219,12 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
   display: block;
   color: var(--panel-subtext, #6b7280);
   pointer-events: none;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+._x_extension_select_wrap_2024_unique_[data-disabled="true"] ._x_extension_select_trigger_2024_unique_ {
+  cursor: not-allowed;
 }
 
 ._x_extension_select_option_label_2026_unique_ {

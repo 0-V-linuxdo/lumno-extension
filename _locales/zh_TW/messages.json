@@ -71,6 +71,14 @@
   "settings_selection_quick_actions_desc": {
     "message": "根據所選文字動態顯示 AI 操作，並在背景的 Lumno AI 分頁群組中開啟結果"
   },
+  "settings_selection_quick_actions_provider_title": {
+    "message": "優先 Provider"
+  },
+  "settings_selection_quick_actions_icon_set_title": {
+    "message": "操作圖示"
+  },
+  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
+  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
   "selection_quick_action_ask": { "message": "問 AI" },
   "selection_quick_action_translate": { "message": "翻譯" },
   "selection_quick_action_explain": { "message": "解釋" },

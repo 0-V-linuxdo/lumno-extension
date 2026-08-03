@@ -38,6 +38,25 @@ function createChromeStub(options) {
 }
 
 {
+  const { chromeApi, groupedTabs, updatedGroups } = createChromeStub({ existingGroup: true });
+  let response = null;
+  selectionTarget.openSelectionTarget(chromeApi, {
+    url: 'https://chatgpt.com/',
+    sourceTab: { id: 12, windowId: 9, groupId: 77 }
+  }, (result) => {
+    response = result;
+  });
+  assert.deepStrictEqual(
+    groupedTabs[0],
+    { tabIds: 100, groupId: 77 },
+    'selection targets should join the source tab group when one already exists'
+  );
+  assert.strictEqual(updatedGroups.length, 0, 'reused source groups should keep their own title and state');
+  assert.strictEqual(response.mode, 'group');
+  assert.strictEqual(response.groupId, 77);
+}
+
+{
   const { chromeApi, createdTabs, groupedTabs, updatedGroups } = createChromeStub({ existingGroup: true });
   let response = null;
   selectionTarget.openSelectionTarget(chromeApi, {

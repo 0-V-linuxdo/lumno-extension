@@ -47,6 +47,8 @@
     documentPipEnabled: '_x_extension_document_pip_enabled_2026_unique_',
     pinnedTabRecoveryEnabled: '_x_extension_pinned_tab_recovery_enabled_2026_unique_',
     selectionQuickActionsEnabled: '_x_extension_selection_quick_actions_enabled_2026_unique_',
+    selectionQuickActionsProvider: '_x_extension_selection_quick_actions_provider_2026_unique_',
+    selectionQuickActionsIconSet: '_x_extension_selection_quick_actions_icon_set_2026_unique_',
     overlayTabPriority: '_x_extension_overlay_tab_priority_2024_unique_',
     newtabTopContentMode: '_x_extension_newtab_wordmark_visible_2026_unique_',
     restrictedAction: '_x_extension_restricted_action_2024_unique_',

@@ -53,6 +53,13 @@
   const documentPipToggle = document.getElementById('_x_extension_document_pip_toggle_2026_unique_');
   const pinnedTabRecoveryToggle = document.getElementById('_x_extension_pinned_tab_recovery_toggle_2026_unique_');
   const selectionQuickActionsToggle = document.getElementById('_x_extension_selection_quick_actions_toggle_2026_unique_');
+  const selectionQuickActionsProviderRow = document.getElementById('_x_extension_selection_quick_actions_provider_row_2026_unique_');
+  const selectionQuickActionsProviderSelect = document.getElementById('_x_extension_selection_quick_actions_provider_select_2026_unique_');
+  const selectionQuickActionsIconSetRow = document.getElementById('_x_extension_selection_quick_actions_icon_set_row_2026_unique_');
+  const selectionQuickActionsIconSetTabsWrap = document.getElementById('_x_extension_selection_quick_actions_icon_set_tabs_wrap_2026_unique_');
+  const selectionQuickActionsIconSetTabsIndicator = selectionQuickActionsIconSetTabsWrap
+    ? selectionQuickActionsIconSetTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
+    : null;
   const overlayTabQuickSwitchToggle = document.getElementById('_x_extension_overlay_tab_quick_switch_2024_unique_');
   const newtabTopContentTabsWrap = document.getElementById('_x_extension_newtab_top_content_tabs_wrap_2026_unique_');
   const newtabTopContentTabsIndicator = newtabTopContentTabsWrap
@@ -237,6 +244,11 @@
     'newtab-top-content',
     handleNewtabTopContentSelection
   );
+  const selectionQuickActionsIconSetTabsController = createOptionsSegmentedControlController(
+    selectionQuickActionsIconSetTabsWrap,
+    'selection-quick-actions-icon-set',
+    handleSelectionQuickActionsIconSetSelection
+  );
   const optionsToggleControlRecords = new Map();
   function registerOptionsToggleControl(input, kind) {
     if (!input ||
@@ -298,6 +310,22 @@
         row.setAttribute('aria-disabled', disabled ? 'true' : 'false');
       }
     });
+  }
+  function syncSelectionQuickActionsProviderAvailability() {
+    const disabled = Boolean(selectionQuickActionsToggle && !selectionQuickActionsToggle.checked);
+    if (selectionQuickActionsProviderSelect) {
+      selectionQuickActionsProviderSelect.disabled = disabled;
+      renderOptionsSelectControl(selectionQuickActionsProviderSelect);
+    }
+    if (selectionQuickActionsProviderRow) {
+      selectionQuickActionsProviderRow.setAttribute('data-disabled', disabled ? 'true' : 'false');
+      selectionQuickActionsProviderRow.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    }
+    if (selectionQuickActionsIconSetRow) {
+      selectionQuickActionsIconSetRow.setAttribute('data-disabled', disabled ? 'true' : 'false');
+      selectionQuickActionsIconSetRow.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    }
+    setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
   }
   [
     [updateNoticeToggle, 'update-notice'],
@@ -503,6 +531,10 @@
   const PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY = '_x_extension_pinned_tab_recovery_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY ||
     '_x_extension_selection_quick_actions_enabled_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY ||
+    '_x_extension_selection_quick_actions_provider_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY ||
+    '_x_extension_selection_quick_actions_icon_set_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
@@ -562,6 +594,8 @@
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
     PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
     OVERLAY_TAB_PRIORITY_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     RESTRICTED_ACTION_STORAGE_KEY,
@@ -647,6 +681,7 @@
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
   let currentNewtabTopContentMode = 'brand';
+  let currentSelectionQuickActionsIconSet = 'remix';
   let currentActiveSettingsTab = 'appearance';
   const optionsSelectControlRecords = new Map();
   function registerOptionsSelectControl(select, kind) {
@@ -658,11 +693,17 @@
     if (!host) {
       return null;
     }
-    const items = Array.from(select.options).map((option) => ({
-      fallback: option.textContent || option.value,
-      labelKey: option.getAttribute('data-i18n') || '',
-      value: option.value
-    }));
+    const items = Array.from(select.options).map((option) => {
+      const iconPath = option.getAttribute('data-icon-path') || '';
+      return {
+        fallback: option.textContent || option.value,
+        iconUrl: iconPath && chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function'
+          ? chrome.runtime.getURL(iconPath)
+          : (iconPath ? `../../${iconPath}` : ''),
+        labelKey: option.getAttribute('data-i18n') || '',
+        value: option.value
+      };
+    });
     const controller = optionsSelectControlApi.createSelectControlController(host, {
       kind,
       onSelect(next) {
@@ -680,8 +721,10 @@
       return;
     }
     record.controller.render({
+      disabled: Boolean(select.disabled),
       id: select.id,
       items: record.items.map((item) => ({
+        iconUrl: item.iconUrl,
         label: item.labelKey ? getMessage(item.labelKey, item.fallback) : item.fallback,
         labelKey: item.labelKey,
         value: item.value
@@ -700,13 +743,15 @@
     [languageSelect, 'language'],
     [recentCountSelect, 'recent-count'],
     [bookmarkCountSelect, 'bookmark-count'],
-    [bookmarkColumnsSelect, 'bookmark-columns']
+    [bookmarkColumnsSelect, 'bookmark-columns'],
+    [selectionQuickActionsProviderSelect, 'selection-quick-actions-provider']
   ].forEach(([select, kind]) => {
     const record = registerOptionsSelectControl(select, kind);
     if (record) {
       renderOptionsSelectControl(select);
     }
   });
+  syncSelectionQuickActionsProviderAvailability();
   const SETTINGS_TAB_KEYS = Object.freeze([
     'general',
     'account',
@@ -1415,6 +1460,21 @@
       : value === true;
   }
 
+  function normalizeSelectionQuickActionsProvider(value) {
+    if (typeof SETTINGS.normalizeSelectionQuickActionsProvider === 'function') {
+      return SETTINGS.normalizeSelectionQuickActionsProvider(value);
+    }
+    const key = String(value || '').trim().toLowerCase();
+    return ['gpt', 'gm', 'dbai', 'qw', 'yb', 'mx', 'ds', 'kimi'].includes(key) ? key : 'gpt';
+  }
+
+  function normalizeSelectionQuickActionsIconSet(value) {
+    if (typeof SETTINGS.normalizeSelectionQuickActionsIconSet === 'function') {
+      return SETTINGS.normalizeSelectionQuickActionsIconSet(value);
+    }
+    return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
+  }
+
   function normalizeSearchResultPriority(value) {
     return typeof SETTINGS.normalizeSearchResultPriority === 'function'
       ? SETTINGS.normalizeSearchResultPriority(value)
@@ -1619,6 +1679,11 @@
         newtabTopContentTabsWrap,
         newtabTopContentTabsIndicator,
         'button[data-newtab-top-content][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        selectionQuickActionsIconSetTabsWrap,
+        selectionQuickActionsIconSetTabsIndicator,
+        'button[data-selection-quick-actions-icon-set][data-active="true"]'
       )
     ];
     measurements.forEach(applyTabsIndicatorMeasurement);
@@ -1888,6 +1953,41 @@
     requestAnimationFrame(updateSearchResultPriorityTabsIndicator);
   }
 
+  function setSelectionQuickActionsIconSetTabState(value) {
+    const nextIconSet = normalizeSelectionQuickActionsIconSet(value);
+    currentSelectionQuickActionsIconSet = nextIconSet;
+    renderSegmentedControlState(
+      selectionQuickActionsIconSetTabsController,
+      {
+        activeValue: nextIconSet,
+        dataAttribute: 'data-selection-quick-actions-icon-set',
+        disabled: Boolean(selectionQuickActionsToggle && !selectionQuickActionsToggle.checked),
+        items: [
+          {
+            value: 'remix',
+            labelKey: 'selection_quick_actions_icon_set_remix',
+            label: getMessage('selection_quick_actions_icon_set_remix', 'Remix')
+          },
+          {
+            value: 'hugeicons',
+            labelKey: 'selection_quick_actions_icon_set_hugeicons',
+            label: getMessage('selection_quick_actions_icon_set_hugeicons', 'Hugeicons')
+          }
+        ],
+        select: {
+          id: '_x_extension_selection_quick_actions_icon_set_select_2026_unique_'
+        }
+      }
+    );
+    requestAnimationFrame(() => {
+      updateInlineTabsIndicator(
+        selectionQuickActionsIconSetTabsWrap,
+        selectionQuickActionsIconSetTabsIndicator,
+        'button[data-selection-quick-actions-icon-set][data-active="true"]'
+      );
+    });
+  }
+
   function handleNewtabWidthSelection(value) {
     const nextMode = normalizeNewtabWidthMode(value);
     setNewtabWidthTabState(nextMode);
@@ -1965,6 +2065,15 @@
     storageArea.set(createRestrictedActionStorageUpdate(nextAction));
   }
 
+  function handleSelectionQuickActionsIconSetSelection(value) {
+    const nextIconSet = normalizeSelectionQuickActionsIconSet(value);
+    setSelectionQuickActionsIconSetTabState(nextIconSet);
+    if (!storageArea) {
+      return;
+    }
+    storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: nextIconSet });
+  }
+
   setNewtabWidthTabState(currentNewtabWidthMode);
   setOverlaySizeTabState(currentOverlaySizeMode);
   setOverlayEnterAnimationTabState(currentOverlayEnterAnimation);
@@ -1972,6 +2081,7 @@
   setRecentModeTabState(currentRecentMode);
   setRestrictedActionTabState(currentRestrictedAction);
   setNewtabTopContentTabState(currentNewtabTopContentMode);
+  setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
 
   function storageGet(area, keys) {
     return new Promise((resolve) => {
@@ -3159,6 +3269,7 @@
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
       setNewtabTopContentTabState(currentNewtabTopContentMode);
+      setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
       renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
@@ -4611,10 +4722,21 @@
     selectionQuickActionsToggle.addEventListener('change', () => {
       const next = normalizeSelectionQuickActionsEnabled(selectionQuickActionsToggle.checked);
       setOptionsToggleState(selectionQuickActionsToggle, next);
+      syncSelectionQuickActionsProviderAvailability();
       if (!storageArea) {
         return;
       }
       storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: next });
+    });
+  }
+  if (selectionQuickActionsProviderSelect) {
+    selectionQuickActionsProviderSelect.addEventListener('change', () => {
+      const next = normalizeSelectionQuickActionsProvider(selectionQuickActionsProviderSelect.value);
+      setOptionsSelectState(selectionQuickActionsProviderSelect, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY]: next });
     });
   }
 
@@ -5215,10 +5337,28 @@
       if (selectionQuickActionsToggle) {
         setOptionsToggleState(selectionQuickActionsToggle, stored);
       }
+      syncSelectionQuickActionsProviderAvailability();
       if (rawValue !== stored) {
         storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
+    });
+    storageArea.get([SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY], (result) => {
+      const rawValue = result[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY];
+      const stored = normalizeSelectionQuickActionsProvider(rawValue);
+      setOptionsSelectState(selectionQuickActionsProviderSelect, stored);
+      if (rawValue !== stored) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY], (result) => {
+      const rawValue = result[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY];
+      const stored = normalizeSelectionQuickActionsIconSet(rawValue);
+      setSelectionQuickActionsIconSetTabState(stored);
+      if (rawValue !== stored) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: stored });
+      }
     });
 
     storageArea.get([RESTRICTED_ACTION_STORAGE_KEY], (result) => {
@@ -6214,6 +6354,9 @@
         changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] ||
         changes[AUTO_PIP_ENABLED_STORAGE_KEY] ||
         changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY] ||
+        changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] ||
+        changes[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY] ||
+        changes[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY] ||
         changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] ||
         changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY] ||
         changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] ||
@@ -6417,10 +6560,28 @@
       const raw = changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY].newValue;
       const next = normalizeSelectionQuickActionsEnabled(raw);
       setOptionsToggleState(selectionQuickActionsToggle, next);
+      syncSelectionQuickActionsProviderAvailability();
       if (raw !== next && storageArea) {
         storageArea.set({ [SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
+    }
+    if (changes[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY] && selectionQuickActionsProviderSelect) {
+      const raw = changes[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY].newValue;
+      const next = normalizeSelectionQuickActionsProvider(raw);
+      setOptionsSelectState(selectionQuickActionsProviderSelect, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]) {
+      const raw = changes[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY].newValue;
+      const next = normalizeSelectionQuickActionsIconSet(raw);
+      setSelectionQuickActionsIconSetTabState(next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: next });
+      }
     }
     if (changes[RESTRICTED_ACTION_STORAGE_KEY] && restrictedActionSelect) {
       const raw = changes[RESTRICTED_ACTION_STORAGE_KEY].newValue;

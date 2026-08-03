@@ -45,6 +45,121 @@ assert.match(
   'the controller visibility state should include the menu opening frame without including closed panels'
 );
 
+const renderTabSuggestionsStart = overlaySource.indexOf(
+  'function renderTabSuggestions(tabList) {'
+);
+const renderTabSuggestionsEnd = overlaySource.indexOf(
+  'function getOverlaySearchModeKey()',
+  renderTabSuggestionsStart
+);
+const renderTabSuggestionsSource = overlaySource.slice(
+  renderTabSuggestionsStart,
+  renderTabSuggestionsEnd
+);
+const tabHeightCaptureIndex = renderTabSuggestionsSource.indexOf(
+  'const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);'
+);
+const emptyRenderIndex = renderTabSuggestionsSource.indexOf(
+  'renderOverlayEmptyState(emptyText);'
+);
+const emptyRevealIndex = renderTabSuggestionsSource.indexOf(
+  'setOverlayResultsCollapsed(false, { deferLayoutSync: true });'
+);
+const tabRenderIndex = renderTabSuggestionsSource.indexOf(
+  'reactView.renderTabs(list);'
+);
+const tabRevealIndex = renderTabSuggestionsSource.indexOf(
+  'setOverlayResultsCollapsed(false, { deferLayoutSync: true });',
+  tabRenderIndex
+);
+assert.ok(
+  tabHeightCaptureIndex >= 0 &&
+    emptyRenderIndex > tabHeightCaptureIndex &&
+    emptyRevealIndex > emptyRenderIndex &&
+    tabRenderIndex > tabHeightCaptureIndex &&
+    tabRevealIndex > tabRenderIndex,
+  'open-tab results must reveal the result surface only after its target rows are rendered'
+);
+
+const updateSearchSuggestionsStart = overlaySource.indexOf(
+  'function updateSearchSuggestions(suggestions, query, options) {'
+);
+const updateSearchSuggestionsEnd = overlaySource.indexOf(
+  'function clearSearchSuggestions()',
+  updateSearchSuggestionsStart
+);
+const updateSearchSuggestionsSource = overlaySource.slice(
+  updateSearchSuggestionsStart,
+  updateSearchSuggestionsEnd
+);
+const updateRenderIndex = updateSearchSuggestionsSource.indexOf(
+  'reactView.render({'
+);
+const updateRevealIndex = updateSearchSuggestionsSource.indexOf(
+  'setOverlayResultsCollapsed(false, {'
+);
+assert.ok(
+  updateRenderIndex >= 0 && updateRevealIndex > updateRenderIndex,
+  'ordinary results must reveal the result surface after the async target render'
+);
+assert.match(
+  updateSearchSuggestionsSource,
+  /setOverlayResultsCollapsed\(false, \{\s*deferLayoutSync: Boolean\(previousHeightState\)\s*\}\);[\s\S]*?reconcileSuggestionsHeightAfterRender\(previousHeightState, query/,
+  'the first result reveal must not publish a natural-height offset before height reconciliation'
+);
+
+assert.match(
+  overlaySource,
+  /const waitForFirstResultMix =\s*suggestionsContainer\.getAttribute\('data-collapsed'\) === 'true';[\s\S]*?OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS[\s\S]*?const remoteDelay = waitForFirstResultMix\s*\? 0[\s\S]*?if \(remoteMixState\.visualSettled\) \{\s*return;/,
+  'the first local and remote result stages should produce only one visible height commit'
+);
+
+const pendingUpdateStart = overlaySource.indexOf(
+  'function updatePendingSearchSuggestions(query, options) {'
+);
+const pendingUpdateEnd = overlaySource.indexOf(
+  'function requestOverlaySearchSuggestions(query)',
+  pendingUpdateStart
+);
+const pendingUpdateSource = overlaySource.slice(
+  pendingUpdateStart,
+  pendingUpdateEnd
+);
+let pendingUpdateCount = 0;
+const pendingUpdateContext = vm.createContext({
+  lastSuggestionResponse: [],
+  suggestionsContainer: {
+    getAttribute(name) {
+      return name === 'data-collapsed' ? 'true' : null;
+    }
+  },
+  updateSearchSuggestions() {
+    pendingUpdateCount += 1;
+  }
+});
+vm.runInContext(
+  `${pendingUpdateSource}\nthis.updatePendingSearchSuggestionsForTest = updatePendingSearchSuggestions;`,
+  pendingUpdateContext,
+  { filename: 'overlay-pending-suggestions-visibility.js' }
+);
+assert.strictEqual(
+  pendingUpdateContext.updatePendingSearchSuggestionsForTest('1', {}),
+  false,
+  'a direct-URL preview must not expand a result surface that is still collapsed'
+);
+assert.strictEqual(
+  pendingUpdateCount,
+  0,
+  'the first character must wait for a visible result commit instead of rendering an empty preview shell'
+);
+pendingUpdateContext.suggestionsContainer.getAttribute = () => null;
+assert.strictEqual(
+  pendingUpdateContext.updatePendingSearchSuggestionsForTest('12', {}),
+  true,
+  'direct-URL previews should still update an already-visible result surface'
+);
+assert.strictEqual(pendingUpdateCount, 1);
+
 const clipStart = overlaySource.indexOf(
   'function clipSuggestionsToHeight(container, height, options) {'
 );
@@ -133,6 +248,18 @@ vm.runInContext(
   captureRuntimeContext,
   { filename: 'overlay-suggestions-height-capture.js' }
 );
+const collapsedState = captureRuntimeContext.captureSuggestionsHeightStateForTest({
+  children: [],
+  getAttribute(name) {
+    return name === 'data-collapsed' ? 'true' : null;
+  }
+});
+assert.strictEqual(collapsedState.height, 0);
+assert.strictEqual(
+  captureCancelCount,
+  0,
+  'height capture must preserve the zero-padding styles owned by a collapsed result surface'
+);
 const interruptedState = captureRuntimeContext.captureSuggestionsHeightStateForTest({
   children: [{}, {}]
 });
@@ -148,6 +275,126 @@ assert.deepStrictEqual(
   'interruption capture should preserve the current padding phase with the current height'
 );
 assert.strictEqual(captureCancelCount, 1);
+
+const beginInputSessionStart = overlaySource.indexOf(
+  'function beginSuggestionsHeightInputSession(query) {'
+);
+const beginInputSessionEnd = overlaySource.indexOf(
+  'function finalizeDeferredSuggestionsHeight(query)',
+  beginInputSessionStart
+);
+const beginInputSessionSource = overlaySource.slice(
+  beginInputSessionStart,
+  beginInputSessionEnd
+);
+let zeroHeightSettleTimerCount = 0;
+let zeroHeightClipCount = 0;
+const zeroHeightInputSessionContext = vm.createContext({
+  Math,
+  Number,
+  suggestionsHeightInputLockedHeight: 0,
+  suggestionsHeightInputLockedPadding: null,
+  suggestionsHeightInputSettleTimer: 0,
+  suggestionsHeightInputSettleMs: 280,
+  deferredSuggestionsHeightQuery: '',
+  suggestionsContainer: {
+    style: {
+      setProperty() {}
+    }
+  },
+  overlay: {
+    _lumnoSuggestionsHeightSettleTimer: 0
+  },
+  clearSuggestionsHeightInputSettleTimer() {},
+  captureSuggestionsHeightState: () => ({
+    height: 0,
+    heldHeight: 0,
+    padding: null
+  }),
+  cancelSuggestionsHeightAnimation() {},
+  clipSuggestionsToHeight() {
+    zeroHeightClipCount += 1;
+  },
+  finishSuggestionsHeightInputSession() {},
+  setTimeout() {
+    zeroHeightSettleTimerCount += 1;
+    return 1;
+  }
+});
+vm.runInContext(
+  `${beginInputSessionSource}\nthis.beginSuggestionsHeightInputSessionForTest = beginSuggestionsHeightInputSession;`,
+  zeroHeightInputSessionContext,
+  { filename: 'overlay-zero-height-input-session.js' }
+);
+zeroHeightInputSessionContext.beginSuggestionsHeightInputSessionForTest('a');
+assert.strictEqual(
+  zeroHeightSettleTimerCount,
+  0,
+  'the first character must not arm a settle timer that restarts the initial result expansion'
+);
+assert.strictEqual(
+  zeroHeightClipCount,
+  0,
+  'the collapsed result surface must remain owned by the initial expansion transition'
+);
+
+let renderedHeightSettleTimerCount = 0;
+let renderedHeightClip = null;
+const renderedHeightInputSessionContext = vm.createContext({
+  Math,
+  Number,
+  suggestionsHeightInputLockedHeight: 184,
+  suggestionsHeightInputLockedPadding: { top: 12, bottom: 12 },
+  suggestionsHeightInputSettleTimer: 0,
+  suggestionsHeightInputSettleMs: 280,
+  deferredSuggestionsHeightQuery: '',
+  suggestionsContainer: {
+    style: {
+      setProperty() {}
+    }
+  },
+  overlay: {
+    _lumnoSuggestionsHeightSettleTimer: 0
+  },
+  clearSuggestionsHeightInputSettleTimer() {},
+  captureSuggestionsHeightState() {
+    throw new Error('an existing input-session lock must be reused');
+  },
+  cancelSuggestionsHeightAnimation() {},
+  clipSuggestionsToHeight(_container, height, options) {
+    renderedHeightClip = { height, options };
+  },
+  finishSuggestionsHeightInputSession() {},
+  setTimeout() {
+    renderedHeightSettleTimerCount += 1;
+    return 7;
+  }
+});
+vm.runInContext(
+  `${beginInputSessionSource}\nthis.beginSuggestionsHeightInputSessionForTest = beginSuggestionsHeightInputSession;`,
+  renderedHeightInputSessionContext,
+  { filename: 'overlay-rendered-height-input-session.js' }
+);
+renderedHeightInputSessionContext.beginSuggestionsHeightInputSessionForTest('ab');
+assert.strictEqual(
+  renderedHeightSettleTimerCount,
+  1,
+  'typing over existing results should retain the input settle session'
+);
+assert.strictEqual(renderedHeightClip && renderedHeightClip.height, 184);
+assert.strictEqual(
+  renderedHeightClip && renderedHeightClip.options.scrollable,
+  true
+);
+assert.strictEqual(
+  renderedHeightClip && renderedHeightClip.options.padding.top,
+  12
+);
+assert.strictEqual(
+  renderedHeightClip && renderedHeightClip.options.padding.bottom,
+  12,
+  'existing results should remain clipped at their visible height while input settles'
+);
 
 const animateStart = overlaySource.indexOf(
   'function animateSuggestionsHeight(container, previousState) {'
@@ -218,6 +465,7 @@ assert.strictEqual(
 assert.strictEqual(offsetSyncCount, 0);
 
 const standaloneCalls = [];
+let standaloneOffsetSyncCount = 0;
 const standaloneRuntimeContext = vm.createContext({
   Boolean,
   Math,
@@ -233,7 +481,9 @@ const standaloneRuntimeContext = vm.createContext({
   scheduleStandaloneSuggestionsHeightTransition: (...args) => {
     standaloneCalls.push(args);
   },
-  syncSearchModeMenuResultOffset: () => {},
+  syncSearchModeMenuResultOffset: () => {
+    standaloneOffsetSyncCount += 1;
+  },
   window: {
     matchMedia: () => ({ matches: false })
   }
@@ -257,13 +507,13 @@ standaloneRuntimeContext.animateSuggestionsHeightForTest(
 );
 assert.strictEqual(
   standaloneCalls.length,
-  1,
-  'the first ordinary overlay result should animate from a collapsed surface'
+  0,
+  'the first ordinary overlay result should reveal its rows and final height in one paint'
 );
 assert.strictEqual(
-  standaloneCalls[0][1].height,
-  0,
-  'ordinary results should start their height transition at zero'
+  standaloneOffsetSyncCount,
+  1,
+  'the atomic first reveal should publish the final result offset once'
 );
 
 console.log('overlay search mode height transition tests passed');

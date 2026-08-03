@@ -17,6 +17,32 @@ function classify(text, options) {
   assert.strictEqual(result.action, 'explain');
   assert.strictEqual(result.confidence, 'medium');
   assert.strictEqual(result.features.languageMismatch, false);
+  assert.strictEqual(result.triggerable, true);
+}
+
+{
+  const result = classify('React components', { uiLanguage: 'en' });
+  assert.strictEqual(result.triggerable, true);
+}
+
+{
+  const result = classify('100', { uiLanguage: 'zh-CN' });
+  assert.strictEqual(result.features.numericLike, false);
+  assert.strictEqual(result.triggerable, false);
+}
+
+{
+  const result = classify('这是你需要的资料', { uiLanguage: 'zh-CN' });
+  assert.strictEqual(result.confidence, 'low');
+  assert.strictEqual(result.triggerable, true);
+}
+
+{
+  const result = classify('The request failed because the server was unavailable.', {
+    uiLanguage: 'en'
+  });
+  assert.strictEqual(result.features.errorLike, false);
+  assert.strictEqual(result.triggerable, true);
 }
 
 {

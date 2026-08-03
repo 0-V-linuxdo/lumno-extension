@@ -48,6 +48,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySuggestionsView = null;
   let overlaySuggestionRequestSeq = 0;
   let overlayRemoteSuggestionDebounceTimer = null;
+  let overlayFirstResultRevealTimer = null;
+  const OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS = 240;
   let openInCurrentTabModifierActive = false;
   let openSwitchInNewTabModifierActive = false;
   let openInBackgroundTabModifierActive = false;
@@ -56,6 +58,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (overlayRemoteSuggestionDebounceTimer) {
       clearTimeout(overlayRemoteSuggestionDebounceTimer);
       overlayRemoteSuggestionDebounceTimer = null;
+    }
+    if (overlayFirstResultRevealTimer) {
+      clearTimeout(overlayFirstResultRevealTimer);
+      overlayFirstResultRevealTimer = null;
     }
   }
   const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
@@ -2459,7 +2465,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       );
     }
 
-    function setOverlayResultsCollapsed(collapsed) {
+    function setOverlayResultsCollapsed(collapsed, options) {
+      const stateOptions = options && typeof options === 'object'
+        ? options
+        : {};
+      const shouldSyncLayout = stateOptions.deferLayoutSync !== true;
       const shouldCollapse = Boolean(collapsed);
       const wasCollapsed = suggestionsContainer.getAttribute('data-collapsed') === 'true';
       overlay.setAttribute('data-open-tabs-default-collapsed', shouldCollapse ? 'true' : 'false');
@@ -2494,7 +2504,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       if (!wasCollapsed) {
         setInputDividerVisible(true);
-        syncSearchModeMenuResultOffset();
+        if (shouldSyncLayout) {
+          syncSearchModeMenuResultOffset();
+        }
         return;
       }
       suggestionsContainer.style.removeProperty('max-height');
@@ -2507,7 +2519,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       suggestionsContainer.style.removeProperty('transition');
       suggestionsContainer.removeAttribute('aria-hidden');
       setInputDividerVisible(true);
-      syncSearchModeMenuResultOffset();
+      if (shouldSyncLayout) {
+        syncSearchModeMenuResultOffset();
+      }
     }
 
     function shouldShowOpenTabsForEmptyQuery() {
@@ -3663,7 +3677,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     chrome.storage.onChanged.addListener(overlaySearchEngineStorageListener);
 
     function updatePendingSearchSuggestions(query, options) {
+      if (suggestionsContainer.getAttribute('data-collapsed') === 'true' ||
+          suggestionsContainer.getAttribute('aria-hidden') === 'true') {
+        return false;
+      }
       updateSearchSuggestions(lastSuggestionResponse, query, options);
+      return true;
     }
 
     function requestOverlaySearchSuggestions(query) {
@@ -3690,6 +3709,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         clearTimeout(overlayRemoteSuggestionDebounceTimer);
         overlayRemoteSuggestionDebounceTimer = null;
       }
+      if (overlayFirstResultRevealTimer) {
+        clearTimeout(overlayFirstResultRevealTimer);
+        overlayFirstResultRevealTimer = null;
+      }
       chrome.runtime.sendMessage({
         action: 'getSearchSuggestions',
         query: requestQuery,
@@ -3705,16 +3728,41 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           return;
         }
         const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
-        updateSearchSuggestions(localSuggestions, requestQuery, {
-          deferCappedShrink: true,
-          remoteMixState
-        });
         if (requestLocalSearchScope) {
           remoteMixState.settled = true;
-          finalizeDeferredSuggestionsHeight(requestQuery);
+          updateSearchSuggestions(localSuggestions, requestQuery);
           return;
         }
-        const remoteDelay = Math.max(0, 120 - (Date.now() - requestStartedAt));
+        // A collapsed surface has no useful intermediate height to preserve.
+        // Give the remote mix one short response budget so the first visible
+        // result set is committed once at its final height. If that budget is
+        // missed, reveal local results and ignore the late mix instead of
+        // moving the whole result surface a second time.
+        const waitForFirstResultMix =
+          suggestionsContainer.getAttribute('data-collapsed') === 'true';
+        if (waitForFirstResultMix) {
+          overlayFirstResultRevealTimer = setTimeout(() => {
+            overlayFirstResultRevealTimer = null;
+            if (requestSeq !== overlaySuggestionRequestSeq ||
+                requestQuery !== latestOverlayQuery ||
+                remoteMixState.visualSettled) {
+              return;
+            }
+            remoteMixState.visualSettled = true;
+            updateSearchSuggestions(localSuggestions, requestQuery, {
+              remoteMixState,
+              finalRemoteMix: true
+            });
+          }, OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS);
+        } else {
+          updateSearchSuggestions(localSuggestions, requestQuery, {
+            deferCappedShrink: true,
+            remoteMixState
+          });
+        }
+        const remoteDelay = waitForFirstResultMix
+          ? 0
+          : Math.max(0, 120 - (Date.now() - requestStartedAt));
         overlayRemoteSuggestionDebounceTimer = setTimeout(function() {
           overlayRemoteSuggestionDebounceTimer = null;
           if (requestSeq !== overlaySuggestionRequestSeq || requestQuery !== latestOverlayQuery) {
@@ -3731,7 +3779,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             }
             if (chrome.runtime && chrome.runtime.lastError) {
               remoteMixState.settled = true;
-              finalizeDeferredSuggestionsHeight(requestQuery);
+              if (waitForFirstResultMix && !remoteMixState.visualSettled) {
+                clearTimeout(overlayFirstResultRevealTimer);
+                overlayFirstResultRevealTimer = null;
+                remoteMixState.visualSettled = true;
+                updateSearchSuggestions(localSuggestions, requestQuery, {
+                  remoteMixState,
+                  finalRemoteMix: true
+                });
+              } else {
+                finalizeDeferredSuggestionsHeight(requestQuery);
+              }
               return;
             }
             if (!remoteResponse ||
@@ -3739,11 +3797,34 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 remoteResponse.hasRemoteSuggestions !== true ||
                 !Array.isArray(remoteResponse.suggestions)) {
               remoteMixState.settled = true;
-              finalizeDeferredSuggestionsHeight(requestQuery);
+              if (waitForFirstResultMix && !remoteMixState.visualSettled) {
+                clearTimeout(overlayFirstResultRevealTimer);
+                overlayFirstResultRevealTimer = null;
+                remoteMixState.visualSettled = true;
+                updateSearchSuggestions(localSuggestions, requestQuery, {
+                  remoteMixState,
+                  finalRemoteMix: true
+                });
+              } else {
+                finalizeDeferredSuggestionsHeight(requestQuery);
+              }
               return;
             }
             remoteMixState.settled = true;
             remoteMixState.hasFinalSuggestions = true;
+            if (waitForFirstResultMix) {
+              if (remoteMixState.visualSettled) {
+                return;
+              }
+              clearTimeout(overlayFirstResultRevealTimer);
+              overlayFirstResultRevealTimer = null;
+              remoteMixState.visualSettled = true;
+              updateSearchSuggestions(remoteResponse.suggestions, requestQuery, {
+                remoteMixState,
+                finalRemoteMix: true
+              });
+              return;
+            }
             updateSearchSuggestions(remoteResponse.suggestions, requestQuery);
           });
         }, remoteDelay);
@@ -7114,6 +7195,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!container) {
         return state;
       }
+      const isCollapsed = typeof container.getAttribute === 'function' && (
+        container.getAttribute('data-collapsed') === 'true' ||
+        container.getAttribute('aria-hidden') === 'true'
+      );
+      if (isCollapsed) {
+        return state;
+      }
       const hasRenderedContent = Boolean(container.children && container.children.length > 0);
       if (hasRenderedContent) {
         const metrics = readSuggestionsHeightMetrics(container);
@@ -7213,19 +7301,26 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         );
         suggestionsHeightInputLockedPadding = previousState.padding;
       }
-      if (suggestionsHeightInputLockedHeight > 0) {
-        cancelSuggestionsHeightAnimation(suggestionsContainer);
-        clipSuggestionsToHeight(
-          suggestionsContainer,
-          suggestionsHeightInputLockedHeight,
-          {
-            scrollable: true,
-            padding: suggestionsHeightInputLockedPadding
-          }
-        );
-        suggestionsContainer.style.setProperty('transition', 'none', 'important');
-        deferredSuggestionsHeightQuery = query;
+      // Input settling only needs to preserve an already-rendered result
+      // surface. Starting a timer for the collapsed zero-height state makes
+      // it fire during the first result expansion and restart that animation.
+      if (suggestionsHeightInputLockedHeight <= 0) {
+        suggestionsHeightInputLockedPadding = null;
+        deferredSuggestionsHeightQuery = '';
+        overlay._lumnoSuggestionsHeightSettleTimer = 0;
+        return;
       }
+      cancelSuggestionsHeightAnimation(suggestionsContainer);
+      clipSuggestionsToHeight(
+        suggestionsContainer,
+        suggestionsHeightInputLockedHeight,
+        {
+          scrollable: true,
+          padding: suggestionsHeightInputLockedPadding
+        }
+      );
+      suggestionsContainer.style.setProperty('transition', 'none', 'important');
+      deferredSuggestionsHeightQuery = query;
       suggestionsHeightInputSettleTimer = setTimeout(() => {
         suggestionsHeightInputSettleTimer = 0;
         overlay._lumnoSuggestionsHeightSettleTimer = 0;
@@ -7383,10 +7478,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const hasRenderedContent = Boolean(
         container.children && container.children.length > 0
       );
-      // The first result render starts with a collapsed result surface. Let
-      // every rendered result type use the same measured-height transition so
-      // the overlay does not jump taller as soon as suggestions arrive.
-      const allowFromZero = hasRenderedContent;
+      // Ordinary first results are already rendered while the surface is
+      // hidden. Reveal their rows and final box in one paint instead of
+      // exposing an empty zero-to-content height animation. Scope-menu mode
+      // changes keep the coordinated transition because the adjacent menu is
+      // already visible and needs to travel with the result surface.
+      const allowFromZero = Boolean(hasRenderedContent && modeMenu);
       if (!fromHeight && !allowFromZero) {
         syncSearchModeMenuResultOffset();
         return;
@@ -7646,7 +7743,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function renderTabSuggestions(tabList) {
-      setOverlayResultsCollapsed(false);
       suggestionsContainer.removeAttribute('data-scope-result-enter');
       const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
       const reactView = ensureOverlaySuggestionsView();
@@ -7660,6 +7756,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           ? t('overlay_empty_open_tabs', '未找到匹配的已打开标签页')
           : t('overlay_empty_result', '无匹配结果');
         renderOverlayEmptyState(emptyText);
+        setOverlayResultsCollapsed(false, { deferLayoutSync: true });
         reconcileSuggestionsHeightAfterRender(
           previousHeightState,
           latestOverlayQuery
@@ -7672,6 +7769,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
       });
       reactView.renderTabs(list);
+      setOverlayResultsCollapsed(false, { deferLayoutSync: true });
       selectedIndex = -1;
       updateSelection();
       reconcileSuggestionsHeightAfterRender(
@@ -7996,10 +8094,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const renderOptions = options && typeof options === 'object' ? options : {};
       const forceFullRerender = renderOptions.forceFullRerender === true;
       const deferCappedShrink = renderOptions.deferCappedShrink === true;
+      const finalRemoteMix = renderOptions.finalRemoteMix === true;
       const remoteMixState = renderOptions.remoteMixState && typeof renderOptions.remoteMixState === 'object'
         ? renderOptions.remoteMixState
         : null;
-      setOverlayResultsCollapsed(false);
       lastSuggestionResponse = Array.isArray(suggestions) ? suggestions : [];
       const rawTagInput = (latestRawInputValue || query || '').trim();
       const localSearchQueryModeActive = Boolean(localSearchScopeState && String(query || '').trim());
@@ -8055,7 +8153,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         if (query !== latestOverlayQuery) {
           return;
         }
-        if (remoteMixState && remoteMixState.settled && remoteMixState.hasFinalSuggestions) {
+        if (!finalRemoteMix && remoteMixState &&
+            remoteMixState.settled && remoteMixState.hasFinalSuggestions) {
           return;
         }
         const shouldDeferCappedShrink = deferCappedShrink && !(remoteMixState && remoteMixState.settled);
@@ -8370,6 +8469,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           onlyKeywordSuggestions,
           mergedProvider,
           emptyMessage
+        });
+        // Keep the collapsed result surface in place until the target rows
+        // have been rendered. Revealing it before this async render completes
+        // lets the flex panel jump to its natural height for one paint.
+        setOverlayResultsCollapsed(false, {
+          deferLayoutSync: Boolean(previousHeightState)
         });
         if (shouldAnimateScopeResultEnter) {
           suggestionsContainer.setAttribute('data-scope-result-enter', 'run');

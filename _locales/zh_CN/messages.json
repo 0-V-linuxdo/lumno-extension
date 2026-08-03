@@ -71,6 +71,14 @@
   "settings_selection_quick_actions_desc": {
     "message": "根据所选文字动态显示 AI 操作，并在后台的 Lumno AI 标签组中打开结果"
   },
+  "settings_selection_quick_actions_provider_title": {
+    "message": "优先 Provider"
+  },
+  "settings_selection_quick_actions_icon_set_title": {
+    "message": "操作图标"
+  },
+  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
+  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
   "selection_quick_action_ask": { "message": "问 AI" },
   "selection_quick_action_translate": { "message": "翻译" },
   "selection_quick_action_explain": { "message": "解释" },

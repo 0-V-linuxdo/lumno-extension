@@ -7,17 +7,19 @@
   window._x_extension_selection_quick_actions_2026_unique_ = true;
 
   const INTENT = globalThis.LumnoSelectionIntent || {};
+  const ACTION_ICON_LIBRARY = globalThis.LumnoSelectionActionIcons || {};
   if (typeof INTENT.classifySelection !== 'function') {
     return;
   }
 
   const ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
+  const ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const HIGH_DELAY_MS = 300;
-  const MEDIUM_DELAY_MS = 460;
-  const POINTER_CONFIRM_DISTANCE_PX = 52;
+  const MEDIUM_DELAY_MS = 380;
+  const POINTER_CONFIRM_DISTANCE_PX = 48;
   const DOT_DISMISS_MS = 2200;
   const CHIP_DISMISS_MS = 3600;
   const providerStorageRuntime = globalThis.LumnoSettings &&
@@ -34,17 +36,20 @@
     : 'local');
 
   let enabled = false;
+  let iconSet = 'remix';
   let languageMode = 'system';
   let localeMessages = null;
   let showTimer = null;
   let dismissTimer = null;
   let requestSequence = 0;
   let pointerPosition = { x: 0, y: 0 };
+  let pointerDownState = null;
   let currentCandidate = null;
   let host = null;
   let shadow = null;
   let surface = null;
   let mainButton = null;
+  let selectionLogo = null;
   let mainLabel = null;
   let moreButton = null;
   let menu = null;
@@ -66,6 +71,44 @@
     search: 'ri-search-line',
     calculate: 'ri-calculator-line'
   });
+  const MORE_ICON = Object.freeze({
+    viewBox: '0 0 24 24',
+    body: '<path fill="currentColor" d="m7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6l-6-6z"/>'
+  });
+
+  function normalizeIconSet(value) {
+    if (globalThis.LumnoSettings &&
+        typeof globalThis.LumnoSettings.normalizeSelectionQuickActionsIconSet === 'function') {
+      return globalThis.LumnoSettings.normalizeSelectionQuickActionsIconSet(value);
+    }
+    return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
+  }
+
+  function createInlineIcon(definition, className) {
+    if (!definition || !definition.body) {
+      return null;
+    }
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add(className);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('viewBox', definition.viewBox || '0 0 24 24');
+    svg.innerHTML = definition.body;
+    return svg;
+  }
+
+  function buildActionIcon(action) {
+    const iconSetDefinitions = ACTION_ICON_LIBRARY[iconSet] || ACTION_ICON_LIBRARY.remix;
+    const definition = iconSetDefinitions && iconSetDefinitions[action];
+    const inlineIcon = createInlineIcon(definition, 'lumno-selection-action-icon');
+    if (inlineIcon) {
+      return inlineIcon;
+    }
+    const fallback = document.createElement('i');
+    fallback.className = `ri-icon ${ACTION_ICONS[action] || ACTION_ICONS.ask}`;
+    fallback.setAttribute('aria-hidden', 'true');
+    return fallback;
+  }
 
   function getMessage(key, fallback) {
     if (localeMessages && localeMessages[key] && localeMessages[key].message) {
@@ -181,19 +224,35 @@
     if (!range) {
       return null;
     }
+    const clientRects = range.getClientRects
+      ? Array.from(range.getClientRects()).filter((item) => (
+        item && Number.isFinite(item.left) && Number.isFinite(item.right) &&
+        Number.isFinite(item.top) && Number.isFinite(item.bottom) &&
+        item.width > 0 && item.height > 0
+      ))
+      : [];
     let rect = range.getBoundingClientRect();
-    if (rect && rect.width <= 0 && rect.height <= 0) {
-      const rects = range.getClientRects();
-      rect = rects && rects.length > 0 ? rects[rects.length - 1] : rect;
+    if ((!rect || rect.width <= 0 || rect.height <= 0) && clientRects.length > 0) {
+      rect = clientRects[clientRects.length - 1];
     }
     if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.bottom)) {
       return null;
     }
+    const inlineRect = clientRects.length > 0
+      ? clientRects[clientRects.length - 1]
+      : rect;
     return {
       bottom: rect.bottom,
       left: rect.left,
       right: rect.right,
-      top: rect.top
+      top: rect.top,
+      inline: {
+        bottom: inlineRect.bottom,
+        left: inlineRect.left,
+        right: inlineRect.right,
+        top: inlineRect.top,
+        height: inlineRect.height
+      }
     };
   }
 
@@ -206,6 +265,46 @@
       return false;
     }
     return INTENT.normalizeText(selection.toString()) === candidate.classification.text;
+  }
+
+  function getSelectionSnapshot() {
+    if (!window.getSelection) {
+      return {
+        anchorNode: null,
+        anchorOffset: 0,
+        focusNode: null,
+        focusOffset: 0,
+        text: ''
+      };
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount <= 0) {
+      return {
+        anchorNode: null,
+        anchorOffset: 0,
+        focusNode: null,
+        focusOffset: 0,
+        text: ''
+      };
+    }
+    return {
+      anchorNode: selection.anchorNode,
+      anchorOffset: selection.anchorOffset,
+      focusNode: selection.focusNode,
+      focusOffset: selection.focusOffset,
+      text: INTENT.normalizeText(selection.toString())
+    };
+  }
+
+  function isSameSelection(left, right) {
+    if (!left || !right) {
+      return false;
+    }
+    return left.text === right.text &&
+      left.anchorNode === right.anchorNode &&
+      left.anchorOffset === right.anchorOffset &&
+      left.focusNode === right.focusNode &&
+      left.focusOffset === right.focusOffset;
   }
 
   function getPointerDistance(candidate) {
@@ -223,11 +322,6 @@
     host.hidden = true;
     host.dataset.visible = 'false';
     shadow = host.attachShadow({ mode: 'closed' });
-
-    const iconStyles = document.createElement('link');
-    iconStyles.rel = 'stylesheet';
-    iconStyles.href = chrome.runtime.getURL('assets/remixicon/fonts/remixicon.css');
-    shadow.appendChild(iconStyles);
 
     const style = document.createElement('style');
     style.textContent = `
@@ -255,6 +349,12 @@
         transform: translateY(-3px) scale(0.96);
         transition: opacity 140ms ease, transform 160ms ease;
         box-sizing: border-box;
+      }
+      .lumno-selection-surface[data-icon-only="true"] {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
       }
       :host([data-visible="true"]) .lumno-selection-surface {
         opacity: 1;
@@ -286,11 +386,32 @@
       }
       button:disabled { opacity: 0.56; cursor: default; }
       .lumno-selection-main[data-icon-only="true"] {
-        width: 30px;
+        width: 22px;
+        min-height: 22px;
         padding: 0;
+        border-radius: 7px;
       }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-label { display: none; }
       .lumno-selection-logo { width: 17px; height: 17px; display: block; }
+      .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
+        width: 18px;
+        height: 18px;
+        filter: brightness(0) invert(1) contrast(1.12);
+        mix-blend-mode: difference;
+        opacity: 0.94;
+      }
+      .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main {
+        transition: background 120ms ease, backdrop-filter 120ms ease;
+      }
+      .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:hover {
+        background: light-dark(rgba(245, 245, 246, 0.78), rgba(63, 63, 66, 0.74));
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        backdrop-filter: blur(10px) saturate(140%);
+      }
+      .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:focus-visible {
+        background: light-dark(rgba(245, 245, 246, 0.78), rgba(63, 63, 66, 0.74));
+        box-shadow: none;
+      }
       .lumno-selection-more { width: 26px; padding: 0; }
       .lumno-selection-menu {
         display: flex;
@@ -298,7 +419,19 @@
         gap: 2px;
       }
       .lumno-selection-menu[hidden], .lumno-selection-more[hidden], .lumno-selection-main[hidden] { display: none; }
-      .lumno-selection-menu i { font-size: 15px; }
+      .lumno-selection-action-icon {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+        display: block;
+        color: currentColor;
+      }
+      .lumno-selection-more-icon {
+        width: 16px;
+        height: 16px;
+        display: block;
+        color: currentColor;
+      }
       .lumno-selection-status {
         padding: 0 8px;
         font: 500 12px/1 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -322,6 +455,7 @@
     logo.className = 'lumno-selection-logo';
     logo.alt = '';
     logo.src = chrome.runtime.getURL('assets/images/lumno.png');
+    selectionLogo = logo;
     mainLabel = document.createElement('span');
     mainLabel.className = 'lumno-selection-label';
     mainButton.append(logo, mainLabel);
@@ -329,7 +463,10 @@
     moreButton = document.createElement('button');
     moreButton.type = 'button';
     moreButton.className = 'lumno-selection-more';
-    moreButton.innerHTML = '<i class="ri-icon ri-arrow-down-s-line" aria-hidden="true"></i>';
+    const moreIcon = createInlineIcon(MORE_ICON, 'lumno-selection-more-icon');
+    if (moreIcon) {
+      moreButton.appendChild(moreIcon);
+    }
     moreButton.setAttribute('aria-haspopup', 'menu');
 
     menu = document.createElement('div');
@@ -374,10 +511,11 @@
     moreButton.addEventListener('click', renderMenu);
   }
 
-  function positionSurface(rect) {
+  function positionSurface(rect, placement) {
     if (!host || !surface || !rect) {
       return;
     }
+    const isInline = placement === 'inline' && rect.inline;
     host.style.left = '8px';
     host.style.top = '8px';
     window.requestAnimationFrame(() => {
@@ -387,6 +525,27 @@
       const bounds = surface.getBoundingClientRect();
       const viewportWidth = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
       const viewportHeight = Math.max(240, window.innerHeight || document.documentElement.clientHeight || 0);
+      if (isInline) {
+        const anchor = rect.inline;
+        const gap = 4;
+        let left = anchor.right + gap;
+        let top = anchor.top + ((anchor.height - bounds.height) / 2);
+        const fitsRight = left + bounds.width <= viewportWidth - 8;
+        if (!fitsRight) {
+          left = anchor.right - bounds.width;
+          top = anchor.bottom + gap;
+        }
+        if (left < 8) {
+          left = Math.max(8, anchor.left - bounds.width - gap);
+        }
+        top = Math.min(
+          viewportHeight - bounds.height - 8,
+          Math.max(8, top)
+        );
+        host.style.left = `${Math.round(left)}px`;
+        host.style.top = `${Math.round(top)}px`;
+        return;
+      }
       const left = Math.min(
         viewportWidth - bounds.width - 8,
         Math.max(8, rect.right - Math.min(32, bounds.width / 2))
@@ -413,7 +572,14 @@
     const action = candidate.classification.action;
     const label = getActionLabel(action);
     host.hidden = false;
+    host.dataset.iconSet = iconSet;
     host.dataset.visible = 'false';
+    surface.dataset.iconOnly = mode === 'medium' ? 'true' : 'false';
+    if (selectionLogo) {
+      selectionLogo.src = chrome.runtime.getURL(mode === 'medium'
+        ? 'assets/images/lumno-selection-mark.png'
+        : 'assets/images/lumno.png');
+    }
     mainButton.hidden = false;
     mainButton.disabled = false;
     mainButton.dataset.iconOnly = mode === 'medium' ? 'true' : 'false';
@@ -429,7 +595,7 @@
     menu.replaceChildren();
     status.hidden = true;
     status.textContent = '';
-    positionSurface(candidate.rect);
+    positionSurface(candidate.rect, mode === 'medium' ? 'inline' : 'panel');
     const renderedCandidate = currentCandidate;
     window.requestAnimationFrame(() => {
       if (host && currentCandidate === renderedCandidate) {
@@ -444,9 +610,7 @@
     button.type = 'button';
     button.setAttribute('role', 'menuitem');
     button.dataset.intent = action;
-    const icon = document.createElement('i');
-    icon.className = `ri-icon ${ACTION_ICONS[action] || ACTION_ICONS.ask}`;
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = buildActionIcon(action);
     const label = document.createElement('span');
     label.textContent = getActionLabel(action);
     button.append(icon, label);
@@ -466,13 +630,15 @@
     if (primary !== 'search') {
       actions.push('search');
     }
+    surface.dataset.iconOnly = 'false';
     mainButton.hidden = true;
     moreButton.hidden = true;
     moreButton.setAttribute('aria-expanded', 'true');
     menu.replaceChildren(...actions.slice(0, 3).map(buildMenuAction));
+    host.dataset.iconSet = iconSet;
     menu.hidden = false;
     status.hidden = true;
-    positionSurface(currentCandidate.rect);
+    positionSurface(currentCandidate.rect, 'panel');
     scheduleDismiss(CHIP_DISMISS_MS);
   }
 
@@ -480,12 +646,13 @@
     if (!host || !currentCandidate) {
       return;
     }
+    surface.dataset.iconOnly = 'false';
     mainButton.hidden = true;
     moreButton.hidden = true;
     menu.hidden = true;
     status.textContent = getMessage('selection_quick_action_sending', '正在后台打开…');
     status.hidden = false;
-    positionSurface(currentCandidate.rect);
+    positionSurface(currentCandidate.rect, 'panel');
   }
 
   function renderFailureStatus() {
@@ -493,6 +660,7 @@
     if (!host) {
       return;
     }
+    surface.dataset.iconOnly = 'false';
     host.hidden = false;
     host.dataset.visible = 'true';
     mainButton.hidden = true;
@@ -548,7 +716,7 @@
       sensitive: isSensitiveElement(element),
       uiLanguage: getCurrentLocale()
     });
-    if (classification.suppressed || classification.confidence === 'low') {
+    if (classification.suppressed || classification.triggerable !== true) {
       return null;
     }
     return {
@@ -577,17 +745,11 @@
         return;
       }
       const behaviorConfirmed = getPointerDistance(candidate) <= POINTER_CONFIRM_DISTANCE_PX;
-      if (initialHigh && behaviorConfirmed) {
-        renderCandidate(candidate, 'high');
+      if (!behaviorConfirmed) {
         return;
       }
       if (initialHigh) {
-        showTimer = window.setTimeout(() => {
-          showTimer = null;
-          if (sequence === requestSequence && enabled && isSelectionStillCurrent(candidate)) {
-            renderCandidate(candidate, 'medium');
-          }
-        }, MEDIUM_DELAY_MS - HIGH_DELAY_MS);
+        renderCandidate(candidate, 'high');
         return;
       }
       renderCandidate(candidate, 'medium');
@@ -595,9 +757,20 @@
   }
 
   function handlePointerUp(event) {
+    const pointerDown = pointerDownState;
+    pointerDownState = null;
     pointerPosition = { x: event.clientX, y: event.clientY };
     if (event.button !== 0 || !enabled ||
+        event.isPrimary === false ||
+        !pointerDown ||
+        (pointerDown.pointerId != null && event.pointerId != null && pointerDown.pointerId !== event.pointerId) ||
         (host && event.composedPath && event.composedPath().includes(host))) {
+      return;
+    }
+    const selection = getSelectionSnapshot();
+    const selectionChanged = !isSameSelection(pointerDown.selection, selection);
+    const isMultiClick = Number(event.detail) >= 2;
+    if (!selection.text || (!selectionChanged && !isMultiClick)) {
       return;
     }
     window.setTimeout(() => evaluateSelection(event), 0);
@@ -608,9 +781,17 @@
   }
 
   function handlePointerDown(event) {
-    if (!host || !event.composedPath || !event.composedPath().includes(host)) {
-      hideSurface();
+    pointerDownState = null;
+    if (event.button !== 0 || !enabled ||
+        event.isPrimary === false ||
+        (host && event.composedPath && event.composedPath().includes(host))) {
+      return;
     }
+    pointerDownState = {
+      pointerId: event.pointerId,
+      selection: getSelectionSnapshot()
+    };
+    hideSurface();
   }
 
   function handleSelectionChange() {
@@ -618,9 +799,14 @@
       return;
     }
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
+    if (!selection || selection.isCollapsed ||
+        INTENT.normalizeText(selection.toString()) !== currentCandidate.classification.text) {
       hideSurface();
     }
+  }
+
+  function handlePointerCancel() {
+    pointerDownState = null;
   }
 
   function hydrateSettings() {
@@ -629,6 +815,7 @@
     }
     storageArea.get([
       ENABLED_STORAGE_KEY,
+      ICON_SET_STORAGE_KEY,
       LANGUAGE_STORAGE_KEY,
       LANGUAGE_MESSAGES_STORAGE_KEY
     ], (result) => {
@@ -636,6 +823,7 @@
         return;
       }
       enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
+      iconSet = normalizeIconSet(result && result[ICON_SET_STORAGE_KEY]);
       languageMode = result && result[LANGUAGE_STORAGE_KEY]
         ? String(result[LANGUAGE_STORAGE_KEY])
         : 'system';
@@ -650,6 +838,7 @@
   document.addEventListener('pointerup', handlePointerUp, true);
   document.addEventListener('pointermove', handlePointerMove, true);
   document.addEventListener('pointerdown', handlePointerDown, true);
+  document.addEventListener('pointercancel', handlePointerCancel, true);
   document.addEventListener('selectionchange', handleSelectionChange, true);
   document.addEventListener('copy', hideSurface, true);
   document.addEventListener('scroll', hideSurface, true);
@@ -658,6 +847,7 @@
       hideSurface();
     }
   }, true);
+  window.addEventListener('blur', handlePointerCancel, true);
 
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -670,6 +860,12 @@
         enabled = changes[ENABLED_STORAGE_KEY].newValue === true;
         if (!enabled) {
           hideSurface();
+        }
+      }
+      if (changes[ICON_SET_STORAGE_KEY]) {
+        iconSet = normalizeIconSet(changes[ICON_SET_STORAGE_KEY].newValue);
+        if (menu && !menu.hidden && currentCandidate) {
+          renderMenu();
         }
       }
       if (changes[LANGUAGE_STORAGE_KEY] || changes[LANGUAGE_MESSAGES_STORAGE_KEY]) {

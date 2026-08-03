@@ -5,12 +5,14 @@ import {
 } from './root-controller';
 
 export interface SelectControlItemModel {
+  iconUrl?: string;
   label: string;
   labelKey: string;
   value: string;
 }
 
 export interface SelectControlRenderModel {
+  disabled?: boolean;
   id: string;
   items: SelectControlItemModel[];
   value: string;
@@ -45,8 +47,15 @@ function SelectControl({
   }, [model.value]);
 
   useEffect(() => {
+    if (model.disabled) {
+      setOpen(false);
+    }
+  }, [model.disabled]);
+
+  useEffect(() => {
     if (host) {
       host.dataset.open = open ? 'true' : 'false';
+      host.dataset.disabled = model.disabled ? 'true' : 'false';
     }
     if (!open) {
       return undefined;
@@ -67,7 +76,7 @@ function SelectControl({
       document.removeEventListener('pointerdown', onDocumentPointerDown);
       document.removeEventListener('keydown', onDocumentKeyDown);
     };
-  }, [host, open]);
+  }, [host, model.disabled, open]);
 
   const selectValue = selectedItem?.value || '';
 
@@ -76,6 +85,7 @@ function SelectControl({
       <select
         aria-hidden="true"
         className="_x_extension_select_2024_unique_"
+        disabled={model.disabled}
         id={model.id}
         onChange={(event) => {
           const next = event.currentTarget.value;
@@ -95,9 +105,18 @@ function SelectControl({
         aria-expanded={open}
         aria-haspopup="listbox"
         className="_x_extension_select_trigger_2024_unique_"
+        disabled={model.disabled}
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
+        {selectedItem?.iconUrl ? (
+          <img
+            alt=""
+            aria-hidden="true"
+            className="_x_extension_select_value_icon_2026_unique_"
+            src={selectedItem.iconUrl}
+          />
+        ) : null}
         <span className="_x_extension_select_label_2024_unique_">
           {selectedItem?.label || ''}
         </span>
@@ -129,6 +148,14 @@ function SelectControl({
               }}
               role="option"
             >
+              {item.iconUrl ? (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="_x_extension_select_option_icon_2026_unique_"
+                  src={item.iconUrl}
+                />
+              ) : null}
               <span
                 className="_x_extension_select_option_label_2026_unique_"
                 data-i18n={item.labelKey}

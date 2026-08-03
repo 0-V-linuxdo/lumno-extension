@@ -139,6 +139,21 @@ assert.strictEqual(
   settings.SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
   '_x_extension_selection_quick_actions_enabled_2026_unique_'
 );
+assert.strictEqual(settings.normalizeSelectionQuickActionsProvider('gpt'), 'gpt');
+assert.strictEqual(settings.normalizeSelectionQuickActionsProvider(' KIMI '), 'kimi');
+assert.strictEqual(settings.normalizeSelectionQuickActionsProvider('unsupported'), 'gpt');
+assert.strictEqual(settings.normalizeSelectionQuickActionsProvider(undefined), 'gpt');
+assert.strictEqual(
+  settings.SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
+  '_x_extension_selection_quick_actions_provider_2026_unique_'
+);
+assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('remix'), 'remix');
+assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet(' HUGEICONS '), 'hugeicons');
+assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('unsupported'), 'remix');
+assert.strictEqual(
+  settings.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
+  '_x_extension_selection_quick_actions_icon_set_2026_unique_'
+);
 
 assert.strictEqual(settings.normalizeThemePreference('dark'), 'dark');
 assert.strictEqual(settings.normalizeThemePreference('light'), 'light');
