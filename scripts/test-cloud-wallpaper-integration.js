@@ -6,13 +6,18 @@ const newtab = fs.readFileSync('src/newtab/newtab.js', 'utf8');
 const background = fs.readFileSync('src/background/background.js', 'utf8');
 
 function run() {
-  assert.match(wallpaper, /action: 'cloudUploadWallpaper', record: nextWallpaper/);
+  assert.match(wallpaper, /action: 'cloudScheduleWallpaperSync'/);
+  assert.match(wallpaper, /action: 'cloudCommitWallpaperSync'/);
+  assert.doesNotMatch(wallpaper, /action: 'cloudUploadWallpaper'/,
+    'importing a wallpaper must not upload it before the active selection settles');
   assert.match(wallpaper, /action: 'cloudDeleteWallpaper', id: targetWallpaper\.id/);
   assert.match(wallpaper, /refreshCustomWallpapers: loadCustomWallpapers/);
   assert.match(newtab, /message\.action === 'lumno:wallpapers-updated'/);
   assert.match(newtab, /action: 'cloudUploadShortcutIcon'/);
   assert.match(newtab, /action: 'cloudDeleteShortcutIcon'/);
-  assert.match(background, /'cloudUploadWallpaper'/);
+  assert.match(background, /'cloudScheduleWallpaperSync'/);
+  assert.match(background, /'cloudCommitWallpaperSync'/);
+  assert.doesNotMatch(background, /'cloudUploadWallpaper'/);
   assert.match(background, /'cloudDeleteWallpaper'/);
   assert.match(background, /'cloudUploadShortcutIcon'/);
   assert.match(background, /'cloudDeleteShortcutIcon'/);

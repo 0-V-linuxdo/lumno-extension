@@ -30,11 +30,15 @@
 
   const SYNC_ALARM_NAME = 'lumno-cloud-sync-v1';
   const PERIODIC_SYNC_ALARM_NAME = 'lumno-cloud-sync-periodic-v1';
+  const WALLPAPER_SETTLE_ALARM_NAME = 'lumno-cloud-wallpaper-settle-v1';
   const SYNC_DEBOUNCE_MS = 1000;
+  const WALLPAPER_SETTLE_MS = 30000;
   const PERIODIC_SYNC_MINUTES = 15;
   const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
   const SHORTCUT_ICON_STORAGE_KEY = wallpaperApi && wallpaperApi.SHORTCUT_ICON_STORAGE_KEY ||
     '_x_extension_newtab_shortcut_icons_2026_unique_';
+  const WALLPAPER_SELECTION_STORAGE_KEY = wallpaperApi && wallpaperApi.WALLPAPER_SELECTION_STORAGE_KEY ||
+    '_x_extension_newtab_local_wallpaper_2026_unique_';
   const PERSISTENT_LOCAL_KEYS = new Set([
     schema.CLOUD_LOCAL_KEYS.cacheOwner,
     schema.CLOUD_LOCAL_KEYS.lastSignInProvider
@@ -216,6 +220,7 @@
         })
       : null);
     let debounceTimer = null;
+    let wallpaperSettleTimer = null;
     let started = false;
 
     async function readLocal(keys) {
@@ -351,7 +356,9 @@
       let wallpaperResult = { skipped: true };
       if (wallpaper && typeof wallpaper.syncAll === 'function') {
         try {
-          wallpaperResult = await wallpaper.syncAll();
+          wallpaperResult = await wallpaper.syncAll({
+            uploadActive: syncOptions.uploadWallpapers !== false
+          });
           const changedWallpapers = wallpaperResult && wallpaperResult.wallpaper
             ? wallpaperResult.wallpaper
             : wallpaperResult;
@@ -373,6 +380,37 @@
       return { ...result, wallpaper: wallpaperResult };
     }
 
+    function clearWallpaperSyncSchedule() {
+      if (wallpaperSettleTimer && clearTimer) clearTimer(wallpaperSettleTimer);
+      wallpaperSettleTimer = null;
+      if (chromeApi && chromeApi.alarms && typeof chromeApi.alarms.clear === 'function') {
+        chromeApi.alarms.clear(WALLPAPER_SETTLE_ALARM_NAME);
+      }
+    }
+
+    function commitActiveWallpapers() {
+      clearWallpaperSyncSchedule();
+      return syncNow({ force: true, uploadWallpapers: true });
+    }
+
+    function scheduleWallpaperSync(optionsArg) {
+      const scheduleOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      if (scheduleOptions.immediate === true) return commitActiveWallpapers();
+      clearWallpaperSyncSchedule();
+      if (chromeApi && chromeApi.alarms && typeof chromeApi.alarms.create === 'function') {
+        chromeApi.alarms.create(WALLPAPER_SETTLE_ALARM_NAME, {
+          delayInMinutes: WALLPAPER_SETTLE_MS / 60000
+        });
+      }
+      if (setTimer) {
+        wallpaperSettleTimer = setTimer(() => {
+          wallpaperSettleTimer = null;
+          commitActiveWallpapers().catch(() => {});
+        }, WALLPAPER_SETTLE_MS);
+      }
+      return Promise.resolve({ scheduled: true, delay_ms: WALLPAPER_SETTLE_MS });
+    }
+
     function scheduleSync() {
       if (chromeApi && chromeApi.alarms && typeof chromeApi.alarms.create === 'function') {
         chromeApi.alarms.create(SYNC_ALARM_NAME, { delayInMinutes: 1 });
@@ -385,7 +423,7 @@
       }
       debounceTimer = setTimer(() => {
         debounceTimer = null;
-        syncNow().catch(() => {});
+        syncNow({ uploadWallpapers: false }).catch(() => {});
       }, SYNC_DEBOUNCE_MS);
     }
 
@@ -416,6 +454,9 @@
       if (areaName === 'local' && changes && changes[SHORTCUT_ICON_STORAGE_KEY]) {
         scheduleSync();
       }
+      if (areaName === 'local' && changes && changes[WALLPAPER_SELECTION_STORAGE_KEY]) {
+        scheduleWallpaperSync().catch(() => {});
+      }
       const trackedArea = trackedLocalSettingArea;
       const externalChanges = typeof trackedArea.consume === 'function'
         ? trackedArea.consume(changes)
@@ -424,9 +465,16 @@
     }
 
     function handleAlarm(alarm) {
-      if (alarm && (alarm.name === SYNC_ALARM_NAME || alarm.name === PERIODIC_SYNC_ALARM_NAME)) {
-        syncNow().catch(() => {});
+      if (!alarm) return;
+      if (alarm.name === WALLPAPER_SETTLE_ALARM_NAME) {
+        commitActiveWallpapers().catch(() => {});
+        return;
       }
+      if (alarm.name === SYNC_ALARM_NAME) {
+        syncNow({ uploadWallpapers: false }).catch(() => {});
+        return;
+      }
+      if (alarm.name === PERIODIC_SYNC_ALARM_NAME) syncNow({ uploadWallpapers: true }).catch(() => {});
     }
 
     async function queueMigrationSettings(migration, pullResult) {
@@ -517,23 +565,6 @@
       }
     }
 
-    async function uploadWallpaper(record) {
-      if (!wallpaper || typeof wallpaper.uploadRecord !== 'function') {
-        return { skipped: true, reason: 'wallpaper_runtime_unavailable' };
-      }
-      try {
-        const result = await wallpaper.uploadRecord(record);
-        if (result && result.ok) {
-          if (usage && typeof usage.record === 'function') await usage.record('wallpaper_upload_succeeded');
-          notifyWallpaperRefresh();
-        }
-        return result;
-      } catch (error) {
-        if (usage && typeof usage.record === 'function') await usage.record('wallpaper_upload_failed');
-        throw error;
-      }
-    }
-
     async function deleteWallpaper(clientAssetId) {
       if (!wallpaper || typeof wallpaper.deleteRecord !== 'function') {
         return { skipped: true, reason: 'wallpaper_runtime_unavailable' };
@@ -577,6 +608,7 @@
 
     async function signOut() {
       const consentResult = await setAnalyticsConsent(false);
+      await commitActiveWallpapers().catch(() => ({ ok: false }));
       await runtime.disableCloudMode({ copyToBrowserSync: true });
       let remoteWarning = String(consentResult && consentResult.remoteWarning || '');
       try {
@@ -673,7 +705,9 @@
       if (action === 'cloudPrepareWebSignIn') return prepareWebSignIn();
       if (action === 'cloudSignInWithWeb') return signInWithWeb(request.consentVersion);
       if (action === 'cloudSignOut') return signOut();
-      if (action === 'cloudSyncNow') return syncNow({ force: true, fullPull: true });
+      if (action === 'cloudSyncNow') {
+        return syncNow({ force: true, fullPull: true, uploadWallpapers: true });
+      }
       if (action === 'cloudSetSyncProvider') return setSyncProvider(request.provider);
       if (action === 'cloudResolveConflict') return resolveConflict(request.key, request.resolution);
       if (action === 'cloudRecordUsage') {
@@ -681,7 +715,8 @@
           ? usage.record(request.metric, request.count)
           : { recorded: false };
       }
-      if (action === 'cloudUploadWallpaper') return uploadWallpaper(request.record);
+      if (action === 'cloudScheduleWallpaperSync') return scheduleWallpaperSync();
+      if (action === 'cloudCommitWallpaperSync') return scheduleWallpaperSync({ immediate: true });
       if (action === 'cloudDeleteWallpaper') return deleteWallpaper(request.id);
       if (action === 'cloudUploadShortcutIcon') {
         return uploadShortcutIcon(request.id, request.dataUrl);
@@ -714,7 +749,7 @@
         chromeApi.alarms.onAlarm.addListener(handleAlarm);
         chromeApi.alarms.create(PERIODIC_SYNC_ALARM_NAME, { periodInMinutes: PERIODIC_SYNC_MINUTES });
       }
-      syncNow().catch(() => {});
+      syncNow({ uploadWallpapers: true }).catch(() => {});
     }
 
     return Object.freeze({
@@ -724,6 +759,8 @@
       getStatus,
       syncNow,
       scheduleSync,
+      scheduleWallpaperSync,
+      commitActiveWallpapers,
       queueExternalChanges,
       handleStorageChanged,
       handleAlarm,
@@ -733,7 +770,6 @@
       resolveConflict,
       setAnalyticsConsent,
       recordUsage: usage && typeof usage.record === 'function' ? usage.record : async () => ({ recorded: false }),
-      uploadWallpaper,
       deleteWallpaper,
       uploadShortcutIcon,
       deleteShortcutIcon,
@@ -745,6 +781,8 @@
   return Object.freeze({
     SYNC_ALARM_NAME,
     PERIODIC_SYNC_ALARM_NAME,
+    WALLPAPER_SETTLE_ALARM_NAME,
+    WALLPAPER_SETTLE_MS,
     PERIODIC_SYNC_MINUTES,
     CLOUD_COMBINED_CONSENT_VERSION,
     detectClientInfo,

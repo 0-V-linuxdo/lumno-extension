@@ -58,27 +58,15 @@ function run() {
     'account deletion must not depend on a fixed list of media directories');
 
   assert.match(media, /lumno_authorize_media_upload/);
-  assert.match(media, /lumno_reserve_media_moderation/,
-    'uploads should reserve global free moderation capacity before calling the provider');
   assert.match(media, /lumno_record_media_egress/);
   assert.match(media, /inspectImage\(responseBody, expectedMimeType\)/,
     'gateway downloads should re-inspect v2 object bytes before returning them');
-  assert.match(media, /await requireModeration\(/,
-    'actual media bytes should be moderated before entering Storage');
+  assert.doesNotMatch(media, /requireModeration|lumno_reserve_media_moderation/,
+    'private media sync should not depend on a third-party content-review service');
   assert.match(media, /await removePaths\([\s\S]*?deleted_at/,
     'object deletion should precede the metadata tombstone');
-  assert.match(mediaValidation, /media_moderation_unavailable/,
-    'production uploads should fail closed when moderation is unavailable');
-  assert.match(mediaValidation, /redirect: 'error'/,
-    'the moderation service must not follow redirects');
-  assert.match(mediaValidation, /https:\/\/api\.sightengine\.com\/1\.0\/check\.json/,
-    'moderation should use the fixed Sightengine HTTPS endpoint');
-  assert.match(mediaValidation, /SIGHTENGINE_API_USER/);
-  assert.match(mediaValidation, /SIGHTENGINE_API_SECRET/);
-  assert.match(mediaValidation, /nudity-2\.1/);
-  assert.match(mediaValidation, /recreational_drug/);
-  assert.match(mediaValidation, /gambling/);
-  assert.match(mediaValidation, /text-content-2\.0/);
+  assert.doesNotMatch(mediaValidation, /Sightengine|SIGHTENGINE|api\.sightengine\.com/,
+    'media validation should not send private wallpaper bytes to a moderation provider');
   assert.match(mediaValidation, /png_metadata_not_allowed/);
   assert.match(mediaValidation, /webp_metadata_not_allowed/);
   assert.match(mediaValidation, /MAX_WALLPAPER_BYTES = 2 \* 1024 \* 1024/);

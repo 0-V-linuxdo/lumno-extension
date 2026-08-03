@@ -140,7 +140,19 @@ async function run() {
         : { width: 480, height: 270 };
     };
   }
-  const repository = { async getMode() { return repositoryApi.MODE_CLOUD; } };
+  const wallpaperSettings = {
+    [wallpaperApi.WALLPAPER_SELECTION_STORAGE_KEY]: localRecord.id
+  };
+  const repository = {
+    async getMode() { return repositoryApi.MODE_CLOUD; },
+    async get(keys) {
+      return Object.fromEntries(keys.flatMap((key) => (
+        Object.prototype.hasOwnProperty.call(wallpaperSettings, key)
+          ? [[key, wallpaperSettings[key]]]
+          : []
+      )));
+    }
+  };
   const runtime = wallpaperApi.createRuntime({
     transport,
     repository,
@@ -164,10 +176,38 @@ async function run() {
     cryptoApi: webcrypto,
     getImageDimensions: createDimensionReader()
   });
-  const synced = await secondRuntime.syncAll();
+  const synced = await secondRuntime.syncAll({ uploadActive: false });
   assert.strictEqual(synced.downloaded, 1);
   assert.strictEqual(secondStore.records.get(localRecord.id).name, 'My wallpaper');
   assert.match(secondStore.records.get(localRecord.id).imageDataUrl, /^data:image\/webp;base64,/);
+
+  const nextRecord = {
+    ...localRecord,
+    id: 'custom-wallpaper-1700000000001-fedcba',
+    key: 'custom-wallpaper-1700000000001-fedcba',
+    name: 'Next wallpaper',
+    imageDataUrl: webpDataUrl('next-full-image'),
+    thumbnailDataUrl: webpDataUrl('next-thumbnail'),
+    updatedAt: 200,
+    cloudAssetId: undefined,
+    cloudSha256: undefined,
+    cloudUpdatedAt: undefined
+  };
+  await store.write(nextRecord);
+  wallpaperSettings[wallpaperApi.WALLPAPER_SELECTION_STORAGE_KEY] = {
+    version: 2,
+    light: nextRecord.id,
+    dark: nextRecord.id
+  };
+  const deferredWallpaperSync = await runtime.syncAll({ uploadActive: false });
+  assert.strictEqual(deferredWallpaperSync.wallpaper.uploaded, 0,
+    'ordinary settings sync should not upload a newly selected wallpaper immediately');
+  const activeWallpaperSync = await runtime.syncAll({ uploadActive: true });
+  assert.strictEqual(activeWallpaperSync.wallpaper.uploaded, 1,
+    'a settled checkpoint should upload the final active wallpaper');
+  assert.strictEqual(activeWallpaperSync.wallpaper.active, 1);
+  assert.strictEqual(store.records.has(localRecord.id), true,
+    'cloud pruning must not delete inactive wallpapers from the local library');
 
   const shortcutId = 'shortcut-1700000000000-cloud';
   const firstIcon = pngDataUrl('first-icon');
@@ -250,9 +290,9 @@ async function run() {
   assets.find((asset) => asset.asset_kind === wallpaperApi.WALLPAPER_KIND).deleted_at =
     '2026-08-02T00:00:00.000Z';
   const tombstoneSync = await secondRuntime.syncAll();
-  assert.strictEqual(tombstoneSync.deleted, 1);
-  assert.strictEqual(secondStore.records.has(localRecord.id), false,
-    'remote tombstones should remove media cached by another device');
+  assert.strictEqual(tombstoneSync.deleted, 0);
+  assert.strictEqual(secondStore.records.has(localRecord.id), true,
+    'cloud tombstones must not remove wallpapers from another device local library');
 
   console.log('cloud wallpaper runtime tests passed');
 }

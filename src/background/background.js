@@ -5043,7 +5043,8 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'cloudSetSyncProvider',
       'cloudResolveConflict',
       'cloudRecordUsage',
-      'cloudUploadWallpaper',
+      'cloudScheduleWallpaperSync',
+      'cloudCommitWallpaperSync',
       'cloudDeleteWallpaper',
       'cloudUploadShortcutIcon',
       'cloudDeleteShortcutIcon'

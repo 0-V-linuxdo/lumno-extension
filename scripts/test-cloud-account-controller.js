@@ -27,6 +27,60 @@ function createArea(initialValues) {
 }
 
 async function run() {
+  assert.strictEqual(controllerApi.WALLPAPER_SETTLE_MS, 30000,
+    'wallpaper checkpoints should wait for a 30-second stable selection');
+
+  const wallpaperTimerCalls = [];
+  const clearedWallpaperTimers = [];
+  const wallpaperAlarmCreates = [];
+  const wallpaperSyncOptions = [];
+  const wallpaperSchedulerLocalArea = createArea({
+    [schema.CLOUD_LOCAL_KEYS.account]: { id: 'wallpaper-user' }
+  });
+  const wallpaperScheduler = controllerApi.createController({
+    chromeApi: {
+      runtime: { id: 'extension-id', getManifest: () => ({ version: '1.2.3' }) },
+      alarms: {
+        create(name, options) { wallpaperAlarmCreates.push({ name, options }); },
+        clear() {}
+      }
+    },
+    localArea: wallpaperSchedulerLocalArea,
+    syncArea: createArea({}),
+    repository: {
+      async getMode() { return repositoryApi.MODE_CLOUD; }
+    },
+    runtime: {
+      async ensureDevice() { return { id: 'wallpaper-device' }; },
+      async syncNow() { return { ok: true }; }
+    },
+    transport: {
+      config: { configured: true },
+      async getSession() { return { user: { id: 'wallpaper-user' } }; },
+      async registerDevice() {}
+    },
+    wallpaperRuntime: {
+      async syncAll(options) {
+        wallpaperSyncOptions.push(options);
+        return { ok: true, wallpaper: { uploaded: 0, downloaded: 0, deleted: 0 } };
+      }
+    },
+    setTimeout(callback, delay) {
+      wallpaperTimerCalls.push({ callback, delay });
+      return wallpaperTimerCalls.length;
+    },
+    clearTimeout(id) { clearedWallpaperTimers.push(id); }
+  });
+  await wallpaperScheduler.scheduleWallpaperSync();
+  await wallpaperScheduler.scheduleWallpaperSync();
+  assert.deepStrictEqual(wallpaperTimerCalls.map((item) => item.delay), [30000, 30000]);
+  assert(clearedWallpaperTimers.includes(1),
+    'a later wallpaper selection should cancel the previous stable-selection timer');
+  assert.strictEqual(wallpaperAlarmCreates.at(-1).name, controllerApi.WALLPAPER_SETTLE_ALARM_NAME);
+  await wallpaperScheduler.commitActiveWallpapers();
+  assert.deepStrictEqual(wallpaperSyncOptions.at(-1), { uploadActive: true },
+    'closing the panel should immediately checkpoint the final active wallpaper slots');
+
   const detected = controllerApi.detectClientInfo({
     runtime: { getManifest: () => ({ version: '1.2.3' }) }
   }, {

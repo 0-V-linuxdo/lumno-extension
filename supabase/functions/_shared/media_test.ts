@@ -1,11 +1,8 @@
 import {
   assertMediaShape,
-  evaluateSightengineResponse,
   inspectImage,
   MAX_ICON_BYTES,
-  MediaRequestError,
-  SIGHTENGINE_OPERATION_COUNT,
-  SIGHTENGINE_MODELS
+  MediaRequestError
 } from './media.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -98,71 +95,5 @@ Deno.test('metadata, trailing bytes, MIME spoofing, and oversize icons are rejec
       rejected = error instanceof MediaRequestError;
     }
     assert(rejected, 'confused or oversized media should be rejected');
-  }
-});
-
-function safeModerationResponse(): Record<string, unknown> {
-  return {
-    status: 'success',
-    request: { id: 'req-safe', operations: SIGHTENGINE_OPERATION_COUNT },
-    nudity: {
-      sexual_activity: 0.01,
-      sexual_display: 0.01,
-      erotica: 0.01,
-      very_suggestive: 0.01
-    },
-    recreational_drug: { prob: 0.01 },
-    gambling: { prob: 0.01 },
-    violence: { prob: 0.01 },
-    gore: { prob: 0.01 },
-    'self-harm': { prob: 0.01 },
-    weapon: { firearm_action: { aiming_threat: 0.01 } },
-    text: { language: 'en', detected_categories: [], detections: {} }
-  };
-}
-
-Deno.test('Sightengine contract allows only a complete safe four-operation response', () => {
-  assert(SIGHTENGINE_MODELS.includes('nudity-2.1'), 'nudity detection should be enabled');
-  assert(SIGHTENGINE_MODELS.includes('gambling'), 'gambling detection should be enabled');
-  assert(SIGHTENGINE_MODELS.includes('recreational_drug'), 'drug detection should be enabled');
-  assert(SIGHTENGINE_MODELS.includes('text-content-2.0'), 'visual text detection should be enabled');
-  const decision = evaluateSightengineResponse(safeModerationResponse());
-  assert(decision.allowed, 'a complete low-risk response should be accepted');
-});
-
-Deno.test('Sightengine decisions reject harmful, obfuscated, and incomplete responses', () => {
-  const cases: Array<[Record<string, unknown>, string]> = [];
-
-  const gambling = safeModerationResponse();
-  gambling.gambling = { prob: 0.91 };
-  cases.push([gambling, 'gambling']);
-
-  const explicit = safeModerationResponse();
-  explicit.nudity = {
-    sexual_activity: 0.92,
-    sexual_display: 0.92,
-    erotica: 0.95,
-    very_suggestive: 0.98
-  };
-  cases.push([explicit, 'sexual content']);
-
-  const obfuscatedText = safeModerationResponse();
-  obfuscatedText.text = {
-    language: 'zh',
-    detected_categories: ['drug'],
-    detections: { drug: { details: [{ match: 'obfuscated' }] } }
-  };
-  cases.push([obfuscatedText, 'obfuscated text']);
-
-  const changedBillingContract = safeModerationResponse();
-  changedBillingContract.request = { id: 'req-changed', operations: 5 };
-  cases.push([changedBillingContract, 'unexpected operation count']);
-
-  const incomplete = safeModerationResponse();
-  delete incomplete.gambling;
-  cases.push([incomplete, 'missing provider field']);
-
-  for (const [payload, label] of cases) {
-    assert(!evaluateSightengineResponse(payload).allowed, `${label} should be rejected`);
   }
 });

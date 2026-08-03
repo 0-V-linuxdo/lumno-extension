@@ -686,6 +686,7 @@
     let currentWallpaperPrefs = null;
     let currentLocalWallpaperOverrides = null;
     let currentWallpaperId = '';
+    let wallpaperCloudSelectionPending = false;
     let lastActiveWallpaperId = '';
     let lastActiveWallpaperIdsByMode = {
       light: '',
@@ -3188,6 +3189,7 @@
         updateWallpaperModeControlsUi();
         updateWallpaperSelectionUi();
         writeCurrentWallpaperPrefs({ showError: true });
+        scheduleCloudWallpaperSelectionSync();
         return;
       }
       NEWTAB_WALLPAPER_MODES.forEach((mode) => {
@@ -3212,6 +3214,7 @@
       updateWallpaperModeControlsUi();
       updateWallpaperSelectionUi();
       writeCurrentWallpaperPrefs({ showError: true });
+      scheduleCloudWallpaperSelectionSync();
     }
 
     function persistWallpaperModeConsistency(sameForModes) {
@@ -3270,6 +3273,7 @@
           [NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY]: getWallpaperEffectStorageValue()
         });
       }
+      scheduleCloudWallpaperSelectionSync();
     }
 
     function persistNewtabWallpaper(id) {
@@ -3304,9 +3308,11 @@
           buildLocalWallpaperStorageValue(currentLocalWallpaperOverrides, currentWallpaperPrefs.sameForModes),
           { showError: true }
         );
+        scheduleCloudWallpaperSelectionSync();
         return;
       }
       writeCurrentWallpaperPrefs({ showError: true });
+      scheduleCloudWallpaperSelectionSync();
     }
 
     function canShowCustomWallpaperTooltip(target) {
@@ -3336,16 +3342,27 @@
     }
 
     function sendCloudWallpaperMessage(message) {
-      if (!chromeObj || !chromeObj.runtime || typeof chromeObj.runtime.sendMessage !== 'function') {
+      if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
         return;
       }
       try {
-        chromeObj.runtime.sendMessage(message, () => {
-          if (chromeObj.runtime.lastError) return;
+        chrome.runtime.sendMessage(message, () => {
+          if (chrome.runtime.lastError) return;
         });
       } catch (_error) {
         // Local wallpaper behavior must not depend on cloud availability.
       }
+    }
+
+    function scheduleCloudWallpaperSelectionSync() {
+      wallpaperCloudSelectionPending = true;
+      sendCloudWallpaperMessage({ action: 'cloudScheduleWallpaperSync' });
+    }
+
+    function commitCloudWallpaperSelection() {
+      if (!wallpaperCloudSelectionPending) return;
+      wallpaperCloudSelectionPending = false;
+      sendCloudWallpaperMessage({ action: 'cloudCommitWallpaperSync' });
     }
 
     function bindCustomWallpaperUploadTile(tile) {
@@ -3389,7 +3406,6 @@
           throw new Error('Invalid wallpaper record.');
         }
         customWallpapers = customWallpapers.concat(nextWallpaper);
-        sendCloudWallpaperMessage({ action: 'cloudUploadWallpaper', record: nextWallpaper });
         persistNewtabWallpaper(nextWallpaper.id);
         renderCustomWallpaperTiles();
         showToast(t('newtab_wallpaper_import_done', 'Wallpaper imported'), false);
@@ -3431,6 +3447,7 @@
             currentLocalWallpaperOverrides,
             currentWallpaperPrefs.sameForModes
           ), { showError: true });
+          scheduleCloudWallpaperSelectionSync();
         } else {
           updateWallpaperSelectionUi();
         }
@@ -4123,6 +4140,7 @@
         wallpaperControl.setAttribute('data-panel-open', 'false');
       }
       setWallpaperPanelOpenState(false);
+      commitCloudWallpaperSelection();
       if (options && options.restoreFocus) {
         try {
           wallpaperButton.focus({ preventScroll: true });
