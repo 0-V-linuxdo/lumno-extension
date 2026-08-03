@@ -5036,6 +5036,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   cloudAccount: {
     actions: [
       'cloudGetStatus',
+      'cloudPrepareWebSignIn',
       'cloudSignInWithWeb',
       'cloudSignOut',
       'cloudSyncNow',
@@ -6048,13 +6049,6 @@ const SEARCH_ENGINE_DEFS = [
     searchUrl: (query) => `https://www.sogou.com/web?query=${encodeURIComponent(query)}`
   },
   {
-    id: 'so',
-    name: '360搜索',
-    hostMatches: ['so.com'],
-    searchTemplate: 'https://www.so.com/s?q={query}',
-    searchUrl: (query) => `https://www.so.com/s?q=${encodeURIComponent(query)}`
-  },
-  {
     id: 'shenma',
     name: '神马',
     hostMatches: ['sm.cn'],
@@ -6192,7 +6186,18 @@ function loadDefaultSearchEngineState() {
     storageArea.get([DEFAULT_SEARCH_ENGINE_STORAGE_KEY], (result) => {
       const stored = result ? result[DEFAULT_SEARCH_ENGINE_STORAGE_KEY] : null;
       if (stored && stored.id) {
-        setDefaultSearchEngineState(stored, false);
+        if (typeof SEARCH_UTILS.isRetiredSearchEngineState === 'function' &&
+            SEARCH_UTILS.isRetiredSearchEngineState(stored)) {
+          setDefaultSearchEngineState({
+            id: 'google',
+            name: 'Google',
+            host: 'www.google.com',
+            searchTemplate: 'https://www.google.com/search?q={query}',
+            updatedAt: Date.now()
+          }, true);
+        } else {
+          setDefaultSearchEngineState(stored, false);
+        }
       }
       resolve(defaultSearchEngineState);
     });
@@ -6414,16 +6419,6 @@ async function fetchSearchSuggestionsForEngine(query, options) {
       const data = extractJsonArray(text);
       if (Array.isArray(data) && Array.isArray(data[1])) {
         return data[1];
-      }
-      return [];
-    }
-    if (engineId === 'so') {
-      const url = `https://sug.so.360.cn/suggest?format=json&word=${encodeURIComponent(query)}`;
-      const data = await fetchJson(url, settings);
-      if (data && Array.isArray(data.result)) {
-        return data.result
-          .map((item) => (item && (item.word || item.w)) || '')
-          .filter(Boolean);
       }
       return [];
     }
@@ -6678,30 +6673,9 @@ function buildSiteThemeColorResult(accentRgb, source, options) {
 }
 
 function fetchManifestThemeColor(manifestUrl) {
-  if (!manifestUrl || isBlockedLocalFaviconUrl(manifestUrl)) {
-    return Promise.resolve(null);
-  }
-  try {
-    const parsed = new URL(manifestUrl);
-    const policy = getFaviconHostPolicy(parsed.hostname);
-    if (!/^https?:$/i.test(parsed.protocol) || policy.hardBlocked || policy.avoidDirect) {
-      return Promise.resolve(null);
-    }
-  } catch (e) {
-    return Promise.resolve(null);
-  }
-  return fetch(manifestUrl, { cache: 'force-cache' })
-    .then((response) => {
-      if (!response || !response.ok) {
-        return null;
-      }
-      return response.json();
-    })
-    .then((manifest) => {
-      const accentRgb = parseCssThemeColor(manifest && (manifest.theme_color || manifest.background_color));
-      return accentRgb ? buildSiteThemeColorResult(accentRgb, 'manifest') : null;
-    })
-    .catch(() => null);
+  // Arbitrary manifest URLs are untrusted network targets. Theme extraction
+  // intentionally stays browser-cache-only instead of making a privileged GET.
+  return Promise.resolve(null);
 }
 
 function resolveThemeColorCandidates(candidates) {
@@ -6742,75 +6716,15 @@ function resolveSiteThemeColor(targetUrl, hostOverride, preferredTheme) {
     if (!targetPolicy.ok) {
       return null;
     }
-    if (!enhancedFetchEnabled) {
-      logBlockedLocalFavicon(inputUrl, 'theme-page', 'global-off', inputUrl);
-      return null;
-    }
-    if (targetPolicy.directFetchBlocked) {
-      logBlockedLocalFavicon(
-        inputUrl,
-        'theme-page',
-        targetPolicy.requestBlacklisted ? 'exclusion' : 'local-rule',
-        inputUrl
-      );
-      return null;
-    }
-    const parsed = targetPolicy.parsed;
-    const normalizedHost = targetPolicy.normalizedHost;
-    const normalizedTheme = normalizeThemePreference(preferredTheme);
-    const cacheKey = `${normalizedHost}::${parsed.origin}::${normalizedTheme || 'auto'}`;
-    if (siteThemeColorCache.has(cacheKey)) {
-      return siteThemeColorCache.get(cacheKey);
-    }
-    if (siteThemeColorPending.has(cacheKey)) {
-      return siteThemeColorPending.get(cacheKey);
-    }
-    if (!canFetchPageForFavicon(inputUrl)) {
-      setBoundedBackgroundCacheEntry(
-        siteThemeColorCache,
-        cacheKey,
-        null,
-        BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
-      );
-      return null;
-    }
-    const promise = fetch(inputUrl, { cache: 'force-cache' })
-      .then((response) => {
-        if (!response || !response.ok) {
-          return '';
-        }
-        return response.text();
-      })
-      .then((html) => {
-        const candidates = parseHtmlThemeColorCandidates(html, inputUrl, normalizedTheme);
-        return resolveThemeColorCandidates(candidates);
-      })
-      .then((result) => {
-        const finalResult = result || null;
-        setBoundedBackgroundCacheEntry(
-          siteThemeColorCache,
-          cacheKey,
-          finalResult,
-          BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
-        );
-        if (finalResult) {
-          persistSiteThemeColorForSwitcher(normalizedHost, finalResult);
-        }
-        siteThemeColorPending.delete(cacheKey);
-        return finalResult;
-      })
-      .catch(() => {
-        setBoundedBackgroundCacheEntry(
-          siteThemeColorCache,
-          cacheKey,
-          null,
-          BACKGROUND_SITE_THEME_CACHE_MAX_ENTRIES
-        );
-        siteThemeColorPending.delete(cacheKey);
-        return null;
-      });
-    siteThemeColorPending.set(cacheKey, promise);
-    return promise;
+    logBlockedLocalFavicon(
+      inputUrl,
+      'theme-page',
+      !enhancedFetchEnabled
+        ? 'global-off'
+        : (targetPolicy.requestBlacklisted ? 'exclusion' : 'direct-network-disabled'),
+      inputUrl
+    );
+    return null;
   });
 }
 
@@ -6823,16 +6737,10 @@ function buildFaviconFallbackCandidates(pageUrl, hostOverride, fallbackUrl, opti
   if (targetPolicy.hardBlocked) {
     return [];
   }
-  if (fallback &&
-      !settings.skipDirectFallback &&
-      !isBlockedLocalFaviconUrl(fallback) &&
-      !isFaviconRequestBlockedByBlacklist(fallback)) {
-    candidates.push({ url: fallback, score: 30 });
-  }
   if (inputUrl) {
-    candidates.push({ url: getExtensionFaviconUrl(inputUrl), score: 20 });
+    candidates.push({ url: getExtensionFaviconUrl(inputUrl), score: 30 });
     if (settings.enhancedFetchEnabled === true) {
-      candidates.push({ url: getGstaticFaviconUrl(inputUrl), score: 10 });
+      candidates.push({ url: getGstaticFaviconUrl(inputUrl), score: 20 });
     }
   }
   return candidates.filter((item) => item && item.url);
@@ -6928,89 +6836,23 @@ function canFetchShortcutFaviconUrl(url) {
 }
 
 function fetchShortcutFaviconDocument(pageUrl, signal) {
-  if (!canFetchShortcutFaviconUrl(pageUrl)) {
-    return Promise.resolve(null);
-  }
-  return fetch(pageUrl, {
-    cache: 'force-cache',
-    credentials: 'omit',
-    referrerPolicy: 'no-referrer',
-    redirect: 'follow',
-    signal
-  }).then((response) => {
-    if (!response || !response.ok) {
-      return null;
-    }
-    const resolvedPageUrl = typeof response.url === 'string' && response.url
-      ? response.url
-      : pageUrl;
-    if (!canFetchShortcutFaviconUrl(resolvedPageUrl)) {
-      return null;
-    }
-    const contentType = String(response.headers && response.headers.get
-      ? response.headers.get('content-type') || ''
-      : '').toLowerCase();
-    if (contentType && !contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
-      return null;
-    }
-    return readShortcutFaviconResponsePrefix(response, SHORTCUT_FAVICON_PAGE_MAX_LENGTH).then((html) => ({
-      html,
-      pageUrl: resolvedPageUrl
-    }));
-  }).catch(() => null);
+  return Promise.resolve(null);
 }
 
 function fetchShortcutFaviconManifest(manifestUrl, signal) {
-  if (!canFetchShortcutFaviconUrl(manifestUrl)) {
-    return Promise.resolve([]);
-  }
-  return fetch(manifestUrl, {
-    cache: 'force-cache',
-    credentials: 'omit',
-    referrerPolicy: 'no-referrer',
-    redirect: 'follow',
-    signal
-  }).then((response) => {
-    if (!response || !response.ok) {
-      return null;
-    }
-    const resolvedManifestUrl = typeof response.url === 'string' && response.url
-      ? response.url
-      : manifestUrl;
-    if (!canFetchShortcutFaviconUrl(resolvedManifestUrl)) {
-      return null;
-    }
-    const contentLength = Number(response.headers && response.headers.get
-      ? response.headers.get('content-length') || 0
-      : 0);
-    if (Number.isFinite(contentLength) && contentLength > SHORTCUT_FAVICON_MANIFEST_MAX_BYTES) {
-      return null;
-    }
-    return readShortcutFaviconResponsePrefix(
-      response,
-      SHORTCUT_FAVICON_MANIFEST_MAX_BYTES
-    ).then((text) => ({
-      manifest: JSON.parse(text),
-      manifestUrl: resolvedManifestUrl
-    }));
-  }).then((result) => {
-    if (!result || typeof SHORTCUT_FAVICON.parseManifestIconCandidates !== 'function') {
-      return [];
-    }
-    return SHORTCUT_FAVICON.parseManifestIconCandidates(result.manifest, result.manifestUrl);
-  }).catch(() => []);
+  return Promise.resolve([]);
 }
 
 function fetchShortcutFaviconResource(candidate, pageUrl, signal) {
   const sourceUrl = candidate && candidate.url ? String(candidate.url) : '';
-  if (!sourceUrl || !canFetchShortcutFaviconUrl(sourceUrl)) {
+  if (!sourceUrl || !isAllowedFaviconProxyRequestUrl(sourceUrl)) {
     return Promise.resolve(null);
   }
   return fetch(sourceUrl, {
     cache: 'force-cache',
     credentials: 'omit',
     referrerPolicy: 'no-referrer',
-    redirect: 'follow',
+    redirect: 'error',
     signal
   }).then((response) => {
     if (!response || !response.ok) {
@@ -7019,7 +6861,7 @@ function fetchShortcutFaviconResource(candidate, pageUrl, signal) {
     const resolvedSourceUrl = typeof response.url === 'string' && response.url
       ? response.url
       : sourceUrl;
-    if (!canFetchShortcutFaviconUrl(resolvedSourceUrl)) {
+    if (!isAllowedFaviconProxyRequestUrl(resolvedSourceUrl)) {
       return null;
     }
     const contentLength = Number(response.headers && response.headers.get
@@ -7057,70 +6899,14 @@ function fetchShortcutFaviconResource(candidate, pageUrl, signal) {
 }
 
 function resolveShortcutFaviconData(pageUrl, preferredTheme, signal, explicitIconUrl) {
-  if (typeof SHORTCUT_FAVICON.parseHtmlIconCandidates !== 'function' ||
-      typeof SHORTCUT_FAVICON.mergeCandidates !== 'function') {
-    return Promise.resolve(null);
-  }
-  const resolveFromPage = () => fetchShortcutFaviconDocument(pageUrl, signal).then((documentResult) => {
-    if (!documentResult || !documentResult.html) {
-      return null;
-    }
-    const resolvedPageUrl = documentResult.pageUrl || pageUrl;
-    const pageCandidates = SHORTCUT_FAVICON.parseHtmlIconCandidates(
-      documentResult.html,
-      resolvedPageUrl,
-      preferredTheme
-    );
-    const manifestUrls = typeof SHORTCUT_FAVICON.parseHtmlManifestUrls === 'function'
-      ? SHORTCUT_FAVICON.parseHtmlManifestUrls(documentResult.html, resolvedPageUrl).slice(0, 2)
-      : [];
-    return Promise.all(manifestUrls.map((manifestUrl) =>
-      fetchShortcutFaviconManifest(manifestUrl, signal))).then((manifestCandidateGroups) => {
-      const rootCandidates = typeof SHORTCUT_FAVICON.getRootIconCandidates === 'function'
-        ? SHORTCUT_FAVICON.getRootIconCandidates(resolvedPageUrl)
-        : [];
-      const candidates = SHORTCUT_FAVICON.mergeCandidates([
-        ...pageCandidates,
-        ...manifestCandidateGroups.flat(),
-        ...rootCandidates
-      ]).slice(0, 10);
-      let candidateIndex = 0;
-      const tryNextCandidate = () => {
-        const candidate = candidates[candidateIndex];
-        candidateIndex += 1;
-        if (!candidate) {
-          return Promise.resolve(null);
-        }
-        return fetchShortcutFaviconResource(candidate, resolvedPageUrl, signal)
-          .then((result) => result || tryNextCandidate());
-      };
-      return tryNextCandidate();
-    });
-  });
-  const explicitIcon = String(explicitIconUrl || '').trim();
-  const resolveFromProxy = () => {
-    const proxyUrl = getGstaticFaviconUrl(pageUrl);
-    if (!proxyUrl || proxyUrl === explicitIcon) {
-      return Promise.resolve(null);
-    }
-    return fetchShortcutFaviconResource({
-      url: proxyUrl,
-      source: 'proxy',
-      declaredSize: 128,
-      vector: false
-    }, pageUrl, signal);
-  };
-  const resolveFromPageOrProxy = () => resolveFromPage().then((result) =>
-    result || resolveFromProxy());
-  if (!explicitIcon) {
-    return resolveFromPageOrProxy();
-  }
+  const proxyUrl = getGstaticFaviconUrl(pageUrl);
+  if (!proxyUrl) return Promise.resolve(null);
   return fetchShortcutFaviconResource({
-    url: explicitIcon,
-    source: 'explicit',
-    declaredSize: 0,
-    vector: /\.svg(?:[?#]|$)/i.test(explicitIcon)
-  }, pageUrl, signal).then((result) => result || resolveFromPageOrProxy());
+    url: proxyUrl,
+    source: 'proxy',
+    declaredSize: 128,
+    vector: false
+  }, pageUrl, signal);
 }
 
 function fetchShortcutFaviconData(pageUrl, preferredTheme, explicitIconUrl) {
@@ -7463,12 +7249,13 @@ function fetchFaviconData(url, pageUrl) {
     const canonicalPageUrl = getFaviconRequestMatchUrl(pageUrl || url);
     const requestExcluded = isUrlBlockedByFaviconRequestBlacklist(canonicalPageUrl);
     const effectiveEnhancedFetchEnabled = enhancedFetchEnabled && !requestExcluded;
-    const sourceAllowed = typeof FAVICON_UTILS.isFaviconSourceAllowedByEnhancedFetchPolicy === 'function'
+    const sourceAllowedByMode = typeof FAVICON_UTILS.isFaviconSourceAllowedByEnhancedFetchPolicy === 'function'
       ? FAVICON_UTILS.isFaviconSourceAllowedByEnhancedFetchPolicy(url, effectiveEnhancedFetchEnabled, { chromeApi: chrome })
       : effectiveEnhancedFetchEnabled === true || (
         typeof FAVICON_UTILS.isSafeVirtualFaviconRequestUrl === 'function' &&
         FAVICON_UTILS.isSafeVirtualFaviconRequestUrl(url)
       );
+    const sourceAllowed = sourceAllowedByMode && isAllowedFaviconProxyRequestUrl(url);
     if (!sourceAllowed) {
       logBlockedLocalFavicon(
         url,
@@ -7496,9 +7283,18 @@ function fetchFaviconData(url, pageUrl) {
     if (faviconPending.has(url)) {
       return faviconPending.get(url);
     }
-    const promise = fetch(url, { cache: 'force-cache' })
+    const promise = fetch(url, {
+      cache: 'force-cache',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error'
+    })
       .then((response) => {
         if (!response || !response.ok) {
+          return null;
+        }
+        const responseUrl = String(response.url || url);
+        if (!isAllowedFaviconProxyRequestUrl(responseUrl)) {
           return null;
         }
         return response.blob();

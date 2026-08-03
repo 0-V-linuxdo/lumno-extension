@@ -543,7 +543,7 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   defaultSearchEngines.map((provider) => provider.key),
-  ['bd', 'bi', 'gg', 'ddg', 'br', 'eco', 'sg', 'so360', 'yh', 'yx', 'sm'],
+  ['bd', 'bi', 'gg', 'ddg', 'br', 'eco', 'sg', 'yh', 'yx', 'sm'],
   'built-in search engines should be explicitly classified and keep their intended order'
 );
 assert.strictEqual(

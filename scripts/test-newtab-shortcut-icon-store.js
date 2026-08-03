@@ -21,8 +21,10 @@ function createMemoryStorage(initialData) {
 }
 
 function testSourceValidation() {
+  assert.strictEqual(iconStoreApi.MAX_SOURCE_BYTES, 10 * 1024 * 1024);
   assert.strictEqual(iconStoreApi.MAX_SOURCE_DIMENSION, 4096);
   assert.strictEqual(iconStoreApi.OUTPUT_SIZE, 128);
+  assert.strictEqual(iconStoreApi.MAX_OUTPUT_BYTES, 96 * 1024);
   assert.strictEqual(iconStoreApi.isAcceptedMimeType('image/png'), true);
   assert.strictEqual(iconStoreApi.isAcceptedMimeType('image/svg+xml'), false);
 
@@ -42,6 +44,16 @@ function testSourceValidation() {
     () => iconStoreApi.validateSourceDimensions(4097, 128),
     (error) => error && error.code === 'dimensions-too-large'
   );
+  assert.throws(
+    () => iconStoreApi.validateSourceFile({
+      type: 'image/png',
+      size: iconStoreApi.MAX_SOURCE_BYTES + 1
+    }),
+    (error) => error && error.code === 'file-too-large'
+  );
+  const oversizedPng = `data:image/png;base64,${Buffer.alloc(iconStoreApi.MAX_OUTPUT_BYTES + 1).toString('base64')}`;
+  assert.strictEqual(iconStoreApi.normalizeIconDataUrl(oversizedPng), '',
+    'decoded icon bytes must be bounded independently of the Data URL string length');
 }
 
 function testContainedRenderingGeometry() {

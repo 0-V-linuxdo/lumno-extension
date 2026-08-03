@@ -44,7 +44,6 @@
     br: 'assets/images/site-search/tile-br.png',
     eco: 'assets/images/site-search/tile-eco.png',
     sg: 'assets/images/site-search/tile-sg.png',
-    so360: 'assets/images/site-search/tile-so360.png',
     yh: 'assets/images/site-search/tile-yh.png',
     yx: 'assets/images/site-search/tile-yx.png',
     sm: 'assets/images/site-search/tile-sm.png',

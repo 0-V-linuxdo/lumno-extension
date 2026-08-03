@@ -79,13 +79,16 @@
   const syncExportButton = document.getElementById('_x_extension_sync_export_2024_unique_');
   const syncImportButton = document.getElementById('_x_extension_sync_import_2024_unique_');
   const syncImportInput = document.getElementById('_x_extension_sync_import_input_2024_unique_');
-  const cloudStatus = document.getElementById('_x_extension_cloud_status_2026_unique_');
   const cloudUnconfigured = document.getElementById('_x_extension_cloud_unconfigured_2026_unique_');
-  const cloudSignedOut = document.getElementById('_x_extension_cloud_signed_out_2026_unique_');
   const cloudSignedIn = document.getElementById('_x_extension_cloud_signed_in_2026_unique_');
   const cloudDangerCard = document.getElementById('_x_extension_cloud_danger_card_2026_unique_');
   const cloudWebSigninButton = document.getElementById('_x_extension_cloud_web_signin_2026_unique_');
   const cloudError = document.getElementById('_x_extension_cloud_error_2026_unique_');
+  const cloudSigninStatus = document.getElementById('_x_extension_cloud_signin_status_2026_unique_');
+  const cloudSigninStatusIcon = document.getElementById('_x_extension_cloud_signin_status_icon_2026_unique_');
+  const cloudSigninStatusText = document.getElementById('_x_extension_cloud_signin_status_text_2026_unique_');
+  const cloudLastSigninHint = document.getElementById('_x_extension_cloud_last_signin_hint_2026_unique_');
+  const cloudLastSigninText = document.getElementById('_x_extension_cloud_last_signin_text_2026_unique_');
   const cloudEmailDisplay = document.getElementById('_x_extension_cloud_email_display_2026_unique_');
   const cloudSyncDetail = document.getElementById('_x_extension_cloud_sync_detail_2026_unique_');
   const cloudSyncNowButton = document.getElementById('_x_extension_cloud_sync_now_2026_unique_');
@@ -94,6 +97,8 @@
   const cloudConsentDialog = document.getElementById('_x_extension_cloud_consent_dialog_2026_unique_');
   const cloudConsentCancelButton = document.getElementById('_x_extension_cloud_consent_cancel_2026_unique_');
   const cloudConsentContinueButton = document.getElementById('_x_extension_cloud_consent_continue_2026_unique_');
+  const cloudConsentLastSigninHint = document.getElementById('_x_extension_cloud_consent_last_signin_hint_2026_unique_');
+  const cloudConsentLastSigninText = document.getElementById('_x_extension_cloud_consent_last_signin_text_2026_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
@@ -582,6 +587,10 @@
   const FORCE_OVERLAY_TAB_QUICK_SWITCH_ENABLED = true;
   const OPTIONS_TARGET_SITE_SEARCH_AI = 'site-search-ai';
   const CLOUD_COMBINED_CONSENT_VERSION = '2026-08-02-combined-v1';
+  const CLOUD_CONSENT_CLOSE_DELAY_MS = 220;
+  const CLOUD_WEB_SIGNIN_PENDING_KEY = '_lumno_options_web_signin_pending_v1_';
+  const CLOUD_WEB_SIGNIN_PENDING_MAX_AGE_MS = 10 * 60 * 1000;
+  const CLOUD_SIGNIN_SUCCESS_VISIBLE_MS = 6000;
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let mediaListenerAttached = false;
   let defaultSiteSearchProviders = [];
@@ -602,6 +611,11 @@
   let cloudConsentReturnFocus = null;
   let cloudConsentCloseTimer = null;
   let cloudConsentPreviousBodyOverflow = '';
+  let cloudSigninStatusTimer = null;
+  let cloudSigninRecoveryPromise = null;
+  let cloudSigninRecoveryTimer = null;
+  let cloudSigninRecoveryAttempt = 0;
+  let cloudSigninHasReturned = false;
   let currentShortcutLabel = null;
   let isCapturingFallbackShortcut = false;
   let cancelCaptureOnMouseLeave = false;
@@ -2237,7 +2251,172 @@
   }
 
   function setCloudError(message) {
-    if (cloudError) cloudError.textContent = String(message || '');
+    if (!cloudError) return;
+    const text = String(message || '');
+    cloudError.textContent = text;
+    cloudError.hidden = !text;
+  }
+
+  function readCloudWebSigninPending() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(CLOUD_WEB_SIGNIN_PENDING_KEY) || 'null');
+      const startedAt = Number(value && value.startedAt) || 0;
+      return startedAt > 0 ? { startedAt } : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function rememberCloudWebSigninPending() {
+    cloudSigninRecoveryAttempt = 0;
+    cloudSigninHasReturned = false;
+    try {
+      sessionStorage.setItem(CLOUD_WEB_SIGNIN_PENDING_KEY, JSON.stringify({ startedAt: Date.now() }));
+    } catch (_error) {
+      // The live request still provides recovery when session storage is unavailable.
+    }
+  }
+
+  function clearCloudWebSigninPending() {
+    if (cloudSigninRecoveryTimer) {
+      clearTimeout(cloudSigninRecoveryTimer);
+      cloudSigninRecoveryTimer = null;
+    }
+    cloudSigninRecoveryAttempt = 0;
+    cloudSigninHasReturned = false;
+    try {
+      sessionStorage.removeItem(CLOUD_WEB_SIGNIN_PENDING_KEY);
+    } catch (_error) {
+      // Ignore storage failures; the visible state is still reset below.
+    }
+  }
+
+  function setCloudSigninStatus(state, message) {
+    if (cloudSigninStatusTimer) {
+      clearTimeout(cloudSigninStatusTimer);
+      cloudSigninStatusTimer = null;
+    }
+    if (!cloudSigninStatus || !cloudSigninStatusText) return;
+    const text = String(message || '');
+    const nextState = ['pending', 'success', 'warning'].includes(state) ? state : 'pending';
+    cloudSigninStatus.hidden = !text;
+    cloudSigninStatus.setAttribute('data-state', nextState);
+    cloudSigninStatusText.textContent = text;
+    if (cloudSigninStatusIcon) {
+      const iconClass = nextState === 'success'
+        ? 'ri-check-line'
+        : (nextState === 'warning' ? 'ri-error-warning-line' : 'ri-loader-4-line');
+      cloudSigninStatusIcon.className = `ri-icon ${iconClass}`;
+    }
+  }
+
+  function hideCloudSigninStatus(delay) {
+    const hide = () => {
+      cloudSigninStatusTimer = null;
+      setCloudSigninStatus('pending', '');
+    };
+    const wait = Number(delay) || 0;
+    if (wait > 0) {
+      cloudSigninStatusTimer = setTimeout(hide, wait);
+    } else {
+      hide();
+    }
+  }
+
+  function isCloudAccountSignedIn(status) {
+    return Boolean(status && status.configured === true && status.signedIn === true);
+  }
+
+  function isCloudSigninInitializationSettled(status) {
+    const syncState = String(status && status.sync && status.sync.state || '');
+    return ['ready', 'conflict', 'error'].includes(syncState);
+  }
+
+  function scheduleCloudSigninRecovery() {
+    if (!cloudSigninHasReturned || cloudSigninRecoveryTimer || !readCloudWebSigninPending()) return;
+    const delay = Math.min(1200 * Math.pow(1.6, cloudSigninRecoveryAttempt), 10000);
+    cloudSigninRecoveryAttempt += 1;
+    cloudSigninRecoveryTimer = setTimeout(() => {
+      cloudSigninRecoveryTimer = null;
+      recoverCloudWebSignin({ returned: true });
+    }, delay);
+  }
+
+  function completeCloudWebSignin(status, options) {
+    const shouldAnnounce = Boolean(readCloudWebSigninPending());
+    clearCloudWebSigninPending();
+    renderCloudAccountStatus(status);
+    setCloudError('');
+    const syncFailed = Boolean(options && options.initializationFailed) ||
+      String(status && status.sync && status.sync.state || '') === 'error';
+    if (syncFailed) {
+      setCloudSigninStatus(
+        'warning',
+        getMessage('cloud_signin_status_sync_retry', '已登录，首次同步稍后会自动重试。')
+      );
+    } else {
+      setCloudSigninStatus(
+        'success',
+        getMessage('cloud_signin_status_done', '登录成功，账号同步已开启。')
+      );
+      hideCloudSigninStatus(CLOUD_SIGNIN_SUCCESS_VISIBLE_MS);
+    }
+    if (shouldAnnounce) {
+      showToast(getMessage('cloud_signin_done', '登录成功，配置同步与产品使用统计已开启'), false);
+    }
+  }
+
+  function recoverCloudWebSignin(options) {
+    const pending = readCloudWebSigninPending();
+    if (!pending) return Promise.resolve(null);
+    if (Date.now() - pending.startedAt > CLOUD_WEB_SIGNIN_PENDING_MAX_AGE_MS) {
+      clearCloudWebSigninPending();
+      hideCloudSigninStatus();
+      setCloudError(getMessage('cloud_error_web_expired', '登录请求已过期，请重新发起'));
+      return Promise.resolve(null);
+    }
+    const returned = Boolean(options && options.returned);
+    if (returned) cloudSigninHasReturned = true;
+    if (cloudSigninRecoveryPromise) return cloudSigninRecoveryPromise;
+    setCloudError('');
+    setCloudSigninStatus(
+      'pending',
+      returned
+        ? getMessage('cloud_signin_status_checking', '已返回，正在确认登录状态…')
+        : getMessage('cloud_signin_status_waiting', '等待网页登录完成…')
+    );
+    cloudSigninRecoveryPromise = sendCloudMessage({ action: 'cloudGetStatus' })
+      .then((status) => {
+        renderCloudAccountStatus(status);
+        if (isCloudAccountSignedIn(status) && isCloudSigninInitializationSettled(status)) {
+          completeCloudWebSignin(status);
+        } else if (isCloudAccountSignedIn(status)) {
+          setCloudSigninStatus(
+            'pending',
+            getMessage('cloud_signin_status_finishing', '已登录，正在完成首次同步…')
+          );
+          scheduleCloudSigninRecovery();
+        } else {
+          setCloudSigninStatus(
+            'pending',
+            getMessage('cloud_signin_status_waiting', '等待网页登录完成…')
+          );
+          scheduleCloudSigninRecovery();
+        }
+        return status;
+      })
+      .catch(() => {
+        setCloudSigninStatus(
+          'pending',
+          getMessage('cloud_signin_status_waiting', '等待网页登录完成…')
+        );
+        scheduleCloudSigninRecovery();
+        return null;
+      })
+      .finally(() => {
+        cloudSigninRecoveryPromise = null;
+      });
+    return cloudSigninRecoveryPromise;
   }
 
   function getCloudConsentFocusTargets() {
@@ -2249,6 +2428,58 @@
 
   function isCloudConsentDialogOpen() {
     return Boolean(cloudConsentMask && !cloudConsentMask.hidden);
+  }
+
+  function clampCloudConsentOffset(value, limit) {
+    const raw = Number(value);
+    const max = Number.isFinite(Number(limit)) ? Math.max(0, Number(limit)) : 28;
+    if (!Number.isFinite(raw)) return 0;
+    return Math.max(-max, Math.min(max, raw));
+  }
+
+  function getCloudConsentEnterOffset(sourceCenter, targetCenter) {
+    const delta = Number(sourceCenter) - Number(targetCenter);
+    if (!Number.isFinite(delta) || Math.abs(delta) < 4) return 0;
+    const offset = clampCloudConsentOffset(delta * 0.12, 28);
+    if (Math.abs(offset) < 6) return delta < 0 ? -6 : 6;
+    return offset;
+  }
+
+  function setCloudConsentEnterDirection(sourceElement, dialog) {
+    let enterX = 0;
+    let enterY = 12;
+    let originX = 'center';
+    let originY = 'bottom';
+    if (sourceElement && dialog) {
+      const sourceRect = sourceElement.getBoundingClientRect();
+      const dialogRect = dialog.getBoundingClientRect();
+      const viewportWidth = Math.max(
+        0,
+        window.innerWidth || document.documentElement?.clientWidth || 0
+      );
+      const viewportHeight = Math.max(
+        0,
+        window.innerHeight || document.documentElement?.clientHeight || 0
+      );
+      const targetX = dialogRect.width
+        ? dialogRect.left + dialogRect.width / 2
+        : viewportWidth / 2;
+      const targetY = dialogRect.height
+        ? dialogRect.top + dialogRect.height / 2
+        : viewportHeight / 2;
+      const sourceX = sourceRect.left + sourceRect.width / 2;
+      const sourceY = sourceRect.top + sourceRect.height / 2;
+      enterX = getCloudConsentEnterOffset(sourceX, targetX);
+      enterY = getCloudConsentEnterOffset(sourceY, targetY);
+      if (Math.abs(enterX) < 2) enterX = 0;
+      if (Math.abs(enterY) < 2) enterY = 0;
+      originX = enterX < -2 ? 'left' : enterX > 2 ? 'right' : 'center';
+      originY = enterY < -2 ? 'top' : enterY > 2 ? 'bottom' : 'center';
+    }
+    if (!dialog) return;
+    dialog.style.setProperty('--x-extension-cloud-consent-enter-x', `${Math.round(enterX)}px`);
+    dialog.style.setProperty('--x-extension-cloud-consent-enter-y', `${Math.round(enterY)}px`);
+    dialog.style.transformOrigin = `${originX} ${originY}`;
   }
 
   function openCloudConsentDialog() {
@@ -2267,8 +2498,13 @@
     document.body.style.overflow = 'hidden';
     cloudConsentMask.hidden = false;
     cloudConsentMask.removeAttribute('data-show');
+    cloudConsentMask.setAttribute('data-preparing', 'true');
+    setCloudConsentEnterDirection(cloudConsentReturnFocus || cloudWebSigninButton, cloudConsentDialog);
+    sendCloudMessage({ action: 'cloudPrepareWebSignIn' }).catch(() => {});
+    void cloudConsentDialog.offsetWidth;
     requestAnimationFrame(() => {
       if (!cloudConsentMask || cloudConsentMask.hidden) return;
+      cloudConsentMask.removeAttribute('data-preparing');
       cloudConsentMask.setAttribute('data-show', 'true');
       cloudConsentContinueButton.focus({ preventScroll: true });
     });
@@ -2281,8 +2517,9 @@
     document.body.style.overflow = cloudConsentPreviousBodyOverflow;
     cloudConsentCloseTimer = setTimeout(() => {
       cloudConsentMask.hidden = true;
+      cloudConsentMask.removeAttribute('data-preparing');
       cloudConsentCloseTimer = null;
-    }, 180);
+    }, CLOUD_CONSENT_CLOSE_DELAY_MS);
     if (settings.restoreFocus !== false && cloudConsentReturnFocus && cloudConsentReturnFocus.isConnected) {
       cloudConsentReturnFocus.focus({ preventScroll: true });
     }
@@ -2318,16 +2555,27 @@
     let signInFailed = false;
     closeCloudConsentDialog({ restoreFocus: false });
     setCloudError('');
+    rememberCloudWebSigninPending();
+    setCloudSigninStatus(
+      'pending',
+      getMessage('cloud_signin_status_waiting', '等待网页登录完成…')
+    );
     setCloudButtonBusy(cloudWebSigninButton, true);
     setCloudButtonBusy(cloudConsentContinueButton, true);
     sendCloudMessage({
       action: 'cloudSignInWithWeb',
       consentVersion: CLOUD_COMBINED_CONSENT_VERSION
     }).then((status) => {
-      renderCloudAccountStatus(status);
-      showToast(getMessage('cloud_signin_done', '登录成功，配置同步与产品使用统计已开启'), false);
-    }).catch((error) => {
+      completeCloudWebSignin(status);
+    }).catch(async (error) => {
+      const recoveredStatus = await sendCloudMessage({ action: 'cloudGetStatus' }).catch(() => null);
+      if (isCloudAccountSignedIn(recoveredStatus)) {
+        completeCloudWebSignin(recoveredStatus, { initializationFailed: true });
+        return;
+      }
       signInFailed = true;
+      clearCloudWebSigninPending();
+      hideCloudSigninStatus();
       setCloudError(getCloudErrorMessage(error));
     }).finally(() => {
       setCloudButtonBusy(cloudWebSigninButton, false);
@@ -2361,6 +2609,24 @@
       : getMessage('cloud_sync_ready_detail', '配置已启用端到端的账号级同步');
   }
 
+  function renderCloudLastSigninHint(providerValue, visible) {
+    const provider = String(providerValue || '').trim().toLowerCase();
+    const providerLabel = provider === 'google' ? 'Google' : (provider === 'github' ? 'GitHub' : '');
+    const shouldShow = visible === true && Boolean(providerLabel);
+    const text = shouldShow
+      ? formatTemplate(getMessage('cloud_last_signin_hint', '上次使用 {provider} 登录，请继续使用同一方式。'), {
+          provider: providerLabel
+        })
+      : '';
+    [
+      [cloudLastSigninHint, cloudLastSigninText],
+      [cloudConsentLastSigninHint, cloudConsentLastSigninText]
+    ].forEach(([container, textNode]) => {
+      if (textNode) textNode.textContent = text;
+      if (container) container.hidden = !shouldShow;
+    });
+  }
+
   function renderCloudAccountStatus(status) {
     const value = status && typeof status === 'object' ? status : {};
     currentCloudAccountStatus = value;
@@ -2368,24 +2634,15 @@
     const signedIn = configured && value.signedIn === true;
     const syncState = signedIn && value.sync ? String(value.sync.state || 'idle') : 'idle';
     if (cloudUnconfigured) cloudUnconfigured.hidden = configured;
-    if (cloudSignedOut) cloudSignedOut.hidden = !configured || signedIn;
+    if (cloudWebSigninButton) cloudWebSigninButton.hidden = !configured || signedIn;
     if (cloudSignedIn) {
       cloudSignedIn.hidden = !signedIn;
       cloudSignedIn.setAttribute('data-sync-state', syncState);
     }
     if (cloudDangerCard) cloudDangerCard.hidden = !signedIn;
+    renderCloudLastSigninHint(value.lastSignInProvider, configured && !signedIn);
     if (cloudEmailDisplay) cloudEmailDisplay.textContent = signedIn ? String(value.email || '') : '';
     if (cloudSyncDetail) cloudSyncDetail.textContent = signedIn ? formatCloudSyncDetail(value) : '';
-    if (cloudStatus) {
-      cloudStatus.setAttribute('data-state', syncState);
-      cloudStatus.textContent = !configured
-        ? getMessage('cloud_status_unconfigured', '未配置')
-        : (signedIn
-          ? (syncState === 'error'
-            ? getMessage('cloud_status_error', '同步异常')
-            : getMessage('cloud_status_connected', '已连接'))
-          : getMessage('cloud_status_signed_out', '未登录'));
-    }
   }
 
   function loadCloudAccountStatus() {
@@ -2440,7 +2697,11 @@
           .finally(() => setCloudButtonBusy(cloudSignoutButton, false));
       });
     }
-    loadCloudAccountStatus();
+    if (readCloudWebSigninPending()) {
+      recoverCloudWebSignin();
+    } else {
+      loadCloudAccountStatus();
+    }
   }
 
   function setSyncButtonEnabled(button, enabled) {
@@ -4521,11 +4782,13 @@
   window.addEventListener('focus', () => {
     loadCurrentShortcut();
     renderShortcutReferenceList();
+    recoverCloudWebSignin({ returned: true });
   }, true);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       loadCurrentShortcut();
       renderShortcutReferenceList();
+      recoverCloudWebSignin({ returned: true });
     }
   }, true);
 

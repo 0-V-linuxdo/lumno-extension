@@ -196,13 +196,6 @@
       "category": "searchEngine"
     },
     {
-      "key": "so360",
-      "aliases": ["360", "so.com", "haosou", "360搜索"],
-      "name": "360 Search",
-      "template": "https://www.so.com/s?q={query}",
-      "category": "searchEngine"
-    },
-    {
       "key": "yh",
       "aliases": ["yahoo"],
       "name": "Yahoo",

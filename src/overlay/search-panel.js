@@ -1125,7 +1125,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
         settled = true;
         const stored = result ? result[DEFAULT_SEARCH_ENGINE_STORAGE_KEY] : null;
-        if (stored && stored.id) {
+        if (stored && stored.id &&
+            (typeof SEARCH_UTILS.isRetiredSearchEngineState !== 'function' ||
+              !SEARCH_UTILS.isRetiredSearchEngineState(stored))) {
           overlaySearchEngineState = stored;
           if (typeof onReload === 'function') {
             onReload();
@@ -3646,7 +3648,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       const nextValue = changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY].newValue;
-      if (nextValue && nextValue.id) {
+      if (nextValue && nextValue.id &&
+          (typeof SEARCH_UTILS.isRetiredSearchEngineState !== 'function' ||
+            !SEARCH_UTILS.isRetiredSearchEngineState(nextValue))) {
         overlaySearchEngineState = nextValue;
         if (latestOverlayQuery) {
           updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);

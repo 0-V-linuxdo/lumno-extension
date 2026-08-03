@@ -76,6 +76,10 @@ assert(
   'store package should not include React source or test files'
 );
 assert(
+  entries.every((entry) => !/^(?:supabase|docs|scripts)\//.test(entry)),
+  'store package should contain no backend, deployment, or repository tooling files'
+);
+assert(
   !Object.prototype.hasOwnProperty.call(packagedManifest, 'key'),
   'store package should not include the dedicated development key'
 );

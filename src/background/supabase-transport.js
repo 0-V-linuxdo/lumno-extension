@@ -33,6 +33,31 @@
     return EMAIL_PATTERN.test(email) && email.length <= 254 ? email : '';
   }
 
+  function normalizeAuthProvider(value) {
+    const provider = String(value || '').trim().toLowerCase();
+    return provider === 'google' || provider === 'github' ? provider : '';
+  }
+
+  function getAuthProvider(userValue) {
+    const user = userValue && typeof userValue === 'object' ? userValue : {};
+    const appMetadata = user.app_metadata && typeof user.app_metadata === 'object'
+      ? user.app_metadata
+      : {};
+    const directProvider = normalizeAuthProvider(user.provider);
+    if (directProvider) return directProvider;
+    const identities = Array.isArray(user.identities) ? user.identities : [];
+    const candidates = identities.map((identity) => ({
+      provider: normalizeAuthProvider(identity && identity.provider),
+      lastSignInAt: Date.parse(String(identity && identity.last_sign_in_at || '')) || 0
+    })).filter((identity) => identity.provider);
+    if (candidates.length === 1) return candidates[0].provider;
+    candidates.sort((left, right) => right.lastSignInAt - left.lastSignInAt);
+    if (candidates.length > 0 && candidates[0].lastSignInAt > 0) {
+      return candidates[0].provider;
+    }
+    return normalizeAuthProvider(appMetadata.provider);
+  }
+
   function normalizeSession(value) {
     const source = value && typeof value === 'object' ? value : {};
     const user = source.user && typeof source.user === 'object' ? source.user : {};
@@ -50,7 +75,8 @@
       oauth_client_id: String(source.oauth_client_id || '').trim(),
       user: {
         id: userId,
-        email: normalizeEmail(user.email) || ''
+        email: normalizeEmail(user.email) || '',
+        provider: getAuthProvider(user)
       }
     };
   }
@@ -385,98 +411,81 @@
       });
     }
 
-    async function upsertAsset(asset) {
+    async function uploadAsset(asset) {
       const source = asset && typeof asset === 'object' ? asset : {};
-      return withAccessToken(async (accessToken, session) => {
-        const body = {
-          id: source.id,
-          user_id: session.user.id,
-          asset_kind: source.asset_kind === 'shortcut_icon' ? 'shortcut_icon' : 'wallpaper',
-          client_asset_id: source.client_asset_id,
-          original_name: String(source.original_name || '').slice(0, 200),
-          storage_path: source.storage_path,
-          thumbnail_path: source.thumbnail_path || null,
-          sha256: source.sha256,
-          mime_type: source.mime_type,
-          byte_size: source.byte_size,
-          width: source.width,
-          height: source.height,
-          deleted_at: null
-        };
-        const result = await request('/rest/v1/lumno_assets?on_conflict=user_id,client_asset_id', {
+      if (typeof FormData !== 'function' || !source.imageBlob) {
+        throw new CloudTransportError('invalid_upload', 400);
+      }
+      return withAccessToken(async (accessToken) => {
+        const form = new FormData();
+        const kind = source.asset_kind === 'shortcut_icon' ? 'shortcut_icon' : 'wallpaper';
+        form.set('asset_kind', kind);
+        form.set('client_asset_id', String(source.client_asset_id || ''));
+        form.set('original_name', String(source.original_name || '').slice(0, 200));
+        form.set('image', source.imageBlob, kind === 'shortcut_icon' ? 'icon.png' : 'wallpaper.webp');
+        if (kind === 'wallpaper' && source.thumbnailBlob) {
+          form.set('thumbnail', source.thumbnailBlob, 'thumbnail.webp');
+        }
+        requireConfigured();
+        const response = await fetchWithTimeout(endpoint('/functions/v1/media-asset'), {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Prefer: 'resolution=merge-duplicates,return=representation'
+            apikey: cloudConfig.publishableKey,
+            Authorization: `Bearer ${accessToken}`
           },
-          body: [body]
+          body: form
         });
-        return Array.isArray(result) && result.length > 0 ? result[0] : body;
+        const result = await parseResponse(response);
+        if (!result || !result.asset) throw new CloudTransportError('invalid_media_response', 502);
+        return result.asset;
       });
     }
 
     async function listAssets() {
       return withAccessToken(async (accessToken) => {
-        const query = '?select=id,asset_kind,client_asset_id,original_name,storage_path,thumbnail_path,sha256,mime_type,byte_size,width,height,updated_at,deleted_at&order=updated_at.asc&limit=1000';
-        const result = await request(`/rest/v1/lumno_assets${query}`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        return Array.isArray(result) ? result : [];
-      });
-    }
-
-    async function removeObjects(paths) {
-      const prefixes = (Array.isArray(paths) ? paths : [])
-        .map((path) => String(path || '').trim())
-        .filter(Boolean);
-      if (prefixes.length === 0) return { ok: true };
-      return withAccessToken((accessToken) => request(
-        `/storage/v1/object/${encodeURIComponent(cloudConfig.mediaBucket)}`,
-        {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: { prefixes }
+        const pageSize = 500;
+        const assets = [];
+        let offset = 0;
+        while (true) {
+          const query = `?select=id,asset_kind,client_asset_id,original_name,storage_path,thumbnail_path,sha256,thumbnail_sha256,mime_type,byte_size,thumbnail_byte_size,width,height,updated_at,deleted_at&order=updated_at.asc,id.asc&limit=${pageSize}&offset=${offset}`;
+          const result = await request(`/rest/v1/lumno_assets${query}`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          const page = Array.isArray(result) ? result : [];
+          assets.push(...page);
+          if (page.length < pageSize) break;
+          offset += pageSize;
         }
-      ));
+        return assets;
+      });
     }
 
     async function deleteAsset(clientAssetId) {
-      const encodedId = encodeURIComponent(String(clientAssetId || '').trim());
-      if (!encodedId) throw new CloudTransportError('invalid_asset_id', 400);
-      return withAccessToken(async (accessToken) => {
-        const rows = await request(`/rest/v1/lumno_assets?select=id,storage_path,thumbnail_path&client_asset_id=eq.${encodedId}&deleted_at=is.null`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-        if (!row) return { ok: true, deleted: false };
-        await removeObjects([row.storage_path, row.thumbnail_path]);
-        await request(`/rest/v1/lumno_assets?id=eq.${encodeURIComponent(row.id)}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Prefer: 'return=minimal'
-          },
-          body: { deleted_at: new Date(now()).toISOString() }
-        });
-        return { ok: true, deleted: true };
-      });
+      const normalizedId = String(clientAssetId || '').trim();
+      if (!normalizedId) throw new CloudTransportError('invalid_asset_id', 400);
+      return withAccessToken((accessToken) => request('/functions/v1/media-asset', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: { action: 'delete', client_asset_id: normalizedId }
+      }));
     }
 
     async function downloadObject(path) {
-      const objectPath = String(path || '').split('/').map(encodeURIComponent).join('/');
+      const objectPath = String(path || '').trim();
       if (!objectPath) throw new CloudTransportError('invalid_asset_path', 400);
       return withAccessToken(async (accessToken) => {
         requireConfigured();
-        const response = await fetchWithTimeout(endpoint(
-          `/storage/v1/object/authenticated/${encodeURIComponent(cloudConfig.mediaBucket)}/${objectPath}`
-        ), {
+        const response = await fetchWithTimeout(endpoint('/functions/v1/media-asset'), {
+          method: 'POST',
           headers: {
             apikey: cloudConfig.publishableKey,
-            Authorization: `Bearer ${accessToken}`
-          }
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'download', path: objectPath })
         });
         if (!response.ok) {
-          throw new CloudTransportError(`http_${response.status}`, response.status);
+          await parseResponse(response);
         }
         return response.blob();
       });
@@ -488,25 +497,6 @@
         headers: { Authorization: `Bearer ${accessToken}` },
         body: batch
       }));
-    }
-
-    async function uploadObject(path, blob, contentType) {
-      const objectPath = String(path || '').split('/').map(encodeURIComponent).join('/');
-      if (!objectPath || !blob) {
-        throw new CloudTransportError('invalid_upload', 400);
-      }
-      return withAccessToken((accessToken) => request(
-        `/storage/v1/object/${encodeURIComponent(cloudConfig.mediaBucket)}/${objectPath}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': String(contentType || 'application/octet-stream'),
-            'x-upsert': 'true'
-          },
-          body: blob
-        }
-      ));
     }
 
     return Object.freeze({
@@ -521,12 +511,10 @@
       setCloudConsent,
       setSyncConsent,
       ingestUsage,
-      uploadObject,
-      upsertAsset,
+      uploadAsset,
       listAssets,
       deleteAsset,
-      downloadObject,
-      removeObjects
+      downloadObject
     });
   }
 
@@ -534,6 +522,8 @@
     CloudTransportError,
     DEFAULT_REQUEST_TIMEOUT_MS,
     normalizeEmail,
+    normalizeAuthProvider,
+    getAuthProvider,
     normalizeSession,
     createTransport
   });

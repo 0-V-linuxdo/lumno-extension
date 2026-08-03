@@ -76,21 +76,48 @@ async function run() {
   const session = { user: { id: '11111111-1111-4111-8111-111111111111' } };
   const transport = {
     async getSession() { return session; },
-    async upsertAsset(asset) {
-      const row = { ...asset, updated_at: '2026-08-01T00:00:00.000Z' };
+    async uploadAsset(payload) {
+      const existing = assets.find((item) => item.client_asset_id === payload.client_asset_id);
+      const assetId = existing && existing.id || (
+        payload.asset_kind === wallpaperApi.SHORTCUT_ICON_KIND
+          ? '33333333-3333-4333-8333-333333333333'
+          : '22222222-2222-4222-8222-222222222222'
+      );
+      const storagePath = payload.asset_kind === wallpaperApi.SHORTCUT_ICON_KIND
+        ? `${session.user.id}/shortcut-icons/${assetId}.png`
+        : `${session.user.id}/wallpapers/${assetId}.webp`;
+      const thumbnailPath = payload.thumbnailBlob
+        ? `${session.user.id}/wallpaper-thumbs/${assetId}.webp`
+        : null;
+      uploads.push({ path: storagePath, size: payload.imageBlob.size });
+      objects.set(storagePath, payload.imageBlob);
+      if (thumbnailPath) {
+        uploads.push({ path: thumbnailPath, size: payload.thumbnailBlob.size });
+        objects.set(thumbnailPath, payload.thumbnailBlob);
+      }
+      const row = {
+        id: assetId,
+        asset_kind: payload.asset_kind,
+        client_asset_id: payload.client_asset_id,
+        original_name: payload.original_name,
+        storage_path: storagePath,
+        thumbnail_path: thumbnailPath,
+        sha256: await wallpaperApi.sha256Hex(payload.imageBlob, webcrypto),
+        mime_type: payload.imageBlob.type,
+        byte_size: payload.imageBlob.size,
+        width: payload.asset_kind === wallpaperApi.SHORTCUT_ICON_KIND ? 128 : 1920,
+        height: payload.asset_kind === wallpaperApi.SHORTCUT_ICON_KIND ? 128 : 1080,
+        updated_at: existing
+          ? '2026-08-02T00:00:00.000Z'
+          : '2026-08-01T00:00:00.000Z'
+      };
       const existingIndex = assets.findIndex((item) => item.client_asset_id === row.client_asset_id);
       if (existingIndex >= 0) {
-        row.id = assets[existingIndex].id;
-        row.updated_at = '2026-08-02T00:00:00.000Z';
         assets[existingIndex] = row;
       } else {
         assets.push(row);
       }
       return { ...row };
-    },
-    async uploadObject(path, blob) {
-      uploads.push({ path, size: blob.size });
-      objects.set(path, blob);
     },
     async deleteAsset(clientAssetId) {
       const asset = assets.find((item) => item.client_asset_id === clientAssetId);
@@ -104,6 +131,15 @@ async function run() {
       );
     }
   };
+  function createDimensionReader() {
+    let call = 0;
+    return async () => {
+      call += 1;
+      return call % 2 === 1
+        ? { width: 1920, height: 1080 }
+        : { width: 480, height: 270 };
+    };
+  }
   const repository = { async getMode() { return repositoryApi.MODE_CLOUD; } };
   const runtime = wallpaperApi.createRuntime({
     transport,
@@ -111,7 +147,7 @@ async function run() {
     store,
     cryptoApi: webcrypto,
     uuid: () => '22222222-2222-4222-8222-222222222222',
-    getImageDimensions: async () => ({ width: 1920, height: 1080 })
+    getImageDimensions: createDimensionReader()
   });
   const uploaded = await runtime.uploadRecord(localRecord);
   assert.strictEqual(uploaded.ok, true);
@@ -126,7 +162,7 @@ async function run() {
     repository,
     store: secondStore,
     cryptoApi: webcrypto,
-    getImageDimensions: async () => ({ width: 1920, height: 1080 })
+    getImageDimensions: createDimensionReader()
   });
   const synced = await secondRuntime.syncAll();
   assert.strictEqual(synced.downloaded, 1);

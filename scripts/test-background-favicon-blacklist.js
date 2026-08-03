@@ -263,16 +263,22 @@ async function run() {
   );
 
   result = await api.resolveSiteThemeColor('https://public.example.com/page', '', 'light');
-  assert.strictEqual(result, null, 'control theme color resolution should still run through the parser path');
-  assert.strictEqual(deps.fetchCalls.length, 2, 'non-blocked theme color resolution should fetch once after safe browser-cache data');
-  assert.strictEqual(deps.themeParseCalls, 1, 'non-blocked theme color resolution should parse HTML candidates');
+  assert.strictEqual(result, null, 'theme color resolution should remain browser-cache-only');
+  assert.strictEqual(deps.fetchCalls.length, 1, 'public theme color resolution must not fetch page HTML');
+  assert.strictEqual(deps.themeParseCalls, 0, 'public page HTML should not enter the privileged background');
 
   result = await api.fetchFaviconData('https://public.example.com/favicon.ico');
-  assert.ok(
-    typeof result === 'string' && result.startsWith('data:image/png;base64,'),
-    'non-blocked favicon data fetch should return a data URL'
+  assert.strictEqual(result, null, 'direct target-site favicon requests should be disabled for public hosts too');
+  assert.strictEqual(deps.fetchCalls.length, 1, 'direct favicon requests must not reach fetch');
+
+  result = await api.fetchFaviconData(
+    'https://t2.gstatic.cn/faviconV2?url=https%3A%2F%2Fpublic.example.com%2Fpage',
+    'https://public.example.com/page'
   );
-  assert.strictEqual(deps.fetchCalls.length, 3, 'non-blocked favicon data fetch should reach the network path');
+  assert.ok(typeof result === 'string' && result.startsWith('data:image/png;base64,'),
+    'the fixed favicon proxy remains available when enhanced fetching is enabled');
+  assert.strictEqual(deps.fetchCalls.at(-1).options.redirect, 'error',
+    'proxy requests must fail instead of following redirects');
 
   deps.faviconEnhancedFetchEnabledCache = false;
   const disabledApi = factory(deps, Buffer);
@@ -357,22 +363,22 @@ async function run() {
   assert.strictEqual(matrixDeps.fetchCalls.length, 0, 'excluded background favicon data requests should not reach fetch');
 
   result = await matrixApi.resolveFaviconCandidates(publicPageUrl, '', rootIconUrl);
-  assert.ok(result.includes(rootIconUrl), 'same-host nonexcluded background paths should retain direct favicon candidates');
+  assert.strictEqual(result.includes(rootIconUrl), false,
+    'same-host public pages must not regain direct favicon candidates');
   assert.ok(
     result.some((url) => url.includes('gstatic.cn/faviconV2')),
     'same-host nonexcluded background paths should retain enhanced proxy candidates'
   );
   result = await matrixApi.resolveSiteThemeColor(publicPageUrl, '', 'dark');
-  assert.strictEqual(result, null, 'public control theme resolution should complete through the test parser');
-  assert.ok(
+  assert.strictEqual(result, null, 'public theme resolution should not read page HTML');
+  assert.strictEqual(
     matrixDeps.fetchCalls.some((entry) => entry.url === publicPageUrl),
-    'same-host nonexcluded background paths should retain page theme fetching'
+    false,
+    'same-host nonexcluded background paths must not fetch page HTML'
   );
   result = await matrixApi.fetchFaviconData(rootIconUrl, publicPageUrl);
-  assert.ok(
-    typeof result === 'string' && result.startsWith('data:image/png;base64,'),
-    'same-host nonexcluded background paths should retain direct favicon data fetching'
-  );
+  assert.strictEqual(result, null,
+    'same-host nonexcluded background paths must not fetch direct favicon bytes');
 
   console.log('background favicon blacklist tests passed');
 }

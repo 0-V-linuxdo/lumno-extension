@@ -13,9 +13,12 @@ const syncAllowlistSql = fs.readFileSync(syncAllowlistMigrationPath, 'utf8');
 const fullConfigurationMigrationPath =
   'supabase/migrations/202608020005_full_configuration_and_media_assets.sql';
 const fullConfigurationSql = fs.readFileSync(fullConfigurationMigrationPath, 'utf8');
+const hardeningMigrationPath =
+  'supabase/migrations/202608030006_media_gateway_and_resource_limits.sql';
+const hardeningSql = fs.readFileSync(hardeningMigrationPath, 'utf8');
 
 function run() {
-  const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}`;
+  const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
   schema.SYNC_KEYS.forEach((key) => {
     assert(syncSchemaSql.includes(`'${key}'`), `database sync allowlist should include ${key}`);
   });
@@ -92,8 +95,30 @@ function run() {
     'shortcut icons should retain their tighter client-side size limit in the database');
   assert.match(fullConfigurationSql, /asset_kind = new\.asset_kind/,
     'wallpapers and shortcut icons should each receive an independent asset quota');
-  assert.match(sql, /storage_path = name or thumbnail_path = name/,
-    'storage uploads must have an owned metadata row before accepting bytes');
+  assert.match(hardeningSql, /A user may store at most 48 MiB of active media/,
+    'the final schema should enforce a hard account byte budget');
+  assert.match(hardeningSql, /lumno_authorize_media_upload/,
+    'media uploads should pass an atomic server-side quota and rate check');
+  assert.match(hardeningSql, /Media upload rate limit exceeded/,
+    'media uploads should have a per-account hourly rate limit');
+  assert.match(hardeningSql, /Monthly media egress quota exceeded/,
+    'media downloads should have a per-account monthly egress budget');
+  assert.match(hardeningSql, /drop policy if exists lumno_media_insert_own on storage\.objects/,
+    'authenticated clients must lose direct Storage upload access');
+  assert.match(hardeningSql, /revoke insert, update, delete on public\.lumno_assets from authenticated/,
+    'authenticated clients must not mutate asset metadata directly');
+  assert.match(hardeningSql, /revoke insert, update, delete on public\.lumno_devices from authenticated/,
+    'authenticated clients must register devices only through the capped RPC');
+  assert.match(hardeningSql, /at most 10 active devices/,
+    'device registration should enforce a per-account cap');
+  assert.match(hardeningSql, /octet_length\(new\.value::text\) > 32768/,
+    'each synchronized JSON value should have a byte bound');
+  assert.match(hardeningSql, /not public\.lumno_jsonb_within_depth\(new\.value, 8\)/,
+    'each synchronized JSON value should have a nesting-depth bound');
+  assert.match(hardeningSql, /remaining_depth <= 1/,
+    'depth validation should stop after the allowed depth instead of recursing through attacker input');
+  assert.match(hardeningSql, /allowed_mime_types = array\['image\/png', 'image\/webp'\]/,
+    'the private bucket should accept only normalized output formats');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(

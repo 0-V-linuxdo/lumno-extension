@@ -1889,12 +1889,6 @@
       searchUrl: (query) => `https://www.sogou.com/web?query=${encodeURIComponent(query)}`
     },
     {
-      id: 'so',
-      name: '360搜索',
-      hostMatches: ['so.com'],
-      searchUrl: (query) => `https://www.so.com/s?q=${encodeURIComponent(query)}`
-    },
-    {
       id: 'shenma',
       name: '神马',
       hostMatches: ['sm.cn'],
@@ -3409,7 +3403,9 @@
     }
     storageArea.get([DEFAULT_SEARCH_ENGINE_STORAGE_KEY], (result) => {
       const stored = result ? result[DEFAULT_SEARCH_ENGINE_STORAGE_KEY] : null;
-      if (stored && stored.id) {
+      if (stored && stored.id &&
+          (typeof SEARCH_UTILS.isRetiredSearchEngineState !== 'function' ||
+            !SEARCH_UTILS.isRetiredSearchEngineState(stored))) {
         defaultSearchEngineState = stored;
       }
     });
@@ -4865,7 +4861,9 @@
       }
       if (changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
         const nextValue = changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY].newValue;
-        if (nextValue && nextValue.id) {
+        if (nextValue && nextValue.id &&
+            (typeof SEARCH_UTILS.isRetiredSearchEngineState !== 'function' ||
+              !SEARCH_UTILS.isRetiredSearchEngineState(nextValue))) {
           defaultSearchEngineState = nextValue;
         }
       }

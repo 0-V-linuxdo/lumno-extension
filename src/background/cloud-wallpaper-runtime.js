@@ -17,14 +17,15 @@
   const SHORTCUT_ICON_KIND = 'shortcut_icon';
   const WALLPAPER_CLIENT_ID_PATTERN = /^custom-wallpaper-[a-zA-Z0-9-]{1,100}$/;
   const SHORTCUT_ICON_CLIENT_ID_PATTERN = /^shortcut-icon-[0-9a-f]{64}$/;
-  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
   const SHORTCUT_ICON_STORAGE_KEY = '_x_extension_newtab_shortcut_icons_2026_unique_';
   const SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
   const SHORTCUT_ICON_META_KEY = '_lumno_cloud_shortcut_icon_meta_v1_';
   const MEDIA_DELETIONS_KEY = '_lumno_cloud_media_deletions_v1_';
   const MAX_ASSET_BYTES = 5 * 1024 * 1024;
-  const MAX_SHORTCUT_ICON_BYTES = 160 * 1024;
+  const MAX_WALLPAPER_UPLOAD_BYTES = 2 * 1024 * 1024;
+  const MAX_WALLPAPER_THUMBNAIL_BYTES = 160 * 1024;
+  const MAX_SHORTCUT_ICON_BYTES = 96 * 1024;
   const MAX_SHORTCUT_ICON_DATA_URL_LENGTH = 160 * 1024;
   const MAX_ASSETS = 20;
 
@@ -39,13 +40,6 @@
     }
     return String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' &&
       String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP';
-  }
-
-  function createUuid(cryptoApi) {
-    const api = cryptoApi || (typeof crypto !== 'undefined' ? crypto : null);
-    if (api && typeof api.randomUUID === 'function') return api.randomUUID();
-    const part = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
-    return `${part()}${part()}-${part()}-4${part().slice(1)}-8${part().slice(1)}-${part()}${part()}${part()}`;
   }
 
   function dataUrlToBlob(dataUrl) {
@@ -100,12 +94,6 @@
     return sha256Bytes(bytes, cryptoApi);
   }
 
-  function extensionForMime(mimeType) {
-    if (mimeType === 'image/png') return 'png';
-    if (mimeType === 'image/jpeg') return 'jpg';
-    return 'webp';
-  }
-
   function getAssetKind(asset) {
     const explicit = String(asset && asset.asset_kind || '');
     if (explicit === SHORTCUT_ICON_KIND || explicit === WALLPAPER_KIND) return explicit;
@@ -120,6 +108,14 @@
     return id && id.length <= 200 && !/[\u0000-\u001f\u007f]/.test(id) ? id : '';
   }
 
+  function getDataUrlByteLength(value) {
+    const match = /^data:[^;,]+;base64,([a-zA-Z0-9+/]*={0,2})$/.exec(String(value || '').trim());
+    if (!match) return 0;
+    const encoded = match[1];
+    const padding = encoded.endsWith('==') ? 2 : (encoded.endsWith('=') ? 1 : 0);
+    return Math.max(0, Math.floor((encoded.length * 3) / 4) - padding);
+  }
+
   function normalizeShortcutIconMap(value) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const result = {};
@@ -127,7 +123,8 @@
       const shortcutId = normalizeShortcutId(rawId);
       const dataUrl = String(rawDataUrl || '').trim();
       if (shortcutId && dataUrl.startsWith('data:image/png;base64,') &&
-          dataUrl.length <= MAX_SHORTCUT_ICON_DATA_URL_LENGTH) {
+          dataUrl.length <= MAX_SHORTCUT_ICON_DATA_URL_LENGTH &&
+          getDataUrlByteLength(dataUrl) <= MAX_SHORTCUT_ICON_BYTES) {
         result[shortcutId] = dataUrl;
       }
     });
@@ -229,7 +226,6 @@
     const store = config.store || createIndexedDbStore(config.indexedDBApi ||
       (typeof indexedDB !== 'undefined' ? indexedDB : null));
     const cryptoApi = config.cryptoApi || (typeof crypto !== 'undefined' ? crypto : null);
-    const uuid = typeof config.uuid === 'function' ? config.uuid : () => createUuid(cryptoApi);
     const getImageDimensions = typeof config.getImageDimensions === 'function'
       ? config.getImageDimensions
       : defaultGetImageDimensions;
@@ -312,42 +308,39 @@
       if (!WALLPAPER_CLIENT_ID_PATTERN.test(clientAssetId)) throw new Error('invalid_wallpaper_id');
       const imageBlob = dataUrlToBlob(record.imageDataUrl);
       const thumbnailBlob = dataUrlToBlob(record.thumbnailDataUrl || record.imageDataUrl);
-      const dimensions = await getImageDimensions(imageBlob);
-      const width = Math.max(1, Math.min(2560, Math.round(Number(record.width) || dimensions.width || 1920)));
-      const height = Math.max(1, Math.min(2560, Math.round(Number(record.height) || dimensions.height || 1080)));
-      const assetId = UUID_PATTERN.test(String(record.cloudAssetId || '')) ? record.cloudAssetId : uuid();
-      const imageExtension = extensionForMime(imageBlob.type);
-      const thumbExtension = extensionForMime(thumbnailBlob.type);
-      const storagePath = `${session.user.id}/wallpapers/${assetId}.${imageExtension}`;
-      const thumbnailPath = `${session.user.id}/wallpaper-thumbs/${assetId}.${thumbExtension}`;
+      if (imageBlob.type !== 'image/webp' || thumbnailBlob.type !== 'image/webp' ||
+          imageBlob.size > MAX_WALLPAPER_UPLOAD_BYTES ||
+          thumbnailBlob.size > MAX_WALLPAPER_THUMBNAIL_BYTES) {
+        throw new Error('wallpaper_must_be_compressed_before_upload');
+      }
+      const [dimensions, thumbnailDimensions] = await Promise.all([
+        getImageDimensions(imageBlob),
+        getImageDimensions(thumbnailBlob)
+      ]);
+      const width = Math.max(1, Math.round(Number(dimensions.width) || Number(record.width) || 1920));
+      const height = Math.max(1, Math.round(Number(dimensions.height) || Number(record.height) || 1080));
+      const thumbnailWidth = Math.max(1, Math.round(Number(thumbnailDimensions.width) || 0));
+      const thumbnailHeight = Math.max(1, Math.round(Number(thumbnailDimensions.height) || 0));
+      if (width > 2560 || height > 2560 || thumbnailWidth > 480 || thumbnailHeight > 480 ||
+          Math.abs((width / height) - (16 / 9)) > 0.015 ||
+          Math.abs((thumbnailWidth / thumbnailHeight) - (16 / 9)) > 0.015) {
+        throw new Error('invalid_compressed_wallpaper_dimensions');
+      }
       const sha256 = await sha256Hex(imageBlob, cryptoApi);
-      const asset = await transport.upsertAsset({
-        id: assetId,
+      const asset = await transport.uploadAsset({
         asset_kind: WALLPAPER_KIND,
         client_asset_id: clientAssetId,
         original_name: String(record.name || '').slice(0, 200),
-        storage_path: storagePath,
-        thumbnail_path: thumbnailPath,
-        sha256,
-        mime_type: imageBlob.type,
-        byte_size: imageBlob.size,
-        width,
-        height
+        imageBlob,
+        thumbnailBlob
       });
-      try {
-        await transport.uploadObject(storagePath, imageBlob, imageBlob.type);
-        await transport.uploadObject(thumbnailPath, thumbnailBlob, thumbnailBlob.type);
-      } catch (error) {
-        await transport.deleteAsset(clientAssetId).catch(() => {});
-        throw error;
-      }
       const nextRecord = {
         ...record,
         id: clientAssetId,
         key: String(record.key || clientAssetId),
         width,
         height,
-        cloudAssetId: String(asset.id || assetId),
+        cloudAssetId: String(asset.id || ''),
         cloudUpdatedAt: String(asset.updated_at || new Date().toISOString())
       };
       await store.write(nextRecord);
@@ -391,57 +384,18 @@
       }
       const state = await readShortcutIconState();
       const clientAssetId = await getShortcutIconClientAssetId(shortcutId);
-      const currentMeta = state.meta[shortcutId] || {};
-      let existingAsset = null;
-      if (typeof transport.listAssets === 'function') {
-        existingAsset = (await transport.listAssets()).find((item) => (
-          !item.deleted_at && String(item.client_asset_id || '') === clientAssetId
-        )) || null;
-      }
-      let assetId = UUID_PATTERN.test(String(currentMeta.cloudAssetId || ''))
-        ? currentMeta.cloudAssetId
-        : '';
-      if (!assetId && existingAsset && UUID_PATTERN.test(String(existingAsset.id || ''))) {
-        assetId = existingAsset.id;
-      }
-      if (!assetId) assetId = uuid();
-      const storagePath = existingAsset && String(existingAsset.storage_path || '') ||
-        `${session.user.id}/shortcut-icons/${assetId}.png`;
       const sha256 = await sha256Hex(imageBlob, cryptoApi);
-      const assetPayload = {
-        id: assetId,
+      const asset = await transport.uploadAsset({
         asset_kind: SHORTCUT_ICON_KIND,
         client_asset_id: clientAssetId,
         original_name: shortcutId,
-        storage_path: storagePath,
-        thumbnail_path: null,
-        sha256,
-        mime_type: 'image/png',
-        byte_size: imageBlob.size,
-        width: 128,
-        height: 128
-      };
-      let asset;
-      if (existingAsset) {
-        // An existing metadata row already authorizes this object path. Upload
-        // the bytes first so a failed transfer cannot publish a hash that does
-        // not match the still-current object.
-        await transport.uploadObject(storagePath, imageBlob, 'image/png');
-        asset = await transport.upsertAsset(assetPayload);
-      } else {
-        asset = await transport.upsertAsset(assetPayload);
-        try {
-          await transport.uploadObject(storagePath, imageBlob, 'image/png');
-        } catch (error) {
-          await transport.deleteAsset(clientAssetId).catch(() => {});
-          throw error;
-        }
-      }
+        imageBlob
+      });
       const latest = await readShortcutIconState();
       latest.icons[shortcutId] = String(dataUrlValue || '');
       latest.meta[shortcutId] = {
         clientAssetId,
-        cloudAssetId: String(asset.id || assetId),
+        cloudAssetId: String(asset.id || ''),
         cloudUpdatedAt: String(asset.updated_at || new Date().toISOString()),
         sha256
       };
@@ -695,6 +649,8 @@
     SHORTCUT_ICON_META_KEY,
     MEDIA_DELETIONS_KEY,
     MAX_ASSET_BYTES,
+    MAX_WALLPAPER_UPLOAD_BYTES,
+    MAX_WALLPAPER_THUMBNAIL_BYTES,
     MAX_SHORTCUT_ICON_BYTES,
     MAX_SHORTCUT_ICON_DATA_URL_LENGTH,
     MAX_ASSETS,
@@ -703,6 +659,7 @@
     blobToDataUrl,
     sha256Hex,
     sha256Text,
+    getDataUrlByteLength,
     normalizeShortcutIconMap,
     createIndexedDbStore,
     createRuntime

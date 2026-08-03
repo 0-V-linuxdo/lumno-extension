@@ -4,24 +4,32 @@ import { handlePreflight, jsonResponse, readSmallJson } from '../_shared/http.ts
 const BUCKET = 'lumno-user-media';
 const PAGE_SIZE = 100;
 
-async function listObjectPaths(admin: AuthorizedClients['admin'], prefix: string): Promise<string[]> {
+async function listObjectPathsRecursively(
+  admin: AuthorizedClients['admin'],
+  rootPrefix: string
+): Promise<string[]> {
   const paths: string[] = [];
-  let offset = 0;
-  while (true) {
-    const { data, error } = await admin.storage.from(BUCKET).list(prefix, {
-      limit: PAGE_SIZE,
-      offset,
-      sortBy: { column: 'name', order: 'asc' }
-    });
-    if (error) {
-      throw error;
+  const prefixes = [rootPrefix];
+  while (prefixes.length > 0) {
+    const prefix = prefixes.shift() as string;
+    let offset = 0;
+    while (true) {
+      const { data, error } = await admin.storage.from(BUCKET).list(prefix, {
+        limit: PAGE_SIZE,
+        offset,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+      if (error) throw error;
+      for (const item of data || []) {
+        const name = String(item.name || '').trim();
+        if (!name || name === '.emptyFolderPlaceholder') continue;
+        const fullPath = `${prefix}/${name}`;
+        if (item.id) paths.push(fullPath);
+        else prefixes.push(fullPath);
+      }
+      if (!data || data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
-    const files = (data || []).filter((item) => item.id).map((item) => `${prefix}/${item.name}`);
-    paths.push(...files);
-    if (!data || data.length < PAGE_SIZE) {
-      break;
-    }
-    offset += PAGE_SIZE;
   }
   return paths;
 }
@@ -45,13 +53,12 @@ Deno.serve(async (request) => {
       return jsonResponse(400, { ok: false, error: 'confirmation_required' });
     }
 
-    const userPrefix = authorized.user.id;
-    const [wallpapers, thumbnails, shortcutIcons] = await Promise.all([
-      listObjectPaths(authorized.admin, `${userPrefix}/wallpapers`),
-      listObjectPaths(authorized.admin, `${userPrefix}/wallpaper-thumbs`),
-      listObjectPaths(authorized.admin, `${userPrefix}/shortcut-icons`)
-    ]);
-    const objectPaths = [...new Set([...wallpapers, ...thumbnails, ...shortcutIcons])];
+    // Enumerate the whole account prefix. This covers future media kinds,
+    // legacy paths, abandoned immutable uploads, and unexpected subfolders.
+    const objectPaths = await listObjectPathsRecursively(
+      authorized.admin,
+      authorized.user.id
+    );
     for (let index = 0; index < objectPaths.length; index += PAGE_SIZE) {
       const { error } = await authorized.admin.storage
         .from(BUCKET)

@@ -1371,9 +1371,6 @@
   "site_search_name_sogou": {
     "message": "Sogou"
   },
-  "site_search_name_360": {
-    "message": "360検索"
-  },
   "site_search_name_shenma": {
     "message": "Shenma"
   },
@@ -1543,7 +1540,7 @@
     "message": "WeChat公式"
   },
   "settings_sync_title": {
-    "message": "{name} の設定"
+    "message": "ブラウザ内蔵同期"
   },
   "settings_sync_desc": {
     "message": "同期状態を確認し、手動同期や設定の読み込み・書き出しを行います"
@@ -1890,8 +1887,19 @@
   "command_copy_title": { "message": "現在のページのリンクをコピー" },
   "command_copy_action": { "message": "リンクをコピー" },
   "settings_tab_account": { "message": "アカウントと同期" },
-  "cloud_account_section_title": { "message": "アカウントとデバイス間同期" },
-  "cloud_account_section_desc": { "message": "確認後、Lumno の設定とカスタム壁紙を同期し、製品利用統計を送信します。閲覧履歴、ページタイトル、検索内容はアップロードされません。" },
+  "cloud_account_section_title": { "message": "同期方法" },
+  "cloud_account_section_desc": { "message": "Lumno の設定、壁紙、利用統計を同期。ブラウザのプライバシーデータは送信しません。" },
+  "cloud_sync_method_browser_title": { "message": "ブラウザ標準の同期" },
+  "cloud_sync_method_browser_current": { "message": "現在" },
+  "cloud_sync_method_browser_limit_scope": { "message": "ログイン不要・端末間同期" },
+  "cloud_sync_method_browser_limit_cross_browser": { "message": "同一ブラウザのみ" },
+  "cloud_sync_method_browser_limit_wallpaper": { "message": "壁紙・アイコンは同期対象外" },
+  "cloud_sync_method_account_title": { "message": "Lumno で同期" },
+  "cloud_sync_method_account_benefit_scope": { "message": "ブラウザ間で同期。設定も移行" },
+  "cloud_sync_method_account_benefit_restore": { "message": "壁紙・カスタムアイコンも同期" },
+  "cloud_sync_method_account_benefit_security": { "message": "閲覧データは同期対象外" },
+  "cloud_sync_method_account_benefit_security_info_label": { "message": "セキュリティの詳細" },
+  "cloud_sync_method_account_benefit_security_tooltip": { "message": "同期するのは、Lumno の設定、ショートカットアイコン、アップロードした壁紙、利用統計のみです。閲覧履歴、現在のページ、ページタイトル、検索語、ブックマーク、Cookie は送信しません。" },
   "cloud_status_loading": { "message": "確認中" },
   "cloud_status_unconfigured": { "message": "未設定" },
   "cloud_status_error": { "message": "同期エラー" },
@@ -1900,12 +1908,23 @@
   "cloud_unconfigured_title": { "message": "クラウドサービスが未接続です" },
   "cloud_unconfigured_desc": { "message": "現在はブラウザ標準の設定同期を使用しています。Supabase をデプロイし、公開プロジェクト URL と Publishable Key を追加するとアカウント機能が有効になります。" },
   "cloud_signin_title": { "message": "ログインしてアカウント同期を有効化" },
-  "cloud_signin_desc": { "message": "同期と統計のデータ範囲を確認してから、Google または GitHub でログインします。同じ確認済みメールは同一の Lumno アカウントに関連付けられます。" },
-  "cloud_web_signin": { "message": "アカウント同期を有効化" },
+  "cloud_signin_desc": { "message": "最初に選んだログイン方法を引き続き使用してください。メールが異なる Google と GitHub のアカウントは別々に扱われ、現在は連携や統合に対応していません。" },
+  "cloud_web_signin": { "message": "同期を開始" },
+  "cloud_signin_provider_support_prefix": { "message": "対応：" },
+  "cloud_signin_provider_support_suffix": { "message": "OAuth" },
+  "cloud_signin_provider_support_aria": { "message": "Google と GitHub の OAuth ログインに対応" },
   "cloud_web_signin_security": { "message": "認証後は自動的に拡張機能へ戻ります。パスワードや外部サービスの認証情報が拡張機能に渡ることはありません。" },
   "cloud_consent_title": { "message": "アカウント同期を有効化" },
   "cloud_consent_intro": { "message": "続行すると Lumno の安全なログインページが開きます。認証後、アカウント同期と製品利用統計が同時に有効になります。" },
-  "cloud_consent_sync": { "message": "アカウントに同期：Lumno 設定、カスタムショートカット、ブロックルール、アップロードした壁紙。" },
+  "cloud_consent_account_isolation": { "message": "最初に選んだログイン方法を引き続き使用してください。メールが異なる Google と GitHub のアカウントは別々のアカウントになり、アカウントやデータの連携・統合には現在対応していません。同じ確認済みメールは同一アカウントとして認識される場合があります。" },
+  "cloud_last_signin_hint": { "message": "前回は {provider} でログインしました。同じ方法を引き続き使用してください。" },
+  "cloud_signin_status_waiting": { "message": "ログインの完了を待っています…" },
+  "cloud_signin_status_checking": { "message": "ログイン状態を確認中…" },
+  "cloud_signin_status_finishing": { "message": "ログインしました。初回同期を完了しています…" },
+  "cloud_signin_status_done": { "message": "ログインしました。アカウント同期が有効です。" },
+  "cloud_signin_status_sync_retry": { "message": "ログインしました。初回同期は自動で再試行します。" },
+  "cloud_consent_sync": { "message": "アカウントに同期：Lumno 設定、カスタムショートカット、ブロックルール、アップロードした壁紙とアイコン。" },
+  "cloud_consent_media_review": { "message": "アップロードする壁紙とカスタムアイコンは圧縮され、自動のコンテンツ安全性チェックを受けます。明示的に許可されない画像はクラウドに保存されません。" },
   "cloud_consent_analytics": { "message": "製品利用統計：アカウントに関連付けられた機能利用回数と設定の真偽値、列挙値、件数を送信し、明細を最大24か月保持します。" },
   "cloud_consent_excluded": { "message": "アップロードしないもの：閲覧履歴、現在のページ、ページタイトル、タブ内容、検索語、ブックマーク内容、Cookie。" },
   "cloud_consent_control": { "message": "ログアウトすると同期と統計が停止し、この端末のローカル設定は保持されます。" },
