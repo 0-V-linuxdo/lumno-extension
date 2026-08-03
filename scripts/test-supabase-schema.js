@@ -16,6 +16,9 @@ const fullConfigurationSql = fs.readFileSync(fullConfigurationMigrationPath, 'ut
 const hardeningMigrationPath =
   'supabase/migrations/202608030006_media_gateway_and_resource_limits.sql';
 const hardeningSql = fs.readFileSync(hardeningMigrationPath, 'utf8');
+const moderationBudgetMigrationPath =
+  'supabase/migrations/202608030007_sightengine_moderation_budget.sql';
+const moderationBudgetSql = fs.readFileSync(moderationBudgetMigrationPath, 'utf8');
 
 function run() {
   const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
@@ -119,6 +122,21 @@ function run() {
     'depth validation should stop after the allowed depth instead of recursing through attacker input');
   assert.match(hardeningSql, /allowed_mime_types = array\['image\/png', 'image\/webp'\]/,
     'the private bucket should accept only normalized output formats');
+  assert.match(moderationBudgetSql, /lumno_reserve_media_moderation/,
+    'provider calls should reserve global moderation capacity atomically');
+  assert.match(moderationBudgetSql, /pg_advisory_xact_lock/,
+    'global provider rate and quota checks should be serialized');
+  assert.match(moderationBudgetSql, /v_day_requests >= 100/,
+    'the daily request budget should retain free-plan headroom');
+  assert.match(moderationBudgetSql, /v_month_requests >= 450/,
+    'the monthly request budget should retain free-plan headroom');
+  assert.match(moderationBudgetSql, /operation_count = 4/,
+    'each request should account for the four selected model groups');
+  assert.match(moderationBudgetSql, /force row level security/,
+    'moderation accounting must not be visible to authenticated clients');
+  assert.match(moderationBudgetSql,
+    /revoke all on public\.lumno_media_moderation_events from public, anon, authenticated/,
+    'moderation accounting should be service-role-only');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(

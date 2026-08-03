@@ -5,9 +5,9 @@
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006_media_gateway_and_resource_limits.sql` 已在仓库中完成，发布本次客户端前必须推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
-- Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸 2 MiB、缩略图 160 KiB、图标 96 KiB，账号活跃媒体合计 48 MiB。
-- Edge Functions：当前生产的 `telemetry-ingest`、`delete-account` 为 ACTIVE；`media-asset` 及新的递归账号清理必须随迁移 `006` 部署并完成未认证 401 验收。
+- 数据库：迁移 `202608010001` 至 `202608020005` 已应用；`202608030006_media_gateway_and_resource_limits.sql` 与 `202608030007_sightengine_moderation_budget.sql` 的远程 dry-run 已通过，待 Sightengine Secrets 就绪后一起推送。用户/账号业务表和内部保留期表均启用并强制 RLS。
+- Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸 2 MiB、缩略图 160 KiB、图标 96 KiB，账号活跃媒体合计 48 MiB。为避免在审核密钥缺失时中断现有客户端，`006`/`007` 尚未应用。
+- Edge Functions：生产的 `telemetry-ingest`、`media-asset`、`delete-account` 均为 ACTIVE，且新的递归账号清理已部署；`media-asset` 在数据库迁移和 Sightengine Secrets 完成前保持失败关闭，不作为现有客户端入口。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
 - 客户端：`src/shared/cloud-config.js` 已填入生产 Project URL 和 Publishable Key。
 - Auth：仅开放 Google 与 GitHub；邮箱登录和新邮箱注册已关闭。Google 与 GitHub 返回同一已验证邮箱时，Supabase 会把两种身份自动关联到同一用户。
@@ -91,17 +91,17 @@ curl -i -X POST "https://<project-ref>.supabase.co/functions/v1/telemetry-ingest
 
 ### 媒体内容审核（上线阻断项）
 
-`media-asset` 会把客户端已压缩的实际图片字节发送给内容安全服务，并只接受形如 `{ "allowed": true }` 的成功响应。生产环境必须设置：
+`media-asset` 会把客户端已压缩的实际主图发送给 Sightengine 固定 HTTPS 端点，检查色情、赌博/毒品、暴力/血腥/武器/自残，以及图片内的违规或混淆文字。它会严格校验成功响应和 4 个计费模型组；字段缺失、计费组变化或命中阈值都不会写入 Storage。生产环境必须设置：
 
 ```bash
 npx supabase@latest secrets set \
-  LUMNO_MEDIA_MODERATION_URL="https://<moderation-provider>/..." \
-  LUMNO_MEDIA_MODERATION_SECRET="<server-only-secret>"
+  SIGHTENGINE_API_USER="<api-user>" \
+  SIGHTENGINE_API_SECRET="<server-only-secret>"
 ```
 
-审核请求不跟随重定向，8 秒超时，未配置、超时、异常或不明确允许时均拒绝上传。本地 Supabase 只有同时满足回环地址且显式设置 `LUMNO_MEDIA_MODERATION_ALLOW_LOCAL=true` 才能跳过，生产项目不能设置该开关。
+Sightengine Free 当前为 1 请求/秒、500 operations/日和 2,000 operations/月的硬上限；本项目每张图占 4 operations，并在数据库串行预留最多 100 张/UTC 日、450 张/UTC 月（分别留 20% 和 10% 余量）。预算耗尽直接返回 429，Free 硬上限不会产生超额账单。审核请求不跟随重定向，8 秒超时，未配置、超时、异常或不明确允许时均拒绝上传。本地 Supabase 只有同时满足回环地址且显式设置 `LUMNO_MEDIA_MODERATION_ALLOW_LOCAL=true` 才能跳过，生产项目不能设置该开关。
 
-审核处理方是隐私和合规上的产品选择：部署前必须在隐私政策中补齐其法定名称、处理区域、保留期、子处理方和申诉机制。没有完成这项选择时，可以部署数据库限制，但不要启用云媒体上传。
+Sightengine 由法国 Kozelo SAS 运营。Free 默认处理区域可能是欧盟（法国、爱尔兰、德国、芬兰）、加拿大或美国，不能锁定单一区域；其公开政策没有承诺 Free 上传图片的固定删除天数，而是按提供服务、订阅约定及合理的业务/法律期限处理。因此发布前必须保留隐私政策中的跨境、保留期和申诉披露；如需地域锁定或确定的合同保留期，应停用 Free 并单独评估 Enterprise/DPA。
 
 ## 5. 配置登录提供商
 

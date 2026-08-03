@@ -193,58 +193,148 @@ function isLocalSupabase(): boolean {
   }
 }
 
+const SIGHTENGINE_ENDPOINT = 'https://api.sightengine.com/1.0/check.json';
+export const SIGHTENGINE_OPERATION_COUNT = 4;
+export const SIGHTENGINE_MODELS = [
+  'nudity-2.1',
+  'recreational_drug',
+  'gambling',
+  'violence',
+  'gore-2.0',
+  'weapon',
+  'self-harm',
+  'text-content-2.0'
+].join(',');
+const SIGHTENGINE_TEXT_CATEGORIES = [
+  'sexual',
+  'discriminatory',
+  'extremism',
+  'weapon',
+  'drug',
+  'self_harm',
+  'violence',
+  'platform_evasion',
+  'content_trade',
+  'money_transaction',
+  'link'
+].join(',');
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as JsonRecord
+    : null;
+}
+
+function probabilityAt(record: JsonRecord, path: string[]): number | null {
+  let value: unknown = record;
+  for (const segment of path) {
+    const nested = asRecord(value);
+    if (!nested || !(segment in nested)) return null;
+    value = nested[segment];
+  }
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : null;
+}
+
+export type ModerationDecision = {
+  allowed: boolean;
+  reason: string;
+};
+
+export function evaluateSightengineResponse(payload: unknown): ModerationDecision {
+  const root = asRecord(payload);
+  const request = root ? asRecord(root.request) : null;
+  if (!root || root.status !== 'success' || !request ||
+      request.operations !== SIGHTENGINE_OPERATION_COUNT) {
+    return { allowed: false, reason: 'invalid_response' };
+  }
+
+  const requiredProbabilities: Array<[string[], number]> = [
+    [['nudity', 'sexual_activity'], 0.50],
+    [['nudity', 'sexual_display'], 0.50],
+    [['nudity', 'erotica'], 0.65],
+    [['nudity', 'very_suggestive'], 0.90],
+    [['recreational_drug', 'prob'], 0.70],
+    [['gambling', 'prob'], 0.70],
+    [['violence', 'prob'], 0.85],
+    [['gore', 'prob'], 0.80],
+    [['self-harm', 'prob'], 0.80],
+    [['weapon', 'firearm_action', 'aiming_threat'], 0.70]
+  ];
+  for (const [path, rejectAt] of requiredProbabilities) {
+    const probability = probabilityAt(root, path);
+    if (probability === null) return { allowed: false, reason: 'invalid_response' };
+    if (probability >= rejectAt) return { allowed: false, reason: path.join('.') };
+  }
+
+  const text = asRecord(root.text);
+  if (!text || !Array.isArray(text.detected_categories) ||
+      text.detected_categories.some((category) => typeof category !== 'string')) {
+    return { allowed: false, reason: 'invalid_response' };
+  }
+  if (text.detected_categories.length > 0) {
+    return { allowed: false, reason: 'text_content' };
+  }
+  return { allowed: true, reason: 'allowed' };
+}
+
+export function assertModerationConfigured(): void {
+  const apiUser = String(Deno.env.get('SIGHTENGINE_API_USER') || '').trim();
+  const apiSecret = String(Deno.env.get('SIGHTENGINE_API_SECRET') || '').trim();
+  if (apiUser && apiSecret) return;
+  if (isLocalSupabase() && Deno.env.get('LUMNO_MEDIA_MODERATION_ALLOW_LOCAL') === 'true') return;
+  throw new MediaRequestError(503, 'media_moderation_unavailable');
+}
+
 export async function requireModeration(
   kind: MediaKind,
   bytes: Uint8Array,
-  mimeType: string,
-  sha256: string
+  mimeType: string
 ): Promise<void> {
-  const endpoint = String(Deno.env.get('LUMNO_MEDIA_MODERATION_URL') || '').trim();
-  const secret = String(Deno.env.get('LUMNO_MEDIA_MODERATION_SECRET') || '').trim();
-  if (!endpoint || !secret) {
-    if (isLocalSupabase() && Deno.env.get('LUMNO_MEDIA_MODERATION_ALLOW_LOCAL') === 'true') return;
-    throw new MediaRequestError(503, 'media_moderation_unavailable');
-  }
-  let moderationUrl: URL;
-  try {
-    moderationUrl = new URL(endpoint);
-  } catch (_error) {
-    throw new MediaRequestError(503, 'media_moderation_unavailable');
-  }
-  if (moderationUrl.protocol !== 'https:') {
-    throw new MediaRequestError(503, 'media_moderation_unavailable');
-  }
+  const apiUser = String(Deno.env.get('SIGHTENGINE_API_USER') || '').trim();
+  const apiSecret = String(Deno.env.get('SIGHTENGINE_API_SECRET') || '').trim();
+  assertModerationConfigured();
+  if (!apiUser || !apiSecret) return;
 
   const form = new FormData();
-  form.set('kind', kind);
-  form.set('sha256', sha256);
+  form.set('models', SIGHTENGINE_MODELS);
+  form.set('text_categories', SIGHTENGINE_TEXT_CATEGORIES);
+  form.set('opt_lang', 'zh,en,ja');
+  form.set('api_user', apiUser);
+  form.set('api_secret', apiSecret);
   form.set('media', new File([bytes], kind === 'wallpaper' ? 'wallpaper.webp' : 'icon.png', {
     type: mimeType
   }));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(moderationUrl, {
+    const response = await fetch(SIGHTENGINE_ENDPOINT, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        'X-Lumno-Content-SHA256': sha256
-      },
       body: form,
       redirect: 'error',
       signal: controller.signal
     });
-    const raw = (await response.text()).slice(0, 8192);
-    let payload: { allowed?: unknown } | null = null;
+    const raw = (await response.text()).slice(0, 64 * 1024);
+    let payload: unknown = null;
     try {
       payload = raw ? JSON.parse(raw) : null;
     } catch (_error) {
       payload = null;
     }
-    if (!response.ok || !payload || payload.allowed !== true) {
-      throw new MediaRequestError(response.ok ? 422 : 503, response.ok
-        ? 'media_content_rejected'
-        : 'media_moderation_unavailable');
+    if (!response.ok) {
+      throw new MediaRequestError(503, 'media_moderation_unavailable');
+    }
+    const decision = evaluateSightengineResponse(payload);
+    if (!decision.allowed) {
+      throw new MediaRequestError(
+        decision.reason === 'invalid_response' ? 503 : 422,
+        decision.reason === 'invalid_response'
+          ? 'media_moderation_unavailable'
+          : 'media_content_rejected'
+      );
     }
   } catch (error) {
     if (error instanceof MediaRequestError) throw error;
