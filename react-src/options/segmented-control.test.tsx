@@ -49,6 +49,8 @@ afterEach(() => {
   });
   controllers = [];
   document.body.textContent = '';
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('Options segmented control React island', () => {
@@ -99,6 +101,65 @@ describe('Options segmented control React island', () => {
     expect(host.querySelector('select')?.value).toBe('most');
     expect(host.querySelector('[data-recent-mode="most"]')?.textContent)
       .toContain('Most visited');
+  });
+
+  it('shows the selected state immediately and remeasures after a hidden panel becomes visible', () => {
+    const { controller, host } = createFixture();
+    let visible = false;
+    let resizeCallback: ResizeObserverCallback = () => {};
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+
+      disconnect() {}
+
+      observe() {}
+
+      unobserve() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
+      const element = this;
+      const left = element === host
+        ? 100
+        : element.dataset.recentMode === 'latest'
+          ? 112
+          : 190;
+      const width = !visible
+        ? 0
+        : element === host
+          ? 180
+          : 70;
+      return {
+        bottom: 40,
+        height: 32,
+        left,
+        right: left + width,
+        top: 8,
+        width,
+        x: left,
+        y: 8,
+        toJSON() {
+          return {};
+        }
+      } as DOMRect;
+    });
+
+    act(() => controller.render(model));
+    const indicator = host.querySelector<HTMLElement>(
+      '._x_extension_theme_indicator_2024_unique_'
+    );
+    expect(indicator?.dataset.ready).toBe('false');
+    expect(host.querySelector('[data-recent-mode="latest"]')?.getAttribute('data-active'))
+      .toBe('true');
+
+    visible = true;
+    act(() => resizeCallback([], {} as ResizeObserver));
+
+    expect(indicator?.dataset.ready).toBe('true');
+    expect(indicator?.style.width).toBe('70px');
+    expect(indicator?.style.transform).toBe('translateX(12px)');
   });
 
   it('supports keyboard tab navigation and disabled state', () => {

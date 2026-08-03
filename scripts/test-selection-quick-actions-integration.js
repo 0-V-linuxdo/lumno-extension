@@ -47,6 +47,10 @@ assert(
     optionsHtml.includes('data-selection-quick-actions-icon-set="hugeicons"'),
   'Labs should render the Remix/Hugeicons icon-set tabs'
 );
+assert(
+  /_x_extension_theme_indicator_2024_unique_\[data-ready="false"\][\s\S]*?_x_extension_theme_option_2024_unique_\[data-active="true"\][\s\S]*?background:\s*var\(--inline-tab-active-bg\)/.test(optionsHtml),
+  'segmented controls should preserve an active background before their indicator can be measured'
+);
 assert.strictEqual(
   (optionsHtml.match(/data-icon-path="assets\/images\/site-search\/tile-[^"]+"/g) || []).length >= 8,
   true,
@@ -81,8 +85,11 @@ assert(
   'selection target tabs should open in the background'
 );
 
-assert(contentSource.includes("document.addEventListener('copy', hideSurface"));
-assert(contentSource.includes("document.addEventListener('scroll', hideSurface"));
+assert(contentSource.includes("document.addEventListener('copy', cancelSelectionGesture"));
+assert(contentSource.includes("document.addEventListener('scroll', cancelSelectionGesture"));
+assert(contentSource.includes("document.addEventListener('selectstart', handleSelectStart, true"));
+assert(contentSource.includes('selectionChangeTimer'));
+assert(contentSource.includes('function handlePointerCancel'));
 assert(contentSource.includes("event.key === 'Escape'"));
 assert(
   contentSource.includes("assets/images/lumno-selection-mark.png"),
@@ -101,17 +108,19 @@ assert(
   'the low-distraction selection affordance should anchor inline with the end of the selection'
 );
 assert(
-  contentSource.includes('const inlineRect = clientRects.length > 0'),
-  'selection positioning should use the final client rect for multi-line selections'
+  contentSource.includes('const inlineAnchorRect = getInlineAnchorRect'),
+  'selection positioning should move past trailing text on the final selected line'
 );
 assert(
   /\.lumno-selection-main\[data-icon-only="true"\][\s\S]*?width:\s*22px[\s\S]*?min-height:\s*22px/.test(contentSource),
   'the low-distraction selection affordance should be compact enough to read as a footnote marker'
 );
 assert(
-  /\.lumno-selection-main\[data-icon-only="true"\] \.lumno-selection-logo[\s\S]*?filter:\s*brightness\(0\) invert\(1\)[\s\S]*?mix-blend-mode:\s*difference/.test(contentSource),
-  'the floating selection mark should adapt its contrast to the page behind it'
+  /\.lumno-selection-main\[data-icon-only="true"\]\s*\{[\s\S]*?background:\s*rgba\(250,\s*250,\s*250,\s*0\.76\)[\s\S]*?backdrop-filter:\s*blur\(10px\)/.test(contentSource),
+  'the floating selection mark should use a stable high-contrast acrylic backing'
 );
+assert(!contentSource.includes('mix-blend-mode: difference'),
+  'the floating selection mark should not blur into page text through difference blending');
 assert(
   /\.lumno-selection-surface\[data-icon-only="true"\] \.lumno-selection-main:hover[\s\S]*?backdrop-filter:\s*blur\(10px\)/.test(contentSource),
   'the hover state should use a translucent acrylic treatment'

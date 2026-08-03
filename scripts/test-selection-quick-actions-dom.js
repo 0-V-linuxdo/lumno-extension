@@ -8,7 +8,7 @@ function wait(ms) {
 }
 
 (async () => {
-  const dom = new JSDOM('<!doctype html><html lang="zh-CN"><body><p id="copy">serendipity</p><p id="generic">React</p><p id="cjk">这是你需要的资料</p></body></html>', {
+  const dom = new JSDOM('<!doctype html><html lang="zh-CN"><body><p id="copy">serendipity</p><p><span id="generic-context"><em id="generic">React</em> trailing text</span></p><p id="cjk">这是你需要的资料</p><article id="x-post"><div><span id="x-body">这是一条来自 X 的帖子，包含跨节点正文</span> <a href="https://t.co/example">https://t.co/example</a></div></article></body></html>', {
     pretendToBeVisual: true,
     runScripts: 'outside-only',
     url: 'https://example.com/article'
@@ -23,7 +23,17 @@ function wait(ms) {
     top: 26,
     width: 90
   });
-  window.Range.prototype.getClientRects = () => [];
+  window.Range.prototype.getClientRects = function() {
+    const node = this.commonAncestorContainer;
+    const element = node.nodeType === window.Node.ELEMENT_NODE ? node : node.parentElement;
+    if (element && element.id === 'generic') {
+      return [{ bottom: 88, height: 18, left: 20, right: 70, top: 70, width: 50 }];
+    }
+    if (element && element.id === 'generic-context') {
+      return [{ bottom: 88, height: 18, left: 20, right: 210, top: 70, width: 190 }];
+    }
+    return [];
+  };
   window.chrome = {
     i18n: {
       getMessage() { return ''; },
@@ -55,6 +65,7 @@ function wait(ms) {
   const paragraph = window.document.getElementById('copy');
   const generic = window.document.getElementById('generic');
   const cjk = window.document.getElementById('cjk');
+  const xPost = window.document.getElementById('x-post');
   window.eval(fs.readFileSync('src/shared/selection-action-icons.js', 'utf8'));
   window.eval(fs.readFileSync('src/content/selection-quick-actions.js', 'utf8'));
 
@@ -77,7 +88,7 @@ function wait(ms) {
     clientY: 40
   }));
 
-  await wait(380);
+  await wait(460);
   const host = window.document.getElementById('_x_extension_selection_quick_actions_host_2026_unique_');
   assert(host, 'high-confidence selection should create the quick action host');
   assert.strictEqual(host.hidden, false);
@@ -105,6 +116,7 @@ function wait(ms) {
   }));
   await wait(520);
   assert.strictEqual(host.hidden, false, 'a deliberate single-word selection should show the low-distraction entry');
+  assert.strictEqual(host.style.left, '215px', 'the entry should sit after trailing text instead of covering it');
 
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
   selection.removeAllRanges();
@@ -125,6 +137,60 @@ function wait(ms) {
   }));
   await wait(520);
   assert.strictEqual(host.hidden, false, 'a deliberate Chinese short-sentence selection should show the entry');
+
+  window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
+
+  selection.removeAllRanges();
+  xPost.dispatchEvent(new window.MouseEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    clientX: 20,
+    clientY: 130
+  }));
+  xPost.dispatchEvent(new window.MouseEvent('pointerup', {
+    bubbles: true,
+    button: 0,
+    clientX: 120,
+    clientY: 130
+  }));
+  const delayedXRange = window.document.createRange();
+  delayedXRange.selectNodeContents(xPost);
+  selection.addRange(delayedXRange);
+  window.document.dispatchEvent(new window.Event('selectionchange'));
+  await wait(520);
+  assert.strictEqual(host.hidden, false, 'a selection that settles after pointerup should still trigger on X-like content');
+
+  window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
+
+  selection.removeAllRanges();
+  xPost.dispatchEvent(new window.Event('selectstart', { bubbles: true }));
+  const selectStartXRange = window.document.createRange();
+  selectStartXRange.selectNodeContents(xPost);
+  selection.addRange(selectStartXRange);
+  window.document.dispatchEvent(new window.Event('selectionchange'));
+  await wait(520);
+  assert.strictEqual(host.hidden, false, 'selectstart should arm selection evaluation even when pointerup is absent');
+
+  window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
+
+  selection.removeAllRanges();
+  xPost.dispatchEvent(new window.MouseEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    clientX: 20,
+    clientY: 130
+  }));
+  const cancelledXRange = window.document.createRange();
+  cancelledXRange.selectNodeContents(xPost);
+  selection.addRange(cancelledXRange);
+  xPost.dispatchEvent(new window.MouseEvent('pointercancel', {
+    bubbles: true,
+    button: 0,
+    clientX: 120,
+    clientY: 130
+  }));
+  await wait(520);
+  assert.strictEqual(host.hidden, false, 'a pointercancel during X selection should not discard the selection trigger');
 
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
 

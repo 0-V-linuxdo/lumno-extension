@@ -19,7 +19,8 @@
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const HIGH_DELAY_MS = 300;
   const MEDIUM_DELAY_MS = 380;
-  const POINTER_CONFIRM_DISTANCE_PX = 48;
+  const SELECTION_CHANGE_DELAY_MS = 80;
+  const SELECTION_GESTURE_TIMEOUT_MS = 1600;
   const DOT_DISMISS_MS = 2200;
   const CHIP_DISMISS_MS = 3600;
   const providerStorageRuntime = globalThis.LumnoSettings &&
@@ -41,9 +42,11 @@
   let localeMessages = null;
   let showTimer = null;
   let dismissTimer = null;
+  let selectionChangeTimer = null;
+  let gestureResetTimer = null;
   let requestSequence = 0;
-  let pointerPosition = { x: 0, y: 0 };
   let pointerDownState = null;
+  let selectionGestureActive = false;
   let currentCandidate = null;
   let host = null;
   let shadow = null;
@@ -166,6 +169,10 @@
       window.clearTimeout(dismissTimer);
       dismissTimer = null;
     }
+    if (selectionChangeTimer) {
+      window.clearTimeout(selectionChangeTimer);
+      selectionChangeTimer = null;
+    }
   }
 
   function hideSurface(options) {
@@ -217,20 +224,95 @@
     if (!node) {
       return null;
     }
-    return node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      return node;
+    }
+    if (node.parentElement) {
+      return node.parentElement;
+    }
+    const root = typeof node.getRootNode === 'function' ? node.getRootNode() : null;
+    return root && root.host && root.host.nodeType === Node.ELEMENT_NODE
+      ? root.host
+      : null;
   }
 
-  function getRangeRect(range) {
+  function getUsableClientRects(range) {
+    if (!range || typeof range.getClientRects !== 'function') {
+      return [];
+    }
+    return Array.from(range.getClientRects()).filter((item) => (
+      item && Number.isFinite(item.left) && Number.isFinite(item.right) &&
+      Number.isFinite(item.top) && Number.isFinite(item.bottom) &&
+      item.width > 0 && item.height > 0
+    ));
+  }
+
+  function getInlineContextElement(element) {
+    let contextElement = element;
+    const elementDisplay = window.getComputedStyle
+      ? window.getComputedStyle(element).display
+      : '';
+    while (contextElement && contextElement.parentElement) {
+      const parent = contextElement.parentElement;
+      if (parent === document.body || parent === document.documentElement ||
+          String(parent.textContent || '').length > 4000) {
+        break;
+      }
+      const display = window.getComputedStyle
+        ? window.getComputedStyle(parent).display
+        : '';
+      if (display !== 'inline' && display !== 'inline-block' && display !== 'contents') {
+        if (contextElement === element &&
+            (elementDisplay === 'inline' || elementDisplay === 'inline-block') &&
+            ['block', 'flow-root', 'list-item', 'table-cell'].includes(display)) {
+          contextElement = parent;
+        }
+        break;
+      }
+      contextElement = parent;
+    }
+    return contextElement;
+  }
+
+  function getInlineAnchorRect(element, selectedTailRect) {
+    const contextElement = getInlineContextElement(element);
+    if (!contextElement || contextElement === document.body ||
+        contextElement === document.documentElement ||
+        String(contextElement.textContent || '').length > 4000) {
+      return selectedTailRect;
+    }
+    try {
+      const contextRange = document.createRange();
+      contextRange.selectNodeContents(contextElement);
+      const contextRects = getUsableClientRects(contextRange);
+      const lineRects = contextRects.filter((item) => {
+        const overlap = Math.min(item.bottom, selectedTailRect.bottom) -
+          Math.max(item.top, selectedTailRect.top);
+        return overlap >= Math.min(item.height, selectedTailRect.height) * 0.5;
+      });
+      if (lineRects.length === 0) {
+        return selectedTailRect;
+      }
+      const top = Math.min(...lineRects.map((item) => item.top));
+      const bottom = Math.max(...lineRects.map((item) => item.bottom));
+      return {
+        bottom,
+        flowBottom: Math.max(...contextRects.map((item) => item.bottom)),
+        height: bottom - top,
+        left: Math.min(...lineRects.map((item) => item.left)),
+        right: Math.max(...lineRects.map((item) => item.right)),
+        top
+      };
+    } catch (e) {
+      return selectedTailRect;
+    }
+  }
+
+  function getRangeRect(range, element) {
     if (!range) {
       return null;
     }
-    const clientRects = range.getClientRects
-      ? Array.from(range.getClientRects()).filter((item) => (
-        item && Number.isFinite(item.left) && Number.isFinite(item.right) &&
-        Number.isFinite(item.top) && Number.isFinite(item.bottom) &&
-        item.width > 0 && item.height > 0
-      ))
-      : [];
+    const clientRects = getUsableClientRects(range);
     let rect = range.getBoundingClientRect();
     if ((!rect || rect.width <= 0 || rect.height <= 0) && clientRects.length > 0) {
       rect = clientRects[clientRects.length - 1];
@@ -241,17 +323,21 @@
     const inlineRect = clientRects.length > 0
       ? clientRects[clientRects.length - 1]
       : rect;
+    const inlineAnchorRect = getInlineAnchorRect(element, inlineRect);
     return {
       bottom: rect.bottom,
       left: rect.left,
       right: rect.right,
       top: rect.top,
       inline: {
-        bottom: inlineRect.bottom,
-        left: inlineRect.left,
-        right: inlineRect.right,
-        top: inlineRect.top,
-        height: inlineRect.height
+        bottom: inlineAnchorRect.bottom,
+        left: inlineAnchorRect.left,
+        right: inlineAnchorRect.right,
+        top: inlineAnchorRect.top,
+        height: inlineAnchorRect.height,
+        flowBottom: Number.isFinite(inlineAnchorRect.flowBottom)
+          ? inlineAnchorRect.flowBottom
+          : inlineAnchorRect.bottom
       }
     };
   }
@@ -305,12 +391,6 @@
       left.anchorOffset === right.anchorOffset &&
       left.focusNode === right.focusNode &&
       left.focusOffset === right.focusOffset;
-  }
-
-  function getPointerDistance(candidate) {
-    const dx = Number(pointerPosition.x) - Number(candidate.pointerX);
-    const dy = Number(pointerPosition.y) - Number(candidate.pointerY);
-    return Math.sqrt((dx * dx) + (dy * dy));
   }
 
   function ensureSurface() {
@@ -390,26 +470,28 @@
         min-height: 22px;
         padding: 0;
         border-radius: 7px;
+        background: rgba(250, 250, 250, 0.76);
+        -webkit-backdrop-filter: blur(10px) saturate(150%);
+        backdrop-filter: blur(10px) saturate(150%);
       }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-label { display: none; }
       .lumno-selection-logo { width: 17px; height: 17px; display: block; }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
         width: 18px;
         height: 18px;
-        filter: brightness(0) invert(1) contrast(1.12);
-        mix-blend-mode: difference;
-        opacity: 0.94;
+        filter: brightness(0.28) contrast(1.18);
+        opacity: 0.9;
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main {
         transition: background 120ms ease, backdrop-filter 120ms ease;
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:hover {
-        background: light-dark(rgba(245, 245, 246, 0.78), rgba(63, 63, 66, 0.74));
+        background: rgba(255, 255, 255, 0.94);
         -webkit-backdrop-filter: blur(10px) saturate(140%);
         backdrop-filter: blur(10px) saturate(140%);
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:focus-visible {
-        background: light-dark(rgba(245, 245, 246, 0.78), rgba(63, 63, 66, 0.74));
+        background: rgba(255, 255, 255, 0.94);
         box-shadow: none;
       }
       .lumno-selection-more { width: 26px; padding: 0; }
@@ -527,16 +609,21 @@
       const viewportHeight = Math.max(240, window.innerHeight || document.documentElement.clientHeight || 0);
       if (isInline) {
         const anchor = rect.inline;
-        const gap = 4;
+        const gap = 5;
         let left = anchor.right + gap;
         let top = anchor.top + ((anchor.height - bounds.height) / 2);
         const fitsRight = left + bounds.width <= viewportWidth - 8;
         if (!fitsRight) {
-          left = anchor.right - bounds.width;
-          top = anchor.bottom + gap;
-        }
-        if (left < 8) {
-          left = Math.max(8, anchor.left - bounds.width - gap);
+          const leftCandidate = anchor.left - bounds.width - gap;
+          if (leftCandidate >= 8) {
+            left = leftCandidate;
+          } else {
+            left = Math.min(
+              viewportWidth - bounds.width - 8,
+              Math.max(8, anchor.right - bounds.width)
+            );
+            top = anchor.flowBottom + gap;
+          }
         }
         top = Math.min(
           viewportHeight - bounds.height - 8,
@@ -699,13 +786,13 @@
     }
   }
 
-  function buildCandidate(selection, pointerEvent) {
+  function buildCandidate(selection) {
     if (!selection || selection.isCollapsed || selection.rangeCount <= 0) {
       return null;
     }
     const range = selection.getRangeAt(0);
     const element = getRangeElement(range);
-    const rect = getRangeRect(range);
+    const rect = getRangeRect(range, element);
     if (!element || !rect || host && element === host) {
       return null;
     }
@@ -721,18 +808,16 @@
     }
     return {
       classification,
-      pointerX: Number(pointerEvent && pointerEvent.clientX) || pointerPosition.x,
-      pointerY: Number(pointerEvent && pointerEvent.clientY) || pointerPosition.y,
       rect
     };
   }
 
-  function evaluateSelection(pointerEvent) {
+  function evaluateSelection() {
     hideSurface();
     if (!enabled || !window.getSelection) {
       return;
     }
-    const candidate = buildCandidate(window.getSelection(), pointerEvent);
+    const candidate = buildCandidate(window.getSelection());
     if (!candidate) {
       return;
     }
@@ -744,10 +829,6 @@
       if (sequence !== requestSequence || !enabled || !isSelectionStillCurrent(candidate)) {
         return;
       }
-      const behaviorConfirmed = getPointerDistance(candidate) <= POINTER_CONFIRM_DISTANCE_PX;
-      if (!behaviorConfirmed) {
-        return;
-      }
       if (initialHigh) {
         renderCandidate(candidate, 'high');
         return;
@@ -756,10 +837,62 @@
     }, initialHigh ? HIGH_DELAY_MS : MEDIUM_DELAY_MS);
   }
 
+  function resetSelectionGesture() {
+    selectionGestureActive = false;
+    if (gestureResetTimer) {
+      window.clearTimeout(gestureResetTimer);
+      gestureResetTimer = null;
+    }
+  }
+
+  function scheduleSelectionGestureReset() {
+    if (gestureResetTimer) {
+      window.clearTimeout(gestureResetTimer);
+    }
+    gestureResetTimer = window.setTimeout(() => {
+      gestureResetTimer = null;
+      if (pointerDownState) {
+        scheduleSelectionGestureReset();
+        return;
+      }
+      selectionGestureActive = false;
+    }, SELECTION_GESTURE_TIMEOUT_MS);
+  }
+
+  function armSelectionGesture() {
+    selectionGestureActive = true;
+    scheduleSelectionGestureReset();
+  }
+
+  function cancelSelectionGesture() {
+    pointerDownState = null;
+    resetSelectionGesture();
+    hideSurface();
+  }
+
+  function scheduleSelectionChangeEvaluation() {
+    if (!enabled || !selectionGestureActive || pointerDownState) {
+      return;
+    }
+    if (selectionChangeTimer) {
+      window.clearTimeout(selectionChangeTimer);
+    }
+    selectionChangeTimer = window.setTimeout(() => {
+      selectionChangeTimer = null;
+      if (!enabled || !selectionGestureActive || pointerDownState || currentCandidate) {
+        return;
+      }
+      const selection = getSelectionSnapshot();
+      if (!selection.text) {
+        return;
+      }
+      evaluateSelection();
+    }, SELECTION_CHANGE_DELAY_MS);
+  }
+
   function handlePointerUp(event) {
     const pointerDown = pointerDownState;
     pointerDownState = null;
-    pointerPosition = { x: event.clientX, y: event.clientY };
     if (event.button !== 0 || !enabled ||
         event.isPrimary === false ||
         !pointerDown ||
@@ -767,17 +900,22 @@
         (host && event.composedPath && event.composedPath().includes(host))) {
       return;
     }
+    armSelectionGesture();
     const selection = getSelectionSnapshot();
     const selectionChanged = !isSameSelection(pointerDown.selection, selection);
     const isMultiClick = Number(event.detail) >= 2;
-    if (!selection.text || (!selectionChanged && !isMultiClick)) {
+    if (!selection.text) {
+      scheduleSelectionChangeEvaluation();
       return;
     }
-    window.setTimeout(() => evaluateSelection(event), 0);
-  }
-
-  function handlePointerMove(event) {
-    pointerPosition = { x: event.clientX, y: event.clientY };
+    if (!selectionChanged && !isMultiClick) {
+      return;
+    }
+    window.setTimeout(() => {
+      if (enabled && selectionGestureActive) {
+        evaluateSelection();
+      }
+    }, 0);
   }
 
   function handlePointerDown(event) {
@@ -792,21 +930,45 @@
       selection: getSelectionSnapshot()
     };
     hideSurface();
+    armSelectionGesture();
   }
 
   function handleSelectionChange() {
-    if (!currentCandidate || !window.getSelection) {
+    if (!window.getSelection) {
       return;
     }
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed ||
-        INTENT.normalizeText(selection.toString()) !== currentCandidate.classification.text) {
+    const text = selection && !selection.isCollapsed && selection.rangeCount > 0
+      ? INTENT.normalizeText(selection.toString())
+      : '';
+    if (currentCandidate && text !== currentCandidate.classification.text) {
       hideSurface();
     }
+    if (!text || !enabled || !selectionGestureActive || pointerDownState || currentCandidate) {
+      return;
+    }
+    scheduleSelectionChangeEvaluation();
   }
 
   function handlePointerCancel() {
+    const pointerDown = pointerDownState;
     pointerDownState = null;
+    const selection = getSelectionSnapshot();
+    if (enabled && selectionGestureActive && selection.text &&
+        (!pointerDown || !isSameSelection(pointerDown.selection, selection))) {
+      scheduleSelectionChangeEvaluation();
+    }
+  }
+
+  function handleSelectStart(event) {
+    if (!enabled || (host && event.composedPath && event.composedPath().includes(host))) {
+      return;
+    }
+    armSelectionGesture();
+  }
+
+  function handleWindowBlur() {
+    cancelSelectionGesture();
   }
 
   function hydrateSettings() {
@@ -830,24 +992,28 @@
       const payload = result && result[LANGUAGE_MESSAGES_STORAGE_KEY];
       localeMessages = payload && payload.messages ? payload.messages : null;
       if (!enabled) {
-        hideSurface();
+        cancelSelectionGesture();
       }
     });
   }
 
   document.addEventListener('pointerup', handlePointerUp, true);
-  document.addEventListener('pointermove', handlePointerMove, true);
   document.addEventListener('pointerdown', handlePointerDown, true);
   document.addEventListener('pointercancel', handlePointerCancel, true);
+  document.addEventListener('selectstart', handleSelectStart, true);
   document.addEventListener('selectionchange', handleSelectionChange, true);
-  document.addEventListener('copy', hideSurface, true);
-  document.addEventListener('scroll', hideSurface, true);
+  document.addEventListener('copy', cancelSelectionGesture, true);
+  document.addEventListener('scroll', cancelSelectionGesture, true);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-      hideSurface();
+      cancelSelectionGesture();
+      return;
+    }
+    if (event.shiftKey || ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'a')) {
+      armSelectionGesture();
     }
   }, true);
-  window.addEventListener('blur', handlePointerCancel, true);
+  window.addEventListener('blur', handleWindowBlur, true);
 
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -859,7 +1025,7 @@
       if (changes[ENABLED_STORAGE_KEY]) {
         enabled = changes[ENABLED_STORAGE_KEY].newValue === true;
         if (!enabled) {
-          hideSurface();
+          cancelSelectionGesture();
         }
       }
       if (changes[ICON_SET_STORAGE_KEY]) {

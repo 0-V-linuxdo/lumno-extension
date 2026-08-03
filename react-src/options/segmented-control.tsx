@@ -2,7 +2,11 @@ import {
   createReactRootController,
   type ReactRootController
 } from './root-controller';
-import type { KeyboardEvent } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent
+} from 'react';
 
 export interface SegmentedControlItemModel {
   iconClass?: string;
@@ -38,6 +42,68 @@ function SegmentedControl({
   model: SegmentedControlRenderModel;
   onSelect(value: string): void;
 }) {
+  const indicatorRef = useRef<HTMLSpanElement>(null);
+  const itemSignature = model.items
+    .map((item) => `${item.value}\u0000${item.label}`)
+    .join('\u0001');
+
+  useLayoutEffect(() => {
+    const indicator = indicatorRef.current;
+    const container = indicator?.parentElement;
+    if (!indicator || !container) {
+      return undefined;
+    }
+    let animationFrame = 0;
+    let disposed = false;
+    const measure = () => {
+      if (disposed) {
+        return;
+      }
+      const activeButton = container.querySelector<HTMLButtonElement>(
+        'button[data-active="true"]'
+      );
+      if (!activeButton) {
+        indicator.dataset.ready = 'false';
+        indicator.style.width = '0px';
+        return;
+      }
+      const containerRect = container.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+      if (containerRect.width <= 0 || buttonRect.width <= 0) {
+        indicator.dataset.ready = 'false';
+        return;
+      }
+      const baseLeft = Number.parseFloat(window.getComputedStyle(indicator).left) || 0;
+      const offset = Math.round(
+        buttonRect.left - containerRect.left + container.scrollLeft - baseLeft
+      );
+      indicator.style.width = `${Math.round(buttonRect.width)}px`;
+      indicator.style.transform = `translateX(${offset}px)`;
+      indicator.dataset.ready = 'true';
+    };
+    const scheduleMeasure = () => {
+      if (disposed) {
+        return;
+      }
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+    scheduleMeasure();
+    const resizeObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(measure)
+      : null;
+    resizeObserver?.observe(container);
+    document.fonts?.ready.then(scheduleMeasure).catch(() => {});
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+    };
+  }, [model.activeValue, model.dataAttribute, itemSignature]);
+
   const handleKeyDown = (
     event: KeyboardEvent<HTMLButtonElement>,
     currentIndex: number
@@ -71,6 +137,8 @@ function SegmentedControl({
       <span
         aria-hidden="true"
         className="_x_extension_theme_indicator_2024_unique_"
+        data-ready="false"
+        ref={indicatorRef}
       />
       {model.items.map((item, index) => {
         const active = item.value === model.activeValue;
