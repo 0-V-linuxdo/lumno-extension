@@ -49,6 +49,29 @@ function createNormalizedIconPng() {
   ]);
 }
 
+function createStructurallyValidWebp(width, height) {
+  const chunks = [
+    ...Buffer.from('VP8X', 'ascii'),
+    10, 0, 0, 0,
+    0, 0, 0, 0,
+    (width - 1) & 0xff, ((width - 1) >>> 8) & 0xff, ((width - 1) >>> 16) & 0xff,
+    (height - 1) & 0xff, ((height - 1) >>> 8) & 0xff, ((height - 1) >>> 16) & 0xff,
+    ...Buffer.from('VP8 ', 'ascii'),
+    10, 0, 0, 0,
+    0, 0, 0, 0x9d, 0x01, 0x2a,
+    width & 0xff, (width >>> 8) & 0x3f,
+    height & 0xff, (height >>> 8) & 0x3f
+  ];
+  const bytes = Buffer.from([
+    ...Buffer.from('RIFF', 'ascii'),
+    0, 0, 0, 0,
+    ...Buffer.from('WEBP', 'ascii'),
+    ...chunks
+  ]);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  return bytes;
+}
+
 async function parseJsonResponse(response, label) {
   const text = await response.text();
   let body = null;
@@ -101,7 +124,58 @@ async function smokeMediaGateway({ projectUrl, publishableKey, accessToken }) {
     headers: { ...commonHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'delete', client_asset_id: clientAssetId })
   }), 'media gateway delete failed');
-  return { clientAssetId, byteSize: image.byteLength };
+
+  const wallpaperFixtures = [0, 1, 2];
+  const wallpaperIds = [];
+  const uploadWallpaper = async (fixtureIndex) => {
+    const wallpaperId = `custom-wallpaper-smoke-${crypto.randomUUID()}`;
+    const wallpaper = createStructurallyValidWebp(1920, 1080);
+    const thumbnail = createStructurallyValidWebp(480, 270);
+    const wallpaperForm = new FormData();
+    wallpaperForm.set('asset_kind', 'wallpaper');
+    wallpaperForm.set('client_asset_id', wallpaperId);
+    wallpaperForm.set('original_name', wallpaperId);
+    wallpaperForm.set('image', new Blob([wallpaper], { type: 'image/webp' }), `wallpaper-${fixtureIndex}.webp`);
+    wallpaperForm.set('thumbnail', new Blob([thumbnail], { type: 'image/webp' }), `thumbnail-${fixtureIndex}.webp`);
+    const response = await fetch(`${projectUrl}/functions/v1/media-asset`, {
+      method: 'POST',
+      headers: commonHeaders,
+      body: wallpaperForm
+    });
+    return { response, wallpaperId };
+  };
+  const deleteWallpaper = async (wallpaperId) => {
+    await parseJsonResponse(await fetch(`${projectUrl}/functions/v1/media-asset`, {
+      method: 'POST',
+      headers: { ...commonHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', client_asset_id: wallpaperId })
+    }), 'wallpaper gate cleanup failed');
+  };
+
+  try {
+    for (const fixtureIndex of wallpaperFixtures.slice(0, 2)) {
+      const uploadedWallpaper = await uploadWallpaper(fixtureIndex);
+      await parseJsonResponse(uploadedWallpaper.response, 'wallpaper slot upload failed');
+      wallpaperIds.push(uploadedWallpaper.wallpaperId);
+    }
+    const thirdWallpaper = await uploadWallpaper(wallpaperFixtures[2]);
+    if (thirdWallpaper.response.ok) {
+      wallpaperIds.push(thirdWallpaper.wallpaperId);
+      throw new Error('media gateway accepted a third active wallpaper');
+    }
+    const rejectionText = await thirdWallpaper.response.text();
+    if (thirdWallpaper.response.status !== 413 || !rejectionText.includes('media_quota_exceeded')) {
+      throw new Error(
+        `unexpected third-wallpaper response: ${thirdWallpaper.response.status} ${rejectionText.slice(0, 300)}`
+      );
+    }
+  } finally {
+    for (const wallpaperId of wallpaperIds) {
+      await deleteWallpaper(wallpaperId);
+    }
+  }
+
+  return { clientAssetId, byteSize: image.byteLength, wallpaperSlotsVerified: 2 };
 }
 
 module.exports = {
