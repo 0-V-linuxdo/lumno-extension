@@ -32,7 +32,7 @@ jobs:
           node-version: 24
 
       - name: Restore incident state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .monitor-state/supabase.json
           key: supabase-monitor-restore-${{ github.run_id }}
@@ -51,7 +51,7 @@ jobs:
 
       - name: Save incident state
         if: always() && steps.monitor.outputs.state_hash != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .monitor-state/supabase.json
           key: supabase-monitor-state-${{ steps.monitor.outputs.state_hash }}
