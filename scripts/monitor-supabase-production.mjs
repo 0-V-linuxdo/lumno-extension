@@ -343,19 +343,28 @@ export async function runMonitor({
     const message = formatNotification(transitions, now);
     const deliveries = [];
     if (env.FEISHU_ALERT_WEBHOOK_URL) {
-      deliveries.push(sendFeishu(fetchImpl, env.FEISHU_ALERT_WEBHOOK_URL, message));
+      deliveries.push({
+        channel: 'feishu',
+        promise: sendFeishu(fetchImpl, env.FEISHU_ALERT_WEBHOOK_URL, message),
+      });
     }
     if (env.FEISHU_SMTP_PASSWORD) {
-      deliveries.push(smtpSender({
-        host: 'smtp.feishu.cn',
-        port: 465,
-        user: 'i@kubai.design',
-        password: env.FEISHU_SMTP_PASSWORD,
-        to: 'i@kubai.design',
-      }, `[Lumno ${incidents.some((item) => item.severity === 'critical') ? 'P0' : 'P1'}] 生产告警`, message));
+      deliveries.push({
+        channel: 'email',
+        promise: smtpSender({
+          host: 'smtp.feishu.cn',
+          port: 465,
+          user: 'i@kubai.design',
+          password: env.FEISHU_SMTP_PASSWORD,
+          to: 'i@kubai.design',
+        }, `[Lumno ${incidents.some((item) => item.severity === 'critical') ? 'P0' : 'P1'}] 生产告警`, message),
+      });
     }
     if (deliveries.length === 0) throw new Error('alert_channels_not_configured');
-    const results = await Promise.allSettled(deliveries);
+    const results = await Promise.allSettled(deliveries.map((item) => item.promise));
+    results.forEach((result, index) => {
+      process.stdout.write(`Alert delivery ${deliveries[index].channel}: ${result.status === 'fulfilled' ? 'ok' : 'failed'}.\n`);
+    });
     if (results.every((result) => result.status === 'rejected')) {
       throw new Error('all_alert_channels_failed');
     }
@@ -369,7 +378,10 @@ export async function runMonitor({
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
   runMonitor().then(({ incidents, transitions }) => {
-    process.stdout.write(`Supabase monitor completed: ${incidents.length} active incident(s), ${transitions.started.length + transitions.escalated.length + transitions.recovered.length} transition(s).\n`);
+    const activeKeys = incidents.length > 0
+      ? incidents.map((item) => `${item.key}:${item.severity}`).join(',')
+      : 'none';
+    process.stdout.write(`Supabase monitor completed: ${incidents.length} active incident(s), ${transitions.started.length + transitions.escalated.length + transitions.recovered.length} transition(s); active=${activeKeys}.\n`);
   }).catch((error) => {
     process.stderr.write(`Supabase monitor failed: ${String(error?.message || error)}\n`);
     process.exitCode = 1;
