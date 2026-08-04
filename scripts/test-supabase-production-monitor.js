@@ -8,10 +8,8 @@ async function run() {
     'the Auth health probe should include the required publishable API key');
   assert.match(monitorSource, /'Supabase REST'[\s\S]*?method: 'OPTIONS'/,
     'the REST health probe should avoid a privileged schema request');
-  assert.match(monitorSource, /source_name = 'edge_logs'/,
-    'ClickHouse log queries should filter the unified stream by source_name');
-  assert.match(monitorSource, /source_name = 'postgres_logs'/,
-    'Postgres log queries should filter the unified stream by source_name');
+  assert.match(monitorSource, /querySources\('source'\)[\s\S]*?querySources\('source_name'\)/,
+    'log queries should support both the current source field and the announced source_name migration');
   const healthy = monitor.evaluateSnapshot({
     signup_hour: 12,
     captcha_verified_hour: 20,

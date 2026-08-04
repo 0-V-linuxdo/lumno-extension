@@ -155,16 +155,24 @@ async function fetchLogMetrics(fetchImpl, token, now) {
     }
     return payload.result[0];
   }
-  const edgeSql = `select count() as requests,
-    countIf(toInt32OrZero(log_attributes['response.status_code']) between 500 and 599) as server_errors,
-    countIf(toInt32OrZero(log_attributes['response.status_code']) = 429) as rate_limited,
-    countIf(position(log_attributes['request.path'], 'delete-account') > 0 and toInt32OrZero(log_attributes['response.status_code']) between 500 and 599) as delete_errors,
-    countIf(position(log_attributes['request.path'], 'signup-captcha') > 0 and toInt32OrZero(log_attributes['response.status_code']) >= 400) as captcha_errors
-    from logs where source_name = 'edge_logs'`;
-  const postgresSql = `select count() as postgres_errors from logs
-    where source_name = 'postgres_logs' and severity_text in ('ERROR', 'FATAL', 'PANIC')`;
-  const [edgeMetrics, postgresMetrics] = await Promise.all([query(edgeSql), query(postgresSql)]);
-  return { edgeMetrics, postgresMetrics };
+  async function querySources(sourceColumn) {
+    const edgeSql = `select count() as requests,
+      countIf(toInt32OrZero(log_attributes['response.status_code']) between 500 and 599) as server_errors,
+      countIf(toInt32OrZero(log_attributes['response.status_code']) = 429) as rate_limited,
+      countIf(position(log_attributes['request.path'], 'delete-account') > 0 and toInt32OrZero(log_attributes['response.status_code']) between 500 and 599) as delete_errors,
+      countIf(position(log_attributes['request.path'], 'signup-captcha') > 0 and toInt32OrZero(log_attributes['response.status_code']) >= 400) as captcha_errors
+      from logs where ${sourceColumn} = 'edge_logs'`;
+    const postgresSql = `select count() as postgres_errors from logs
+      where ${sourceColumn} = 'postgres_logs' and severity_text in ('ERROR', 'FATAL', 'PANIC')`;
+    const [edgeMetrics, postgresMetrics] = await Promise.all([query(edgeSql), query(postgresSql)]);
+    return { edgeMetrics, postgresMetrics };
+  }
+  try {
+    return await querySources('source');
+  } catch (error) {
+    if (!String(error?.message || error).startsWith('logs_query_error_')) throw error;
+    return querySources('source_name');
+  }
 }
 
 async function fetchSnapshot(fetchImpl, monitorKey) {
