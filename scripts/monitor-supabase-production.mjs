@@ -145,7 +145,14 @@ async function fetchLogMetrics(fetchImpl, token, now) {
     );
     if (!response.ok) throw new Error(`logs_http_${response.status}`);
     const payload = await response.json();
-    if (!Array.isArray(payload.result) || !payload.result[0]) throw new Error('logs_result_missing');
+    if (payload.error) {
+      const queryError = String(payload.error).replace(/[\r\n]+/g, ' ').slice(0, 100);
+      throw new Error(`logs_query_error_${queryError}`);
+    }
+    if (!Array.isArray(payload.result) || !payload.result[0]) {
+      const resultShape = Array.isArray(payload.result) ? `array_${payload.result.length}` : typeof payload.result;
+      throw new Error(`logs_result_missing_${resultShape}`);
+    }
     return payload.result[0];
   }
   const edgeSql = `select count() as requests,
