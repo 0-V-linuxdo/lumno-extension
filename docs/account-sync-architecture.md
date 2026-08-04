@@ -2,6 +2,8 @@
 
 更新日期：2026-08-04
 
+> 本文描述当前账号与同步架构。新增同步键、修改 RPC/数据库、处理旧客户端兼容或进行多机器整合时，必须先遵循 [Lumno 账号同步兼容、数据库发布与多机器协作规范](./cloud-sync-compatibility-playbook.md)。
+
 ## 1. 最终方案
 
 Lumno 使用 Supabase Auth + Postgres + Private Storage + Edge Functions，并保持 local-first：

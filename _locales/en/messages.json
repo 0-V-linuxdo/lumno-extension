@@ -74,6 +74,11 @@
   "settings_selection_quick_actions_provider_title": {
     "message": "Preferred provider"
   },
+  "settings_selection_quick_actions_trigger_style_title": {
+    "message": "Selection trigger icon"
+  },
+  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
+  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno Butterfly" },
   "settings_selection_quick_actions_icon_set_title": {
     "message": "Action icons"
   },

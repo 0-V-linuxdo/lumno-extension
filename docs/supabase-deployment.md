@@ -2,6 +2,8 @@
 
 更新日期：2026-08-04
 
+> 涉及数据库 migration、RPC、同步键、客户端兼容或多机器协作时，必须先遵循 [Lumno 账号同步兼容、数据库发布与多机器协作规范](./cloud-sync-compatibility-playbook.md)。本手册负责具体部署操作；兼容顺序、发布门禁和事故修复以该规范为准。
+
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。

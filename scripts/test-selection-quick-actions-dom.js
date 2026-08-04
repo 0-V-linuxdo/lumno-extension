@@ -29,10 +29,22 @@ function wait(ms) {
     if (element && element.id === 'generic') {
       return [{ bottom: 88, height: 18, left: 20, right: 70, top: 70, width: 50 }];
     }
-    if (element && element.id === 'generic-context') {
-      return [{ bottom: 88, height: 18, left: 20, right: 210, top: 70, width: 190 }];
-    }
     return [];
+  };
+  let selectionShadow = null;
+  const storageChangeListeners = [];
+  const localStorageValues = {
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: 'lumno'
+  };
+  const syncStorageValues = {
+    _x_extension_selection_quick_actions_enabled_2026_unique_: true,
+    _x_extension_selection_quick_actions_icon_set_2026_unique_: 'hugeicons',
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: 'butterfly'
+  };
+  const attachShadow = window.Element.prototype.attachShadow;
+  window.Element.prototype.attachShadow = function(options) {
+    selectionShadow = attachShadow.call(this, options);
+    return selectionShadow;
   };
   window.chrome = {
     i18n: {
@@ -40,23 +52,33 @@ function wait(ms) {
       getUILanguage() { return 'zh-CN'; }
     },
     runtime: {
+      id: 'kkcjcneagmlhpeaafngjdlpcfjakejgb',
       getURL(path) { return `chrome-extension://lumno/${path}`; },
       lastError: null,
       sendMessage(_message, callback) { callback({ ok: true }); }
     },
     storage: {
       local: {
-        get(_keys, callback) { callback({}); }
+        get(keys, callback) {
+          const result = {};
+          (Array.isArray(keys) ? keys : [keys]).forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(localStorageValues, key)) {
+              result[key] = localStorageValues[key];
+            }
+          });
+          callback(result);
+        },
+        set(payload, callback) {
+          Object.assign(localStorageValues, payload);
+          if (callback) callback();
+        }
       },
       onChanged: {
-        addListener() {}
+        addListener(listener) { storageChangeListeners.push(listener); }
       },
       sync: {
         get(_keys, callback) {
-          callback({
-            _x_extension_selection_quick_actions_enabled_2026_unique_: true,
-            _x_extension_selection_quick_actions_icon_set_2026_unique_: 'hugeicons'
-          });
+          callback({ ...syncStorageValues });
         }
       }
     }
@@ -66,8 +88,26 @@ function wait(ms) {
   const generic = window.document.getElementById('generic');
   const cjk = window.document.getElementById('cjk');
   const xPost = window.document.getElementById('x-post');
+  window.eval(fs.readFileSync('src/shared/settings.js', 'utf8'));
   window.eval(fs.readFileSync('src/shared/selection-action-icons.js', 'utf8'));
+  assert.strictEqual(
+    window.LumnoSelectionButterfly,
+    undefined,
+    'the DOM regression should cover a missing shared butterfly module'
+  );
   window.eval(fs.readFileSync('src/content/selection-quick-actions.js', 'utf8'));
+  await wait(0);
+
+  const legacyHost = window.document.createElement('div');
+  legacyHost.id = '_x_extension_selection_quick_actions_host_2026_unique_';
+  legacyHost.dataset.selectionMark = 'lumno';
+  window.document.documentElement.appendChild(legacyHost);
+  await wait(0);
+  assert.strictEqual(
+    legacyHost.isConnected,
+    false,
+    'the current runtime should remove a legacy selection host injected by another Lumno installation'
+  );
 
   paragraph.dispatchEvent(new window.MouseEvent('pointerdown', {
     bubbles: true,
@@ -94,6 +134,105 @@ function wait(ms) {
   assert.strictEqual(host.hidden, false);
   assert.strictEqual(host.dataset.visible, 'true');
   assert.strictEqual(host.dataset.iconSet, 'hugeicons');
+  assert.strictEqual(host.dataset.selectionMark, 'butterfly', 'the selected butterfly style should replace the high-confidence entry icon too');
+  assert.strictEqual(host.dataset.runtimeRevision, 'selection-butterfly-v6');
+  assert.strictEqual(host.dataset.runtimeId, 'kkcjcneagmlhpeaafngjdlpcfjakejgb');
+  assert.strictEqual(host.dataset.triggerStyle, 'butterfly');
+  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:local');
+  assert.strictEqual(
+    localStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_,
+    'butterfly',
+    'an existing butterfly choice should replace a stale local Lumno mirror'
+  );
+  syncStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_ = 'lumno';
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_language_2024_unique_: {
+      oldValue: 'system',
+      newValue: 'zh-CN'
+    }
+  }, 'sync'));
+  await wait(0);
+  assert.strictEqual(
+    host.dataset.selectionMark,
+    'butterfly',
+    'rehydration should keep the local butterfly mirror when the active provider still contains a stale Lumno value'
+  );
+  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:local');
+  syncStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_ = 'butterfly';
+  assert.strictEqual(
+    window.document.querySelectorAll('[id="_x_extension_selection_quick_actions_host_2026_unique_"]').length,
+    1,
+    'only one Lumno selection surface should remain when multiple extension builds inject the same page'
+  );
+  assert(selectionShadow, 'the selection surface should create a shadow root');
+  const highLogo = selectionShadow.querySelector('.lumno-selection-logo');
+  const highButterfly = selectionShadow.querySelector('.lumno-selection-butterfly-stage');
+  assert(highLogo && highButterfly, 'the selection surface should contain both trigger visuals');
+  assert.strictEqual(highLogo.hidden, true, 'the static Lumno logo should be hidden for the butterfly style');
+  assert.strictEqual(highButterfly.hidden, false, 'the butterfly visual should be visible for the butterfly style');
+  assert.strictEqual(highButterfly.querySelectorAll('svg').length, 2, 'the butterfly visual should contain both animated wings');
+  assert.strictEqual(highButterfly.querySelectorAll('animate').length, 2, 'both butterfly wings should morph continuously');
+  assert.strictEqual(highButterfly.querySelectorAll('animateTransform').length, 1, 'the front wing should include the tuned rotation loop');
+  assert.strictEqual(
+    highButterfly.querySelector('path').getAttribute('fill'),
+    '#79C3F2',
+    'the fallback butterfly should preserve the website material color'
+  );
+
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: {
+      oldValue: 'butterfly',
+      newValue: 'lumno'
+    }
+  }, 'sync'));
+  assert.strictEqual(host.dataset.selectionMark, 'lumno', 'storage changes should update an already visible entry');
+  assert.strictEqual(host.dataset.triggerStyleSource, 'change:sync');
+  assert.strictEqual(
+    localStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_,
+    'lumno',
+    'provider changes should update the local runtime mirror'
+  );
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: {
+      oldValue: 'lumno',
+      newValue: 'butterfly'
+    }
+  }, 'sync'));
+  assert.strictEqual(host.dataset.selectionMark, 'butterfly', 'switching back should restore the animated butterfly immediately');
+
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: {
+      oldValue: 'butterfly',
+      newValue: 'lumno'
+    }
+  }, 'local'));
+  assert.strictEqual(
+    host.dataset.selectionMark,
+    'lumno',
+    'a local runtime mirror update should win even while Chrome Sync is the primary provider'
+  );
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: {
+      oldValue: 'lumno',
+      newValue: 'butterfly'
+    }
+  }, 'local'));
+  assert.strictEqual(host.dataset.selectionMark, 'butterfly');
+
+  const lateLegacyHost = window.document.createElement('div');
+  lateLegacyHost.id = '_x_extension_selection_quick_actions_host_2026_unique_';
+  lateLegacyHost.dataset.selectionMark = 'lumno';
+  window.document.documentElement.appendChild(lateLegacyHost);
+  await wait(0);
+  assert.strictEqual(
+    lateLegacyHost.isConnected,
+    false,
+    'a legacy host injected after the current surface should not cover the animated butterfly'
+  );
+  assert.strictEqual(
+    window.document.querySelectorAll('[id="_x_extension_selection_quick_actions_host_2026_unique_"]').length,
+    1
+  );
 
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
   assert.strictEqual(host.hidden, true, 'copy should dismiss the selection affordance');
@@ -116,7 +255,16 @@ function wait(ms) {
   }));
   await wait(520);
   assert.strictEqual(host.hidden, false, 'a deliberate single-word selection should show the low-distraction entry');
-  assert.strictEqual(host.style.left, '215px', 'the entry should sit after trailing text instead of covering it');
+  assert.strictEqual(host.dataset.selectionMark, 'butterfly', 'the selected butterfly style should render in the compact entry');
+  assert.strictEqual(host.style.left, '75px', 'the entry should sit at the end of the selected text');
+  assert.strictEqual(host.style.top, '62px', 'the entry should rise to the upper edge of the selected text');
+  const selectionStyles = selectionShadow.querySelector('style').textContent;
+  assert(selectionStyles.includes('width: 36px'), 'the compact trigger should use the enlarged 36px button');
+  assert(selectionStyles.includes('width: 34px'), 'the butterfly stage should use the enlarged 34px art width');
+  assert(
+    /:host\(\[data-selection-mark="butterfly"\]\)[\s\S]*?background:\s*transparent[\s\S]*?backdrop-filter:\s*none/.test(selectionStyles),
+    'the butterfly should float without a visible acrylic tile'
+  );
 
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
   selection.removeAllRanges();
@@ -206,6 +354,18 @@ function wait(ms) {
   }));
   await wait(520);
   assert.strictEqual(host.hidden, true, 'an existing selection without a new pointer gesture should not trigger');
+
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_enabled_2026_unique_: {
+      oldValue: true,
+      newValue: false
+    }
+  }, 'sync'));
+  assert.strictEqual(
+    host.isConnected,
+    false,
+    'disabling this runtime should release its ownership instead of suppressing another Lumno installation'
+  );
 
   dom.window.close();
   console.log('selection quick actions DOM tests passed');

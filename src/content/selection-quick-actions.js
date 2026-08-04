@@ -8,15 +8,24 @@
 
   const INTENT = globalThis.LumnoSelectionIntent || {};
   const ACTION_ICON_LIBRARY = globalThis.LumnoSelectionActionIcons || {};
+  const BUTTERFLY = globalThis.LumnoSelectionButterfly || {};
   if (typeof INTENT.classifySelection !== 'function') {
     return;
   }
 
   const ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
+  const TRIGGER_STYLE_STORAGE_KEY = '_x_extension_selection_quick_actions_trigger_style_2026_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
+  const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
+  const RUNTIME_REVISION = 'selection-butterfly-v6';
+  const RUNTIME_VERSION = 6;
+  const RUNTIME_ID = chrome && chrome.runtime && chrome.runtime.id
+    ? String(chrome.runtime.id)
+    : '';
+  const RUNTIME_PRIORITY = RUNTIME_ID === DEVELOPMENT_EXTENSION_ID ? 2 : 1;
   const HIGH_DELAY_MS = 300;
   const MEDIUM_DELAY_MS = 380;
   const SELECTION_CHANGE_DELAY_MS = 80;
@@ -35,9 +44,14 @@
   const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea && storageArea === (chrome && chrome.storage ? chrome.storage.sync : null)
     ? 'sync'
     : 'local');
+  const triggerStyleStorageArea = chrome && chrome.storage && chrome.storage.local
+    ? chrome.storage.local
+    : storageArea;
 
   let enabled = false;
   let iconSet = 'remix';
+  let triggerStyle = 'lumno';
+  let triggerStyleSource = 'default';
   let languageMode = 'system';
   let localeMessages = null;
   let showTimer = null;
@@ -53,10 +67,12 @@
   let surface = null;
   let mainButton = null;
   let selectionLogo = null;
+  let selectionButterfly = null;
   let mainLabel = null;
   let moreButton = null;
   let menu = null;
   let status = null;
+  let ownershipObserver = null;
 
   const ACTION_COPY = Object.freeze({
     ask: ['selection_quick_action_ask', 'Ask AI'],
@@ -78,6 +94,20 @@
     viewBox: '0 0 24 24',
     body: '<path fill="currentColor" d="m7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6l-6-6z"/>'
   });
+  const FALLBACK_BUTTERFLY_REST_PATH = 'M4.3248 17.7823C1.22382 14.6398 -0.116749 10.2475 0.824858 6.7097C1.02033 5.97529 1.95363 5.98287 2.27212 6.67289L4.16024 10.7637C4.38415 11.2488 4.50011 11.7767 4.50011 12.311L4.50011 16L6.24277 16C7.66705 16 9.01155 16.6576 9.88596 17.7819L11.0831 19.3211C11.5044 19.8627 11.2076 20.6668 10.5235 20.7201C8.63849 20.8671 6.85452 20.3459 4.3248 17.7823Z';
+  const FALLBACK_BUTTERFLY_FLUTTER_PATH = 'M4.32468 17.7823C-1.04106 11.6456 2.30784 4.56298 5.14393 1.13518C5.48929 0.717757 6.11849 0.734355 6.47527 1.14207L10.4328 5.66451C11.4105 6.78177 11.6239 8.37593 10.9745 9.71102L8.61264 14.567L11.5238 13.9636C13.2202 13.612 14.9706 14.24 16.0565 15.5899L18.7241 18.9056C19.0394 19.2975 18.9857 19.8717 18.5688 20.1531C15.6258 22.1399 9.6385 23.8596 4.32468 17.7823Z';
+  const FALLBACK_BUTTERFLY = Object.freeze({
+    back: Object.freeze({ begin: '120ms' }),
+    dValues: `${FALLBACK_BUTTERFLY_FLUTTER_PATH};${FALLBACK_BUTTERFLY_REST_PATH};${FALLBACK_BUTTERFLY_FLUTTER_PATH}`,
+    fill: '#79C3F2',
+    front: Object.freeze({}),
+    keySplines: '0.42 0 0.58 1;0.42 0 0.58 1',
+    keyTimes: '0;0.5;1',
+    restPath: FALLBACK_BUTTERFLY_REST_PATH,
+    transformValues: '-1.5 5.5 15.5;0 5.5 15.5;-1.5 5.5 15.5',
+    viewBox: '0 0 23 25',
+    duration: '2800ms'
+  });
 
   function normalizeIconSet(value) {
     if (globalThis.LumnoSettings &&
@@ -87,12 +117,33 @@
     return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
   }
 
+  function normalizeTriggerStyle(value) {
+    if (globalThis.LumnoSettings &&
+        typeof globalThis.LumnoSettings.normalizeSelectionQuickActionsTriggerStyle === 'function') {
+      return globalThis.LumnoSettings.normalizeSelectionQuickActionsTriggerStyle(value);
+    }
+    return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
+  }
+
+  function resolveTriggerStyle(localValue, providerValue) {
+    if (globalThis.LumnoSettings &&
+        typeof globalThis.LumnoSettings.resolveSelectionQuickActionsTriggerStyle === 'function') {
+      return globalThis.LumnoSettings.resolveSelectionQuickActionsTriggerStyle(
+        localValue,
+        providerValue
+      );
+    }
+    return [localValue, providerValue].some((value) => (
+      String(value || '').trim().toLowerCase() === 'butterfly'
+    )) ? 'butterfly' : 'lumno';
+  }
+
   function createInlineIcon(definition, className) {
     if (!definition || !definition.body) {
       return null;
     }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.classList.add(className);
+    svg.classList.add(...String(className).split(/\s+/).filter(Boolean));
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
     svg.setAttribute('viewBox', definition.viewBox || '0 0 24 24');
@@ -100,8 +151,93 @@
     return svg;
   }
 
+  function getButterflyDefinition() {
+    const definition = BUTTERFLY;
+    return definition && definition.restPath && definition.dValues
+      ? definition
+      : FALLBACK_BUTTERFLY;
+  }
+
+  function createButterflyWing(definition, className, material, transformMotion) {
+    if (!definition || !material) {
+      return null;
+    }
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add(...String(className).split(/\s+/).filter(Boolean));
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('viewBox', definition.viewBox || '0 0 23 25');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.classList.add('lumno-selection-butterfly-path');
+    path.setAttribute('d', definition.restPath);
+    path.setAttribute('fill', definition.fill || '#79C3F2');
+    path.setAttribute('opacity', '0.2');
+
+    const animate = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+    animate.setAttribute('attributeName', 'd');
+    if (material.begin) {
+      animate.setAttribute('begin', material.begin);
+    }
+    animate.setAttribute('calcMode', 'spline');
+    animate.setAttribute('dur', definition.duration || '2800ms');
+    animate.setAttribute('keySplines', definition.keySplines || '0.42 0 0.58 1;0.42 0 0.58 1');
+    animate.setAttribute('keyTimes', definition.keyTimes || '0;0.5;1');
+    animate.setAttribute('repeatCount', 'indefinite');
+    animate.setAttribute('values', definition.dValues);
+    path.appendChild(animate);
+
+    if (transformMotion) {
+      const transform = document.createElementNS('http://www.w3.org/2000/svg', 'animateTransform');
+      transform.setAttribute('attributeName', 'transform');
+      transform.setAttribute('calcMode', 'spline');
+      transform.setAttribute('dur', definition.duration || '2800ms');
+      transform.setAttribute('keySplines', definition.keySplines || '0.42 0 0.58 1;0.42 0 0.58 1');
+      transform.setAttribute('keyTimes', definition.keyTimes || '0;0.5;1');
+      transform.setAttribute('repeatCount', 'indefinite');
+      transform.setAttribute('type', 'rotate');
+      transform.setAttribute('values', definition.transformValues || '0 5.5 15.5');
+      path.appendChild(transform);
+    }
+
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function createButterflyStage() {
+    const definition = getButterflyDefinition();
+    if (!definition) {
+      return null;
+    }
+    const stage = document.createElement('span');
+    stage.className = 'lumno-selection-butterfly-stage';
+    stage.setAttribute('aria-hidden', 'true');
+    const back = createButterflyWing(
+      definition,
+      'lumno-selection-butterfly lumno-selection-butterfly-wing lumno-selection-butterfly-wing-back',
+      definition.back,
+      false
+    );
+    const front = createButterflyWing(
+      definition,
+      'lumno-selection-butterfly lumno-selection-butterfly-wing lumno-selection-butterfly-wing-front',
+      definition.front,
+      true
+    );
+    if (!back || !front) {
+      return null;
+    }
+    stage.append(back, front);
+    stage.hidden = true;
+    return stage;
+  }
+
   function buildActionIcon(action) {
-    const iconSetDefinitions = ACTION_ICON_LIBRARY[iconSet] || ACTION_ICON_LIBRARY.remix;
+    const iconSetDefinitions = ACTION_ICON_LIBRARY[iconSet] && ACTION_ICON_LIBRARY[iconSet].ask
+      ? ACTION_ICON_LIBRARY[iconSet]
+      : ACTION_ICON_LIBRARY.remix;
     const definition = iconSetDefinitions && iconSetDefinitions[action];
     const inlineIcon = createInlineIcon(definition, 'lumno-selection-action-icon');
     if (inlineIcon) {
@@ -194,6 +330,129 @@
     }
   }
 
+  function getRuntimeClaim(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE || element.id !== HOST_ID) {
+      return null;
+    }
+    return {
+      id: String(element.dataset.runtimeId || ''),
+      priority: Number.parseInt(element.dataset.runtimePriority || '0', 10) || 0,
+      version: Number.parseInt(element.dataset.runtimeVersion || '0', 10) || 0
+    };
+  }
+
+  function compareRuntimeClaim(element) {
+    const claim = getRuntimeClaim(element);
+    if (!claim) {
+      return -1;
+    }
+    if (claim.version !== RUNTIME_VERSION) {
+      return claim.version - RUNTIME_VERSION;
+    }
+    if (claim.priority !== RUNTIME_PRIORITY) {
+      return claim.priority - RUNTIME_PRIORITY;
+    }
+    return claim.id.localeCompare(RUNTIME_ID);
+  }
+
+  function clearOwnedSurface() {
+    if (host && host.isConnected) {
+      host.remove();
+    }
+    host = null;
+    shadow = null;
+    surface = null;
+    mainButton = null;
+    selectionLogo = null;
+    selectionButterfly = null;
+    mainLabel = null;
+    moreButton = null;
+    menu = null;
+    status = null;
+    currentCandidate = null;
+  }
+
+  function reconcileSurfaceOwnership() {
+    if (!enabled) {
+      return true;
+    }
+    const candidates = Array.from(document.querySelectorAll(`[id="${HOST_ID}"]`));
+    const strongerClaim = candidates.find((candidate) => (
+      candidate !== host && compareRuntimeClaim(candidate) > 0
+    ));
+    if (strongerClaim) {
+      clearOwnedSurface();
+      return false;
+    }
+    candidates.forEach((candidate) => {
+      if (candidate !== host) {
+        candidate.remove();
+      }
+    });
+    return true;
+  }
+
+  function mutationContainsSelectionHost(mutation) {
+    return Array.from(mutation.addedNodes || []).some((node) => {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+        return false;
+      }
+      if (node.id === HOST_ID) {
+        return true;
+      }
+      return typeof node.querySelector === 'function' && Boolean(node.querySelector(`[id="${HOST_ID}"]`));
+    });
+  }
+
+  function setOwnershipMonitoring(active) {
+    if (!active) {
+      if (ownershipObserver) {
+        ownershipObserver.disconnect();
+        ownershipObserver = null;
+      }
+      return;
+    }
+    reconcileSurfaceOwnership();
+    if (ownershipObserver || typeof MutationObserver !== 'function') {
+      return;
+    }
+    ownershipObserver = new MutationObserver((mutations) => {
+      if (mutations.some(mutationContainsSelectionHost)) {
+        reconcileSurfaceOwnership();
+      }
+    });
+    ownershipObserver.observe(document.documentElement || document, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  function getActiveStorageAreaName() {
+    return providerStorageRuntime
+      ? providerStorageRuntime.getActiveAreaName()
+      : storageAreaName;
+  }
+
+  function updateRuntimeDebugState() {
+    if (!host) {
+      return;
+    }
+    host.dataset.runtimeRevision = RUNTIME_REVISION;
+    host.dataset.runtimeVersion = String(RUNTIME_VERSION);
+    host.dataset.runtimeId = RUNTIME_ID;
+    host.dataset.runtimePriority = String(RUNTIME_PRIORITY);
+    host.dataset.storageArea = getActiveStorageAreaName() || '';
+    host.dataset.triggerStyle = triggerStyle;
+    host.dataset.triggerStyleSource = triggerStyleSource;
+  }
+
+  function mirrorTriggerStyleToLocal(value) {
+    if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.set !== 'function') {
+      return;
+    }
+    triggerStyleStorageArea.set({ [TRIGGER_STYLE_STORAGE_KEY]: normalizeTriggerStyle(value) });
+  }
+
   function isEditableElement(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
       return false;
@@ -247,68 +506,7 @@
     ));
   }
 
-  function getInlineContextElement(element) {
-    let contextElement = element;
-    const elementDisplay = window.getComputedStyle
-      ? window.getComputedStyle(element).display
-      : '';
-    while (contextElement && contextElement.parentElement) {
-      const parent = contextElement.parentElement;
-      if (parent === document.body || parent === document.documentElement ||
-          String(parent.textContent || '').length > 4000) {
-        break;
-      }
-      const display = window.getComputedStyle
-        ? window.getComputedStyle(parent).display
-        : '';
-      if (display !== 'inline' && display !== 'inline-block' && display !== 'contents') {
-        if (contextElement === element &&
-            (elementDisplay === 'inline' || elementDisplay === 'inline-block') &&
-            ['block', 'flow-root', 'list-item', 'table-cell'].includes(display)) {
-          contextElement = parent;
-        }
-        break;
-      }
-      contextElement = parent;
-    }
-    return contextElement;
-  }
-
-  function getInlineAnchorRect(element, selectedTailRect) {
-    const contextElement = getInlineContextElement(element);
-    if (!contextElement || contextElement === document.body ||
-        contextElement === document.documentElement ||
-        String(contextElement.textContent || '').length > 4000) {
-      return selectedTailRect;
-    }
-    try {
-      const contextRange = document.createRange();
-      contextRange.selectNodeContents(contextElement);
-      const contextRects = getUsableClientRects(contextRange);
-      const lineRects = contextRects.filter((item) => {
-        const overlap = Math.min(item.bottom, selectedTailRect.bottom) -
-          Math.max(item.top, selectedTailRect.top);
-        return overlap >= Math.min(item.height, selectedTailRect.height) * 0.5;
-      });
-      if (lineRects.length === 0) {
-        return selectedTailRect;
-      }
-      const top = Math.min(...lineRects.map((item) => item.top));
-      const bottom = Math.max(...lineRects.map((item) => item.bottom));
-      return {
-        bottom,
-        flowBottom: Math.max(...contextRects.map((item) => item.bottom)),
-        height: bottom - top,
-        left: Math.min(...lineRects.map((item) => item.left)),
-        right: Math.max(...lineRects.map((item) => item.right)),
-        top
-      };
-    } catch (e) {
-      return selectedTailRect;
-    }
-  }
-
-  function getRangeRect(range, element) {
+  function getRangeRect(range) {
     if (!range) {
       return null;
     }
@@ -323,21 +521,17 @@
     const inlineRect = clientRects.length > 0
       ? clientRects[clientRects.length - 1]
       : rect;
-    const inlineAnchorRect = getInlineAnchorRect(element, inlineRect);
     return {
       bottom: rect.bottom,
       left: rect.left,
       right: rect.right,
       top: rect.top,
       inline: {
-        bottom: inlineAnchorRect.bottom,
-        left: inlineAnchorRect.left,
-        right: inlineAnchorRect.right,
-        top: inlineAnchorRect.top,
-        height: inlineAnchorRect.height,
-        flowBottom: Number.isFinite(inlineAnchorRect.flowBottom)
-          ? inlineAnchorRect.flowBottom
-          : inlineAnchorRect.bottom
+        bottom: inlineRect.bottom,
+        left: inlineRect.left,
+        right: inlineRect.right,
+        top: inlineRect.top,
+        height: inlineRect.height
       }
     };
   }
@@ -395,12 +589,17 @@
 
   function ensureSurface() {
     if (host && host.isConnected) {
-      return;
+      updateRuntimeDebugState();
+      return true;
+    }
+    if (!reconcileSurfaceOwnership()) {
+      return false;
     }
     host = document.createElement('div');
     host.id = HOST_ID;
     host.hidden = true;
     host.dataset.visible = 'false';
+    updateRuntimeDebugState();
     shadow = host.attachShadow({ mode: 'closed' });
 
     const style = document.createElement('style');
@@ -466,24 +665,70 @@
       }
       button:disabled { opacity: 0.56; cursor: default; }
       .lumno-selection-main[data-icon-only="true"] {
-        width: 22px;
-        min-height: 22px;
+        width: 36px;
+        min-height: 36px;
         padding: 0;
-        border-radius: 7px;
+        border-radius: 9px;
         background: rgba(250, 250, 250, 0.76);
         -webkit-backdrop-filter: blur(10px) saturate(150%);
         backdrop-filter: blur(10px) saturate(150%);
+        filter: blur(8px);
+        opacity: 0;
+        transform: translateY(3px) scale(0.86);
+        transition: background 120ms ease, backdrop-filter 120ms ease,
+          filter 240ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-label { display: none; }
       .lumno-selection-logo { width: 17px; height: 17px; display: block; }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
-        width: 18px;
-        height: 18px;
+        width: 22px;
+        height: 22px;
         filter: brightness(0.28) contrast(1.18);
         opacity: 0.9;
       }
+      .lumno-selection-logo[hidden],
+      .lumno-selection-butterfly-stage[hidden],
+      .lumno-selection-butterfly[hidden] {
+        display: none;
+      }
+      .lumno-selection-butterfly-stage {
+        position: relative;
+        width: 34px;
+        height: 38px;
+        flex: 0 0 auto;
+        display: block;
+        overflow: visible;
+        transform: rotate(-4deg);
+        transform-origin: 24% 77%;
+      }
+      .lumno-selection-butterfly {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        overflow: visible;
+      }
+      .lumno-selection-butterfly-wing {
+        transform-origin: 24% 77%;
+      }
+      .lumno-selection-butterfly-wing-back {
+        opacity: 0.22;
+        transform: translate(0.6px, 0.2px) rotate(12deg) scale(0.97);
+        filter: blur(0.1px);
+      }
+      .lumno-selection-butterfly-wing-front {
+        opacity: 0.34;
+        transform: translate(-0.2px, 0.1px) rotate(-8deg) scale(1.01);
+      }
+      .lumno-selection-butterfly-path {
+        opacity: 1;
+      }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main {
-        transition: background 120ms ease, backdrop-filter 120ms ease;
+        transition: background 120ms ease, backdrop-filter 120ms ease,
+          filter 240ms cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:hover {
         background: rgba(255, 255, 255, 0.94);
@@ -493,6 +738,18 @@
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:focus-visible {
         background: rgba(255, 255, 255, 0.94);
         box-shadow: none;
+      }
+      :host([data-selection-mark="butterfly"]) .lumno-selection-main[data-icon-only="true"],
+      :host([data-selection-mark="butterfly"]) .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:hover,
+      :host([data-selection-mark="butterfly"]) .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:focus-visible {
+        background: transparent;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+      :host([data-visible="true"]) .lumno-selection-main[data-icon-only="true"] {
+        filter: blur(0);
+        opacity: 1;
+        transform: translateY(0) scale(1);
       }
       .lumno-selection-more { width: 26px; padding: 0; }
       .lumno-selection-menu {
@@ -521,7 +778,17 @@
       }
       .lumno-selection-status[hidden] { display: none; }
       @media (prefers-reduced-motion: reduce) {
-        .lumno-selection-surface { transition: none; }
+        .lumno-selection-surface,
+        .lumno-selection-main[data-icon-only="true"] {
+          transition: none;
+        }
+        .lumno-selection-main[data-icon-only="true"] {
+          filter: none;
+        }
+        .lumno-selection-butterfly path > animate,
+        .lumno-selection-butterfly path > animateTransform {
+          display: none;
+        }
       }
     `;
     shadow.appendChild(style);
@@ -538,9 +805,14 @@
     logo.alt = '';
     logo.src = chrome.runtime.getURL('assets/images/lumno.png');
     selectionLogo = logo;
+    selectionButterfly = createButterflyStage();
     mainLabel = document.createElement('span');
     mainLabel.className = 'lumno-selection-label';
-    mainButton.append(logo, mainLabel);
+    mainButton.append(logo);
+    if (selectionButterfly) {
+      mainButton.append(selectionButterfly);
+    }
+    mainButton.append(mainLabel);
 
     moreButton = document.createElement('button');
     moreButton.type = 'button';
@@ -591,6 +863,7 @@
       sendSelectionAction(currentCandidate.classification.action);
     });
     moreButton.addEventListener('click', renderMenu);
+    return true;
   }
 
   function positionSurface(rect, placement) {
@@ -611,7 +884,8 @@
         const anchor = rect.inline;
         const gap = 5;
         let left = anchor.right + gap;
-        let top = anchor.top + ((anchor.height - bounds.height) / 2);
+        const topOffset = Math.max(8, Math.min(16, bounds.height * 0.7));
+        let top = anchor.top - topOffset;
         const fitsRight = left + bounds.width <= viewportWidth - 8;
         if (!fitsRight) {
           const leftCandidate = anchor.left - bounds.width - gap;
@@ -622,7 +896,7 @@
               viewportWidth - bounds.width - 8,
               Math.max(8, anchor.right - bounds.width)
             );
-            top = anchor.flowBottom + gap;
+            top = anchor.bottom + gap;
           }
         }
         top = Math.min(
@@ -646,6 +920,26 @@
     });
   }
 
+  function updateSelectionMark(mode) {
+    const showButterfly = Boolean(selectionButterfly) &&
+      triggerStyle === 'butterfly';
+    if (selectionLogo) {
+      selectionLogo.hidden = showButterfly;
+      if (!showButterfly) {
+        selectionLogo.src = chrome.runtime.getURL(mode === 'medium'
+          ? 'assets/images/lumno-selection-mark.png'
+          : 'assets/images/lumno.png');
+      }
+    }
+    if (selectionButterfly) {
+      selectionButterfly.hidden = !showButterfly;
+    }
+    if (host) {
+      host.dataset.selectionMark = showButterfly ? 'butterfly' : 'lumno';
+      updateRuntimeDebugState();
+    }
+  }
+
   function scheduleDismiss(delay) {
     if (dismissTimer) {
       window.clearTimeout(dismissTimer);
@@ -654,7 +948,9 @@
   }
 
   function renderCandidate(candidate, mode) {
-    ensureSurface();
+    if (!ensureSurface()) {
+      return;
+    }
     currentCandidate = { ...candidate, mode };
     const action = candidate.classification.action;
     const label = getActionLabel(action);
@@ -662,11 +958,7 @@
     host.dataset.iconSet = iconSet;
     host.dataset.visible = 'false';
     surface.dataset.iconOnly = mode === 'medium' ? 'true' : 'false';
-    if (selectionLogo) {
-      selectionLogo.src = chrome.runtime.getURL(mode === 'medium'
-        ? 'assets/images/lumno-selection-mark.png'
-        : 'assets/images/lumno.png');
-    }
+    updateSelectionMark(mode);
     mainButton.hidden = false;
     mainButton.disabled = false;
     mainButton.dataset.iconOnly = mode === 'medium' ? 'true' : 'false';
@@ -792,7 +1084,7 @@
     }
     const range = selection.getRangeAt(0);
     const element = getRangeElement(range);
-    const rect = getRangeRect(range, element);
+    const rect = getRangeRect(range);
     if (!element || !rect || host && element === host) {
       return null;
     }
@@ -978,22 +1270,56 @@
     storageArea.get([
       ENABLED_STORAGE_KEY,
       ICON_SET_STORAGE_KEY,
+      TRIGGER_STYLE_STORAGE_KEY,
       LANGUAGE_STORAGE_KEY,
       LANGUAGE_MESSAGES_STORAGE_KEY
     ], (result) => {
       if (chrome.runtime && chrome.runtime.lastError) {
         return;
       }
-      enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
-      iconSet = normalizeIconSet(result && result[ICON_SET_STORAGE_KEY]);
-      languageMode = result && result[LANGUAGE_STORAGE_KEY]
-        ? String(result[LANGUAGE_STORAGE_KEY])
-        : 'system';
-      const payload = result && result[LANGUAGE_MESSAGES_STORAGE_KEY];
-      localeMessages = payload && payload.messages ? payload.messages : null;
-      if (!enabled) {
-        cancelSelectionGesture();
+      const applyHydratedSettings = (localResult) => {
+        const hasLocalTriggerStyle = Boolean(localResult) &&
+          Object.prototype.hasOwnProperty.call(localResult, TRIGGER_STYLE_STORAGE_KEY);
+        const localTriggerStyle = hasLocalTriggerStyle
+          ? localResult[TRIGGER_STYLE_STORAGE_KEY]
+          : undefined;
+        const providerTriggerStyle = result && result[TRIGGER_STYLE_STORAGE_KEY];
+        enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
+        iconSet = normalizeIconSet(result && result[ICON_SET_STORAGE_KEY]);
+        triggerStyle = resolveTriggerStyle(localTriggerStyle, providerTriggerStyle);
+        triggerStyleSource = hasLocalTriggerStyle
+          ? 'hydrate:local'
+          : `hydrate:${getActiveStorageAreaName() || 'unknown'}`;
+        if (!hasLocalTriggerStyle || localTriggerStyle !== triggerStyle) {
+          mirrorTriggerStyleToLocal(triggerStyle);
+        }
+        languageMode = result && result[LANGUAGE_STORAGE_KEY]
+          ? String(result[LANGUAGE_STORAGE_KEY])
+          : 'system';
+        const payload = result && result[LANGUAGE_MESSAGES_STORAGE_KEY];
+        localeMessages = payload && payload.messages ? payload.messages : null;
+        if (!enabled) {
+          cancelSelectionGesture();
+          clearOwnedSurface();
+        }
+        setOwnershipMonitoring(enabled);
+        if (currentCandidate && host && !host.hidden) {
+          updateSelectionMark(currentCandidate.mode);
+        } else {
+          updateRuntimeDebugState();
+        }
+      };
+      if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.get !== 'function') {
+        applyHydratedSettings({});
+        return;
       }
+      triggerStyleStorageArea.get([TRIGGER_STYLE_STORAGE_KEY], (localResult) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          applyHydratedSettings({});
+          return;
+        }
+        applyHydratedSettings(localResult || {});
+      });
     });
   }
 
@@ -1017,24 +1343,41 @@
 
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (providerStorageRuntime
-        ? !providerStorageRuntime.isActiveAreaName(areaName)
-        : areaName !== storageAreaName) {
+      const isPrimaryArea = providerStorageRuntime
+        ? providerStorageRuntime.isActiveAreaName(areaName)
+        : areaName === storageAreaName;
+      const hasLocalTriggerStyleChange = areaName === 'local' &&
+        Boolean(changes[TRIGGER_STYLE_STORAGE_KEY]);
+      if (!isPrimaryArea && !hasLocalTriggerStyleChange) {
         return;
       }
-      if (changes[ENABLED_STORAGE_KEY]) {
+      if (isPrimaryArea && changes[ENABLED_STORAGE_KEY]) {
         enabled = changes[ENABLED_STORAGE_KEY].newValue === true;
+        setOwnershipMonitoring(enabled);
         if (!enabled) {
           cancelSelectionGesture();
+          clearOwnedSurface();
         }
       }
-      if (changes[ICON_SET_STORAGE_KEY]) {
+      if (isPrimaryArea && changes[ICON_SET_STORAGE_KEY]) {
         iconSet = normalizeIconSet(changes[ICON_SET_STORAGE_KEY].newValue);
         if (menu && !menu.hidden && currentCandidate) {
           renderMenu();
         }
       }
-      if (changes[LANGUAGE_STORAGE_KEY] || changes[LANGUAGE_MESSAGES_STORAGE_KEY]) {
+      if (changes[TRIGGER_STYLE_STORAGE_KEY] && (isPrimaryArea || hasLocalTriggerStyleChange)) {
+        triggerStyle = normalizeTriggerStyle(changes[TRIGGER_STYLE_STORAGE_KEY].newValue);
+        triggerStyleSource = `change:${areaName || 'unknown'}`;
+        if (areaName !== 'local') {
+          mirrorTriggerStyleToLocal(triggerStyle);
+        }
+        if (currentCandidate && host && !host.hidden) {
+          updateSelectionMark(currentCandidate.mode);
+        } else {
+          updateRuntimeDebugState();
+        }
+      }
+      if (isPrimaryArea && (changes[LANGUAGE_STORAGE_KEY] || changes[LANGUAGE_MESSAGES_STORAGE_KEY])) {
         hydrateSettings();
       }
     });

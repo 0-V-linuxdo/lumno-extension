@@ -74,6 +74,11 @@
   "settings_selection_quick_actions_provider_title": {
     "message": "优先 Provider"
   },
+  "settings_selection_quick_actions_trigger_style_title": {
+    "message": "划词入口图标"
+  },
+  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
+  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno 蝴蝶" },
   "settings_selection_quick_actions_icon_set_title": {
     "message": "操作图标"
   },

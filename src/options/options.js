@@ -55,6 +55,11 @@
   const selectionQuickActionsToggle = document.getElementById('_x_extension_selection_quick_actions_toggle_2026_unique_');
   const selectionQuickActionsProviderRow = document.getElementById('_x_extension_selection_quick_actions_provider_row_2026_unique_');
   const selectionQuickActionsProviderSelect = document.getElementById('_x_extension_selection_quick_actions_provider_select_2026_unique_');
+  const selectionQuickActionsTriggerStyleRow = document.getElementById('_x_extension_selection_quick_actions_trigger_style_row_2026_unique_');
+  const selectionQuickActionsTriggerStyleTabsWrap = document.getElementById('_x_extension_selection_quick_actions_trigger_style_tabs_wrap_2026_unique_');
+  const selectionQuickActionsTriggerStyleTabsIndicator = selectionQuickActionsTriggerStyleTabsWrap
+    ? selectionQuickActionsTriggerStyleTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
+    : null;
   const selectionQuickActionsIconSetRow = document.getElementById('_x_extension_selection_quick_actions_icon_set_row_2026_unique_');
   const selectionQuickActionsIconSetTabsWrap = document.getElementById('_x_extension_selection_quick_actions_icon_set_tabs_wrap_2026_unique_');
   const selectionQuickActionsIconSetTabsIndicator = selectionQuickActionsIconSetTabsWrap
@@ -249,6 +254,11 @@
     'selection-quick-actions-icon-set',
     handleSelectionQuickActionsIconSetSelection
   );
+  const selectionQuickActionsTriggerStyleTabsController = createOptionsSegmentedControlController(
+    selectionQuickActionsTriggerStyleTabsWrap,
+    'selection-quick-actions-trigger-style',
+    handleSelectionQuickActionsTriggerStyleSelection
+  );
   const optionsToggleControlRecords = new Map();
   function registerOptionsToggleControl(input, kind) {
     if (!input ||
@@ -321,10 +331,15 @@
       selectionQuickActionsProviderRow.setAttribute('data-disabled', disabled ? 'true' : 'false');
       selectionQuickActionsProviderRow.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     }
+    if (selectionQuickActionsTriggerStyleRow) {
+      selectionQuickActionsTriggerStyleRow.setAttribute('data-disabled', disabled ? 'true' : 'false');
+      selectionQuickActionsTriggerStyleRow.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    }
     if (selectionQuickActionsIconSetRow) {
       selectionQuickActionsIconSetRow.setAttribute('data-disabled', disabled ? 'true' : 'false');
       selectionQuickActionsIconSetRow.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     }
+    setSelectionQuickActionsTriggerStyleTabState(currentSelectionQuickActionsTriggerStyle);
     setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
   }
   [
@@ -474,6 +489,9 @@
   const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
     ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null);
+  const triggerStyleStorageArea = chrome && chrome.storage && chrome.storage.local
+    ? chrome.storage.local
+    : storageArea;
   function getActivePrimaryAreaName() {
     return providerStorageRuntime
       ? providerStorageRuntime.getActiveAreaName()
@@ -535,6 +553,8 @@
     '_x_extension_selection_quick_actions_provider_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY ||
     '_x_extension_selection_quick_actions_icon_set_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY = SETTINGS.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY ||
+    '_x_extension_selection_quick_actions_trigger_style_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
@@ -596,6 +616,7 @@
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
     OVERLAY_TAB_PRIORITY_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     RESTRICTED_ACTION_STORAGE_KEY,
@@ -682,6 +703,7 @@
   let currentSearchResultPriority = 'autocomplete';
   let currentNewtabTopContentMode = 'brand';
   let currentSelectionQuickActionsIconSet = 'remix';
+  let currentSelectionQuickActionsTriggerStyle = 'lumno';
   let currentActiveSettingsTab = 'appearance';
   const optionsSelectControlRecords = new Map();
   function registerOptionsSelectControl(select, kind) {
@@ -1475,6 +1497,22 @@
     return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
   }
 
+  function normalizeSelectionQuickActionsTriggerStyle(value) {
+    if (typeof SETTINGS.normalizeSelectionQuickActionsTriggerStyle === 'function') {
+      return SETTINGS.normalizeSelectionQuickActionsTriggerStyle(value);
+    }
+    return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
+  }
+
+  function resolveSelectionQuickActionsTriggerStyle(localValue, providerValue) {
+    if (typeof SETTINGS.resolveSelectionQuickActionsTriggerStyle === 'function') {
+      return SETTINGS.resolveSelectionQuickActionsTriggerStyle(localValue, providerValue);
+    }
+    return [localValue, providerValue].some((value) => (
+      String(value || '').trim().toLowerCase() === 'butterfly'
+    )) ? 'butterfly' : 'lumno';
+  }
+
   function normalizeSearchResultPriority(value) {
     return typeof SETTINGS.normalizeSearchResultPriority === 'function'
       ? SETTINGS.normalizeSearchResultPriority(value)
@@ -1679,6 +1717,11 @@
         newtabTopContentTabsWrap,
         newtabTopContentTabsIndicator,
         'button[data-newtab-top-content][data-active="true"]'
+      ),
+      measureInlineTabsIndicator(
+        selectionQuickActionsTriggerStyleTabsWrap,
+        selectionQuickActionsTriggerStyleTabsIndicator,
+        'button[data-selection-quick-actions-trigger-style][data-active="true"]'
       ),
       measureInlineTabsIndicator(
         selectionQuickActionsIconSetTabsWrap,
@@ -1953,6 +1996,41 @@
     requestAnimationFrame(updateSearchResultPriorityTabsIndicator);
   }
 
+  function setSelectionQuickActionsTriggerStyleTabState(value) {
+    const nextStyle = normalizeSelectionQuickActionsTriggerStyle(value);
+    currentSelectionQuickActionsTriggerStyle = nextStyle;
+    renderSegmentedControlState(
+      selectionQuickActionsTriggerStyleTabsController,
+      {
+        activeValue: nextStyle,
+        dataAttribute: 'data-selection-quick-actions-trigger-style',
+        disabled: Boolean(selectionQuickActionsToggle && !selectionQuickActionsToggle.checked),
+        items: [
+          {
+            value: 'lumno',
+            labelKey: 'selection_quick_actions_trigger_style_lumno',
+            label: getMessage('selection_quick_actions_trigger_style_lumno', 'Lumno')
+          },
+          {
+            value: 'butterfly',
+            labelKey: 'selection_quick_actions_trigger_style_butterfly',
+            label: getMessage('selection_quick_actions_trigger_style_butterfly', 'Lumno Butterfly')
+          }
+        ],
+        select: {
+          id: '_x_extension_selection_quick_actions_trigger_style_select_2026_unique_'
+        }
+      }
+    );
+    requestAnimationFrame(() => {
+      updateInlineTabsIndicator(
+        selectionQuickActionsTriggerStyleTabsWrap,
+        selectionQuickActionsTriggerStyleTabsIndicator,
+        'button[data-selection-quick-actions-trigger-style][data-active="true"]'
+      );
+    });
+  }
+
   function setSelectionQuickActionsIconSetTabState(value) {
     const nextIconSet = normalizeSelectionQuickActionsIconSet(value);
     currentSelectionQuickActionsIconSet = nextIconSet;
@@ -2074,6 +2152,30 @@
     storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: nextIconSet });
   }
 
+  function handleSelectionQuickActionsTriggerStyleSelection(value) {
+    const nextStyle = normalizeSelectionQuickActionsTriggerStyle(value);
+    const previousStyle = currentSelectionQuickActionsTriggerStyle;
+    const payload = { [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: nextStyle };
+    const writes = [];
+    if (triggerStyleStorageArea && typeof triggerStyleStorageArea.set === 'function') {
+      writes.push(storageSet(triggerStyleStorageArea, payload));
+    }
+    if (storageArea && storageArea !== triggerStyleStorageArea) {
+      writes.push(storageSet(storageArea, payload));
+    }
+    Promise.all(writes)
+      .then(() => {
+        setSelectionQuickActionsTriggerStyleTabState(nextStyle);
+      })
+      .catch((error) => {
+        setSelectionQuickActionsTriggerStyleTabState(previousStyle);
+        if (recoverInvalidatedOptionsContext(error)) {
+          return;
+        }
+        showToast(getMessage('toast_error', '操作失败，请重试'), true);
+      });
+  }
+
   setNewtabWidthTabState(currentNewtabWidthMode);
   setOverlaySizeTabState(currentOverlaySizeMode);
   setOverlayEnterAnimationTabState(currentOverlayEnterAnimation);
@@ -2081,6 +2183,7 @@
   setRecentModeTabState(currentRecentMode);
   setRestrictedActionTabState(currentRestrictedAction);
   setNewtabTopContentTabState(currentNewtabTopContentMode);
+  setSelectionQuickActionsTriggerStyleTabState(currentSelectionQuickActionsTriggerStyle);
   setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
 
   function storageGet(area, keys) {
@@ -2099,14 +2202,46 @@
         resolve();
         return;
       }
-      area.set(payload, () => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         if (chrome.runtime && chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message || 'storage set failed'));
           return;
         }
         resolve();
-      });
+      };
+      try {
+        const maybePromise = area.set(payload, finish);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(finish).catch((error) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            reject(error);
+          });
+        }
+      } catch (error) {
+        settled = true;
+        reject(error);
+      }
     });
+  }
+
+  function isInvalidatedExtensionContextError(error) {
+    return /extension context invalidated/i.test(String(error && error.message ? error.message : error));
+  }
+
+  function recoverInvalidatedOptionsContext(error) {
+    if (!isInvalidatedExtensionContextError(error)) {
+      return false;
+    }
+    window.location.reload();
+    return true;
   }
 
   function storageRemove(area, key) {
@@ -3269,6 +3404,7 @@
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
       setNewtabTopContentTabState(currentNewtabTopContentMode);
+      setSelectionQuickActionsTriggerStyleTabState(currentSelectionQuickActionsTriggerStyle);
       setSelectionQuickActionsIconSetTabState(currentSelectionQuickActionsIconSet);
       renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
@@ -5360,6 +5496,33 @@
         storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: stored });
       }
     });
+    storageArea.get([SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY], (result) => {
+      const providerRawValue = result[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY];
+      const applyTriggerStyle = (localResult) => {
+        const hasLocalValue = Boolean(localResult) && Object.prototype.hasOwnProperty.call(
+          localResult,
+          SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY
+        );
+        const localRawValue = hasLocalValue
+          ? localResult[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]
+          : undefined;
+        const stored = resolveSelectionQuickActionsTriggerStyle(localRawValue, providerRawValue);
+        setSelectionQuickActionsTriggerStyleTabState(stored);
+        if (triggerStyleStorageArea && (!hasLocalValue || localRawValue !== stored)) {
+          triggerStyleStorageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: stored });
+        }
+        if (providerRawValue !== stored) {
+          storageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: stored });
+        }
+      };
+      if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.get !== 'function') {
+        applyTriggerStyle({});
+        return;
+      }
+      triggerStyleStorageArea.get([SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY], (localResult) => {
+        applyTriggerStyle(localResult || {});
+      });
+    });
 
     storageArea.get([RESTRICTED_ACTION_STORAGE_KEY], (result) => {
       const stored = result[RESTRICTED_ACTION_STORAGE_KEY];
@@ -6334,7 +6497,9 @@
 
   addStorageChangeListener((changes, areaName) => {
     const isPrimaryArea = isPrimaryStorageAreaName(areaName);
-    if (!isPrimaryArea) {
+    const hasLocalTriggerStyleChange = areaName === 'local' &&
+      Boolean(changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]);
+    if (!isPrimaryArea && !hasLocalTriggerStyleChange) {
       return;
     }
     if (changes[SYNC_META_KEY] ||
@@ -6357,6 +6522,7 @@
         changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] ||
         changes[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY] ||
         changes[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY] ||
+        changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY] ||
         changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] ||
         changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY] ||
         changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] ||
@@ -6581,6 +6747,17 @@
       setSelectionQuickActionsIconSetTabState(next);
       if (raw !== next && storageArea) {
         storageArea.set({ [SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY]: next });
+      }
+    }
+    if (changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]) {
+      const raw = changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY].newValue;
+      const next = normalizeSelectionQuickActionsTriggerStyle(raw);
+      setSelectionQuickActionsTriggerStyleTabState(next);
+      if (areaName !== 'local' && triggerStyleStorageArea) {
+        triggerStyleStorageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: next });
+      }
+      if (raw !== next && storageArea) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: next });
       }
     }
     if (changes[RESTRICTED_ACTION_STORAGE_KEY] && restrictedActionSelect) {

@@ -149,10 +149,20 @@ assert.strictEqual(
 );
 assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('remix'), 'remix');
 assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet(' HUGEICONS '), 'hugeicons');
+assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('butterfly'), 'remix');
 assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('unsupported'), 'remix');
 assert.strictEqual(
   settings.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
   '_x_extension_selection_quick_actions_icon_set_2026_unique_'
+);
+assert.strictEqual(settings.normalizeSelectionQuickActionsTriggerStyle('butterfly'), 'butterfly');
+assert.strictEqual(settings.normalizeSelectionQuickActionsTriggerStyle('unsupported'), 'lumno');
+assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('lumno', 'butterfly'), 'butterfly');
+assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('butterfly', 'lumno'), 'butterfly');
+assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('lumno', undefined), 'lumno');
+assert.strictEqual(
+  settings.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
+  '_x_extension_selection_quick_actions_trigger_style_2026_unique_'
 );
 
 assert.strictEqual(settings.normalizeThemePreference('dark'), 'dark');
@@ -197,7 +207,8 @@ async function testProviderStorageRuntime() {
       clear(callback) { Object.keys(values).forEach((key) => delete values[key]); if (callback) callback(); }
     };
   }
-  const sync = createArea({});
+  const triggerStyleKey = settings.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY;
+  const sync = createArea({ [triggerStyleKey]: 'butterfly' });
   const local = createArea({});
   const chromeApi = {
     storage: {
@@ -208,9 +219,15 @@ async function testProviderStorageRuntime() {
   };
   const runtime = settings.createProviderStorageRuntime(chromeApi);
   await runtime.ready;
+  assert.deepStrictEqual(
+    await runtime.area.get([triggerStyleKey]),
+    { [triggerStyleKey]: 'butterfly' },
+    'Chrome Sync mode should expose the stored butterfly entry style'
+  );
   await runtime.area.set({ theme: 'chrome' });
   assert.strictEqual(sync.values.theme, 'chrome');
   local.values[settings.CLOUD_SYNC_MODE_STORAGE_KEY] = 'cloud';
+  local.values[triggerStyleKey] = 'lumno';
   listeners.forEach((listener) => listener({
     [settings.CLOUD_SYNC_MODE_STORAGE_KEY]: { newValue: 'cloud' }
   }, 'local'));
@@ -218,6 +235,14 @@ async function testProviderStorageRuntime() {
   assert.strictEqual(local.values.theme, 'lumno');
   assert.strictEqual(sync.values.theme, 'chrome', 'inactive Chrome Sync must not receive Lumno writes');
   assert.strictEqual(runtime.isActiveAreaName('local'), true);
+  assert.deepStrictEqual(
+    await runtime.area.get([triggerStyleKey]),
+    { [triggerStyleKey]: 'lumno' },
+    'Lumno Cloud mode should read the trigger style from local primary storage'
+  );
+  await runtime.area.set({ [triggerStyleKey]: 'butterfly' });
+  assert.strictEqual(local.values[triggerStyleKey], 'butterfly');
+  assert.strictEqual(sync.values[triggerStyleKey], 'butterfly', 'inactive Chrome Sync should remain untouched');
 }
 
 testProviderStorageRuntime().then(() => {

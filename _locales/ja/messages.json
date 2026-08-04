@@ -74,6 +74,11 @@
   "settings_selection_quick_actions_provider_title": {
     "message": "優先プロバイダー"
   },
+  "settings_selection_quick_actions_trigger_style_title": {
+    "message": "選択トリガーアイコン"
+  },
+  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
+  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno バタフライ" },
   "settings_selection_quick_actions_icon_set_title": {
     "message": "操作アイコン"
   },

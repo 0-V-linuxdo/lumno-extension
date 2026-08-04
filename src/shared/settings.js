@@ -19,6 +19,7 @@
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY = '_x_extension_selection_quick_actions_trigger_style_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_KEYS = Object.freeze([
     'gpt',
     'gm',
@@ -205,7 +206,18 @@
   }
 
   function normalizeSelectionQuickActionsIconSet(value) {
-    return String(value || '').trim().toLowerCase() === 'hugeicons' ? 'hugeicons' : 'remix';
+    const key = String(value || '').trim().toLowerCase();
+    return key === 'hugeicons' ? key : 'remix';
+  }
+
+  function normalizeSelectionQuickActionsTriggerStyle(value) {
+    return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
+  }
+
+  function resolveSelectionQuickActionsTriggerStyle(...values) {
+    return values.some((value) => normalizeSelectionQuickActionsTriggerStyle(value) === 'butterfly')
+      ? 'butterfly'
+      : 'lumno';
   }
 
   function normalizeThemePreference(value) {
@@ -333,6 +345,7 @@
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
     CLOUD_SYNC_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
@@ -362,6 +375,8 @@
     normalizeSelectionQuickActionsEnabled,
     normalizeSelectionQuickActionsProvider,
     normalizeSelectionQuickActionsIconSet,
+    normalizeSelectionQuickActionsTriggerStyle,
+    resolveSelectionQuickActionsTriggerStyle,
     normalizeThemePreference,
     normalizeThemeMode,
     createGlobalThemeModeStorageUpdate,

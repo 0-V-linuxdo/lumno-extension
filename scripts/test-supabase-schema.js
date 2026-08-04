@@ -52,9 +52,21 @@ const opsMonitorSql = fs.readFileSync(opsMonitorMigrationPath, 'utf8');
 const enforceSignupRecaptchaMigrationPath =
   'supabase/migrations/202608040018_enforce_signup_recaptcha.sql';
 const enforceSignupRecaptchaSql = fs.readFileSync(enforceSignupRecaptchaMigrationPath, 'utf8');
+const selectionQuickActionsSyncKeysMigrationPath =
+  'supabase/migrations/202608040019_selection_quick_actions_sync_keys.sql';
+const selectionQuickActionsSyncKeysSql = fs.readFileSync(
+  selectionQuickActionsSyncKeysMigrationPath,
+  'utf8'
+);
 
 function run() {
-  const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
+  const syncSchemaSql = [
+    sql,
+    syncAllowlistSql,
+    fullConfigurationSql,
+    hardeningSql,
+    selectionQuickActionsSyncKeysSql
+  ].join('\n');
   schema.SYNC_KEYS.forEach((key) => {
     assert(syncSchemaSql.includes(`'${key}'`), `database sync allowlist should include ${key}`);
   });
@@ -67,12 +79,14 @@ function run() {
     (match) => match[1]
   );
   const expectedFollowupKeys = new Set(schema.SYNC_KEYS);
-  const actualFollowupKeys = new Set(extractSyncKeys(fullConfigurationSql));
+  const actualFollowupKeys = new Set(extractSyncKeys(selectionQuickActionsSyncKeysSql));
   assert.deepStrictEqual(
     Array.from(actualFollowupKeys).sort(),
     Array.from(expectedFollowupKeys).sort(),
     'the latest follow-up migration should replace the complete sync allowlist without dropping keys'
   );
+  assert.match(selectionQuickActionsSyncKeysSql, /notify pgrst, 'reload schema';/,
+    'the latest sync contract migration should reload the PostgREST schema cache');
   schema.USAGE_METRICS.forEach((metric) => {
     assert(sql.includes(`'${metric}'`), `database usage allowlist should include ${metric}`);
   });
