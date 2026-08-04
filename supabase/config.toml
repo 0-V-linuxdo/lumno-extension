@@ -44,6 +44,19 @@ refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
 
+[auth.rate_limit]
+email_sent = 2
+sms_sent = 1
+anonymous_users = 1
+token_refresh = 150
+sign_in_sign_ups = 20
+token_verifications = 30
+web3 = 1
+
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/lumno_before_user_created"
+
 [auth.email]
 enable_signup = false
 double_confirm_changes = true
@@ -64,6 +77,12 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.media-asset]
+verify_jwt = false
+
+[functions.signup-captcha]
+verify_jwt = false
+
+[functions.monitor-snapshot]
 verify_jwt = false
 
 [analytics]

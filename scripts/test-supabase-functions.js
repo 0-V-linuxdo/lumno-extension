@@ -9,7 +9,11 @@ const deletion = fs.readFileSync('supabase/functions/delete-account/index.ts', '
 const media = fs.readFileSync('supabase/functions/media-asset/index.ts', 'utf8');
 const mediaValidation = fs.readFileSync('supabase/functions/_shared/media.ts', 'utf8');
 const authorization = fs.readFileSync('supabase/functions/_shared/auth.ts', 'utf8');
+const signupCaptcha = fs.readFileSync('supabase/functions/signup-captcha/index.ts', 'utf8');
+const monitorSnapshot = fs.readFileSync('supabase/functions/monitor-snapshot/index.ts', 'utf8');
 const supabaseConfig = fs.readFileSync('supabase/config.toml', 'utf8');
+const localSmoke = fs.readFileSync('scripts/smoke-supabase-local.js', 'utf8');
+const remoteSmoke = fs.readFileSync('scripts/smoke-supabase-remote.js', 'utf8');
 
 function run() {
   schema.USAGE_METRICS.forEach((metric) => {
@@ -44,11 +48,25 @@ function run() {
     /\[auth\.email\][\s\S]*?enable_signup\s*=\s*false/,
     'new email signups must remain disabled'
   );
+  assert.match(
+    supabaseConfig,
+    /\[auth\.rate_limit\][\s\S]*?sign_in_sign_ups\s*=\s*20/,
+    'Auth sign-in and signup bursts should use the reviewed project limit'
+  );
+  assert.match(
+    supabaseConfig,
+    /\[auth\.hook\.before_user_created\][\s\S]*?enabled\s*=\s*true[\s\S]*?lumno_before_user_created/,
+    'the deployable Auth configuration should enable the database signup hook'
+  );
   assert.doesNotMatch(
     supabaseConfig,
     /\[auth\.email\.template\.|content_path\s*=/,
     'retired email OTP templates must not remain in deployable config'
   );
+  [localSmoke, remoteSmoke].forEach((source) => {
+    assert.match(source, /app_metadata:\s*\{ lumno_system_fixture: true \}/,
+      'service-role smoke users must carry the private Auth-hook bypass marker');
+  });
 
   const removeObjectsAt = deletion.indexOf('.remove(');
   const deleteUserAt = deletion.indexOf('.deleteUser(');
@@ -96,6 +114,28 @@ function run() {
   assert.match(mediaValidation, /MAX_WALLPAPER_BYTES = 2 \* 1024 \* 1024/);
   assert.match(mediaValidation, /MAX_ICON_BYTES = 96 \* 1024/);
   assert.match(supabaseConfig, /\[functions\.media-asset\][\s\S]*?verify_jwt\s*=\s*false/);
+  assert.match(supabaseConfig, /\[functions\.signup-captcha\][\s\S]*?verify_jwt\s*=\s*false/);
+  assert.match(signupCaptcha, /https:\/\/www\.google\.com\/recaptcha\/api\/siteverify/,
+    'CAPTCHA tokens should be verified with Google only from the Edge Function');
+  assert.match(signupCaptcha, /result\.action !== ACTION/,
+    'CAPTCHA verification should bind the token to the OAuth action');
+  assert.match(signupCaptcha, /ALLOWED_HOSTNAMES\.has/,
+    'CAPTCHA verification should validate the issuing hostname');
+  assert.match(signupCaptcha, /errorCodes\.length > 0/,
+    'quota or replay errors must fail closed even if a score is returned');
+  assert.match(signupCaptcha, /score < minimumScore\(\)/,
+    'low-confidence traffic should be rejected server-side');
+  assert.match(signupCaptcha, /lumno_record_signup_captcha_pass/,
+    'a successful Google verification should mint a short database pass');
+  assert.doesNotMatch(signupCaptcha, /console\.(?:log|error)|token\s*:/,
+    'the function must not log or echo the CAPTCHA token');
+  assert.match(supabaseConfig, /\[functions\.monitor-snapshot\][\s\S]*?verify_jwt\s*=\s*false/);
+  assert.match(monitorSnapshot, /safeEqual\(suppliedKey, expectedKey\)/,
+    'the monitoring endpoint should compare its dedicated secret without early exit');
+  assert.match(monitorSnapshot, /lumno_get_monitor_snapshot/,
+    'the monitoring endpoint should return only the reviewed aggregate RPC');
+  assert.doesNotMatch(monitorSnapshot, /select\(|\.from\(/,
+    'the Edge Function should not query arbitrary internal tables directly');
 
   console.log('supabase Edge Function tests passed');
 }

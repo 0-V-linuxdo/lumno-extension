@@ -74,7 +74,12 @@ async function main() {
   const createdUser = await requestJson(`${apiUrl}/auth/v1/admin/users`, serviceRoleKey, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceRoleKey}` },
-    body: { email, password, email_confirm: true }
+    body: {
+      email,
+      password,
+      email_confirm: true,
+      app_metadata: { lumno_system_fixture: true }
+    }
   });
   const userId = createdUser.id || createdUser.user?.id;
   assert(userId, 'admin-created test fixture should return a user id');

@@ -40,6 +40,18 @@ const mediaUsageSql = fs.readFileSync(mediaUsageMigrationPath, 'utf8');
 const mediaUsageFixMigrationPath =
   'supabase/migrations/202608030014_media_usage_counter_fix.sql';
 const mediaUsageFixSql = fs.readFileSync(mediaUsageFixMigrationPath, 'utf8');
+const signupAndSyncRateLimitMigrationPath =
+  'supabase/migrations/202608040015_signup_and_sync_rate_limits.sql';
+const signupAndSyncRateLimitSql = fs.readFileSync(signupAndSyncRateLimitMigrationPath, 'utf8');
+const signupRecaptchaMigrationPath =
+  'supabase/migrations/202608040016_signup_recaptcha_passes.sql';
+const signupRecaptchaSql = fs.readFileSync(signupRecaptchaMigrationPath, 'utf8');
+const opsMonitorMigrationPath =
+  'supabase/migrations/202608040017_ops_monitor_snapshot.sql';
+const opsMonitorSql = fs.readFileSync(opsMonitorMigrationPath, 'utf8');
+const enforceSignupRecaptchaMigrationPath =
+  'supabase/migrations/202608040018_enforce_signup_recaptcha.sql';
+const enforceSignupRecaptchaSql = fs.readFileSync(enforceSignupRecaptchaMigrationPath, 'utf8');
 
 function run() {
   const syncSchemaSql = `${sql}\n${syncAllowlistSql}\n${fullConfigurationSql}\n${hardeningSql}`;
@@ -239,6 +251,92 @@ function run() {
   assert.match(mediaUsageFixSql,
     /update public\.lumno_media_global_usage[\s\S]*?select sum\(byte_size \+ thumbnail_byte_size\)/,
     'the counter fix should reconcile the global byte total from active metadata');
+  assert.match(signupAndSyncRateLimitSql,
+    /create or replace function public\.lumno_before_user_created\(event jsonb\)/,
+    'new accounts should pass through a database-backed Auth hook');
+  assert.match(signupAndSyncRateLimitSql,
+    /extensions\.hmac\([\s\S]*?ip_hmac_key[\s\S]*?'sha256'/,
+    'signup rate events should retain only a keyed IP fingerprint');
+  assert.doesNotMatch(signupAndSyncRateLimitSql,
+    /create table if not exists public\.lumno_signup_rate_events[\s\S]*?\bip_address\s+(?:text|inet)\b/,
+    'signup rate events must not persist raw IP addresses');
+  assert.match(signupAndSyncRateLimitSql,
+    /v_provider not in \('google', 'github'\)/,
+    'the Auth hook should reject providers outside the production allowlist');
+  assert.match(signupAndSyncRateLimitSql,
+    /v_ip_hour_count >= 5[\s\S]*?v_ip_day_count >= 12[\s\S]*?v_global_hour_count >= 60[\s\S]*?v_global_day_count >= 200/,
+    'the Auth hook should enforce per-origin and project-wide rolling signup caps');
+  assert.match(signupAndSyncRateLimitSql,
+    /grant execute on function public\.lumno_before_user_created\(jsonb\)[\s\S]*?to supabase_auth_admin/,
+    'only the Supabase Auth administrator should invoke the signup hook');
+  assert.match(signupAndSyncRateLimitSql,
+    /'lumno-signup-rate-event-cleanup'[\s\S]*?'47 \* \* \* \*'/,
+    'keyed signup fingerprints should receive clock-driven retention cleanup');
+  assert.match(signupAndSyncRateLimitSql,
+    /create table if not exists public\.lumno_sync_request_windows/,
+    'authenticated sync endpoints should use a bounded per-account request window');
+  assert.match(signupAndSyncRateLimitSql,
+    /from public\.lumno_sync_request_windows[\s\S]*?for update/,
+    'sync rate accounting should serialize on one short-lived account row lock');
+  assert.match(signupAndSyncRateLimitSql,
+    /register_count >= 20[\s\S]*?push_count >= 30[\s\S]*?pull_count >= 60/,
+    'device, push, and pull RPCs should each enforce a per-minute ceiling');
+  ['register', 'push', 'pull'].forEach((kind) => {
+    assert.match(signupAndSyncRateLimitSql,
+      new RegExp(`lumno_consume_sync_request\\(v_user_id, '${kind}'\\)`),
+      `${kind} RPC wrapper should consume the shared request budget`);
+  });
+  assert.match(signupAndSyncRateLimitSql,
+    /revoke all on function public\.lumno_push_setting_changes_internal[\s\S]*?from public, anon, authenticated/,
+    'the unlimited sync implementation must not remain directly callable');
+  assert.match(signupAndSyncRateLimitSql,
+    /create trigger lumno_devices_throttle_last_seen[\s\S]*?before update of last_seen_at/,
+    'all device heartbeat paths should share one database write throttle');
+  assert.match(signupRecaptchaSql,
+    /create table if not exists public\.lumno_signup_captcha_passes/,
+    'server-verified CAPTCHA passes should have a bounded persistence table');
+  assert.match(signupRecaptchaSql,
+    /alter table public\.lumno_signup_captcha_passes enable row level security;[\s\S]*?force row level security/,
+    'CAPTCHA passes should be protected by forced RLS');
+  assert.doesNotMatch(signupRecaptchaSql,
+    /create table if not exists public\.lumno_signup_captcha_passes[\s\S]*?\b(?:ip_address|captcha_token)\s+(?:text|inet)\b/,
+    'CAPTCHA passes must not persist raw IP addresses or Google tokens');
+  assert.match(signupRecaptchaSql,
+    /create index if not exists lumno_signup_captcha_passes_available_idx[\s\S]*?where consumed_at is null/,
+    'the hook lookup should use a compact partial index over unconsumed passes');
+  assert.match(signupRecaptchaSql,
+    /grant execute on function public\.lumno_record_signup_captcha_pass\(inet, text, numeric\)[\s\S]*?to service_role/,
+    'only the privileged Edge Function should mint a CAPTCHA pass');
+  assert.match(signupRecaptchaSql,
+    /v_origin_hour_count >= 20[\s\S]*?v_global_hour_count >= 500/,
+    'server verification should also have origin and global abuse ceilings');
+  assert.match(signupRecaptchaSql,
+    /if v_captcha_enforced then[\s\S]*?for update skip locked[\s\S]*?set consumed_at = v_now/,
+    'the Auth hook should atomically consume one matching pass');
+  assert.match(signupRecaptchaSql,
+    /provider = v_provider[\s\S]*?expires_at >= v_now/,
+    'a pass should be bound to the selected provider and a short expiry');
+  assert.match(signupRecaptchaSql,
+    /where expires_at < now\(\) - interval '1 hour'/,
+    'expired CAPTCHA fingerprints should be removed by the existing hourly cleanup');
+  assert.match(enforceSignupRecaptchaSql,
+    /update public\.lumno_signup_security_secrets[\s\S]*?set captcha_enforced = true[\s\S]*?where singleton/,
+    'production rollout should explicitly enable server-side CAPTCHA enforcement');
+  assert.match(enforceSignupRecaptchaSql,
+    /where singleton and captcha_enforced[\s\S]*?raise exception/,
+    'CAPTCHA enforcement rollout should fail closed when the singleton cannot be updated');
+  assert.match(opsMonitorSql,
+    /create or replace function public\.lumno_get_monitor_snapshot\(\)/,
+    'monitoring should read one coarse database snapshot');
+  assert.match(opsMonitorSql,
+    /signup_hour[\s\S]*?sync_hot_accounts[\s\S]*?media_active_bytes[\s\S]*?retention_last_completed_at/,
+    'the snapshot should cover signup, concurrency, storage, and maintenance guardrails');
+  assert.doesNotMatch(opsMonitorSql,
+    /user_id|ip_fingerprint|storage_path|client_asset_id/,
+    'the operational snapshot must not expose account or origin identifiers');
+  assert.match(opsMonitorSql,
+    /revoke all on function public\.lumno_get_monitor_snapshot\(\)[\s\S]*?grant execute[\s\S]*?to service_role/,
+    'only the privileged monitoring function should read the snapshot');
 
   ['lumno_usage_monthly_totals', 'lumno_maintenance_state'].forEach((table) => {
     assert(

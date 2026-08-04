@@ -2802,7 +2802,7 @@
         setCloudButtonBusy(cloudSignoutButton, true);
         sendCloudMessage({ action: 'cloudSignOut' })
           .then(() => loadCloudAccountStatus())
-          .then(() => showToast(getMessage('cloud_signout_done', '已退出登录，本机配置仍然保留'), false))
+          .then(() => showToast(getMessage('cloud_signout_done', '已退出当前设备；本机配置继续生效，其他设备不受影响'), false))
           .catch((error) => showToast(getCloudErrorMessage(error), true))
           .finally(() => setCloudButtonBusy(cloudSignoutButton, false));
       });

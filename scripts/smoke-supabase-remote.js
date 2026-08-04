@@ -7,6 +7,17 @@ const { execFileSync } = require('child_process');
 
 const cloudConfig = require('../src/shared/cloud-config.js');
 
+// The hosted Auth, REST, Storage, and Edge routes share one origin but may
+// terminate keep-alive connections at different gateway layers. Node's
+// Undici pool can otherwise reuse a half-closed socket during this mixed-route
+// smoke and report a misleading `fetch failed` after the server succeeded.
+const nativeFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = (input, options = {}) => {
+  const headers = new Headers(options.headers || {});
+  headers.set('Connection', 'close');
+  return nativeFetch(input, { ...options, headers });
+};
+
 function readRemoteKeys(projectRef) {
   const raw = execFileSync(
     'npx',
@@ -90,14 +101,24 @@ async function main() {
   let deleted = false;
 
   try {
+    const createdUser = await requestJson(`${config.projectUrl}/auth/v1/admin/users`, keys.serviceRole, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${keys.serviceRole}` },
+      body: {
+        email,
+        email_confirm: true,
+        app_metadata: { lumno_system_fixture: true }
+      }
+    });
+    userId = createdUser.id;
+    assert(userId, 'admin test setup should create a marked system fixture');
     const fixture = await requestJson(`${config.projectUrl}/auth/v1/admin/generate_link`, keys.serviceRole, {
       method: 'POST',
       headers: { Authorization: `Bearer ${keys.serviceRole}` },
       body: { type: 'magiclink', email }
     });
-    userId = fixture.id;
-    assert(userId && fixture.hashed_token,
-      'admin test setup should create a user and a non-delivered test token');
+    assert(fixture.hashed_token,
+      'admin test setup should issue a non-delivered token for the marked fixture');
 
     const session = await requestJson(
       `${config.projectUrl}/auth/v1/verify`,

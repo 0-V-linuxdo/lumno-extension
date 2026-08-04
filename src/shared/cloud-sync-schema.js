@@ -74,6 +74,7 @@
     mode: '_lumno_cloud_mode_v1_',
     outbox: '_lumno_cloud_outbox_v1_',
     pullCursor: '_lumno_cloud_pull_cursor_v1_',
+    rejoin: '_lumno_cloud_rejoin_v1_',
     session: '_lumno_cloud_session_v1_',
     status: '_lumno_cloud_status_v1_',
     usage: '_lumno_cloud_usage_v1_',

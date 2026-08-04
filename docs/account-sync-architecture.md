@@ -1,6 +1,6 @@
 # Lumno 账号、同步与统计架构
 
-更新日期：2026-08-03
+更新日期：2026-08-04
 
 ## 1. 最终方案
 
@@ -16,6 +16,7 @@ Lumno 使用 Supabase Auth + Postgres + Private Storage + Edge Functions，并�
 flowchart LR
   Plugin["Lumno 插件"] --> PKCE["Chrome Identity + PKCE"]
   PKCE --> Web["Lumno Web 登录 / 授权页"]
+  Web --> Captcha["reCAPTCHA v3 + 一次性注册通行证"]
   Web --> Social["Google / GitHub（相同已验证邮箱自动关联）"]
   PKCE --> Vault["扩展私有 IndexedDB 会话"]
   UI["Options / New Tab"] --> Router["同步提供方路由"]
@@ -81,6 +82,7 @@ flowchart LR
 2. 版本不一致：服务端不覆盖，客户端从 Outbox 摘除旧操作以终止重试死循环；双方值进入去重冲突记录，当前工作值先采用服务端版本。
 3. 网络超时重试：同一个 `operation_id` 只执行一次。
 4. 多键批量写入：按键名排序，降低数据库死锁概率。
+5. 本机 Outbox、版本、冲突和设备 ID 的读改写走同一个串行队列；网络响应落盘前重新读取最新状态，因此请求在途期间产生的新修改不会被旧快照覆盖。
 
 这分别对应 Optimistic Concurrency、Idempotency 和 Deterministic Lock Ordering。可以把它们理解为“对稿版本号”“快递单号”和“所有人按同一顺序排队”。
 
@@ -109,8 +111,9 @@ flowchart LR
 | 网页到插件 | OAuth 2.1 Authorization Code + PKCE + state + 精确回调 URI | 网页不能直接把 Token 注入插件，截获授权码也无法兑换 |
 | 用户会话 | Token 仅存扩展源私有 IndexedDB | Token 不随浏览器账号同步，内容脚本也不能直接读取 |
 | 插件消息 | 只接受同扩展 ID、同 `chrome-extension://` 源的账号动作 | 普通网页和内容脚本不能触发登录、退出或同步操作；插件不提供删除账号接口 |
+| 新账号创建 | reCAPTCHA v3 服务端验签 + 十分钟一次性来源通行证 + 仅允许 Google/GitHub + Before User Created Hook + Auth 原生频控；每来源每小时 5 个、24 小时 12 个，项目每小时 60 个、24 小时 200 个 | 绕过网页登录也不能直接批量创建 OAuth 账号，账号级配额不能无限放大 |
 | 数据库 | 所有业务表启用并强制 RLS | 用户不能读写别人的行 |
-| 配置写入 | 只允许受控 RPC | 客户端不能绕过版本检查 |
+| 配置写入 | 只允许受控 RPC；注册设备/推送/拉取分别限制为每账号每分钟 20/30/60 次 | 客户端不能绕过版本检查，也不能用高频空请求制造持续热行写入 |
 | 媒体上传 | 客户端重编码 + Edge 网关 + 实际字节/结构/尺寸复核 + 两个活动壁纸槽位 + 数量/容量/速率配额 | 不能越权写路径、伪造 MIME、无限上传或把服务当网盘 |
 | 媒体下载 | Edge 网关 + metadata 所有权检查 + 月度出站预算 | 不能绕过计费边界批量消耗 Storage 流量 |
 | 开源仓库 | 商店包仅打包 `src/_locales/assets`，剥离开发 key/debug 连接；仓库和客户端仅含 Publishable Key | 开源代码不会暴露 Service Role、数据库密码或部署资产 |
@@ -127,6 +130,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - 15 分钟 periodic alarm 补偿；
 - 浏览器启动或后台被唤醒时再次同步；
 - 所有操作先写本地，因此网络失败不阻塞 UI。
+- 同一浏览器实例的首次设备 ID 创建和远端注册采用 single-flight；并发同步入口共享同一个结果，不重复占用设备名额。
 - 每次 Supabase 请求最多等待 15 秒；网络故障按 30 秒起步指数退避，最长 15 分钟，用户手动同步可绕过冷却重试。
 - Supabase 故障时不自动回退 Chrome Sync，避免两套远端各自产生新历史；本机继续可用，待发修改留在 Outbox。
 
@@ -138,6 +142,8 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - 删除本地壁纸只影响当前设备；若它正在浅色或深色槽位中生效，会同时更新选择并清理对应云端活动副本。云端替换或墓碑不会删除其他设备的本地 IndexedDB 壁纸库。
 - 删除账号只能在已认证的 Lumno Web 账号中心完成。Web 调用 Edge Function，递归枚举并清理该 `user_id/` 下的全部对象（包括未来目录、旧路径和无引用对象），再删除 Auth 用户；数据库行通过外键级联清理。插件只有跳转链接，没有直接删除能力。
 - 退出登录不会删除本机配置；永久删除账号也保留本机配置，方便用户继续使用游客模式。
+- “退出登录”只撤销当前设备的会话，不会全局撤销其他设备。退出前先尽力完成一次同步，把当前云端版本、Outbox、冲突和设备 ID 保存成只属于原账号的重登录检查点，再把可同步配置复制回 Chrome Sync 供游客模式继续使用。
+- 退出后产生的本机改动继续写入游客模式工作副本。重新登录同一个账号时恢复原设备 ID 和版本基线，先拉取服务器全量：服务器版本没变的本机离线改动沿用原 `base_version` 上传；服务器版本已前进的键进入显式冲突，不按登录先后静默覆盖。登录另一个账号时不会复用原账号检查点。
 
 ## 8. 主要风险和控制
 
@@ -153,7 +159,8 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 | 开源代码被二次打包 | 公共客户端标识不视为秘密；所有授权、配额和内容判断在服务端；商店包不包含后端/部署文件 | 外部贡献者或 CI 若需端到端云测试，应使用独立 Supabase 开发项目，禁止给生产 Service Role |
 | 统计口径膨胀 | 固定白名单、未知字段拒绝 | 新指标必须经过隐私评审和 schema 变更 |
 | 多设备冲突体验 | 不静默覆盖，保存冲突 | 后续增加逐项冲突 UI |
-| 账号枚举/暴力请求 | Auth 速率限制，错误文案不暴露账号存在 | 上线后观察 Auth 日志并调限额 |
+| 批量注册/账号枚举 | Google/GitHub 提供方白名单、按点击加载的 reCAPTCHA v3、Edge 服务端核验 action/hostname/score、一次性来源通行证、Auth 原生频控、数据库注册 Hook 的来源与全局滚动上限；错误文案不暴露账号存在 | 上线后观察验证码评分、403/429 比例并按真实增长调整 0.5 阈值 |
+| 同步 RPC 洪泛 | 每账号单行分钟窗口，固定锁顺序；设备心跳一小时内无变化不写盘 | 若出现跨账号分布式攻击，需在网关层增加项目级 IP/WAF 限制 |
 
 ## 9. 方案比较
 
@@ -186,6 +193,7 @@ MV3 Service Worker 会休眠，不能依赖常驻 WebSocket。实现使用：
 - `supabase/migrations/202608030012_delete_step_up_consumption.sql`：以数据库主键原子消费账号删除的独立 step-up 会话。
 - `supabase/migrations/202608030013_media_usage_counters.sql`：维护媒体计数器，并通过租约校验的原子 RPC 提交 metadata。
 - `supabase/migrations/202608030014_media_usage_counter_fix.sql`：修复软删除媒体随后级联删除时的重复扣减，并校准已有媒体计数器。
+- `supabase/migrations/202608040015_signup_and_sync_rate_limits.sql`：加入注册提供方白名单、带密钥 IP 指纹滚动频控、同步 RPC 分钟窗口、设备心跳统一节流和最小权限包装层。
 - `supabase/migrations/202608020004_mainland_cross_border_consent.sql`：保留已部署的历史同意字段；当前客户端不再展示或写入地区专属同意。
 - `supabase/functions/`：统计入口、媒体上传/下载/删除网关与账号删除。
 

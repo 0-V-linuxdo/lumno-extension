@@ -226,6 +226,7 @@
       refreshInFlight = refreshRequest.catch(async (error) => {
         if (error && (error.status === 400 || error.status === 401)) {
           await sessionStore.remove();
+          error.sessionInvalidated = true;
         }
         throw error;
       }).finally(() => {
@@ -294,7 +295,7 @@
       const session = await readSession();
       try {
         if (session) {
-          await request('/auth/v1/logout', {
+          await request('/auth/v1/logout?scope=local', {
             method: 'POST',
             headers: { Authorization: `Bearer ${session.access_token}` }
           });

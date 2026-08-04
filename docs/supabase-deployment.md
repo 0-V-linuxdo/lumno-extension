@@ -1,11 +1,12 @@
 # Lumno Supabase 部署手册
 
-更新日期：2026-08-03
+更新日期：2026-08-04
 
 ## 当前云端状态
 
 - 项目：`lumno`（Ref `krpyocaoeqfwpepnsthc`），东京 `ap-northeast-1`，创建时为 Free 计划。
-- 数据库基线：迁移 `202608010001` 至 `202608030009` 的历史状态按部署记录保留；本次收尾新增的 `010`–`014` 已部署到远端并完成迁移历史登记，分别收口设备/统计并发限制、媒体租约、删除二次验证一次性消费、媒体计数器及软删除级联删除的计数校准。
+- 数据库基线：迁移 `202608010001` 至 `202608040018` 已部署并完成迁移历史登记；`010`–`014` 收口设备/统计并发限制、媒体租约、删除二次验证一次性消费、媒体计数器及软删除级联删除的计数校准，`015`–`018` 启用注册/同步频控、reCAPTCHA 单次通行证、聚合监控快照和生产注册强制校验。
+- 注册与并发保护：`202608040015` 已于 2026-08-04 部署并登记到远端；注册准入 Hook、注册来源/全局滚动频控、同步 RPC 分钟窗口和设备心跳节流均已启用。Auth 使用 Management API 最小 PATCH，只修改五分钟登录/注册频控和 Before User Created Hook，生产站点 URL、OAuth 回调和提供方配置保持不变。
 - Storage：`lumno-user-media` 为私有 Bucket。迁移 `006` 后认证客户端没有任何直连对象策略，上传、下载和删除全部经过 `media-asset`；壁纸主图 2 MiB、缩略图 160 KiB、图标 96 KiB，账号最多两张活动壁纸、20 个图标和 10 MiB 活跃媒体。
 - Edge Functions 基线：`telemetry-ingest`、`media-asset`、`delete-account` 已部署为 ACTIVE，分别为当前工作区版本；不依赖第三方审核 Secret。
 - 数据保留：账号关联的每日统计与配置属性保留 24 个月，之后只汇总为不含用户、设备或配置标识的“月份 + 指标”长期总数；统计去重批次保留 30 天，同步幂等操作记录保留 90 天。
@@ -27,6 +28,7 @@
 - 未认证访问 `telemetry-ingest` 和 `delete-account` 均返回 401。
 - `node scripts/smoke-supabase-local.js` 使用仅限测试的管理员账号夹具，验证配置推拉、私有壁纸、同意后的聚合统计和删除二次验证防线；脚本失败也会在 finally 中清理测试用户。
 - 2026-08-03：远端迁移 `010`–`014` 已部署并登记，三个 Edge Function 均为 ACTIVE；系统目录核对确认租约、step-up 一次性消费、媒体计数器和 900 MiB 全局停写闸门生效。远端烟测覆盖配置同步、私有媒体、统计和删除防线，测试账号清理后零残留；计数器最终与活动资产字节数一致。
+- 2026-08-04：本地复现并修复并发 Outbox 丢写、首次设备 ID 分叉和重复设备注册；新增测试确认两个并发设置均保留、设备 ID 唯一、在途推送后的新值会基于已接受版本继续排队。`015` 已部署，生产实测同账号一分钟内前 20 次设备注册成功、第 21 次以 `42901` 拒绝；注册 Hook 同源前 5 次放行、第 6 次返回 429，测试账号、测试指纹和本次中断烟测产生的对象均已清理。
 
 可重复本地验收：
 
@@ -66,7 +68,25 @@ npx supabase@latest db push --dry-run
 npx supabase@latest db push
 ```
 
-迁移会创建表、索引、RLS、同步 RPC、私有媒体 Bucket、Storage 策略、媒体计数器、租约提交和保留期维护函数。维护函数在统计写入后至多每日运行一次：先生成匿名月度总数，再删除超过 24 个月的账号关联明细，并清理 30/90 天幂等记录。推送后在 Dashboard 的 Security Advisor 中复查告警。`db push` 的迁移历史和行为见 [CLI db push](https://supabase.com/docs/reference/cli/supabase-projects-create)。
+迁移会创建表、索引、RLS、同步 RPC、私有媒体 Bucket、Storage 策略、媒体计数器、租约提交、注册准入函数和保留期维护函数。维护函数在统计写入后至多每日运行一次：先生成匿名月度总数，再删除超过 24 个月的账号关联明细，并清理 30/90 天幂等记录；注册来源的带密钥 IP 指纹最多保留 26 小时。推送后在 Dashboard 的 Security Advisor 中复查告警。`db push` 的迁移历史和行为见 [CLI db push](https://supabase.com/docs/reference/cli/supabase-projects-create)。
+
+`015` 首次部署必须先推数据库迁移，再更新 Auth，避免数据库函数尚不存在时启用 Hook：
+
+```bash
+npx supabase@latest db push
+```
+
+当前 `supabase/config.toml` 同时服务于本地开发，包含 `127.0.0.1` 的 Auth Site URL；不得直接对生产执行整份 `config push`，否则可能覆盖生产站点和 OAuth 回调。应先读取远端 Auth 配置，再通过 Dashboard 或 Management API 仅更新以下字段：
+
+```json
+{
+  "rate_limit_otp": 20,
+  "hook_before_user_created_enabled": true,
+  "hook_before_user_created_uri": "pg-functions://postgres/public/lumno_before_user_created"
+}
+```
+
+Hook 只允许 Google/GitHub 新账号；每个来源最多每小时 5 个、24 小时 12 个，项目最多每小时 60 个、24 小时 200 个。IP 先使用数据库内随机密钥做 HMAC-SHA256，事件表不保存原始 IP。Service Role 管理接口创建的远程烟测夹具不消耗公开注册预算；脚本仍写入不可由公开客户端设置的 `app_metadata.lumno_system_fixture`，方便直接调用 Hook 的数据库烟测识别系统夹具。
 
 不要并行执行同一项目的多个 CLI 数据库命令；它们可能同时轮换临时登录角色，造成凭证竞态。本次东京项目从当前网络到 Postgres 的长连接不稳定，最终通过官方 Management API 将 `010`–`014` 完整 SQL 执行，验证系统目录和迁移历史后使用 `migration repair` 登记版本；最后通过 Management API 查询确认五条迁移已登记。当前机器没有远端数据库密码，因此 CLI 的直连 `db push --dry-run` 仅作为未执行的本地运维检查，不影响已完成的远端部署核验。
 
@@ -110,6 +130,18 @@ curl -i -X POST "https://<project-ref>.supabase.co/functions/v1/telemetry-ingest
 
 在 Authentication → Providers 中保持 Google 与 GitHub 开启，并关闭 Email。Supabase 默认会对相同已验证邮箱执行自动身份关联，因此用户可以用任一已关联提供商进入同一个 Lumno 账号，账号级同步数据不会复制成两份。不同邮箱仍会创建不同账号；Lumno 不提供手工合并两个既有账号的数据迁移。
 
+迁移 `015`–`018` 和 Auth 最小 PATCH 完成后，在 Authentication → Hooks 确认 Before User Created 指向 `public.lumno_before_user_created`，在 Authentication → Rate Limits 确认 Sign in / sign ups 为每 IP 每五分钟 20 次。不要先手工启用 Hook；数据库函数必须先存在。
+
+生产登录页使用 reCAPTCHA v3，`action=lumno_oauth`，初始最低分 0.5。网页只在用户点击 Google/GitHub 时加载脚本并把 token 立即交给 `signup-captcha`；Edge Function 向 Google 验证 success、error codes、action、hostname、score 和时间，再让数据库生成十分钟有效、单次消费、绑定来源 HMAC 指纹和提供方的通行证。Before User Created Hook 只对真正的新用户消费通行证，已有账号登录不会创建用户。上线顺序必须是：
+
+1. 部署 `016`、`017` 和两个 Edge Function，保持 `captcha_enforced=false`；
+2. 将 `RECAPTCHA_SECRET_KEY` 和 `LUMNO_MONITOR_KEY` 写入 Supabase Edge Secrets；
+3. 将 `PUBLIC_RECAPTCHA_SITE_KEY` 写入网站 GitHub Secret，部署并验证登录页；
+4. 通过独立迁移把 `captcha_enforced` 改为 `true`；
+5. 用新账号验证正常注册，并确认绕过网页登录直接发起 OAuth 会被 Hook 拒绝。
+
+不要在网站、插件、仓库或日志中出现 reCAPTCHA Secret。Google token 有效期很短且只能验签一次；Lumno 不保存 token 或原始 IP。
+
 旧邮箱 OTP 实现仅保存在 `archive/email-otp-auth/`，不参与构建或部署。恢复它必须重新进行产品、滥用防护和隐私评审。
 
 ## 6. 填入插件公开配置
@@ -151,7 +183,7 @@ node scripts/smoke-supabase-remote.js
 4. 断网修改后重启浏览器，恢复网络并确认 Outbox 清空。
 5. 在插件确认弹窗中取消，确认不会启动网页登录，且本地不存在 `_lumno_cloud_usage_v1_`。
 6. 确认同步与统计范围并完成登录，确认只出现白名单计数和枚举，不出现 URL、标题或查询。
-7. 退出登录后确认本地待上传计数立即清除，之后不再产生新计数。
+7. 退出当前设备后确认本机设置继续生效、其他设备仍登录；在退出状态修改配置，再登录同一账号，确认服务器未变化的键上传、服务器已变化的键产生冲突，并复用原设备 ID。
 8. 连续快速切换多张本地壁纸，确认过程中不逐张上传；等待 30 秒或关闭面板后仅最终生效的浅色/深色壁纸存在于 Storage。
 9. 删除一个快捷方式自定义图标，确认 Storage 对象和 metadata 都进入删除状态，并且其他设备不再恢复它。
 10. 在危险操作确认页重新完成 Google/GitHub OAuth，使用独立 step-up Token 永久删除账号；确认 Auth 用户、数据库行和壁纸/快捷方式图标对象全部删除，本机设置仍在，并重复提交同一个 step-up Token 确认返回 403。

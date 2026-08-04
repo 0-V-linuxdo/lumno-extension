@@ -52,6 +52,13 @@ function readAuthConfiguration(): AuthConfiguration {
   return { url, publishableKey, secretKey };
 }
 
+export function createAdminClient(): SupabaseClient {
+  const configuration = readAuthConfiguration();
+  return createClient(configuration.url, configuration.secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+}
+
 async function verifyAccessTokenWithConfiguration(
   accessToken: string,
   configuration: AuthConfiguration

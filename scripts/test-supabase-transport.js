@@ -223,6 +223,38 @@ async function run() {
     'authenticated clients should never call Storage directly'
   );
 
+  await transport.signOut();
+  assert.strictEqual(storedSession, null, 'local sign-out must always remove the encrypted device session');
+  assert.match(requests.at(-1).url, /\/auth\/v1\/logout\?scope=local$/,
+    'the extension sign-out button must revoke only this device session');
+
+  let invalidatedSession = {
+    access_token: 'expired-access',
+    refresh_token: 'revoked-refresh',
+    expires_at: Math.floor(now / 1000),
+    user: { id: 'user-one', email: 'alice@example.com' }
+  };
+  const invalidatedTransport = transportApi.createTransport({
+    localArea: createArea({}),
+    sessionStore: {
+      async get() { return invalidatedSession; },
+      async set(value) { invalidatedSession = value; },
+      async remove() { invalidatedSession = null; }
+    },
+    fetchImpl: async () => jsonResponse(401, { error: 'refresh_token_not_found' }),
+    now: () => now,
+    config: {
+      projectUrl: 'https://project.supabase.co/',
+      publishableKey: 'public-key'
+    }
+  });
+  await assert.rejects(
+    () => invalidatedTransport.getSession(),
+    (error) => error && error.sessionInvalidated === true,
+    'a revoked refresh session must be distinguishable from an ordinary API error'
+  );
+  assert.strictEqual(invalidatedSession, null);
+
   console.log('supabase transport tests passed');
 }
 

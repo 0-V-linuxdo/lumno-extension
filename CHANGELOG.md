@@ -12,6 +12,10 @@ Tags: Release
 
 ## Bug Fixes
 
+- 修复多个设置同时变化时 Outbox 读改写覆盖、首次并发同步生成多个设备 ID，以及重复发起设备注册的问题。
+- 为 Google/GitHub 新账号加入数据库准入与滚动频控，并为设备注册、配置推送和拉取加入每账号分钟窗口及统一心跳节流。
+- 登录页加入按需加载且由 Edge/数据库闭环验证的 reCAPTCHA v3；生产监控每五分钟检查 Supabase 健康、错误率、异常流量、注册/同步/媒体阈值和保留任务，并在状态变化时发送飞书与备用邮件告警。
+- 退出登录改为只退出当前设备；本机设置继续工作，其他设备保持登录，重新登录同一账号时按服务器版本合并退出期间的本机改动并保留冲突。
 - 修复页面级 favicon 被旧主机缓存覆盖的问题，并改进缓存并发写入、策略变更失效和快捷方式图标清理。
 - 修复站内搜索 PNG 图标未被打包或未被声明为 web-accessible resource 的问题。
 - 改进搜索范围前缀的切换动画、尺寸过渡和文字对比度，提升浅色与深色主题下的可读性。
@@ -33,6 +37,10 @@ Tags: Release
 
 ## Bug Fixes
 
+- Fixed Outbox read-modify-write loss during concurrent setting changes, first-run device ID splits, and duplicate in-flight device registration.
+- Added database admission and rolling limits for new Google/GitHub accounts, plus per-account minute windows and shared heartbeat throttling for device registration, settings push, and pull RPCs.
+- Added on-demand reCAPTCHA v3 with Edge/database verification, plus five-minute production monitoring for Supabase health, errors, traffic, signup/sync/media guardrails, and retention heartbeats with Feishu and backup email alerts.
+- Changed sign-out to affect only the current device: local settings keep working, other devices stay signed in, and signing back into the same account reconciles offline edits against server versions without hiding conflicts.
 - Fixed page-specific favicons being overridden by stale host-level caches, and improved concurrent cache writes, policy invalidation, and shortcut-icon cleanup.
 - Fixed bundled site-search PNG icons not being packaged or declared as web-accessible resources.
 - Improved scope-prefix transitions, size changes, and text contrast for better readability in light and dark themes.

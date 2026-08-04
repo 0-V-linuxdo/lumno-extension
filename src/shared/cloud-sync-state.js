@@ -125,7 +125,8 @@
     const local = localSnapshot && typeof localSnapshot === 'object'
       ? cloneJson(localSnapshot)
       : {};
-    const pendingKeys = new Set(normalizeOutbox(outbox).map((operation) => operation.key));
+    const pendingByKey = new Map(normalizeOutbox(outbox)
+      .map((operation) => [operation.key, operation]));
     const updates = {};
     const removals = [];
     const conflicts = [];
@@ -139,7 +140,15 @@
       .forEach((row) => {
         cursor = Math.max(cursor, row.change_id);
         versions[row.key] = row.version;
-        if (pendingKeys.has(row.key)) {
+        const pendingOperation = pendingByKey.get(row.key);
+        if (pendingOperation) {
+          // A full pull during same-account re-entry returns every remote row.
+          // If the row is still at the version the local operation was based
+          // on, the server has not changed it and the local operation can be
+          // pushed normally. Only a version advance is a real conflict.
+          if (pendingOperation.base_version === row.version) {
+            return;
+          }
           conflicts.push({
             key: row.key,
             local_value: Object.prototype.hasOwnProperty.call(local, row.key) ? cloneJson(local[row.key]) : null,

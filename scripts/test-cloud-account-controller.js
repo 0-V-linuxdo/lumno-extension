@@ -398,6 +398,143 @@ async function run() {
     url: 'chrome-extension://other-extension/page.html'
   }, { runtime: { id: 'extension-id' } }), false);
 
+  const concurrentRegistrationArea = createArea({
+    [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_CLOUD,
+    [schema.CLOUD_LOCAL_KEYS.account]: { id: 'concurrent-user' },
+    [schema.CLOUD_LOCAL_KEYS.cacheOwner]: 'concurrent-user'
+  });
+  let releaseRegistration;
+  let markRegistrationStarted;
+  let registrationCalls = 0;
+  const registrationStarted = new Promise((resolve) => { markRegistrationStarted = resolve; });
+  const concurrentRegistrationController = controllerApi.createController({
+    chromeApi: { runtime: { id: 'extension-id', getManifest: () => ({ version: '1.2.3' }) } },
+    localArea: concurrentRegistrationArea,
+    syncArea: createArea({}),
+    repository: {
+      async getMode() { return repositoryApi.MODE_CLOUD; }
+    },
+    runtime: {
+      async ensureDevice() { return { id: 'concurrent-device' }; },
+      async syncNow() { return { ok: true }; }
+    },
+    transport: {
+      async getSession() { return { user: { id: 'concurrent-user' } }; },
+      async registerDevice() {
+        registrationCalls += 1;
+        markRegistrationStarted();
+        await new Promise((resolve) => { releaseRegistration = resolve; });
+      }
+    },
+    wallpaperRuntime: {
+      async syncAll() { return { ok: true, uploaded: 0, downloaded: 0, deleted: 0 }; }
+    },
+    usageRuntime: { async flush() { return { ok: true }; } }
+  });
+  const concurrentSyncs = [
+    concurrentRegistrationController.syncNow(),
+    concurrentRegistrationController.syncNow()
+  ];
+  await registrationStarted;
+  assert.strictEqual(registrationCalls, 1,
+    'concurrent sync entry points must share one in-flight device registration');
+  releaseRegistration();
+  await Promise.all(concurrentSyncs);
+  assert.strictEqual(registrationCalls, 1);
+
+  const rejoinDeviceId = '40000000-0000-4000-8000-000000000001';
+  const rejoinLocalArea = createArea({
+    [themeKey]: 'dark',
+    [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_CLOUD,
+    [schema.CLOUD_LOCAL_KEYS.account]: { id: 'rejoin-user', email: 'rejoin@example.com' },
+    [schema.CLOUD_LOCAL_KEYS.cacheOwner]: 'rejoin-user',
+    [schema.CLOUD_LOCAL_KEYS.device]: { id: rejoinDeviceId, display_name: 'Same Mac' },
+    [schema.CLOUD_LOCAL_KEYS.versions]: { [themeKey]: 5 },
+    [schema.CLOUD_LOCAL_KEYS.pullCursor]: 50,
+    [schema.CLOUD_LOCAL_KEYS.outbox]: [],
+    [schema.CLOUD_LOCAL_KEYS.conflicts]: []
+  });
+  const rejoinSyncArea = createArea({ [themeKey]: 'dark' });
+  let rejoinSession = { user: { id: 'rejoin-user', email: 'rejoin@example.com', provider: 'google' } };
+  let remoteTheme = 'dark';
+  let remoteVersion = 5;
+  let remoteChangeId = 50;
+  const rejoinPushes = [];
+  const rejoinRegistrations = [];
+  const rejoinTransport = {
+    config: { configured: true },
+    async getSession() { return rejoinSession; },
+    async registerDevice(device) { rejoinRegistrations.push(device.id); },
+    async signOut() { rejoinSession = null; },
+    async setCloudConsent() {},
+    async setAnalyticsConsent() {},
+    async pushSettings(payload) {
+      rejoinPushes.push(payload);
+      const change = payload.changes[0];
+      remoteTheme = change.value;
+      remoteVersion += 1;
+      remoteChangeId += 1;
+      return {
+        accepted: [{
+          operation_id: change.operation_id,
+          key: change.key,
+          version: remoteVersion,
+          change_id: remoteChangeId
+        }],
+        conflicts: []
+      };
+    },
+    async pullSettings() {
+      return {
+        rows: [{
+          key: themeKey,
+          value: remoteTheme,
+          version: remoteVersion,
+          change_id: remoteChangeId,
+          updated_by_device: 'other-device'
+        }]
+      };
+    }
+  };
+  const rejoinController = controllerApi.createController({
+    chromeApi: { runtime: { id: 'extension-id', getManifest: () => ({ version: '1.2.3' }) } },
+    localArea: rejoinLocalArea,
+    syncArea: rejoinSyncArea,
+    transport: rejoinTransport,
+    webAuth: {
+      async signIn() {
+        rejoinSession = { user: { id: 'rejoin-user', email: 'rejoin@example.com', provider: 'google' } };
+        return rejoinSession;
+      }
+    },
+    wallpaperRuntime: {
+      async syncAll() { return { ok: true, uploaded: 0, downloaded: 0, deleted: 0 }; }
+    },
+    usageRuntime: {
+      async flush() { return { ok: true }; },
+      async withdrawConsent() {},
+      async clear() {},
+      async record() { return { recorded: false }; }
+    },
+    setTimeout: () => 1,
+    clearTimeout: () => {}
+  });
+  await rejoinController.signOut();
+  assert.strictEqual(rejoinLocalArea.values[schema.CLOUD_LOCAL_KEYS.rejoin].device.id, rejoinDeviceId,
+    'local sign-out must retain the account-scoped physical device id for a safe rejoin');
+  rejoinSyncArea.values[themeKey] = 'system';
+  const rejoined = await rejoinController.signInWithWeb(consentVersion);
+  assert.strictEqual(rejoined.signedIn, true);
+  assert.strictEqual(remoteTheme, 'system',
+    'a setting changed while signed out must be pushed when the server base is unchanged');
+  assert.strictEqual(rejoinPushes.at(-1).changes[0].base_version, 5,
+    'the signed-out edit must retain its last acknowledged cloud base version');
+  assert(rejoinRegistrations.every((id) => id === rejoinDeviceId),
+    'same-account re-entry must reuse the device id instead of consuming another device slot');
+  assert.strictEqual(rejoinLocalArea.values[schema.CLOUD_LOCAL_KEYS.rejoin], undefined,
+    'the checkpoint must be removed after it is restored into active sync state');
+  assert.strictEqual(rejoined.sync.conflictCount, 0);
+
   console.log('cloud account controller tests passed');
 }
 

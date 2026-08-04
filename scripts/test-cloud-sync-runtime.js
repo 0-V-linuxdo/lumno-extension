@@ -1,6 +1,8 @@
 const assert = require('assert');
 
 const schema = require('../src/shared/cloud-sync-schema.js');
+const stateApi = require('../src/shared/cloud-sync-state.js');
+const repositoryApi = require('../src/shared/settings-repository.js');
 const runtimeApi = require('../src/background/cloud-sync-runtime.js');
 
 function createArea(initialValues) {
@@ -24,6 +26,32 @@ function createArea(initialValues) {
       if (callback) {
         callback();
       }
+    }
+  };
+}
+
+function createDelayedArea(initialValues, delay = 5) {
+  const values = { ...(initialValues || {}) };
+  return {
+    values,
+    get(keys, callback) {
+      const requested = Array.isArray(keys) ? keys : Object.keys(values);
+      const result = Object.fromEntries(requested.flatMap((key) => (
+        Object.prototype.hasOwnProperty.call(values, key) ? [[key, values[key]]] : []
+      )));
+      setTimeout(() => callback(result), delay);
+    },
+    set(payload, callback) {
+      setTimeout(() => {
+        Object.assign(values, payload);
+        if (callback) callback();
+      }, delay);
+    },
+    remove(keys, callback) {
+      setTimeout(() => {
+        (Array.isArray(keys) ? keys : [keys]).forEach((key) => delete values[key]);
+        if (callback) callback();
+      }, delay);
     }
   };
 }
@@ -137,6 +165,100 @@ async function run() {
   await runtime.queueSettingChange(themeKey, 'light');
   const skipped = await runtime.flush();
   assert.strictEqual(skipped.skipped, true);
+
+  const concurrentArea = createDelayedArea({});
+  let concurrentUuid = 1;
+  const concurrentRuntime = runtimeApi.createRuntime({
+    localArea: concurrentArea,
+    syncArea: createArea({}),
+    uuid: () => `10000000-0000-4000-8000-${String(concurrentUuid++).padStart(12, '0')}`
+  });
+  await Promise.all([
+    concurrentRuntime.queueSettingChange(themeKey, 'dark'),
+    concurrentRuntime.queueSettingChange(languageKey, 'ja')
+  ]);
+  assert.deepStrictEqual(
+    new Set((await concurrentRuntime.getState()).outbox.map((operation) => operation.key)),
+    new Set([themeKey, languageKey]),
+    'concurrent local changes must serialize their Outbox read-modify-write cycle'
+  );
+  const concurrentDevices = await Promise.all([
+    concurrentRuntime.ensureDevice(),
+    concurrentRuntime.ensureDevice()
+  ]);
+  assert.strictEqual(new Set(concurrentDevices.map((device) => device.id)).size, 1,
+    'concurrent first-run syncs must share one durable device id');
+
+  let releasePush;
+  let markPushStarted;
+  const pushStarted = new Promise((resolve) => { markPushStarted = resolve; });
+  const inFlightArea = createArea({
+    [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_CLOUD,
+    [schema.CLOUD_LOCAL_KEYS.device]: {
+      id: '20000000-0000-4000-8000-000000000001',
+      display_name: 'Concurrent browser'
+    },
+    [themeKey]: 'dark'
+  });
+  let inFlightUuid = 1;
+  const inFlightRuntime = runtimeApi.createRuntime({
+    localArea: inFlightArea,
+    syncArea: createArea({}),
+    uuid: () => `20000000-0000-4000-8000-${String(++inFlightUuid).padStart(12, '0')}`,
+    transport: {
+      async pushSettings(payload) {
+        markPushStarted();
+        await new Promise((resolve) => { releasePush = resolve; });
+        return {
+          accepted: payload.changes.map((change) => ({
+            operation_id: change.operation_id,
+            key: change.key,
+            version: change.base_version + 1,
+            change_id: 100
+          })),
+          conflicts: []
+        };
+      },
+      async pullSettings() { return { rows: [] }; }
+    }
+  });
+  await inFlightRuntime.queueSettingChange(themeKey, 'dark');
+  const flushTask = inFlightRuntime.flush();
+  await pushStarted;
+  inFlightArea.values[themeKey] = 'system';
+  await inFlightRuntime.queueSettingChange(themeKey, 'system');
+  releasePush();
+  await flushTask;
+  const supersedingOutbox = (await inFlightRuntime.getState()).outbox;
+  assert.strictEqual(supersedingOutbox.length, 1,
+    'a setting changed during an in-flight push must remain queued');
+  assert.strictEqual(supersedingOutbox[0].value, 'system');
+  assert.strictEqual(supersedingOutbox[0].base_version, 1,
+    'a superseding operation should rebase onto the accepted in-flight version');
+
+  const rejoinOperation = stateApi.createOperation({
+    operation_id: '30000000-0000-4000-8000-000000000001',
+    key: themeKey,
+    value: 'system',
+    base_version: 5,
+    enqueued_at: 1
+  });
+  const unchangedRemote = stateApi.applyRemoteRows(
+    { [themeKey]: 'system' },
+    [{ key: themeKey, value: 'dark', version: 5, change_id: 50 }],
+    [rejoinOperation]
+  );
+  assert.deepStrictEqual(unchangedRemote.conflicts, [],
+    'a same-account full pull must not conflict when the server is still at the queued base version');
+  assert.deepStrictEqual(unchangedRemote.updates, {},
+    'an unchanged remote base must not overwrite the signed-out device edit');
+  const advancedRemote = stateApi.applyRemoteRows(
+    { [themeKey]: 'system' },
+    [{ key: themeKey, value: 'blue', version: 6, change_id: 51 }],
+    [rejoinOperation]
+  );
+  assert.strictEqual(advancedRemote.conflicts.length, 1,
+    'a remote version advance must still create a real multi-device conflict');
 
   console.log('cloud sync runtime tests passed');
 }

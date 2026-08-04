@@ -42,7 +42,8 @@
     '_x_extension_newtab_local_wallpaper_2026_unique_';
   const PERSISTENT_LOCAL_KEYS = new Set([
     schema.CLOUD_LOCAL_KEYS.cacheOwner,
-    schema.CLOUD_LOCAL_KEYS.lastSignInProvider
+    schema.CLOUD_LOCAL_KEYS.lastSignInProvider,
+    schema.CLOUD_LOCAL_KEYS.rejoin
   ]);
   const PRIVATE_LOCAL_KEYS = Object.freeze(
     Object.values(schema.CLOUD_LOCAL_KEYS).filter((key) => !PERSISTENT_LOCAL_KEYS.has(key))
@@ -225,6 +226,7 @@
     let started = false;
     let lastDeviceRegistrationAt = 0;
     let lastDeviceRegistrationSignature = '';
+    let deviceRegistrationTask = null;
 
     async function readLocal(keys) {
       return repositoryApi.getAreaValues(localArea, keys);
@@ -238,8 +240,19 @@
       return repositoryApi.mutateArea(localArea, 'remove', keys);
     }
 
-    async function clearIdentityState() {
+    async function clearIdentityState(optionsArg) {
+      const clearOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      await writeLocal({ [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_GUEST });
+      if (deviceRegistrationTask) {
+        await deviceRegistrationTask.catch(() => {});
+      }
+      if (runtime && typeof runtime.waitForIdle === 'function') {
+        await runtime.waitForIdle();
+      }
       await removeLocal(PRIVATE_LOCAL_KEYS);
+      if (clearOptions.preserveRejoin !== true) {
+        await removeLocal([schema.CLOUD_LOCAL_KEYS.rejoin]);
+      }
       await writeLocal({ [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_GUEST });
       lastDeviceRegistrationAt = 0;
       lastDeviceRegistrationSignature = '';
@@ -270,7 +283,7 @@
       }
       const previousAccountId = await getStoredAccountId();
       if (previousAccountId !== nextAccountId) {
-        await clearIdentityState();
+        await clearIdentityState({ preserveRejoin: false });
       }
       return {
         nextAccountId,
@@ -278,24 +291,122 @@
       };
     }
 
+    async function createRejoinCheckpoint() {
+      const accountId = await getStoredAccountId();
+      if (!accountId) return null;
+      const [snapshot, local] = await Promise.all([
+        repository.get(schema.SYNC_KEYS),
+        readLocal([
+          schema.CLOUD_LOCAL_KEYS.device,
+          schema.CLOUD_LOCAL_KEYS.outbox,
+          schema.CLOUD_LOCAL_KEYS.versions,
+          schema.CLOUD_LOCAL_KEYS.pullCursor,
+          schema.CLOUD_LOCAL_KEYS.conflicts
+        ])
+      ]);
+      return {
+        format: 'lumno-cloud-rejoin-v1',
+        account_id: accountId,
+        signed_out_at: Date.now(),
+        snapshot: schema.copySyncSettings(snapshot),
+        device: local[schema.CLOUD_LOCAL_KEYS.device] || null,
+        outbox: local[schema.CLOUD_LOCAL_KEYS.outbox] || [],
+        versions: local[schema.CLOUD_LOCAL_KEYS.versions] || {},
+        cursor: Number(local[schema.CLOUD_LOCAL_KEYS.pullCursor]) || 0,
+        conflicts: local[schema.CLOUD_LOCAL_KEYS.conflicts] || []
+      };
+    }
+
+    async function readRejoinCheckpoint(accountId) {
+      const local = await readLocal([schema.CLOUD_LOCAL_KEYS.rejoin]);
+      const checkpoint = local[schema.CLOUD_LOCAL_KEYS.rejoin];
+      if (!checkpoint || checkpoint.format !== 'lumno-cloud-rejoin-v1' ||
+          String(checkpoint.account_id || '') !== String(accountId || '')) {
+        return null;
+      }
+      return checkpoint;
+    }
+
+    function settingValuesEqual(leftExists, left, rightExists, right) {
+      if (leftExists !== rightExists) return false;
+      return !leftExists || safeJson(left) === safeJson(right);
+    }
+
+    async function restoreRejoinCheckpoint(checkpoint, currentSnapshot) {
+      if (!checkpoint || !runtime || typeof runtime.restoreState !== 'function') return false;
+      await runtime.restoreState(checkpoint);
+      const before = schema.copySyncSettings(checkpoint.snapshot || {});
+      const current = schema.copySyncSettings(currentSnapshot || {});
+      for (const key of schema.SYNC_KEYS) {
+        const beforeExists = Object.prototype.hasOwnProperty.call(before, key);
+        const currentExists = Object.prototype.hasOwnProperty.call(current, key);
+        if (settingValuesEqual(beforeExists, before[key], currentExists, current[key])) continue;
+        await runtime.queueSettingChange(
+          key,
+          currentExists ? current[key] : null,
+          { deleted: !currentExists }
+        );
+      }
+      await removeLocal([schema.CLOUD_LOCAL_KEYS.rejoin]);
+      return true;
+    }
+
+    async function leaveCloudLocally(optionsArg) {
+      const leaveOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      const checkpoint = await createRejoinCheckpoint();
+      if (checkpoint) {
+        await writeLocal({ [schema.CLOUD_LOCAL_KEYS.rejoin]: checkpoint });
+      }
+      await runtime.disableCloudMode({ copyToBrowserSync: true });
+      let remoteWarning = '';
+      if (leaveOptions.revokeSession === true) {
+        try {
+          await transport.signOut();
+        } catch (error) {
+          remoteWarning = String((error && error.code) || 'remote_signout_failed');
+        }
+      }
+      await clearIdentityState({ preserveRejoin: Boolean(checkpoint) });
+      return { checkpoint, remoteWarning };
+    }
+
+    async function handleInvalidatedSession(error) {
+      if (!error || error.sessionInvalidated !== true ||
+          await repository.getMode() !== repositoryApi.MODE_CLOUD) {
+        return false;
+      }
+      await leaveCloudLocally({ revokeSession: false });
+      return true;
+    }
+
     async function sessionMatchesStoredAccount(session) {
       const sessionAccountId = getSessionUserId(session);
       return Boolean(sessionAccountId && sessionAccountId === await getStoredAccountId());
     }
 
-    async function registerCurrentDevice() {
-      const device = await runtime.ensureDevice();
-      const registration = { ...device, ...clientInfo };
-      const signature = safeJson(registration);
-      const now = Date.now();
-      if (signature && signature === lastDeviceRegistrationSignature &&
-          now - lastDeviceRegistrationAt < DEVICE_REGISTER_CACHE_MS) {
+    function registerCurrentDevice() {
+      if (deviceRegistrationTask) return deviceRegistrationTask;
+      const task = (async () => {
+        const device = await runtime.ensureDevice();
+        const registration = { ...device, ...clientInfo };
+        const signature = safeJson(registration);
+        const now = Date.now();
+        if (signature && signature === lastDeviceRegistrationSignature &&
+            now - lastDeviceRegistrationAt < DEVICE_REGISTER_CACHE_MS) {
+          return device;
+        }
+        await transport.registerDevice(registration);
+        lastDeviceRegistrationAt = now;
+        lastDeviceRegistrationSignature = signature;
         return device;
-      }
-      await transport.registerDevice(registration);
-      lastDeviceRegistrationAt = now;
-      lastDeviceRegistrationSignature = signature;
-      return device;
+      })();
+      const wrappedTask = task.finally(() => {
+        if (deviceRegistrationTask === wrappedTask) {
+          deviceRegistrationTask = null;
+        }
+      });
+      deviceRegistrationTask = wrappedTask;
+      return wrappedTask;
     }
 
     async function getStatus() {
@@ -358,7 +469,13 @@
       if (await repository.getMode() !== repositoryApi.MODE_CLOUD) {
         return { skipped: true, reason: 'cloud-disabled' };
       }
-      const session = await transport.getSession();
+      let session;
+      try {
+        session = await transport.getSession();
+      } catch (error) {
+        await handleInvalidatedSession(error).catch(() => false);
+        throw error;
+      }
       if (!session) {
         return { skipped: true, reason: 'authentication-required' };
       }
@@ -366,7 +483,13 @@
         return { skipped: true, reason: 'account-transition-required' };
       }
       await registerCurrentDevice();
-      const result = await runtime.syncNow(syncOptions);
+      let result;
+      try {
+        result = await runtime.syncNow(syncOptions);
+      } catch (error) {
+        await handleInvalidatedSession(error).catch(() => false);
+        throw error;
+      }
       let wallpaperResult = { skipped: true };
       if (wallpaper && typeof wallpaper.syncAll === 'function') {
         try {
@@ -529,6 +652,10 @@
     async function initializeSignedInAccount(session) {
       const identityTransition = await prepareAccountIdentity(session);
       const modeAfterIdentity = await repository.getMode();
+      const rejoinCheckpoint = !identityTransition.replacedAccount &&
+        modeAfterIdentity === repositoryApi.MODE_GUEST
+        ? await readRejoinCheckpoint(identityTransition.nextAccountId)
+        : null;
       const browserSnapshot = !identityTransition.replacedAccount &&
         modeAfterIdentity === repositoryApi.MODE_GUEST
         ? await repository.get(schema.SYNC_KEYS)
@@ -555,12 +682,18 @@
           ? { resetCloudCache: true }
           : (browserSnapshot === null ? undefined : { browserSnapshot })
       );
+      const restoredRejoin = rejoinCheckpoint
+        ? await restoreRejoinCheckpoint(rejoinCheckpoint, browserSnapshot || {})
+        : false;
       const requiresBootstrap = identityTransition.replacedAccount ||
         modeAfterIdentity !== repositoryApi.MODE_CLOUD;
       if (requiresBootstrap) {
         await registerCurrentDevice();
-        const pulled = await runtime.pull({ full: true, resetMissing: false });
-        if (!identityTransition.replacedAccount) {
+        const pulled = await runtime.pull({
+          full: true,
+          resetMissing: restoredRejoin
+        });
+        if (!identityTransition.replacedAccount && !restoredRejoin) {
           await queueMigrationSettings(migration, pulled);
         }
       }
@@ -623,14 +756,9 @@
     async function signOut() {
       const consentResult = await setAnalyticsConsent(false);
       await commitActiveWallpapers().catch(() => ({ ok: false }));
-      await runtime.disableCloudMode({ copyToBrowserSync: true });
       let remoteWarning = String(consentResult && consentResult.remoteWarning || '');
-      try {
-        await transport.signOut();
-      } catch (error) {
-        remoteWarning = remoteWarning || String((error && error.code) || 'remote_signout_failed');
-      }
-      await clearIdentityState();
+      const left = await leaveCloudLocally({ revokeSession: true });
+      remoteWarning = remoteWarning || left.remoteWarning;
       return { ok: true, remoteWarning };
     }
 
