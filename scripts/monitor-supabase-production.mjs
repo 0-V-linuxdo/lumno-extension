@@ -153,9 +153,9 @@ async function fetchLogMetrics(fetchImpl, token, now) {
     countIf(toInt32OrZero(log_attributes['response.status_code']) = 429) as rate_limited,
     countIf(position(log_attributes['request.path'], 'delete-account') > 0 and toInt32OrZero(log_attributes['response.status_code']) between 500 and 599) as delete_errors,
     countIf(position(log_attributes['request.path'], 'signup-captcha') > 0 and toInt32OrZero(log_attributes['response.status_code']) >= 400) as captcha_errors
-    from logs where source = 'edge_logs'`;
+    from logs where source_name = 'edge_logs'`;
   const postgresSql = `select count() as postgres_errors from logs
-    where source = 'postgres_logs' and severity_text in ('ERROR', 'FATAL', 'PANIC')`;
+    where source_name = 'postgres_logs' and severity_text in ('ERROR', 'FATAL', 'PANIC')`;
   const [edgeMetrics, postgresMetrics] = await Promise.all([query(edgeSql), query(postgresSql)]);
   return { edgeMetrics, postgresMetrics };
 }
@@ -300,9 +300,12 @@ export async function runMonitor({
 } = {}) {
   const incidents = [];
   const publicChecks = await Promise.all([
-    checkEndpoint(fetchImpl, 'Supabase Auth', `${PROJECT_URL}/auth/v1/health`),
+    checkEndpoint(fetchImpl, 'Supabase Auth', `${PROJECT_URL}/auth/v1/health`, {
+      headers: { apikey: PUBLISHABLE_KEY },
+    }),
     checkEndpoint(fetchImpl, 'Supabase REST', `${PROJECT_URL}/rest/v1/`, {
-      headers: { apikey: PUBLISHABLE_KEY, Authorization: `Bearer ${PUBLISHABLE_KEY}` },
+      method: 'OPTIONS',
+      headers: { apikey: PUBLISHABLE_KEY },
     }),
     checkEndpoint(fetchImpl, '验证码函数', `${PROJECT_URL}/functions/v1/signup-captcha`, {
       method: 'OPTIONS',

@@ -1,7 +1,17 @@
 const assert = require('assert');
+const fs = require('fs');
 
 async function run() {
   const monitor = await import('./monitor-supabase-production.mjs');
+  const monitorSource = fs.readFileSync('scripts/monitor-supabase-production.mjs', 'utf8');
+  assert.match(monitorSource, /auth\/v1\/health[\s\S]*?headers: \{ apikey: PUBLISHABLE_KEY \}/,
+    'the Auth health probe should include the required publishable API key');
+  assert.match(monitorSource, /'Supabase REST'[\s\S]*?method: 'OPTIONS'/,
+    'the REST health probe should avoid a privileged schema request');
+  assert.match(monitorSource, /source_name = 'edge_logs'/,
+    'ClickHouse log queries should filter the unified stream by source_name');
+  assert.match(monitorSource, /source_name = 'postgres_logs'/,
+    'Postgres log queries should filter the unified stream by source_name');
   const healthy = monitor.evaluateSnapshot({
     signup_hour: 12,
     captcha_verified_hour: 20,
