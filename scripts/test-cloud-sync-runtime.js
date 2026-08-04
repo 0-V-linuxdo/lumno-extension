@@ -260,6 +260,75 @@ async function run() {
   assert.strictEqual(advancedRemote.conflicts.length, 1,
     'a remote version advance must still create a real multi-device conflict');
 
+  const legacyOnlyKey = schema.STORAGE_KEYS.selectionQuickActionsTriggerStyle;
+  const legacyArea = createArea({
+    [schema.CLOUD_LOCAL_KEYS.mode]: repositoryApi.MODE_CLOUD,
+    [schema.CLOUD_LOCAL_KEYS.device]: {
+      id: '50000000-0000-4000-8000-000000000001',
+      display_name: 'Legacy protocol browser'
+    },
+    [themeKey]: 'dark',
+    [legacyOnlyKey]: 'butterfly'
+  });
+  const legacyRuntime = runtimeApi.createRuntime({
+    localArea: legacyArea,
+    syncArea: createArea({}),
+    uuid: (() => {
+      let value = 1;
+      return () => `50000000-0000-4000-8000-${String(++value).padStart(12, '0')}`;
+    })(),
+    transport: {
+      async pushSettings(payload) {
+        const acceptedChanges = payload.changes.filter((change) => (
+          schema.LEGACY_SYNC_KEYS.includes(change.key)
+        ));
+        const deferredChanges = payload.changes.filter((change) => (
+          !schema.LEGACY_SYNC_KEYS.includes(change.key)
+        ));
+        return {
+          accepted: acceptedChanges.map((change, index) => ({
+            operation_id: change.operation_id,
+            key: change.key,
+            version: 1,
+            change_id: index + 1
+          })),
+          conflicts: [],
+          rejected: [],
+          deferred: deferredChanges.map((change) => ({
+            operation_id: change.operation_id,
+            key: change.key,
+            code: 'protocol_unsupported',
+            retryable: false
+          })),
+          protocol: 1,
+          supported_keys: schema.LEGACY_SYNC_KEYS,
+          schema_hash: ''
+        };
+      },
+      async pullSettings() {
+        return {
+          rows: [],
+          protocol: 1,
+          supported_keys: schema.LEGACY_SYNC_KEYS,
+          schema_hash: ''
+        };
+      }
+    }
+  });
+  await legacyRuntime.pull({ full: true, resetMissing: true });
+  assert.strictEqual(legacyArea.values[legacyOnlyKey], 'butterfly',
+    'a full pull from protocol 1 must not delete a protocol 2 setting on this device');
+  await legacyRuntime.queueSettingChange(themeKey, 'system');
+  await legacyRuntime.queueSettingChange(legacyOnlyKey, 'button');
+  const legacyFlush = await legacyRuntime.flush();
+  assert.strictEqual(legacyFlush.pushed, 1);
+  assert.strictEqual(legacyFlush.deferred, 1);
+  assert.deepStrictEqual(
+    (await legacyRuntime.getState()).outbox.map((operation) => operation.key),
+    [legacyOnlyKey],
+    'unsupported protocol 2 operations must remain queued for a future server upgrade'
+  );
+
   console.log('cloud sync runtime tests passed');
 }
 

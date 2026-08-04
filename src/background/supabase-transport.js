@@ -18,14 +18,79 @@
 
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+  const CAPABILITY_CACHE_TTL_MS = 60 * 60 * 1000;
+  const DEGRADED_CAPABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 
   class CloudTransportError extends Error {
-    constructor(code, status) {
-      super(String(code || 'cloud_request_failed'));
+    constructor(code, status, optionsArg) {
+      const options = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      const normalizedCode = String(code || 'cloud_request_failed');
+      super(String(options.message || normalizedCode));
       this.name = 'CloudTransportError';
-      this.code = String(code || 'cloud_request_failed');
+      this.code = normalizedCode;
       this.status = Number(status) || 0;
+      this.details = options.details === undefined || options.details === null
+        ? ''
+        : String(options.details);
+      this.hint = options.hint === undefined || options.hint === null
+        ? ''
+        : String(options.hint);
+      this.rpc = String(options.rpc || '');
+      this.protocol = Math.max(0, Math.floor(Number(options.protocol) || 0));
     }
+  }
+
+  function createFallbackCapabilities(errorCode) {
+    const keys = Array.isArray(schema.LEGACY_SYNC_KEYS)
+      ? schema.LEGACY_SYNC_KEYS
+      : schema.SYNC_KEYS;
+    return Object.freeze({
+      protocol: Number(schema.MIN_SYNC_PROTOCOL) || 1,
+      server_protocol: 1,
+      supported_protocols: Object.freeze([1]),
+      max_push_batch: 100,
+      schema_hash: '',
+      supported_keys: Object.freeze([...keys]),
+      degraded: true,
+      error_code: String(errorCode || '')
+    });
+  }
+
+  function normalizeSyncCapabilities(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const currentProtocol = Number(schema.CURRENT_SYNC_PROTOCOL) || 1;
+    const minimumProtocol = Number(schema.MIN_SYNC_PROTOCOL) || 1;
+    const supportedProtocols = [...new Set((Array.isArray(source.supported_protocols)
+      ? source.supported_protocols
+      : [source.current_protocol])
+      .map((item) => Math.floor(Number(item) || 0))
+      .filter((item) => item >= minimumProtocol && item <= currentProtocol))]
+      .sort((left, right) => left - right);
+    if (supportedProtocols.length === 0) {
+      return createFallbackCapabilities('invalid_capabilities');
+    }
+    const protocol = supportedProtocols.at(-1);
+    const protocolKeys = source.protocol_keys && typeof source.protocol_keys === 'object'
+      ? source.protocol_keys[String(protocol)]
+      : null;
+    const advertisedKeys = Array.isArray(protocolKeys)
+      ? protocolKeys
+      : source.sync_keys;
+    const supportedKeys = [...new Set((Array.isArray(advertisedKeys)
+      ? advertisedKeys
+      : schema.getSyncKeysForProtocol(protocol))
+      .map((key) => String(key || ''))
+      .filter((key) => schema.isSyncKeySupported(key, protocol)))];
+    return Object.freeze({
+      protocol,
+      server_protocol: Math.max(protocol, Math.floor(Number(source.current_protocol) || protocol)),
+      supported_protocols: Object.freeze(supportedProtocols),
+      max_push_batch: Math.min(100, Math.max(1, Math.floor(Number(source.max_push_batch) || 100))),
+      schema_hash: String(source.schema_hash || ''),
+      supported_keys: Object.freeze(supportedKeys),
+      degraded: false,
+      error_code: ''
+    });
   }
 
   function normalizeEmail(value) {
@@ -99,6 +164,9 @@
     const setTimer = settings.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
     const clearTimer = settings.clearTimeout || (typeof clearTimeout === 'function' ? clearTimeout : null);
     let refreshInFlight = null;
+    let capabilitiesInFlight = null;
+    let capabilitiesCache = null;
+    let capabilitiesCachedAt = 0;
 
     function requireConfigured() {
       if (!cloudConfig.configured || !fetchImpl) {
@@ -110,7 +178,10 @@
       return `${cloudConfig.projectUrl}${path}`;
     }
 
-    async function parseResponse(response) {
+    async function parseResponse(response, errorContextArg) {
+      const errorContext = errorContextArg && typeof errorContextArg === 'object'
+        ? errorContextArg
+        : {};
       const text = await response.text();
       let body = null;
       if (text) {
@@ -121,10 +192,20 @@
         }
       }
       if (!response.ok) {
-        const code = body && (body.error_code || body.code || body.error)
-          ? String(body.error_code || body.code || body.error)
+        const bodyError = body && typeof body.error === 'string' ? body.error : '';
+        const code = body && (body.error_code || body.code || bodyError)
+          ? String(body.error_code || body.code || bodyError)
           : `http_${response.status}`;
-        throw new CloudTransportError(code.slice(0, 100), response.status);
+        const message = body && (body.message || body.msg || body.error_description || bodyError)
+          ? String(body.message || body.msg || body.error_description || bodyError)
+          : code;
+        throw new CloudTransportError(code.slice(0, 100), response.status, {
+          message,
+          details: body && body.details,
+          hint: body && body.hint,
+          rpc: errorContext.rpc,
+          protocol: errorContext.protocol
+        });
       }
       return body;
     }
@@ -183,7 +264,7 @@
         body,
         signal: requestOptions.signal
       });
-      return parseResponse(response);
+      return parseResponse(response, requestOptions.errorContext);
     }
 
     async function saveSession(rawSession) {
@@ -306,12 +387,46 @@
       return { ok: true };
     }
 
-    async function rpc(name, body) {
+    async function rpc(name, body, optionsArg) {
+      const rpcOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
       return withAccessToken((accessToken) => request(`/rest/v1/rpc/${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
-        body
+        body,
+        errorContext: {
+          rpc: name,
+          protocol: rpcOptions.protocol
+        }
       }));
+    }
+
+    async function getSyncCapabilities(optionsArg) {
+      const capabilityOptions = optionsArg && typeof optionsArg === 'object' ? optionsArg : {};
+      if (capabilityOptions.refresh === true) {
+        capabilitiesCache = null;
+        capabilitiesInFlight = null;
+        capabilitiesCachedAt = 0;
+      }
+      const cacheTtl = capabilitiesCache && capabilitiesCache.degraded
+        ? DEGRADED_CAPABILITY_CACHE_TTL_MS
+        : CAPABILITY_CACHE_TTL_MS;
+      if (capabilitiesCache && now() - capabilitiesCachedAt < cacheTtl) return capabilitiesCache;
+      if (capabilitiesInFlight) return capabilitiesInFlight;
+      capabilitiesInFlight = request('/rest/v1/rpc/lumno_get_sync_capabilities', {
+        method: 'POST',
+        body: {},
+        errorContext: { rpc: 'lumno_get_sync_capabilities', protocol: 0 }
+      }).then((body) => normalizeSyncCapabilities(body))
+        .catch((error) => createFallbackCapabilities(error && error.code))
+        .then((capabilities) => {
+          capabilitiesCache = capabilities;
+          capabilitiesCachedAt = now();
+          return capabilities;
+        })
+        .finally(() => {
+          capabilitiesInFlight = null;
+        });
+      return capabilitiesInFlight;
     }
 
     async function registerDevice(device) {
@@ -326,19 +441,79 @@
     }
 
     async function pushSettings(payload) {
-      return rpc('lumno_push_setting_changes', {
+      const capabilities = await getSyncCapabilities();
+      const supportedKeySet = new Set(capabilities.supported_keys);
+      const changes = Array.isArray(payload && payload.changes) ? payload.changes : [];
+      const supportedChanges = changes.filter((change) => supportedKeySet.has(String(change && change.key || '')));
+      const deferred = changes.filter((change) => !supportedKeySet.has(String(change && change.key || '')))
+        .map((change) => ({
+          operation_id: String(change && change.operation_id || ''),
+          key: String(change && change.key || ''),
+          code: 'protocol_unsupported',
+          retryable: false
+        }));
+      if (supportedChanges.length === 0) {
+        return {
+          accepted: [],
+          conflicts: [],
+          rejected: [],
+          deferred,
+          protocol: capabilities.protocol,
+          supported_keys: capabilities.supported_keys,
+          schema_hash: capabilities.schema_hash
+        };
+      }
+      const rpcName = capabilities.protocol >= 2
+        ? 'lumno_push_setting_changes_v2'
+        : 'lumno_push_setting_changes';
+      const result = await rpc(rpcName, {
         p_device_id: payload.device_id,
-        p_changes: payload.changes
-      });
+        p_changes: supportedChanges
+      }, { protocol: capabilities.protocol });
+      const unsupportedRejected = (Array.isArray(result && result.rejected) ? result.rejected : [])
+        .filter((item) => item && (
+          item.code === 'unsupported_key' || item.code === 'protocol_unsupported'
+        ));
+      const unsupportedKeySet = new Set(unsupportedRejected
+        .map((item) => String(item.key || ''))
+        .filter(Boolean));
+      const effectiveSupportedKeys = capabilities.supported_keys
+        .filter((key) => !unsupportedKeySet.has(key));
+      if (unsupportedKeySet.size > 0) {
+        capabilitiesCache = Object.freeze({
+          ...capabilities,
+          supported_keys: Object.freeze(effectiveSupportedKeys)
+        });
+        capabilitiesCachedAt = now();
+      }
+      return {
+        ...(result && typeof result === 'object' ? result : {}),
+        deferred: [
+          ...deferred,
+          ...unsupportedRejected.map((item) => ({ ...item, retryable: false }))
+        ],
+        protocol: capabilities.protocol,
+        supported_keys: effectiveSupportedKeys,
+        schema_hash: capabilities.schema_hash
+      };
     }
 
     async function pullSettings(payload) {
-      const rows = await rpc('lumno_pull_setting_changes', {
+      const capabilities = await getSyncCapabilities();
+      const rpcName = capabilities.protocol >= 2
+        ? 'lumno_pull_setting_changes_v2'
+        : 'lumno_pull_setting_changes';
+      const rows = await rpc(rpcName, {
         p_device_id: payload.device_id,
         p_cursor: Math.max(0, Number(payload.cursor) || 0),
         p_limit: 500
-      });
-      return { rows: Array.isArray(rows) ? rows : [] };
+      }, { protocol: capabilities.protocol });
+      return {
+        rows: Array.isArray(rows) ? rows : [],
+        protocol: capabilities.protocol,
+        supported_keys: capabilities.supported_keys,
+        schema_hash: capabilities.schema_hash
+      };
     }
 
     async function setAnalyticsConsent(consented, noticeVersion) {
@@ -503,6 +678,7 @@
     return Object.freeze({
       config: cloudConfig,
       getSession,
+      getSyncCapabilities,
       exchangeOAuthCode,
       signOut,
       registerDevice,
@@ -522,6 +698,10 @@
   return Object.freeze({
     CloudTransportError,
     DEFAULT_REQUEST_TIMEOUT_MS,
+    CAPABILITY_CACHE_TTL_MS,
+    DEGRADED_CAPABILITY_CACHE_TTL_MS,
+    createFallbackCapabilities,
+    normalizeSyncCapabilities,
     normalizeEmail,
     normalizeAuthProvider,
     getAuthProvider,

@@ -228,6 +228,172 @@ async function run() {
   assert.match(requests.at(-1).url, /\/auth\/v1\/logout\?scope=local$/,
     'the extension sign-out button must revoke only this device session');
 
+  const protocolRequests = [];
+  const protocolSession = {
+    access_token: 'protocol-access',
+    refresh_token: 'protocol-refresh',
+    expires_at: Math.floor(now / 1000) + 3600,
+    user: { id: 'protocol-user', email: 'protocol@example.com' }
+  };
+  const protocolFetch = async (url, options) => {
+    const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+    protocolRequests.push({ url, options, body });
+    if (url.endsWith('/rest/v1/rpc/lumno_get_sync_capabilities')) {
+      return jsonResponse(200, {
+        current_protocol: 2,
+        supported_protocols: [1, 2],
+        max_push_batch: 100,
+        schema_hash: schema.SYNC_SCHEMA_HASH,
+        sync_keys: schema.SYNC_KEYS,
+        protocol_keys: {
+          1: schema.LEGACY_SYNC_KEYS,
+          2: schema.SYNC_KEYS
+        }
+      });
+    }
+    if (url.endsWith('/rest/v1/rpc/lumno_push_setting_changes_v2')) {
+      return jsonResponse(200, {
+        accepted: body.p_changes.map((change, index) => ({
+          operation_id: change.operation_id,
+          key: change.key,
+          version: 1,
+          change_id: index + 1
+        })),
+        conflicts: [],
+        rejected: []
+      });
+    }
+    if (url.endsWith('/rest/v1/rpc/lumno_pull_setting_changes_v2')) {
+      return jsonResponse(200, []);
+    }
+    return jsonResponse(404, { code: 'PGRST202', message: 'RPC not found' });
+  };
+  const protocolTransport = transportApi.createTransport({
+    localArea: createArea({}),
+    sessionStore: {
+      async get() { return protocolSession; },
+      async set() {},
+      async remove() {}
+    },
+    fetchImpl: protocolFetch,
+    now: () => now,
+    config: {
+      projectUrl: 'https://project.supabase.co/',
+      publishableKey: 'public-key'
+    }
+  });
+  const capabilities = await protocolTransport.getSyncCapabilities();
+  assert.strictEqual(capabilities.protocol, 2);
+  assert.strictEqual(capabilities.supported_keys.length, 52);
+  assert.strictEqual(protocolRequests[0].options.headers.Authorization, undefined,
+    'capability discovery must work with only the public project key');
+  const protocolChanges = [
+    {
+      operation_id: '40000000-0000-4000-8000-000000000001',
+      key: schema.STORAGE_KEYS.themeMode,
+      value: 'dark',
+      base_version: 0
+    },
+    {
+      operation_id: '40000000-0000-4000-8000-000000000002',
+      key: schema.STORAGE_KEYS.selectionQuickActionsTriggerStyle,
+      value: 'butterfly',
+      base_version: 0
+    }
+  ];
+  const protocolPush = await protocolTransport.pushSettings({
+    device_id: '40000000-0000-4000-8000-000000000003',
+    changes: protocolChanges
+  });
+  assert.strictEqual(protocolPush.accepted.length, 2);
+  assert.strictEqual(protocolPush.deferred.length, 0);
+  assert.match(protocolRequests.at(-1).url, /lumno_push_setting_changes_v2$/);
+  await protocolTransport.pullSettings({
+    device_id: '40000000-0000-4000-8000-000000000003',
+    cursor: 0
+  });
+  assert.match(protocolRequests.at(-1).url, /lumno_pull_setting_changes_v2$/);
+  assert.strictEqual(protocolRequests.filter((request) => (
+    request.url.endsWith('/rest/v1/rpc/lumno_get_sync_capabilities')
+  )).length, 1, 'capabilities should be cached for the transport session');
+
+  const legacyRequests = [];
+  const legacyTransport = transportApi.createTransport({
+    localArea: createArea({}),
+    sessionStore: {
+      async get() { return protocolSession; },
+      async set() {},
+      async remove() {}
+    },
+    fetchImpl: async (url, options) => {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+      legacyRequests.push({ url, options, body });
+      if (url.endsWith('/rest/v1/rpc/lumno_get_sync_capabilities')) {
+        return jsonResponse(404, { code: 'PGRST202', message: 'RPC not found' });
+      }
+      return jsonResponse(200, { accepted: [], conflicts: [] });
+    },
+    now: () => now,
+    config: {
+      projectUrl: 'https://project.supabase.co/',
+      publishableKey: 'public-key'
+    }
+  });
+  const legacyPush = await legacyTransport.pushSettings({
+    device_id: '40000000-0000-4000-8000-000000000003',
+    changes: protocolChanges
+  });
+  assert.strictEqual(legacyPush.protocol, 1);
+  assert.strictEqual(legacyPush.deferred.length, 1,
+    'a new setting must remain deferred when the server only supports protocol 1');
+  assert.strictEqual(legacyRequests.at(-1).body.p_changes.length, 1,
+    'protocol 1 must receive only its frozen key set');
+  assert.match(legacyRequests.at(-1).url, /lumno_push_setting_changes$/);
+  now += transportApi.DEGRADED_CAPABILITY_CACHE_TTL_MS + 1;
+  await legacyTransport.getSyncCapabilities();
+  assert.strictEqual(legacyRequests.filter((request) => (
+    request.url.endsWith('/rest/v1/rpc/lumno_get_sync_capabilities')
+  )).length, 2,
+  'a degraded protocol fallback must be re-probed so a later server upgrade can release deferred settings');
+
+  const errorTransport = transportApi.createTransport({
+    localArea: createArea({}),
+    sessionStore: {
+      async get() { return protocolSession; },
+      async set() {},
+      async remove() {}
+    },
+    fetchImpl: async (url) => {
+      if (url.endsWith('/rest/v1/rpc/lumno_get_sync_capabilities')) {
+        return protocolFetch(url, { body: '{}', headers: {} });
+      }
+      return jsonResponse(400, {
+        code: '22023',
+        message: 'Invalid sync change',
+        details: 'operation 2 was malformed',
+        hint: 'refresh capabilities'
+      });
+    },
+    now: () => now,
+    config: {
+      projectUrl: 'https://project.supabase.co/',
+      publishableKey: 'public-key'
+    }
+  });
+  await assert.rejects(
+    () => errorTransport.pushSettings({
+      device_id: '40000000-0000-4000-8000-000000000003',
+      changes: [protocolChanges[0]]
+    }),
+    (error) => error && error.code === '22023' &&
+      error.message === 'Invalid sync change' &&
+      error.details === 'operation 2 was malformed' &&
+      error.hint === 'refresh capabilities' &&
+      error.rpc === 'lumno_push_setting_changes_v2' &&
+      error.protocol === 2,
+    'transport errors must preserve the server message, details, hint, RPC, and protocol'
+  );
+
   let invalidatedSession = {
     access_token: 'expired-access',
     refresh_token: 'revoked-refresh',

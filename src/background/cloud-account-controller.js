@@ -172,8 +172,10 @@
     const clearTimer = config.clearTimeout || (typeof clearTimeout === 'function' ? clearTimeout : null);
     const trackedCloudArea = config.trackedCloudArea || createTrackedArea(localArea, setTimer);
     const trackedLocalSettingArea = config.trackedLocalSettingArea || trackedCloudArea;
-    const localOnlyKeys = Array.isArray(schema.LOCAL_ONLY_SYNC_KEYS)
-      ? schema.LOCAL_ONLY_SYNC_KEYS
+    const localOnlyKeys = Array.isArray(schema.LOCAL_STORAGE_SYNC_KEYS)
+      ? schema.LOCAL_STORAGE_SYNC_KEYS
+      : Array.isArray(schema.LOCAL_ONLY_SYNC_KEYS)
+        ? schema.LOCAL_ONLY_SYNC_KEYS
       : [schema.STORAGE_KEYS.newtabLocalWallpaper];
     const repository = config.repository || repositoryApi.createRepository({
       localArea,
@@ -454,11 +456,16 @@
         sync: {
           state: String(status.state || (mode === repositoryApi.MODE_CLOUD ? 'idle' : 'disabled')),
           lastError: String(status.last_error || ''),
+          lastRejectionCode: String(status.last_rejection_code || ''),
           lastPushAt: Number(status.last_push_at) || 0,
           lastPullAt: Number(status.last_pull_at) || 0,
           nextRetryAt: Number(status.next_retry_at) || 0,
           failureCount: Number(status.failure_count) || 0,
           pendingCount: outbox.length,
+          deferredCount: Number(status.deferred_count) || 0,
+          rejectedCount: Number(status.rejected_count) || 0,
+          protocol: Math.max(0, Number(status.sync_protocol) || 0),
+          schemaHash: String(status.sync_schema_hash || ''),
           conflictCount: conflicts.length
         }
       };

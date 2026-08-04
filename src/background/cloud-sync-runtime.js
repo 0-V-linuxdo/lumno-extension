@@ -150,8 +150,22 @@
       });
       const accepted = Array.isArray(response && response.accepted) ? response.accepted : [];
       const conflicts = Array.isArray(response && response.conflicts) ? response.conflicts : [];
+      const rejected = Array.isArray(response && response.rejected) ? response.rejected : [];
+      const deferred = Array.isArray(response && response.deferred) ? response.deferred : [];
       const acceptedIds = accepted.map((item) => item && item.operation_id).filter(Boolean);
       const conflictIds = conflicts.map((item) => item && item.operation_id).filter(Boolean);
+      const deferredIds = new Set([
+        ...deferred,
+        ...rejected.filter((item) => item && (
+          item.code === 'unsupported_key' || item.code === 'protocol_unsupported'
+        ))
+      ].map((item) => String(item && item.operation_id || '')).filter(Boolean));
+      const terminalRejectedIds = rejected
+        .map((item) => String(item && item.operation_id || ''))
+        .filter((operationId) => operationId && !deferredIds.has(operationId));
+      const supportedKeys = new Set(Array.isArray(response && response.supported_keys)
+        ? response.supported_keys.filter((key) => schema.isSyncKey(key))
+        : schema.SYNC_KEYS);
       const outboxById = new Map(current.outbox.map((item) => [item.operation_id, item]));
       const acceptedByKey = new Map(accepted
         .filter((item) => item && schema.isSyncKey(item.key))
@@ -208,7 +222,7 @@
 
         const acknowledgedOutbox = state.acknowledgeOperations(
           latest.outbox,
-          [...acceptedIds, ...conflictIds, ...extraAcknowledgedIds]
+          [...acceptedIds, ...conflictIds, ...extraAcknowledgedIds, ...terminalRejectedIds]
         );
         const rebasedOutbox = acknowledgedOutbox.map((operation) => {
           const acceptedItem = acceptedByKey.get(operation.key);
@@ -223,6 +237,12 @@
           });
         }).filter(Boolean);
         const nextConflicts = mergeConflicts(latest.conflicts, normalizedConflicts);
+        const deferredCount = rebasedOutbox
+          .filter((operation) => !supportedKeys.has(operation.key) || deferredIds.has(operation.operation_id))
+          .length;
+        const rejectionCode = rejected
+          .filter((item) => item && !deferredIds.has(String(item.operation_id || '')))
+          .map((item) => String(item.code || 'sync_change_rejected'))[0] || '';
         await writeLocal({
           [schema.CLOUD_LOCAL_KEYS.outbox]: state.normalizeOutbox(rebasedOutbox),
           [schema.CLOUD_LOCAL_KEYS.versions]: nextVersions,
@@ -232,14 +252,21 @@
             ...latest.status,
             state: nextConflicts.length > 0 ? 'conflict' : 'ready',
             last_push_at: now(),
-            last_error: ''
+            last_error: rejectionCode,
+            last_rejection_code: rejectionCode,
+            deferred_count: deferredCount,
+            rejected_count: rejected.length,
+            sync_protocol: Math.max(1, Number(response && response.protocol) || 1),
+            sync_schema_hash: String(response && response.schema_hash || '')
           }
         });
-        return { nextConflicts };
+        return { nextConflicts, deferredCount };
       });
       return {
         ok: true,
         pushed: accepted.length,
+        deferred: committed.deferredCount,
+        rejected,
         conflicts: committed.nextConflicts
       };
     }
@@ -259,6 +286,9 @@
         cursor: full ? 0 : requestState.cursor
       });
       const rows = Array.isArray(response && response.rows) ? response.rows : [];
+      const supportedKeys = Array.isArray(response && response.supported_keys)
+        ? response.supported_keys.filter((key) => schema.isSyncKey(key))
+        : schema.SYNC_KEYS;
       const remoteKeys = new Set(rows
         .map((row) => String(row && row.key || ''))
         .filter((key) => schema.isSyncKey(key)));
@@ -269,7 +299,7 @@
         const pendingKeys = new Set(latest.outbox
           .map((operation) => String(operation && operation.key || '')));
         const missingRemovals = resetMissing
-          ? schema.SYNC_KEYS.filter((key) => (
+          ? supportedKeys.filter((key) => (
               Object.prototype.hasOwnProperty.call(localSnapshot, key) &&
               !remoteKeys.has(key) &&
               !pendingKeys.has(key)
@@ -297,7 +327,9 @@
             ...latest.status,
             state: conflicts.length > 0 ? 'conflict' : 'ready',
             last_pull_at: now(),
-            last_error: ''
+            last_error: '',
+            sync_protocol: Math.max(1, Number(response && response.protocol) || 1),
+            sync_schema_hash: String(response && response.schema_hash || '')
           }
         });
         return {

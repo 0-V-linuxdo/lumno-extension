@@ -6,6 +6,8 @@
 > 维护方式：每季度复查一次；发生同步事故、协议升级或生产数据库变更后立即复查<br>
 > 唯一原则：生产数据库先兼容新旧客户端，再发布新客户端；已经部署的 migration 永不修改
 
+> 2026-08-04 落地状态：生产已部署 `019` 白名单修复和 `020` 同步协议 v2；匿名能力探测为 protocol 2、52/52 键；一次性测试账号已通过逐项拒绝、旧链路、私有媒体、分析和删除保护冒烟。客户端兼容代码已完成，须在完整 CI 通过并推送后再发布。
+
 ## 目录
 
 1. [目标和结论](#1-目标和结论)
@@ -144,6 +146,8 @@
 3. 一旦加入 `SYNC_KEYS`，必须同时声明其最低同步协议版本并提供对应的新 migration。
 4. 删除同步键时先停止新客户端写入并保留读取兼容，不能直接从服务端白名单和旧 RPC 中删除。
 
+注意：代码里的 `storageArea: 'local'` 只表示该键在扩展侧落到 `chrome.storage.local`，用于规避 Chrome Sync 的容量或形态限制；只要它仍在 `SYNC_KEY_DEFINITIONS` 中，它就是 Lumno 账号同步键。真正的“仅本机”设置不得进入 `SYNC_KEY_DEFINITIONS`。
+
 建议在 `src/shared/cloud-sync-schema.js` 中把单纯的字符串数组升级为带元数据的合同：
 
 ```js
@@ -191,18 +195,20 @@ Supabase 通过 `supabase_migrations.schema_migrations` 记录已执行的时间
 - `lumno_push_setting_changes`
 - `lumno_pull_setting_changes`
 
-后续新增：
+当前已新增：
 
 - `lumno_get_sync_capabilities`
 - `lumno_push_setting_changes_v2`
 - `lumno_pull_setting_changes_v2`
 
-建议数据库维护独立的协议白名单：
+数据库维护独立的协议白名单：
 
-- `lumno_is_sync_key_v1(candidate)`：冻结旧客户端认识的键；
-- `lumno_is_sync_key_v2(candidate)`：包含 v2 新键；
-- legacy RPC 只调用 v1 白名单；
-- v2 RPC 只调用 v2 白名单。
+- `lumno_sync_keys_v1()`：冻结旧客户端认识的 49 个键；
+- `lumno_sync_keys_v2()`：包含当前 52 个键；
+- 新客户端只按 capabilities 返回的协议白名单组装批次；
+- v2 RPC 只接受 v2 白名单，并逐项返回 `rejected`。
+
+`019/020` 属于 Expand 阶段。为保护事故期间已经出现、尚未升级到 v2 但会发送三个新键的过渡客户端，legacy RPC 暂时保留当前 52 键服务端白名单，不在同一次发布中收窄。新客户端的 v1 降级合同严格限制为 49 键。只有过渡版本退出支持窗口后，才可用独立 Contract migration 收窄 legacy RPC。
 
 不要依赖同名 PostgreSQL 函数重载实现版本选择。PostgreSQL 支持重载，但默认参数和相近签名可能造成调用歧义；对公开 PostgREST API 使用清晰的新 RPC 名称更容易审计和回滚。
 
@@ -210,7 +216,7 @@ Supabase 通过 `supabase_migrations.schema_migrations` 记录已执行的时间
 
 ### 4.4 旧客户端拉取新数据
 
-v1 pull 只返回 v1 白名单内的键，v2 pull 只返回 v2 白名单内的键。这样旧客户端不会收到无法识别的新键，也不会因为未知 change id 反复拉取相同页面。
+目标状态是 v1 pull 只返回 v1 白名单内的键，v2 pull 只返回 v2 白名单内的键。当前 Expand 过渡期的 legacy pull 可能返回 52 键；已部署旧客户端会忽略不认识的键，新客户端 v1 降级只清理 capabilities 明确支持的 49 键，因此不会误删本机 v2 设置。过渡窗口结束后再单独收窄 legacy pull。
 
 服务端不得把“当前最新全局白名单”直接应用到所有历史协议。
 
@@ -342,13 +348,14 @@ main                               只接收通过门禁的完整版本
 
 - 对比 PR base：已有 `supabase/migrations/*.sql` 内容不得改变；
 - 只允许增加新的 migration 文件；
+- 生产部署后把 migration SHA-256 加入 `supabase/deployed-migration-checksums.json`，CI 对所有已部署文件逐字节校验；
 - 若必须恢复历史文件与已部署内容一致，使用一次明确的审计 PR，并同时新增 forward migration，不能把它当作日常例外。
 
 ### 8.2 静态合同检查
 
 - 所有账号同步键都有 `introducedProtocol`；
 - 每个协议白名单与客户端定义一致；
-- local-only 键不进入 Cloud、Chrome Sync、导入导出和后台迁移；
+- 真正的 device-only 键不进入 Cloud、Chrome Sync、导入导出和后台迁移；`storageArea: 'local'` 的账号键仍需进入 Cloud 合同；
 - 新 RPC migration 包含权限收口和 schema cache reload；
 - migration 时间戳唯一且严格晚于当前最新版本。
 
@@ -522,6 +529,8 @@ selectionMark: butterfly
 - [ ] 文档和变更日志已更新。
 
 ## 12. 落地计划
+
+当前执行结果：P0 已完成生产修复；P1 的数据库、客户端和测试实现已完成，等待客户端正常发布流程；P2 已落地 checksum、静态合同、兼容矩阵和生产只读探测，独立 staging、分支 required checks 与人工批准环境仍待配置；P3 尚未开始。
 
 ### P0：修复当前同步故障
 

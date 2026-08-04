@@ -82,14 +82,37 @@
     versions: '_lumno_cloud_versions_v1_'
   });
 
-  const SYNC_KEYS = Object.freeze(Object.values(STORAGE_KEYS));
-  const SYNC_KEY_SET = new Set(SYNC_KEYS);
-  const LOCAL_ONLY_SYNC_KEYS = Object.freeze([
+  const MIN_SYNC_PROTOCOL = 1;
+  const CURRENT_SYNC_PROTOCOL = 2;
+  const SYNC_SCHEMA_HASH = '3158a7fff8b1c85ab9b82fbd97d38cccf091d750332cd9a72477a368d98493c9';
+  const LOCAL_STORAGE_SYNC_KEYS = Object.freeze([
     STORAGE_KEYS.newtabLocalWallpaper,
     STORAGE_KEYS.bookmarkTopbarSurfaceMode,
     STORAGE_KEYS.bookmarkTopbarSurfaceColorLight,
     STORAGE_KEYS.bookmarkTopbarSurfaceColorDark
   ]);
+  // Backward-compatible alias. These keys live in chrome.storage.local but
+  // are still account-synced in Cloud mode; they are not device-only settings.
+  const LOCAL_ONLY_SYNC_KEYS = LOCAL_STORAGE_SYNC_KEYS;
+  const LOCAL_STORAGE_SYNC_KEY_SET = new Set(LOCAL_STORAGE_SYNC_KEYS);
+  const PROTOCOL_2_STORAGE_NAMES = new Set([
+    'selectionQuickActionsProvider',
+    'selectionQuickActionsIconSet',
+    'selectionQuickActionsTriggerStyle'
+  ]);
+  const SYNC_KEY_DEFINITIONS = Object.freeze(Object.entries(STORAGE_KEYS).map(([name, key]) => Object.freeze({
+    name,
+    key,
+    introducedProtocol: PROTOCOL_2_STORAGE_NAMES.has(name) ? 2 : 1,
+    storageArea: LOCAL_STORAGE_SYNC_KEY_SET.has(key) ? 'local' : 'shared'
+  })));
+  const SYNC_KEYS = Object.freeze(SYNC_KEY_DEFINITIONS.map((definition) => definition.key));
+  const LEGACY_SYNC_KEYS = Object.freeze(SYNC_KEY_DEFINITIONS
+    .filter((definition) => definition.introducedProtocol <= MIN_SYNC_PROTOCOL)
+    .map((definition) => definition.key));
+  const SYNC_KEY_SET = new Set(SYNC_KEYS);
+  const SYNC_KEY_DEFINITION_BY_KEY = new Map(SYNC_KEY_DEFINITIONS
+    .map((definition) => [definition.key, definition]));
 
   const USAGE_METRICS = Object.freeze([
     'command_bar_opened',
@@ -178,6 +201,25 @@
 
   function isSyncKey(key) {
     return SYNC_KEY_SET.has(String(key || ''));
+  }
+
+  function getSyncKeysForProtocol(protocol) {
+    const normalized = Math.min(
+      CURRENT_SYNC_PROTOCOL,
+      Math.max(MIN_SYNC_PROTOCOL, Math.floor(Number(protocol) || MIN_SYNC_PROTOCOL))
+    );
+    return SYNC_KEY_DEFINITIONS
+      .filter((definition) => definition.introducedProtocol <= normalized)
+      .map((definition) => definition.key);
+  }
+
+  function isSyncKeySupported(key, protocol) {
+    const definition = SYNC_KEY_DEFINITION_BY_KEY.get(String(key || ''));
+    const normalized = Math.min(
+      CURRENT_SYNC_PROTOCOL,
+      Math.max(MIN_SYNC_PROTOCOL, Math.floor(Number(protocol) || MIN_SYNC_PROTOCOL))
+    );
+    return Boolean(definition && definition.introducedProtocol <= normalized);
   }
 
   function buildAnalyticsConfiguration(snapshot) {
@@ -297,13 +339,21 @@
   return Object.freeze({
     SETTINGS_SCHEMA_VERSION,
     ANALYTICS_SCHEMA_VERSION,
+    MIN_SYNC_PROTOCOL,
+    CURRENT_SYNC_PROTOCOL,
+    SYNC_SCHEMA_HASH,
     STORAGE_KEYS,
     CLOUD_LOCAL_KEYS,
+    SYNC_KEY_DEFINITIONS,
     SYNC_KEYS,
+    LEGACY_SYNC_KEYS,
+    LOCAL_STORAGE_SYNC_KEYS,
     LOCAL_ONLY_SYNC_KEYS,
     USAGE_METRICS,
     FORBIDDEN_ANALYTICS_KEY_PATTERN,
     isSyncKey,
+    isSyncKeySupported,
+    getSyncKeysForProtocol,
     copySyncSettings,
     buildAnalyticsConfiguration,
     containsForbiddenAnalyticsKey,

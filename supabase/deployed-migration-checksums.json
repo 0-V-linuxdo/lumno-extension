@@ -1,0 +1,25 @@
+{
+  "lockedThrough": "202608040020_sync_protocol_v2.sql",
+  "sha256": {
+    "202608010001_lumno_cloud.sql": "3d8d5bde22fe3315ab51e6f3684c9bc5654782575124e52719cb0a00f3ad6d5e",
+    "202608020002_data_retention.sql": "1590ff78fe4b525033a26460518e4a634834f061f99f180010490f05a91b634b",
+    "202608020003_selection_quick_actions_sync_key.sql": "d425e2f75f03a50f920a1fa3d0859c479d2c681e2f7ec55c8007c2edda086050",
+    "202608020004_mainland_cross_border_consent.sql": "4657e06c63bd649fc2a5dc1b757d109a5b9d800bc3a2bb2ad21eb87bbc0499d7",
+    "202608020005_full_configuration_and_media_assets.sql": "35b6ea8a6fb3600b84cec1c7af2b2c3c32b3dce8c69f64447d8b0fc54bde6448",
+    "202608030006_media_gateway_and_resource_limits.sql": "25a9b56f1ebcb4c27a9a8bc4a4b1c158dcc8b031848eb996d5d209abd77d21dc",
+    "202608030007_sightengine_moderation_budget.sql": "168f53b52dc352102a15433e470343e4b2643f3c16cf995860218622a8207458",
+    "202608030008_private_active_media_sync.sql": "68619af470854864e77ca54fe56caa356996d3c0374f88ec2e75c46044eb0cf6",
+    "202608030009_revoke_auth_trigger_rpc.sql": "1f725020c53bf3bfc1f8df02cf7b5d3d9396660fa64969374f0e445889a5bd2d",
+    "202608030010_security_boundaries.sql": "b67e698b6f1ac338d43c4aa135d50182b80603475f11e7a269299d5eeec472ee",
+    "202608030011_media_upload_leases.sql": "64bc66859f6631496f379b3b6c996890ab664c2350f8e86e2094c63ec64ffa3f",
+    "202608030012_delete_step_up_consumption.sql": "ce59188494ec32f525028be807d3f9a28d56ab146b986378dc3cddaf15d3e0d1",
+    "202608030013_media_usage_counters.sql": "6d2096e2807bd44f05ea12ef50396747bdedb3f16e89983306b63b890e9399d8",
+    "202608030014_media_usage_counter_fix.sql": "88e54633f5ba283074d766cc8240ff834b50814df1b2d5bda4c1f8b0993b52ee",
+    "202608040015_signup_and_sync_rate_limits.sql": "71a65db3f78046873a294d53e973a8335583a6bb62b440e40470dbf98c2c8a80",
+    "202608040016_signup_recaptcha_passes.sql": "fec8390b271529ec2332e7268b50ac2de5872eb44b7bc6037ca3d4b5cad2b249",
+    "202608040017_ops_monitor_snapshot.sql": "fe311be787114092b77e0a0f5cfcfd5918e3bfaf76b3b52112e4b87ee88fab74",
+    "202608040018_enforce_signup_recaptcha.sql": "4cf16882340ca9a0984b63f6fecc73836fecc935840ea214553398ec90e03534",
+    "202608040019_selection_quick_actions_sync_keys.sql": "0e1eb3caa05b099540d819683b8d58c26e716c3e98b0764a242bf1d4c4c01f05",
+    "202608040020_sync_protocol_v2.sql": "c5c069598992a102a1a9bc5d0f92952575aba6d2e3f7d8445229cad24a03e1ed"
+  }
+}

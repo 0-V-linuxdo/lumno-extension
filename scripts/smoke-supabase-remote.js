@@ -6,6 +6,7 @@ const { smokeMediaGateway } = require('./helpers/media-gateway-smoke.js');
 const { execFileSync } = require('child_process');
 
 const cloudConfig = require('../src/shared/cloud-config.js');
+const syncSchema = require('../src/shared/cloud-sync-schema.js');
 
 // The hosted Auth, REST, Storage, and Edge routes share one origin but may
 // terminate keep-alive connections at different gateway layers. Node's
@@ -91,6 +92,16 @@ async function requestJsonResult(url, apiKey, options = {}) {
 async function main() {
   const config = cloudConfig.getConfig();
   assert(config.configured, 'cloud client configuration should be populated');
+  const capabilities = await requestJson(
+    `${config.projectUrl}/rest/v1/rpc/lumno_get_sync_capabilities`,
+    config.publishableKey,
+    { method: 'POST', body: {} }
+  );
+  assert.equal(capabilities.current_protocol, 2, 'production should advertise sync protocol 2');
+  assert.equal(capabilities.schema_hash, syncSchema.SYNC_SCHEMA_HASH,
+    'production and client sync schema hashes should match');
+  assert.deepStrictEqual(new Set(capabilities.sync_keys), new Set(syncSchema.SYNC_KEYS),
+    'production should advertise every client sync key');
   const projectRef = new URL(config.projectUrl).hostname.split('.')[0];
   const keys = readRemoteKeys(projectRef);
   assert.equal(keys.publishable, config.publishableKey, 'client key should match the linked project');
@@ -129,8 +140,15 @@ async function main() {
     const authHeaders = { Authorization: `Bearer ${session.access_token}` };
 
     const deviceId = crypto.randomUUID();
-    const operationId = crypto.randomUUID();
-    const settingKey = '_x_extension_theme_mode_2024_unique_';
+    const settingKey = syncSchema.STORAGE_KEYS.themeMode;
+    const settingOperations = syncSchema.SYNC_KEYS.map((key) => ({
+      operation_id: crypto.randomUUID(),
+      key,
+      value: key === settingKey ? 'dark' : `remote-smoke:${key}`,
+      base_version: 0,
+      deleted: false,
+      schema_version: 1
+    }));
     await requestJson(`${config.projectUrl}/rest/v1/rpc/lumno_register_device`, config.publishableKey, {
       method: 'POST',
       headers: authHeaders,
@@ -143,27 +161,22 @@ async function main() {
       }
     });
     const push = await requestJson(
-      `${config.projectUrl}/rest/v1/rpc/lumno_push_setting_changes`,
+      `${config.projectUrl}/rest/v1/rpc/lumno_push_setting_changes_v2`,
       config.publishableKey,
       {
         method: 'POST',
         headers: authHeaders,
         body: {
           p_device_id: deviceId,
-          p_changes: [{
-            operation_id: operationId,
-            key: settingKey,
-            value: 'dark',
-            base_version: 0,
-            deleted: false,
-            schema_version: 1
-          }]
+          p_changes: settingOperations
         }
       }
     );
-    assert.equal(push.accepted?.[0]?.operation_id, operationId, 'remote setting push should be accepted');
+    assert.equal(push.accepted?.length, syncSchema.SYNC_KEYS.length,
+      'production protocol 2 should accept all 52 declared sync keys');
+    assert.equal(push.rejected?.length, 0);
     const pulled = await requestJson(
-      `${config.projectUrl}/rest/v1/rpc/lumno_pull_setting_changes`,
+      `${config.projectUrl}/rest/v1/rpc/lumno_pull_setting_changes_v2`,
       config.publishableKey,
       {
         method: 'POST',
@@ -175,6 +188,69 @@ async function main() {
       pulled.some((row) => row.key === settingKey && row.value === 'dark'),
       'accepted remote setting should be returned by the pull cursor'
     );
+    assert.deepStrictEqual(new Set(pulled.map((row) => row.key)), new Set(syncSchema.SYNC_KEYS),
+      'production protocol 2 pull should return the complete 52-key fixture');
+
+    const isolatedOperationId = crypto.randomUUID();
+    const isolatedPush = await requestJson(
+      `${config.projectUrl}/rest/v1/rpc/lumno_push_setting_changes_v2`,
+      config.publishableKey,
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: {
+          p_device_id: deviceId,
+          p_changes: [{
+            operation_id: crypto.randomUUID(),
+            key: '_x_extension_future_unsupported_key_',
+            value: true,
+            base_version: 0
+          }, {
+            operation_id: isolatedOperationId,
+            key: settingKey,
+            value: 'light',
+            base_version: 1
+          }]
+        }
+      }
+    );
+    assert.equal(isolatedPush.accepted?.[0]?.operation_id, isolatedOperationId,
+      'a supported item should commit even when its batch contains an unknown key');
+    assert.equal(isolatedPush.rejected?.[0]?.code, 'unsupported_key',
+      'an unknown key should be rejected as one isolated item');
+
+    const legacyKey = syncSchema.STORAGE_KEYS.language;
+    const legacyOperationId = crypto.randomUUID();
+    const legacyPush = await requestJson(
+      `${config.projectUrl}/rest/v1/rpc/lumno_push_setting_changes`,
+      config.publishableKey,
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: {
+          p_device_id: deviceId,
+          p_changes: [{
+            operation_id: legacyOperationId,
+            key: legacyKey,
+            value: 'en',
+            base_version: 1
+          }]
+        }
+      }
+    );
+    assert.equal(legacyPush.accepted?.[0]?.operation_id, legacyOperationId,
+      'the legacy push RPC must remain writable after protocol 2 deployment');
+    const legacyPull = await requestJson(
+      `${config.projectUrl}/rest/v1/rpc/lumno_pull_setting_changes`,
+      config.publishableKey,
+      {
+        method: 'POST',
+        headers: authHeaders,
+        body: { p_device_id: deviceId, p_cursor: 0, p_limit: 500 }
+      }
+    );
+    assert(legacyPull.some((row) => row.key === legacyKey && row.value === 'en'),
+      'the legacy pull RPC must remain readable after protocol 2 deployment');
 
     const consentVersion = 'remote-smoke-v1';
     await requestJson(
@@ -256,7 +332,7 @@ async function main() {
     assert.equal(deletion.status, 403,
       'remote account deletion must require an independent OAuth step-up token');
     assert.deepStrictEqual(deletion.data, { ok: false, error: 'step_up_required' });
-    console.log('remote Supabase smoke test passed: sync, private media, analytics, deletion guard');
+    console.log('remote Supabase smoke test passed: 52-key protocol, isolated rejection, legacy sync, private media, analytics, deletion guard');
   } finally {
     if (userId && !deleted) {
       await requestJson(`${config.projectUrl}/auth/v1/admin/users/${userId}`, keys.serviceRole, {

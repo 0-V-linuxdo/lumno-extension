@@ -5,13 +5,25 @@ const schema = require('../src/shared/cloud-sync-schema.js');
 function run() {
   assert(schema.SYNC_KEYS.length >= 40, 'the cloud schema should cover the existing settings surface');
   assert.strictEqual(new Set(schema.SYNC_KEYS).size, schema.SYNC_KEYS.length, 'sync keys must stay unique');
+  assert.strictEqual(schema.CURRENT_SYNC_PROTOCOL, 2);
+  assert.strictEqual(schema.SYNC_KEYS.length, 52, 'protocol 2 should publish the complete 52-key contract');
+  assert.strictEqual(schema.LEGACY_SYNC_KEYS.length, 49, 'protocol 1 must remain frozen at 49 keys');
+  assert.strictEqual(schema.SYNC_KEY_DEFINITIONS.length, schema.SYNC_KEYS.length);
+  assert.match(schema.SYNC_SCHEMA_HASH, /^[0-9a-f]{64}$/);
   assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.themeMode), true);
   assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.newtabZenMode), true);
   assert.strictEqual(schema.isSyncKey(schema.STORAGE_KEYS.newtabFavicon), true);
-  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.newtabLocalWallpaper));
-  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceMode));
-  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorLight));
-  assert(schema.LOCAL_ONLY_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorDark));
+  assert.strictEqual(schema.isSyncKeySupported(schema.STORAGE_KEYS.themeMode, 1), true);
+  assert.strictEqual(schema.isSyncKeySupported(schema.STORAGE_KEYS.selectionQuickActionsProvider, 1), false);
+  assert.strictEqual(schema.isSyncKeySupported(schema.STORAGE_KEYS.selectionQuickActionsProvider, 2), true);
+  assert.strictEqual(schema.isSyncKeySupported(schema.STORAGE_KEYS.selectionQuickActionsIconSet, 1), false);
+  assert.strictEqual(schema.isSyncKeySupported(schema.STORAGE_KEYS.selectionQuickActionsTriggerStyle, 1), false);
+  assert.deepStrictEqual(schema.getSyncKeysForProtocol(1), schema.LEGACY_SYNC_KEYS);
+  assert.deepStrictEqual(schema.getSyncKeysForProtocol(2), schema.SYNC_KEYS);
+  assert(schema.LOCAL_STORAGE_SYNC_KEYS.includes(schema.STORAGE_KEYS.newtabLocalWallpaper));
+  assert(schema.LOCAL_STORAGE_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceMode));
+  assert(schema.LOCAL_STORAGE_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorLight));
+  assert(schema.LOCAL_STORAGE_SYNC_KEYS.includes(schema.STORAGE_KEYS.bookmarkTopbarSurfaceColorDark));
   assert.strictEqual(schema.isSyncKey(schema.CLOUD_LOCAL_KEYS.session), false, 'sessions must never be sync settings');
 
   const settingsSnapshot = {
