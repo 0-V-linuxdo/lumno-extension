@@ -321,7 +321,9 @@ export async function runMonitor({
     try {
       const metrics = await fetchLogMetrics(fetchImpl, env.SUPABASE_MANAGEMENT_TOKEN, now);
       incidents.push(...evaluateLogMetrics(metrics.edgeMetrics, metrics.postgresMetrics));
-    } catch (_error) {
+    } catch (error) {
+      const reason = String(error?.message || error || 'unknown').replace(/[\r\n]+/g, ' ').slice(0, 120);
+      process.stdout.write(`Log metrics query diagnostics: ${reason}.\n`);
       incidents.push(incident('logs_unavailable', 'critical', 'Supabase 日志读取失败', '监控暂时无法判断 5xx、429 与数据库错误'));
     }
   }
