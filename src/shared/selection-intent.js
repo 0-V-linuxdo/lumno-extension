@@ -17,6 +17,20 @@
   ]);
   const MAX_SELECTION_LENGTH = 2400;
   const MIN_SELECTION_LENGTH = 2;
+  const LOW_INTENT_ENGLISH_TERMS = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'being', 'but', 'by',
+    'for', 'from', 'had', 'has', 'have', 'he', 'her', 'here', 'hers', 'him',
+    'his', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'me', 'more', 'my',
+    'no', 'not', 'of', 'on', 'or', 'our', 'ours', 'she', 'so', 'that', 'the',
+    'their', 'theirs', 'them', 'there', 'these', 'they', 'this', 'those', 'to',
+    'too', 'up', 'us', 'was', 'we', 'were', 'what', 'when', 'where', 'which',
+    'who', 'why', 'with', 'you', 'your', 'yours'
+  ]);
+  const LOW_INTENT_CJK_TERMS = new Set([
+    '这个', '那个', '这些', '那些', '这里', '那里', '我们', '你们', '他们',
+    '可以', '需要', '已经', '现在', '更多', '其他', '内容', '资料',
+    'これ', 'それ', 'あれ', 'ここ', 'そこ', 'こちら', 'もっと'
+  ]);
 
   function normalizeText(value) {
     return String(value || '')
@@ -119,6 +133,54 @@
     return hasUnitOrCurrency || hasConversion || hasArithmetic;
   }
 
+  function isGenericUiText(text) {
+    const source = String(text || '').trim();
+    const lower = source.toLowerCase();
+    if (LOW_INTENT_ENGLISH_TERMS.has(lower) || LOW_INTENT_CJK_TERMS.has(source)) {
+      return true;
+    }
+    return /^(?:(?:click|tap|press)\s+(?:here|this|below)|(?:learn|read|see|show|view)\s+more|(?:next|previous|back|home)(?:\s+page)?|(?:sign|log)\s+(?:in|out|up))$/i.test(source) ||
+      /^(?:continue|cancel|submit|save|close)$/i.test(source) ||
+      /^welcome\s+(?:to|back)\b.+/i.test(source) ||
+      /^(?:(?:点击|点按|轻触)(?:这里|此处|下方)?|(?:了解|查看|阅读)更多|下一步|上一步|返回|首页|继续|取消|提交|保存|关闭|登录|注册)$/.test(source) ||
+      /^欢迎(?:访问|来到).+/.test(source) ||
+      /^(?:(?:ここ|こちら)を(?:クリック|タップ)|続きを読む|次へ|前へ|戻る|続ける|キャンセル|保存|閉じる)$/.test(source);
+  }
+
+  function isMeaningfulTermLike(text, options) {
+    const source = String(text || '').trim();
+    const settings = options && typeof options === 'object' ? options : {};
+    if (!source || settings.genericUiLike === true) {
+      return false;
+    }
+    const latinTokens = source.match(/[A-Za-z\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F+.#'’-]*/g) || [];
+    const cjkCount = countMatches(source, /[\u3040-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF]/g);
+    if (latinTokens.length === 1 && latinTokens[0].length === source.length) {
+      const token = latinTokens[0];
+      const lower = token.toLowerCase();
+      return !LOW_INTENT_ENGLISH_TERMS.has(lower) && (
+        /^[A-Z][A-Z0-9+.#-]+$/.test(token) ||
+        token.length >= 3
+      );
+    }
+    if (latinTokens.length >= 2) {
+      return latinTokens.some((token) => (
+        token.length >= 3 && !LOW_INTENT_ENGLISH_TERMS.has(token.toLowerCase())
+      ));
+    }
+    return cjkCount >= 2 && cjkCount >= source.replace(/\s/g, '').length * 0.72;
+  }
+
+  function isSearchLike(text, shortTermLike) {
+    if (!shortTermLike) {
+      return false;
+    }
+    const source = String(text || '');
+    return /\b(?:latest|news|price|pricing|review|reviews|release|releases|documentation|docs|official|website|status|version|download|update|updates)\b/i.test(source) ||
+      /(?:最新|新闻|资讯|价格|定价|评测|测评|发布|官网|文档|版本|下载|更新)/.test(source) ||
+      /(?:最新|ニュース|価格|料金|レビュー|リリース|公式|ドキュメント|バージョン|更新)/.test(source);
+  }
+
   function getSentenceCount(text) {
     const terminalCount = countMatches(text, /[。！？]/g) +
       countMatches(text, /[.!?](?:\s|$)/g);
@@ -165,6 +227,7 @@
     const questionLike = isQuestionLike(text);
     const numericLike = isNumericLike(text);
     const paragraphLike = length >= 160 && (sentenceCount >= 2 || lineCount >= 3);
+    const genericUiLike = isGenericUiText(text);
     const plainClauseLike = /^(?:这是|这个|这些|那是|那个|那些|我们|你们|他们|我在|你在|他在|她在|它在|これは|それは|あれは)/.test(text);
     const shortTermLike = length >= MIN_SELECTION_LENGTH &&
       length <= 48 &&
@@ -172,58 +235,58 @@
       wordCount <= 6 &&
       !/[.!?。！？]\s*$/.test(text) &&
       !plainClauseLike &&
+      !genericUiLike &&
       symbolRatio < 0.3;
     const languageMismatch = isLanguageMismatch(text, settings, scriptStats, codeLike);
+    const meaningfulTermLike = shortTermLike && isMeaningfulTermLike(text, { genericUiLike });
+    const searchLike = isSearchLike(text, shortTermLike);
     const strongIntentLike = questionLike ||
-      (languageMismatch && !numericLike) ||
+      (languageMismatch && !numericLike && !genericUiLike) ||
       (errorLike && (codeLike || !questionLike)) ||
       codeLike ||
       paragraphLike ||
-      numericLike;
-    const phraseLike = shortTermLike && (
-      wordCount >= 2 ||
-      (scriptStats.cjkRatio >= 0.72 && length >= 4)
-    );
-    const readableSelectionLike = scriptStats.letters >= 2 && length >= MIN_SELECTION_LENGTH;
+      numericLike ||
+      searchLike;
     const suppressed = !text ||
       length < MIN_SELECTION_LENGTH ||
       length > MAX_SELECTION_LENGTH ||
       urlLike ||
       emailLike ||
-      settings.editable === true ||
       settings.sensitive === true;
     const scores = Object.fromEntries(ACTIONS.map((action) => [action, 0]));
 
     if (!suppressed) {
       if (questionLike) {
-        scores.ask += 0.84;
-        scores.search += 0.2;
+        scores.ask = 0.9;
+        scores.search = 0.2;
       }
-      if (languageMismatch && !numericLike) {
-        scores.translate += 0.8;
-        scores.explain += 0.18;
+      if (languageMismatch && !numericLike && !genericUiLike) {
+        scores.translate = 0.82;
+        scores.explain = Math.max(scores.explain, 0.18);
       }
       if (errorLike && (codeLike || !questionLike)) {
-        scores.explain += 0.9;
-        scores.search += 0.52;
+        scores.explain = 0.96;
+        scores.search = Math.max(scores.search, 0.52);
       } else if (codeLike) {
-        scores.explain += 0.76;
-        scores.ask += 0.2;
+        scores.explain = 0.84;
+        scores.ask = Math.max(scores.ask, 0.2);
       }
       if (paragraphLike) {
-        scores.summarize += 0.76;
-        scores.ask += 0.28;
+        scores.summarize = 0.9;
       }
       if (numericLike) {
-        scores.calculate += 0.84;
-        scores.ask += 0.16;
+        scores.calculate = 0.96;
+        scores.ask = Math.max(scores.ask, 0.16);
       }
-      if (shortTermLike && !numericLike && !questionLike && !languageMismatch && !errorLike) {
-        scores.explain += 0.5;
-        scores.search += 0.46;
+      if (searchLike && !numericLike && !questionLike && !errorLike) {
+        scores.search = 0.88;
+        scores.explain = Math.max(scores.explain, 0.24);
+      } else if (meaningfulTermLike && !numericLike && !questionLike && !languageMismatch && !errorLike) {
+        scores.explain = 0.5;
+        scores.search = 0.46;
       }
       if (!paragraphLike && !shortTermLike && length >= 20) {
-        scores.ask += 0.3;
+        scores.ask = Math.max(scores.ask, 0.3);
       }
     }
 
@@ -247,11 +310,14 @@
         codeLike,
         emailLike,
         errorLike,
+        genericUiLike,
         languageMismatch,
         lineCount,
+        meaningfulTermLike,
         numericLike,
         paragraphLike,
         questionLike,
+        searchLike,
         scriptStats,
         sentenceCount,
         shortTermLike,
@@ -259,7 +325,7 @@
         urlLike,
         wordCount
       }),
-      triggerable: !suppressed && (strongIntentLike || phraseLike || readableSelectionLike)
+      triggerable: !suppressed && !genericUiLike && (strongIntentLike || meaningfulTermLike)
     });
   }
 
