@@ -20,6 +20,23 @@
       : '';
   }
 
+  function getHttpOrigin(value) {
+    try {
+      const parsed = new URL(String(value || ''));
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function getTabUrl(tab) {
+    const pendingUrl = tab && typeof tab.pendingUrl === 'string' ? tab.pendingUrl.trim() : '';
+    if (pendingUrl) {
+      return pendingUrl;
+    }
+    return tab && typeof tab.url === 'string' ? tab.url.trim() : '';
+  }
+
   function tryOpenWithSplitViewAdapter(adapter, options, callback) {
     const done = typeof callback === 'function' ? callback : () => {};
     if (!adapter || typeof adapter.openTarget !== 'function') {
@@ -73,39 +90,62 @@
     }
   }
 
-  function getSourceSelectionGroup(chromeApi, sourceTab) {
-    const api = getChromeApi(chromeApi);
-    if (!sourceTab || typeof sourceTab.groupId !== 'number') {
-      return null;
-    }
-    const ungroupedId = api && api.tabGroups &&
-      typeof api.tabGroups.TAB_GROUP_ID_NONE === 'number'
-      ? api.tabGroups.TAB_GROUP_ID_NONE
-      : -1;
-    if (sourceTab.groupId === ungroupedId) {
-      return null;
-    }
-    return {
-      id: sourceTab.groupId,
-      preserve: true
-    };
-  }
-
   function resolveSelectionGroup(chromeApi, settings, callback) {
     const api = getChromeApi(chromeApi);
     const done = typeof callback === 'function' ? callback : () => {};
     const sourceTab = settings && settings.sourceTab && typeof settings.sourceTab === 'object'
       ? settings.sourceTab
       : null;
-    const sourceGroup = getSourceSelectionGroup(api, sourceTab);
-    if (sourceGroup) {
-      done(sourceGroup);
-      return;
-    }
     const windowId = sourceTab && typeof sourceTab.windowId === 'number'
       ? sourceTab.windowId
       : (settings && typeof settings.windowId === 'number' ? settings.windowId : null);
     findExistingSelectionGroup(api, windowId, settings && settings.groupTitle, done);
+  }
+
+  function findReusableSelectionTab(chromeApi, options, callback) {
+    const api = getChromeApi(chromeApi);
+    const settings = options && typeof options === 'object' ? options : {};
+    const done = typeof callback === 'function' ? callback : () => {};
+    const expectedOrigin = getHttpOrigin(settings.url);
+    if (!expectedOrigin || !api || !api.tabs || typeof api.tabs.query !== 'function') {
+      done(null);
+      return;
+    }
+    const sourceTab = settings.sourceTab && typeof settings.sourceTab === 'object'
+      ? settings.sourceTab
+      : null;
+    const queryInfo = {};
+    const windowId = sourceTab && typeof sourceTab.windowId === 'number'
+      ? sourceTab.windowId
+      : (typeof settings.windowId === 'number' ? settings.windowId : null);
+    if (typeof windowId === 'number') {
+      queryInfo.windowId = windowId;
+    }
+    try {
+      api.tabs.query(queryInfo, (tabs) => {
+        if (getRuntimeError(api, 'tab-query-failed')) {
+          done(null);
+          return;
+        }
+        const candidates = (Array.isArray(tabs) ? tabs : [])
+          .filter((tab) => (
+            tab &&
+            typeof tab.id === 'number' &&
+            tab.discarded !== true &&
+            getHttpOrigin(getTabUrl(tab)) === expectedOrigin
+          ))
+          .sort((left, right) => {
+            const statusDifference = Number(right.status === 'complete') - Number(left.status === 'complete');
+            if (statusDifference !== 0) {
+              return statusDifference;
+            }
+            return (Number(right.lastAccessed) || 0) - (Number(left.lastAccessed) || 0);
+          });
+        done(candidates[0] || null);
+      });
+    } catch (error) {
+      done(null);
+    }
   }
 
   function updateSelectionGroup(chromeApi, groupId, options, callback) {
@@ -190,6 +230,28 @@
         reason: error && error.message ? error.message : 'tab-group-threw'
       });
     }
+  }
+
+  function placeTabInSelectionGroup(chromeApi, tab, options, callback) {
+    const api = getChromeApi(chromeApi);
+    const settings = options && typeof options === 'object' ? options : {};
+    const done = typeof callback === 'function' ? callback : () => {};
+    if (!tab || typeof tab.id !== 'number') {
+      done({ ok: false, mode: 'none', tab: tab || null, groupId: null, reason: 'tab-unavailable' });
+      return;
+    }
+    findExistingSelectionGroup(
+      api,
+      typeof tab.windowId === 'number' ? tab.windowId : null,
+      settings.groupTitle,
+      (group) => {
+        addTabToSelectionGroup(api, tab, group, {
+          title: settings.groupTitle || DEFAULT_GROUP_TITLE,
+          color: settings.groupColor || DEFAULT_GROUP_COLOR,
+          collapsed: true
+        }, done);
+      }
+    );
   }
 
   function openInSelectionGroup(chromeApi, options, callback) {
@@ -305,6 +367,23 @@
         return;
       }
       if (settings.groupEnabled === true) {
+        if (settings.reuseExisting !== false) {
+          findReusableSelectionTab(chromeApi, settings, (tab) => {
+            if (!tab) {
+              openInSelectionGroup(chromeApi, settings, done);
+              return;
+            }
+            placeTabInSelectionGroup(chromeApi, tab, settings, (placement) => {
+              done({
+                ...(placement && typeof placement === 'object' ? placement : {}),
+                ok: true,
+                mode: 'reused',
+                tab
+              });
+            });
+          });
+          return;
+        }
         openInSelectionGroup(chromeApi, settings, done);
         return;
       }
@@ -317,9 +396,11 @@
     DEFAULT_GROUP_TITLE,
     addTabToSelectionGroup,
     findExistingSelectionGroup,
+    findReusableSelectionTab,
     openInNewTab,
     openInSelectionGroup,
     openSelectionTarget,
+    placeTabInSelectionGroup,
     tryOpenWithSplitViewAdapter,
     updateSelectionGroup
   });

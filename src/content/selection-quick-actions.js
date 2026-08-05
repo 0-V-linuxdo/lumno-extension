@@ -16,8 +16,8 @@
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
-  const RUNTIME_REVISION = 'selection-toolbar-v18';
-  const RUNTIME_VERSION = 18;
+  const RUNTIME_REVISION = 'selection-toolbar-v29';
+  const RUNTIME_VERSION = 29;
   const RUNTIME_ID = chrome && chrome.runtime && chrome.runtime.id
     ? String(chrome.runtime.id)
     : '';
@@ -27,6 +27,7 @@
   const SELECTION_GESTURE_TIMEOUT_MS = 1600;
   const ENTRY_DISMISS_MS = 2200;
   const TOOLBAR_DISMISS_MS = 3600;
+  const VIEWPORT_SAFE_MARGIN_PX = 12;
   const TEXT_INPUT_TYPES = new Set(['text', 'search', 'url', 'tel', 'email']);
   const providerStorageRuntime = globalThis.LumnoSettings &&
     typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
@@ -55,17 +56,65 @@
   let host = null;
   let shadow = null;
   let surface = null;
+  let material = null;
   let mainButton = null;
   let selectionLogo = null;
   let mainLabel = null;
   let primaryDivider = null;
+  let contentViewport = null;
   let actionsViewport = null;
   let menu = null;
   let status = null;
   let ownershipObserver = null;
+  let surfaceResizeObserver = null;
   let toolbarEntranceAnimations = [];
   let toolbarEntranceFrame = null;
   let toolbarEntranceCleanupTimer = null;
+  let viewportRepositionFrame = null;
+  let hostHorizontalAnchor = 'left';
+
+  const HOST_ISOLATION_STYLES = Object.freeze({
+    all: 'initial',
+    position: 'fixed',
+    'z-index': '2147483647',
+    'box-sizing': 'border-box',
+    width: 'max-content',
+    height: 'max-content',
+    'min-width': '0',
+    'min-height': '0',
+    'max-width': 'none',
+    'max-height': 'none',
+    margin: '0',
+    padding: '0',
+    border: '0',
+    outline: '0',
+    bottom: 'auto',
+    opacity: '1',
+    visibility: 'visible',
+    'pointer-events': 'auto',
+    transform: 'none',
+    translate: 'none',
+    rotate: 'none',
+    scale: 'none',
+    filter: 'none',
+    '-webkit-filter': 'none',
+    perspective: 'none',
+    clip: 'auto',
+    'clip-path': 'none',
+    '-webkit-clip-path': 'none',
+    mask: 'none',
+    '-webkit-mask': 'none',
+    overflow: 'visible',
+    isolation: 'isolate',
+    'mix-blend-mode': 'normal',
+    contain: 'layout style',
+    'content-visibility': 'visible',
+    'writing-mode': 'horizontal-tb',
+    direction: 'ltr',
+    zoom: '1',
+    animation: 'none',
+    transition: 'none'
+  });
 
   const ACTION_COPY = Object.freeze({
     ask: ['selection_quick_action_ask', 'Answer'],
@@ -107,6 +156,31 @@
     } catch (e) {
       return fallback;
     }
+  }
+
+  function applyNoTranslate(element) {
+    if (!element || typeof element.setAttribute !== 'function') {
+      return element;
+    }
+    element.setAttribute('translate', 'no');
+    element.setAttribute('lang', 'zxx');
+    element.setAttribute('notranslate', '');
+    element.setAttribute('data-no-translate', 'true');
+    if (element.classList) {
+      element.classList.add('notranslate');
+    }
+    return element;
+  }
+
+  function applyNoTranslateDeep(root) {
+    if (!root || typeof root !== 'object') {
+      return root;
+    }
+    applyNoTranslate(root);
+    if (typeof root.querySelectorAll === 'function') {
+      root.querySelectorAll('*').forEach((element) => applyNoTranslate(element));
+    }
+    return root;
   }
 
   function normalizeLocale(value) {
@@ -172,6 +246,142 @@
     }
   }
 
+  function applyHostIsolationStyles() {
+    if (!host) {
+      return;
+    }
+    Object.entries(HOST_ISOLATION_STYLES).forEach(([property, value]) => {
+      host.style.setProperty(property, value, 'important');
+    });
+  }
+
+  function setHostHidden(hidden) {
+    if (!host) {
+      return;
+    }
+    applyHostIsolationStyles();
+    host.hidden = Boolean(hidden);
+    host.style.setProperty('display', hidden ? 'none' : 'block', 'important');
+  }
+
+  function setHostPosition(left, top) {
+    if (!host) {
+      return;
+    }
+    hostHorizontalAnchor = 'left';
+    host.style.setProperty('left', `${Math.round(left)}px`, 'important');
+    host.style.setProperty('right', 'auto', 'important');
+    host.style.setProperty('top', `${Math.round(top)}px`, 'important');
+  }
+
+  function setHostRightPosition(right, top) {
+    if (!host) {
+      return;
+    }
+    hostHorizontalAnchor = 'right';
+    host.style.setProperty('left', 'auto', 'important');
+    host.style.setProperty('right', `${Math.round(right)}px`, 'important');
+    host.style.setProperty('top', `${Math.round(top)}px`, 'important');
+  }
+
+  function setHostColorScheme(value) {
+    if (!host) {
+      return;
+    }
+    host.style.setProperty('color-scheme', value, 'important');
+  }
+
+  function getViewportBounds() {
+    const visualViewport = window.visualViewport;
+    const width = visualViewport && Number.isFinite(visualViewport.width)
+      ? visualViewport.width
+      : (window.innerWidth || document.documentElement.clientWidth || 0);
+    const height = visualViewport && Number.isFinite(visualViewport.height)
+      ? visualViewport.height
+      : (window.innerHeight || document.documentElement.clientHeight || 0);
+    const left = visualViewport && Number.isFinite(visualViewport.offsetLeft)
+      ? visualViewport.offsetLeft
+      : 0;
+    const top = visualViewport && Number.isFinite(visualViewport.offsetTop)
+      ? visualViewport.offsetTop
+      : 0;
+    return {
+      bottom: top + Math.max(0, height),
+      left,
+      right: left + Math.max(0, width),
+      top
+    };
+  }
+
+  function getLayoutViewportWidth() {
+    return window.innerWidth || document.documentElement.clientWidth || 0;
+  }
+
+  function clampToSafeAxis(value, minimum, maximum) {
+    const safeMaximum = Math.max(minimum, maximum);
+    return Math.min(safeMaximum, Math.max(minimum, value));
+  }
+
+  function applySurfaceViewportLimit(viewport) {
+    if (!surface || !viewport) {
+      return;
+    }
+    const availableWidth = Math.max(
+      0,
+      viewport.right - viewport.left - VIEWPORT_SAFE_MARGIN_PX * 2
+    );
+    surface.style.maxWidth = `${Math.floor(availableWidth)}px`;
+  }
+
+  function clampVisibleSurfaceToViewport() {
+    viewportRepositionFrame = null;
+    if (!host || host.hidden || !surface) {
+      return;
+    }
+    const viewport = getViewportBounds();
+    applySurfaceViewportLimit(viewport);
+    const bounds = surface.getBoundingClientRect();
+    const safeLeft = viewport.left + VIEWPORT_SAFE_MARGIN_PX;
+    const safeTop = viewport.top + VIEWPORT_SAFE_MARGIN_PX;
+    const maximumLeft = viewport.right - bounds.width - VIEWPORT_SAFE_MARGIN_PX;
+    const maximumTop = viewport.bottom - bounds.height - VIEWPORT_SAFE_MARGIN_PX;
+    const currentTop = Number.parseFloat(host.style.top);
+    const clampedTop = clampToSafeAxis(
+      Number.isFinite(currentTop) ? currentTop : bounds.top,
+      safeTop,
+      maximumTop
+    );
+    if (hostHorizontalAnchor === 'right') {
+      const layoutViewportWidth = getLayoutViewportWidth();
+      const currentRightOffset = Number.parseFloat(host.style.right);
+      const currentRightEdge = Number.isFinite(currentRightOffset)
+        ? layoutViewportWidth - currentRightOffset
+        : bounds.right;
+      const rightEdge = clampToSafeAxis(
+        currentRightEdge,
+        safeLeft + bounds.width,
+        viewport.right - VIEWPORT_SAFE_MARGIN_PX
+      );
+      setHostRightPosition(layoutViewportWidth - rightEdge, clampedTop);
+      return;
+    }
+    const currentLeft = Number.parseFloat(host.style.left);
+    setHostPosition(
+      clampToSafeAxis(Number.isFinite(currentLeft) ? currentLeft : bounds.left, safeLeft, maximumLeft),
+      clampedTop
+    );
+  }
+
+  function scheduleViewportClamp() {
+    if (!host || host.hidden || !surface) {
+      return;
+    }
+    if (viewportRepositionFrame != null) {
+      window.cancelAnimationFrame(viewportRepositionFrame);
+    }
+    viewportRepositionFrame = window.requestAnimationFrame(clampVisibleSurfaceToViewport);
+  }
+
   function prefersReducedMotion() {
     try {
       return typeof window.matchMedia === 'function' &&
@@ -200,10 +410,16 @@
     if (surface) {
       delete surface.dataset.toolbarEntranceState;
       surface.style.removeProperty('--lumno-entry-width');
-      surface.style.removeProperty('--lumno-toolbar-collapsed-width');
       surface.style.removeProperty('--lumno-toolbar-expanded-width');
+      surface.style.removeProperty('--lumno-toolbar-content-width');
       surface.style.removeProperty('--lumno-toolbar-content-offset');
       surface.style.removeProperty('will-change');
+    }
+    if (material) {
+      material.style.removeProperty('will-change');
+    }
+    if (contentViewport) {
+      contentViewport.style.removeProperty('will-change');
     }
     if (menu) {
       menu.style.removeProperty('will-change');
@@ -211,12 +427,12 @@
   }
 
   function runToolbarEntranceFallback(geometry) {
-    if (!surface || !mainButton || !geometry) {
+    if (!surface || !material || !contentViewport || !geometry) {
       return;
     }
     surface.dataset.toolbarEntranceMode = 'fallback';
-    surface.style.setProperty('--lumno-toolbar-collapsed-width', `${geometry.collapsedWidth}px`);
     surface.style.setProperty('--lumno-toolbar-expanded-width', `${geometry.expandedWidth}px`);
+    surface.style.setProperty('--lumno-toolbar-content-width', `${geometry.contentWidth}px`);
     surface.style.setProperty('--lumno-toolbar-content-offset', `${geometry.contentOffset}px`);
     surface.dataset.toolbarEntranceState = 'from';
     void surface.offsetWidth;
@@ -227,21 +443,12 @@
         return;
       }
       surface.dataset.toolbarEntranceState = 'to';
-      toolbarEntranceCleanupTimer = window.setTimeout(() => {
-        toolbarEntranceCleanupTimer = null;
-        if (surface) {
-          delete surface.dataset.toolbarEntranceState;
-          surface.style.removeProperty('--lumno-toolbar-collapsed-width');
-          surface.style.removeProperty('--lumno-toolbar-expanded-width');
-          surface.style.removeProperty('--lumno-toolbar-content-offset');
-        }
-      }, 360);
     }, 0);
   }
 
   function animateToolbarEntrance(originRect) {
     cancelToolbarEntranceAnimation();
-    if (!surface || !originRect) {
+    if (!surface || !material || !contentViewport || !originRect) {
       return;
     }
     if (prefersReducedMotion()) {
@@ -263,35 +470,12 @@
         surface.dataset.toolbarEntranceMode = 'invalid-destination';
         return;
       }
-      const measuredButtonRect = mainButton.getBoundingClientRect();
-      const destinationButtonRect = measuredButtonRect.width > 0 && measuredButtonRect.height > 0
-        ? measuredButtonRect
-        : {
-            height: 30,
-            left: destinationRect.left + 4,
-            top: destinationRect.top + 4,
-            width: 30
-          };
-      const buttonInset = Math.max(0, destinationButtonRect.left - destinationRect.left);
-      const measuredViewportRect = actionsViewport && actionsViewport.getBoundingClientRect
-        ? actionsViewport.getBoundingClientRect()
-        : null;
-      const fixedRegionWidth = measuredViewportRect && measuredViewportRect.left > destinationRect.left
-        ? measuredViewportRect.left - destinationRect.left + buttonInset
-        : destinationButtonRect.width + buttonInset * 2 + 7;
-      const collapsedWidth = Math.max(
-        1,
-        Math.min(
-          destinationRect.width,
-          Math.max(originRect.width, fixedRegionWidth)
-        )
-      );
-      const actionsWidth = measuredViewportRect && measuredViewportRect.width > 0
-        ? measuredViewportRect.width
-        : Math.max(0, destinationRect.width - collapsedWidth);
       const geometry = {
-        collapsedWidth,
-        contentOffset: actionsWidth,
+        contentOffset: Math.max(6, Math.min(10, destinationRect.width * 0.04)),
+        contentWidth: Math.max(0, (() => {
+          const contentRect = contentViewport.getBoundingClientRect();
+          return contentRect.width > 0 ? contentRect.width : destinationRect.width - 8;
+        })()),
         expandedWidth: destinationRect.width
       };
       if (!useWebAnimations) {
@@ -299,38 +483,52 @@
         return;
       }
       surface.dataset.toolbarEntranceMode = 'web-animations';
-      surface.style.willChange = 'width';
-      menu.style.willChange = 'transform';
-      const surfaceAnimation = surface.animate([
-        { width: `${geometry.collapsedWidth}px` },
+      material.style.willChange = 'width';
+      contentViewport.style.willChange = 'width';
+      menu.style.willChange = 'transform, opacity';
+      const materialAnimation = material.animate([
+        { width: '0px' },
         { width: `${destinationRect.width}px` }
       ], {
+        duration: 240,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        fill: 'both'
+      });
+      const contentRevealAnimation = contentViewport.animate([
+        { width: '0px' },
+        { width: `${geometry.contentWidth}px` }
+      ], {
         duration: 260,
+        delay: 20,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'both'
       });
       const toolbarContentAnimation = menu.animate([
-        { transform: `translateX(-${geometry.contentOffset}px)` },
-        { transform: 'translateX(0px)' }
+        { transform: `translateX(-${geometry.contentOffset}px)`, opacity: 0.72 },
+        { transform: 'translateX(0px)', opacity: 1 }
       ], {
-        duration: 260,
+        duration: 280,
+        delay: 30,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'both'
       });
-      toolbarEntranceAnimations = [surfaceAnimation, toolbarContentAnimation];
+      toolbarEntranceAnimations = [materialAnimation, contentRevealAnimation, toolbarContentAnimation];
       toolbarEntranceCleanupTimer = window.setTimeout(() => {
         toolbarEntranceCleanupTimer = null;
-        toolbarEntranceAnimations.forEach((animation) => animation.cancel());
-        toolbarEntranceAnimations = [];
-        if (surface) surface.style.removeProperty('will-change');
+        if (material) material.style.removeProperty('will-change');
+        if (contentViewport) contentViewport.style.removeProperty('will-change');
         if (menu) menu.style.removeProperty('will-change');
-      }, 360);
+      }, 420);
     });
   }
 
   function hideSurface(options) {
     cancelToolbarEntranceAnimation();
     clearTimers();
+    if (viewportRepositionFrame != null) {
+      window.cancelAnimationFrame(viewportRepositionFrame);
+      viewportRepositionFrame = null;
+    }
     currentCandidate = null;
     requestSequence += 1;
     if (!host) {
@@ -338,11 +536,11 @@
     }
     host.dataset.visible = 'false';
     if (!options || options.immediate !== false) {
-      host.hidden = true;
+      setHostHidden(true);
     } else {
       window.setTimeout(() => {
         if (host && host.dataset.visible !== 'true') {
-          host.hidden = true;
+          setHostHidden(true);
         }
       }, 160);
     }
@@ -375,12 +573,17 @@
 
   function clearOwnedSurface() {
     cancelToolbarEntranceAnimation();
+    if (surfaceResizeObserver) {
+      surfaceResizeObserver.disconnect();
+      surfaceResizeObserver = null;
+    }
     if (host && host.isConnected) {
       host.remove();
     }
     host = null;
     shadow = null;
     surface = null;
+    contentViewport = null;
     mainButton = null;
     selectionLogo = null;
     mainLabel = null;
@@ -763,7 +966,8 @@
     }
     host = document.createElement('div');
     host.id = HOST_ID;
-    host.hidden = true;
+    applyNoTranslate(host);
+    setHostHidden(true);
     host.dataset.visible = 'false';
     updateRuntimeDebugState();
     shadow = host.attachShadow({ mode: 'closed' });
@@ -775,39 +979,74 @@
         position: fixed;
         z-index: 2147483647;
         display: block;
+        box-sizing: border-box;
+        width: max-content;
+        height: max-content;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: none;
+        filter: none;
+        overflow: visible;
+        isolation: isolate;
+        mix-blend-mode: normal;
+        contain: layout style;
         color-scheme: light dark;
         font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       :host([hidden]) { display: none; }
+      :host::before,
+      :host::after {
+        content: none !important;
+        display: none !important;
+      }
       .lumno-selection-surface {
         position: relative;
         display: inline-flex;
         align-items: center;
+        justify-content: flex-start;
         gap: 0;
         height: 38px;
         padding: 3px;
-        border: 1px solid light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.13));
+        border: 1px solid transparent;
         border-radius: 13px;
-        background: light-dark(rgba(244, 245, 247, 0.94), rgba(26, 27, 31, 0.96));
+        background: transparent;
         color: light-dark(#18181b, #e7e8eb);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        box-shadow: none;
+        opacity: 0;
+        transform: translateY(-3px) scale(0.96);
+        transition: opacity 140ms ease, transform 160ms ease;
+        box-sizing: border-box;
+        overflow: visible;
+        contain: layout style;
+      }
+      .lumno-selection-material {
+        position: absolute;
+        inset: 0 auto 0 0;
+        z-index: 0;
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+        border: 1px solid light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.13));
+        border-radius: inherit;
+        background: light-dark(rgba(244, 245, 247, 0.94), rgba(26, 27, 31, 0.96));
         -webkit-backdrop-filter: blur(14px) saturate(130%);
         backdrop-filter: blur(14px) saturate(130%);
         box-shadow:
           inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06)),
           0 8px 24px light-dark(rgba(15, 23, 42, 0.14), rgba(0, 0, 0, 0.38)),
           0 2px 6px light-dark(rgba(15, 23, 42, 0.08), rgba(0, 0, 0, 0.24));
-        opacity: 0;
-        transform: translateY(-3px) scale(0.96);
-        transition: opacity 140ms ease, transform 160ms ease;
-        box-sizing: border-box;
-        overflow: hidden;
-        contain: layout style;
+        pointer-events: none;
       }
-      .lumno-selection-surface::before {
+      .lumno-selection-material::before {
         content: "";
         position: absolute;
         inset: 0;
-        z-index: 0;
         border-radius: inherit;
         background:
           radial-gradient(125% 165% at 50% -38%, light-dark(rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.16)) 0%, transparent 72%),
@@ -817,6 +1056,10 @@
       .lumno-selection-surface > * {
         position: relative;
         z-index: 1;
+      }
+      .lumno-selection-surface > .lumno-selection-material {
+        position: absolute;
+        z-index: 0;
       }
       .lumno-selection-surface[data-icon-only="true"] {
         height: auto;
@@ -828,7 +1071,11 @@
         backdrop-filter: none;
         overflow: visible;
       }
-      .lumno-selection-surface[data-icon-only="true"]::before { display: none; }
+      .lumno-selection-surface[data-icon-only="true"] .lumno-selection-material { display: none; }
+      .lumno-selection-surface[data-icon-only="true"] .lumno-selection-content {
+        flex: 0 0 auto;
+        overflow: visible;
+      }
       :host([data-visible="true"]) .lumno-selection-surface {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -886,7 +1133,6 @@
       .lumno-selection-main[data-icon-only="false"] .lumno-selection-label { display: none; }
       .lumno-selection-main[data-icon-only="false"],
       .lumno-selection-primary-divider,
-      .lumno-selection-actions-viewport,
       .lumno-selection-toolbar {
         flex: 0 0 auto;
       }
@@ -930,11 +1176,19 @@
         filter: brightness(0.62) contrast(1.05) drop-shadow(0 0 1px rgba(255, 255, 255, 0.72));
         opacity: 0.86;
       }
+      .lumno-selection-content {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+      }
       .lumno-selection-toolbar {
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        transform-origin: right center;
+        transform-origin: left center;
         gap: 0;
       }
       .lumno-selection-primary-divider {
@@ -948,6 +1202,9 @@
       .lumno-selection-actions-viewport {
         display: flex;
         align-items: center;
+        flex: 0 1 auto;
+        min-width: 0;
+        justify-content: flex-end;
         overflow: hidden;
       }
       .lumno-selection-toolbar:focus {
@@ -989,22 +1246,35 @@
         display: block;
         overflow: hidden;
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] {
-        transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-material {
+        transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] {
-        width: var(--lumno-toolbar-collapsed-width);
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-material {
+        width: 0;
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] {
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-material {
         width: var(--lumno-toolbar-expanded-width);
       }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-content {
+        transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1) 20ms;
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-content {
+        width: 0;
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-content {
+        width: var(--lumno-toolbar-content-width);
+      }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-toolbar {
-        transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition:
+          transform 280ms cubic-bezier(0.22, 1, 0.36, 1) 30ms,
+          opacity 180ms ease-out 50ms;
       }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-toolbar {
+        opacity: 0.72;
         transform: translateX(calc(-1 * var(--lumno-toolbar-content-offset)));
       }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-toolbar {
+        opacity: 1;
         transform: translateX(0);
       }
       .lumno-selection-status {
@@ -1015,7 +1285,12 @@
       .lumno-selection-status[hidden] { display: none; }
       @supports (corner-shape: superellipse(1.25)) {
         .lumno-selection-surface,
-        button {
+        .lumno-selection-material,
+        button,
+        .lumno-selection-toolbar button:hover,
+        .lumno-selection-toolbar button:focus-visible,
+        .lumno-selection-main:hover,
+        .lumno-selection-main:focus-visible {
           corner-shape: superellipse(1.25);
         }
       }
@@ -1024,7 +1299,8 @@
         .lumno-selection-main[data-icon-only="true"] {
           transition: none;
         }
-        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"],
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-material,
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-content,
         .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-toolbar {
           transition: none;
         }
@@ -1035,6 +1311,10 @@
     surface = document.createElement('div');
     surface.className = 'lumno-selection-surface';
     surface.setAttribute('role', 'group');
+
+    material = document.createElement('span');
+    material.className = 'lumno-selection-material';
+    material.setAttribute('aria-hidden', 'true');
 
     mainButton = document.createElement('button');
     mainButton.type = 'button';
@@ -1074,9 +1354,19 @@
     status.hidden = true;
     status.setAttribute('role', 'status');
 
-    surface.append(mainButton, primaryDivider, actionsViewport, status);
+    contentViewport = document.createElement('div');
+    contentViewport.className = 'lumno-selection-content';
+    contentViewport.append(status, actionsViewport, primaryDivider, mainButton);
+
+    surface.append(material, contentViewport);
+    applyNoTranslateDeep(surface);
     shadow.appendChild(surface);
     (document.documentElement || document.body).appendChild(host);
+
+    if (typeof window.ResizeObserver === 'function') {
+      surfaceResizeObserver = new window.ResizeObserver(scheduleViewportClamp);
+      surfaceResizeObserver.observe(surface);
+    }
 
     surface.addEventListener('pointerdown', (event) => {
       event.preventDefault();
@@ -1114,30 +1404,42 @@
     const hasPanelAnchor = placement === 'panel' && anchorRect &&
       Number.isFinite(anchorRect.left) && Number.isFinite(anchorRect.top);
     if (!hasPanelAnchor) {
-      host.style.left = '8px';
-      host.style.top = '8px';
+      const initialViewport = getViewportBounds();
+      setHostPosition(
+        initialViewport.left + VIEWPORT_SAFE_MARGIN_PX,
+        initialViewport.top + VIEWPORT_SAFE_MARGIN_PX
+      );
     }
     window.requestAnimationFrame(() => {
       if (!host || host.hidden) {
         return;
       }
+      const viewport = getViewportBounds();
+      applySurfaceViewportLimit(viewport);
       const bounds = surface.getBoundingClientRect();
-      const viewportWidth = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
-      const viewportHeight = Math.max(240, window.innerHeight || document.documentElement.clientHeight || 0);
+      const safeLeft = viewport.left + VIEWPORT_SAFE_MARGIN_PX;
+      const safeTop = viewport.top + VIEWPORT_SAFE_MARGIN_PX;
+      const safeRight = viewport.right - VIEWPORT_SAFE_MARGIN_PX;
+      const safeBottom = viewport.bottom - VIEWPORT_SAFE_MARGIN_PX;
+      const maximumLeft = safeRight - bounds.width;
+      const maximumTop = safeBottom - bounds.height;
       if (hasPanelAnchor) {
         const anchorHeight = Number.isFinite(anchorRect.height) && anchorRect.height > 0
           ? anchorRect.height
           : 18;
-        const left = Math.min(
-          viewportWidth - bounds.width - 8,
-          Math.max(8, anchorRect.left)
+        const anchorCenterY = anchorRect.top + anchorHeight / 2;
+        const preferredLeft = anchorRect.left;
+        const left = clampToSafeAxis(
+          preferredLeft,
+          safeLeft,
+          maximumLeft
         );
-        const top = Math.min(
-          viewportHeight - bounds.height - 8,
-          Math.max(8, anchorRect.top - Math.max(0, (bounds.height - anchorHeight) / 2))
+        const top = clampToSafeAxis(
+          anchorCenterY - bounds.height / 2,
+          safeTop,
+          maximumTop
         );
-        host.style.left = `${Math.round(left)}px`;
-        host.style.top = `${Math.round(top)}px`;
+        setHostPosition(left, top);
         return;
       }
       if (isInline) {
@@ -1146,37 +1448,36 @@
         let left = anchor.right + gap;
         const topOffset = Math.max(4, Math.min(7, bounds.height * 0.4));
         let top = anchor.top - topOffset;
-        const fitsRight = left + bounds.width <= viewportWidth - 8;
+        const fitsRight = left + bounds.width <= safeRight;
         if (!fitsRight) {
           const leftCandidate = anchor.left - bounds.width - gap;
-          if (leftCandidate >= 8) {
+          if (leftCandidate >= safeLeft) {
             left = leftCandidate;
           } else {
-            left = Math.min(
-              viewportWidth - bounds.width - 8,
-              Math.max(8, anchor.right - bounds.width)
+            left = clampToSafeAxis(
+              anchor.right - bounds.width,
+              safeLeft,
+              maximumLeft
             );
             top = anchor.bottom + gap;
           }
         }
-        top = Math.min(
-          viewportHeight - bounds.height - 8,
-          Math.max(8, top)
-        );
-        host.style.left = `${Math.round(left)}px`;
-        host.style.top = `${Math.round(top)}px`;
+        left = clampToSafeAxis(left, safeLeft, maximumLeft);
+        top = clampToSafeAxis(top, safeTop, maximumTop);
+        setHostPosition(left, top);
         return;
       }
-      const left = Math.min(
-        viewportWidth - bounds.width - 8,
-        Math.max(8, rect.right - Math.min(32, bounds.width / 2))
+      const left = clampToSafeAxis(
+        rect.right - Math.min(32, bounds.width / 2),
+        safeLeft,
+        maximumLeft
       );
-      const fitsBelow = rect.bottom + bounds.height + 10 <= viewportHeight;
-      const top = fitsBelow
-        ? rect.bottom + 8
-        : Math.max(8, rect.top - bounds.height - 8);
-      host.style.left = `${Math.round(left)}px`;
-      host.style.top = `${Math.round(top)}px`;
+      const fitsBelow = rect.bottom + bounds.height + VIEWPORT_SAFE_MARGIN_PX <= safeBottom;
+      const preferredTop = fitsBelow
+        ? rect.bottom + VIEWPORT_SAFE_MARGIN_PX
+        : rect.top - bounds.height - VIEWPORT_SAFE_MARGIN_PX;
+      const top = clampToSafeAxis(preferredTop, safeTop, maximumTop);
+      setHostPosition(left, top);
     });
   }
 
@@ -1205,11 +1506,11 @@
     currentCandidate = candidate;
     const action = candidate.classification.action;
     const label = getActionLabel(action);
-    host.hidden = false;
+    setHostHidden(false);
     host.dataset.iconSet = 'remix';
     const entryContrast = resolveEntryContrastTone(candidate.snapshot.element);
     host.dataset.entryContrast = entryContrast;
-    host.style.colorScheme = entryContrast === 'mixed' ? 'light dark' : entryContrast;
+    setHostColorScheme(entryContrast === 'mixed' ? 'light dark' : entryContrast);
     host.dataset.visible = 'false';
     surface.dataset.iconOnly = 'true';
     delete surface.dataset.toolbarEntranceMode;
@@ -1274,8 +1575,8 @@
     if (!currentCandidate || !host) {
       return;
     }
-    const originRect = surface && surface.dataset.iconOnly === 'true'
-      ? surface.getBoundingClientRect()
+    const originRect = surface && surface.dataset.iconOnly === 'true' && mainButton
+      ? mainButton.getBoundingClientRect()
       : null;
     const primary = currentCandidate.classification.action;
     const actions = getToolbarActions(primary);
@@ -1286,6 +1587,7 @@
     mainButton.setAttribute('aria-label', getMessage('settings_tab_labs', '实验室功能'));
     mainButton.setAttribute('aria-expanded', 'true');
     menu.replaceChildren(...actionButtons);
+    applyNoTranslateDeep(menu);
     host.dataset.iconSet = 'remix';
     primaryDivider.hidden = false;
     actionsViewport.hidden = false;
@@ -1302,6 +1604,7 @@
       return;
     }
     const originRect = surface.getBoundingClientRect();
+    cancelToolbarEntranceAnimation();
     surface.dataset.iconOnly = 'false';
     mainButton.hidden = true;
     primaryDivider.hidden = true;
@@ -1318,7 +1621,7 @@
       return;
     }
     surface.dataset.iconOnly = 'false';
-    host.hidden = false;
+    setHostHidden(false);
     host.dataset.visible = 'true';
     mainButton.hidden = true;
     primaryDivider.hidden = true;
@@ -1522,7 +1825,10 @@
     armSelectionGesture();
   }
 
-  function handleWindowBlur() {
+  function handleWindowBlur(event) {
+    if (event && event.target !== window) {
+      return;
+    }
     cancelSelectionGesture();
   }
 
@@ -1572,6 +1878,12 @@
     }
   }, true);
   window.addEventListener('blur', handleWindowBlur, true);
+  window.addEventListener('resize', scheduleViewportClamp, true);
+  window.addEventListener('orientationchange', scheduleViewportClamp, true);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleViewportClamp);
+    window.visualViewport.addEventListener('scroll', scheduleViewportClamp);
+  }
 
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {

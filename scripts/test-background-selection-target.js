@@ -5,6 +5,7 @@ function createChromeStub(options) {
   const settings = options || {};
   const createdTabs = [];
   const groupedTabs = [];
+  const queriedTabs = [];
   const updatedGroups = [];
   let nextTabId = 100;
   const chromeApi = {
@@ -19,6 +20,10 @@ function createChromeStub(options) {
       }
     },
     tabs: {
+      query(queryInfo, callback) {
+        queriedTabs.push({ ...queryInfo });
+        callback(Array.isArray(settings.openTabs) ? settings.openTabs.map((tab) => ({ ...tab })) : []);
+      },
       create(createProperties, callback) {
         createdTabs.push({ ...createProperties });
         callback({
@@ -34,7 +39,7 @@ function createChromeStub(options) {
       }
     }
   };
-  return { chromeApi, createdTabs, groupedTabs, updatedGroups };
+  return { chromeApi, createdTabs, groupedTabs, queriedTabs, updatedGroups };
 }
 
 {
@@ -69,12 +74,57 @@ function createChromeStub(options) {
   });
   assert.deepStrictEqual(
     groupedTabs[0],
-    { tabIds: 100, groupId: 77 },
-    'selection targets should join the source tab group when one already exists'
+    { tabIds: 100, groupId: 33 },
+    'background AI targets should always join the dedicated AI 查询 group rather than the source page group'
   );
-  assert.strictEqual(updatedGroups.length, 0, 'reused source groups should keep their own title and state');
+  assert.deepStrictEqual(updatedGroups[0], {
+    groupId: 33,
+    title: 'AI 查询',
+    color: 'blue',
+    collapsed: true
+  });
   assert.strictEqual(response.mode, 'group');
-  assert.strictEqual(response.groupId, 77);
+  assert.strictEqual(response.groupId, 33);
+}
+
+{
+  const { chromeApi, createdTabs, groupedTabs, queriedTabs } = createChromeStub({
+    existingGroup: true,
+    openTabs: [
+      {
+        id: 64,
+        windowId: 9,
+        url: 'https://chatgpt.com/c/existing-conversation',
+        status: 'complete',
+        active: false,
+        lastAccessed: 200
+      },
+      {
+        id: 65,
+        windowId: 9,
+        url: 'https://attacker.example/?next=https://chatgpt.com/',
+        status: 'complete',
+        active: false,
+        lastAccessed: 300
+      }
+    ]
+  });
+  let response = null;
+  selectionTarget.openSelectionTarget(chromeApi, {
+    url: 'https://chatgpt.com/',
+    sourceTab: { id: 7, windowId: 9 },
+    groupEnabled: true
+  }, (result) => {
+    response = result;
+  });
+  assert.deepStrictEqual(queriedTabs[0], { windowId: 9 },
+    'reuse should stay inside the source window');
+  assert.strictEqual(createdTabs.length, 0,
+    'an already-open page for the same AI provider should be reused instead of duplicated');
+  assert.deepStrictEqual(groupedTabs[0], { tabIds: 64, groupId: 33 },
+    'a reused AI page should be collected into the dedicated AI 查询 group');
+  assert.strictEqual(response.mode, 'reused');
+  assert.strictEqual(response.tab.id, 64);
 }
 
 {

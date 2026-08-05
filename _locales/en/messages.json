@@ -75,10 +75,10 @@
     "message": "Preferred provider"
   },
   "settings_selection_quick_actions_group_title": {
-    "message": "Create a tab group"
+    "message": "Search in the background"
   },
   "settings_selection_quick_actions_group_desc": {
-    "message": "Open results in the background and collect them in the “AI 查询” tab group"
+    "message": "Collect all AI pages in the “AI 查询” tab group"
   },
   "selection_quick_action_ask": { "message": "Answer" },
   "selection_quick_action_translate": { "message": "Translate" },

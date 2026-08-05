@@ -5,6 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
+const providerResolverSource = fs.readFileSync('src/background/selection-quick-action-provider.js', 'utf8');
 const contentSource = fs.readFileSync('src/content/selection-quick-actions.js', 'utf8');
 const intentSource = fs.readFileSync('src/shared/selection-intent.js', 'utf8');
 const iconSource = fs.readFileSync('src/shared/selection-action-icons.js', 'utf8');
@@ -56,6 +57,11 @@ const groupToggleTag = optionsHtml.match(
 );
 assert(groupToggleTag, 'Labs should render the optional selection group toggle');
 assert.doesNotMatch(groupToggleTag[0], /\bchecked\b/, 'selection grouping should be off by default');
+assert(
+  /data-i18n="settings_selection_quick_actions_group_title">在后台查询</.test(optionsHtml) &&
+    /data-i18n="settings_selection_quick_actions_group_desc">所有 AI 网页皆归入「AI 查询」标签组</.test(optionsHtml),
+  'the group-enabled behavior should be described as a background query rather than tab creation'
+);
 assert(!optionsHtml.includes('selection_quick_actions_icon_set'),
   'Labs should not show an icon-library setting when the toolbar always uses Remix');
 assert(!optionsHtml.includes('selection_quick_actions_trigger_style'),
@@ -90,9 +96,20 @@ assert(
   'background message routing should isolate the selection quick action feature'
 );
 assert(
+  backgroundSource.includes("src/background/selection-quick-action-provider.js") &&
+    backgroundSource.includes('loadSelectionQuickActionFallbackProviders()') &&
+    providerResolverSource.includes('resolveSelectionQuickActionProvider'),
+  'selection actions should resolve their preferred provider independently of general search-source visibility'
+);
+assert(
   /Promise\.all\(\[[\s\S]*loadSelectionQuickActionsGroupEnabled\(\)[\s\S]*\]\)/.test(backgroundSource) &&
     /SELECTION_TARGET\.openSelectionTarget\([\s\S]*groupEnabled[\s\S]*groupTitle:\s*SELECTION_TARGET\.DEFAULT_GROUP_TITLE[\s\S]*groupColor:\s*'blue'/.test(backgroundSource),
   'selection targets should only use the optional AI 查询 group when the setting is enabled'
+);
+assert(
+  /async function openAndSubmitSelectionPrompt\([\s\S]*?targetInfo\.mode === 'reused'[\s\S]*?reuseExisting:\s*false[\s\S]*?submitSelectionPromptInTab/.test(backgroundSource) &&
+    /runSelectionQuickAction\([\s\S]*?return openAndSubmitSelectionPrompt\(/.test(backgroundSource),
+  'a failed attempt to submit into a reusable AI page should fall back to one fresh grouped tab'
 );
 assert(
   /active:\s*true/.test(fs.readFileSync('src/background/selection-target.js', 'utf8')),
@@ -120,9 +137,9 @@ assert(
   'the default floating selection affordance should use the supplied Lumno mark'
 );
 assert(
-  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v18'") &&
-    contentSource.includes('const RUNTIME_VERSION = 18'),
-  'the selection runtime should expose the fixed-leading-region revision for live diagnostics'
+  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v29'") &&
+    contentSource.includes('const RUNTIME_VERSION = 29'),
+  'the selection runtime should expose the stable-width smooth-hover revision for live diagnostics'
 );
 assert(
   /\.lumno-selection-surface\[data-icon-only="true"\][\s\S]*?border:\s*0[;\s\S]*?box-shadow:\s*none/.test(contentSource),
@@ -137,9 +154,26 @@ assert(
   'every triggerable selection should anchor the same compact entry inline with the selected text'
 );
 assert(
+  /function applyNoTranslate\(element\)[\s\S]*?setAttribute\('translate', 'no'\)[\s\S]*?setAttribute\('lang', 'zxx'\)[\s\S]*?setAttribute\('notranslate', ''\)[\s\S]*?setAttribute\('data-no-translate', 'true'\)[\s\S]*?classList\.add\('notranslate'\)/.test(contentSource) &&
+    contentSource.includes('applyNoTranslate(host)') &&
+    contentSource.includes('applyNoTranslateDeep(surface)') &&
+    contentSource.includes('applyNoTranslateDeep(menu)'),
+  'the selection host and dynamic toolbar descendants should reuse Overlay no-translate markers'
+);
+assert(
   contentSource.includes("positionSurface(currentCandidate.rect, 'panel', originRect)") &&
-    /function positionSurface\(rect, placement, anchorRect\)[\s\S]*?const hasPanelAnchor = placement === 'panel'[\s\S]*?anchorRect\.left[\s\S]*?anchorRect\.top/.test(contentSource),
-  'the expanded toolbar should inherit the compact entry rectangle instead of re-anchoring to the full selection bounds'
+    /function positionSurface\(rect, placement, anchorRect\)[\s\S]*?preferredLeft\s*=\s*anchorRect\.left[\s\S]*?setHostPosition/.test(contentSource) &&
+    !contentSource.includes('destinationButtonCenterX'),
+  'the expanded toolbar should start at the compact entry point and grow into the space on its right'
+);
+assert(
+  contentSource.includes('const VIEWPORT_SAFE_MARGIN_PX = 12') &&
+    contentSource.includes("host.style.setProperty(property, value, 'important')") &&
+    contentSource.includes("window.addEventListener('resize', scheduleViewportClamp, true)") &&
+    contentSource.includes("window.visualViewport.addEventListener('resize', scheduleViewportClamp)") &&
+    contentSource.includes('surfaceResizeObserver.observe(surface)') &&
+    contentSource.includes('applySurfaceViewportLimit(viewport)'),
+  'the closed selection surface should resist hostile page CSS and remain inside a 12px visual-viewport safe area'
 );
 assert(
   contentSource.includes('const inlineRect = clientRects.length > 0') &&
@@ -188,10 +222,13 @@ assert(
 );
 assert(
   contentSource.includes("primaryDivider.className = 'lumno-selection-primary-divider'") &&
+    contentSource.includes("material.className = 'lumno-selection-material'") &&
+    contentSource.includes("contentViewport.className = 'lumno-selection-content'") &&
     contentSource.includes("actionsViewport.className = 'lumno-selection-actions-viewport'") &&
     contentSource.includes('actionsViewport.append(menu)') &&
-    contentSource.includes('surface.append(mainButton, primaryDivider, actionsViewport, status)'),
-  'the fixed butterfly divider should be outside the independently clipped actions viewport'
+    contentSource.includes('contentViewport.append(status, actionsViewport, primaryDivider, mainButton)') &&
+    contentSource.includes('surface.append(material, contentViewport)'),
+  'all toolbar controls should share one right-aligned clipping layer with the butterfly last'
 );
 assert(!contentSource.toLowerCase().includes('butterfly'),
   'content runtime should render only the fixed Lumno selection mark');
@@ -202,23 +239,27 @@ assert(
   'Ask AI should use the simpler single-sparkle Remix icon'
 );
 assert(
-  /\.lumno-selection-surface\s*\{[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*13px[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.96\)\)/.test(contentSource),
+  /\.lumno-selection-surface\s*\{[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*13px/.test(contentSource) &&
+    /\.lumno-selection-material\s*\{[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.96\)\)/.test(contentSource),
   'the expanded toolbar should use the approved compact surface geometry'
 );
 assert(
-  /\.lumno-selection-surface\s*\{[\s\S]*?border:\s*1px solid light-dark\(rgba\(15, 23, 42, 0\.12\), rgba\(255, 255, 255, 0\.13\)\)[\s\S]*?color:\s*light-dark\(#18181b, #e7e8eb\)/.test(contentSource),
+  /\.lumno-selection-material\s*\{[\s\S]*?border:\s*1px solid light-dark\(rgba\(15, 23, 42, 0\.12\), rgba\(255, 255, 255, 0\.13\)\)/.test(contentSource) &&
+    /\.lumno-selection-surface\s*\{[\s\S]*?color:\s*light-dark\(#18181b, #e7e8eb\)/.test(contentSource),
   'the expanded toolbar should tune border and text contrast for each theme'
 );
 assert(
-  /\.lumno-selection-surface::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(contentSource),
+  /\.lumno-selection-material::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(contentSource),
   'the expanded toolbar should use broad static gradient diffusion for its inner glow'
 );
 assert(
-  /\.lumno-selection-surface\s*\{[\s\S]*?-webkit-backdrop-filter:\s*blur\(14px\) saturate\(130%\)[\s\S]*?backdrop-filter:\s*blur\(14px\) saturate\(130%\)/.test(contentSource),
+  /\.lumno-selection-material\s*\{[\s\S]*?-webkit-backdrop-filter:\s*blur\(14px\) saturate\(130%\)[\s\S]*?backdrop-filter:\s*blur\(14px\) saturate\(130%\)/.test(contentSource),
   'the expanded toolbar should use a translucent acrylic backdrop treatment'
 );
 assert(
-  /\.lumno-selection-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?transform-origin:\s*right center[\s\S]*?gap:\s*0/.test(contentSource) &&
+  /\.lumno-selection-surface\s*\{[\s\S]*?justify-content:\s*flex-start/.test(contentSource) &&
+    /\.lumno-selection-content\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?overflow:\s*hidden/.test(contentSource) &&
+    /\.lumno-selection-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?transform-origin:\s*left center[\s\S]*?gap:\s*0/.test(contentSource) &&
     /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*400 12px/.test(contentSource) &&
     /\.lumno-selection-primary-divider\s*\{[\s\S]*?margin-inline:\s*3px[\s\S]*?height:\s*18px/.test(contentSource) &&
     /\.lumno-selection-actions-viewport\s*\{[\s\S]*?overflow:\s*hidden/.test(contentSource) &&
@@ -226,11 +267,15 @@ assert(
     /\.lumno-selection-toolbar button \+ button\s*\{[\s\S]*?margin-inline-start:\s*7px/.test(contentSource) &&
     /\.lumno-selection-toolbar button \+ button::before[\s\S]*?inset-inline-start:\s*-4px[\s\S]*?height:\s*18px/.test(contentSource) &&
     /\.lumno-selection-action-icon\s*\{[\s\S]*?width:\s*16px[\s\S]*?height:\s*16px/.test(contentSource),
-  'the fixed divider and clipped actions viewport should retain the same 3px rhythm'
+  'the shared right-aligned content layer should retain the same compact 3px rhythm'
 );
 assert(
   /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
   'the toolbar should use the same supported smooth-corner primitive as Overlay'
+);
+assert(
+  /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?\.lumno-selection-toolbar button:hover,[\s\S]*?\.lumno-selection-main:hover[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
+  'toolbar action and butterfly hover backgrounds should explicitly retain continuous corners'
 );
 assert(
   contentSource.includes('menu.tabIndex = -1') &&
@@ -240,45 +285,56 @@ assert(
   'opening the toolbar should focus its neutral container instead of pre-highlighting the first action'
 );
 assert(
-  contentSource.includes('function animateToolbarEntrance(originRect)') &&
+    contentSource.includes('function animateToolbarEntrance(originRect)') &&
     contentSource.includes("window.matchMedia('(prefers-reduced-motion: reduce)').matches") &&
-    /surface\.animate\(\[[\s\S]*?width:\s*`\$\{geometry\.collapsedWidth\}px`[\s\S]*?width:\s*`\$\{destinationRect\.width\}px`[\s\S]*?duration:\s*260,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource) &&
+    /material\.animate\(\[[\s\S]*?width:\s*'0px'[\s\S]*?width:\s*`\$\{destinationRect\.width\}px`[\s\S]*?duration:\s*240,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource) &&
+    /contentViewport\.animate\(\[[\s\S]*?width:\s*'0px'[\s\S]*?width:\s*`\$\{geometry\.contentWidth\}px`[\s\S]*?duration:\s*260,[\s\S]*?delay:\s*20/.test(contentSource) &&
+    !contentSource.includes('actionsViewport.animate([') &&
+    !contentSource.includes('surface.animate([') &&
     !contentSource.includes('mainButton.animate([') &&
-    /menu\.animate\(\[[\s\S]*?translateX\(-\$\{geometry\.contentOffset\}px\)[\s\S]*?translateX\(0px\)[\s\S]*?duration:\s*260/.test(contentSource) &&
+    /menu\.animate\(\[[\s\S]*?translateX\(-\$\{geometry\.contentOffset\}px\)[\s\S]*?translateX\(0px\)[\s\S]*?duration:\s*280,[\s\S]*?delay:\s*30/.test(contentSource) &&
     !contentSource.includes('label.animate(['),
-  'the material should grow through real width while the stationary butterfly and right-aligned content remain independent layers'
+  'the material and one right-aligned content viewport should grow together from left to right'
 );
 assert(
-  contentSource.includes('function runToolbarEntranceFallback') &&
-    contentSource.includes("surface.style.setProperty('--lumno-toolbar-collapsed-width'") &&
+  /function handleWindowBlur\(event\)\s*\{[\s\S]*?event\.target !== window[\s\S]*?cancelSelectionGesture\(\)/.test(contentSource),
+  'toolbar descendant blur events should not be treated as browser window blur before an action request is sent'
+);
+assert(
+    contentSource.includes('function runToolbarEntranceFallback') &&
     contentSource.includes("surface.style.setProperty('--lumno-toolbar-expanded-width'") &&
+    contentSource.includes("surface.style.setProperty('--lumno-toolbar-content-width'") &&
     contentSource.includes("surface.style.setProperty('--lumno-toolbar-content-offset'") &&
     contentSource.includes("surface.dataset.toolbarEntranceState = 'from'") &&
     contentSource.includes("surface.dataset.toolbarEntranceState = 'to'") &&
-    /data-toolbar-entrance-state="from"\][\s\S]*?width:\s*var\(--lumno-toolbar-collapsed-width\)/.test(contentSource) &&
-    /data-toolbar-entrance-state="to"\][\s\S]*?width:\s*var\(--lumno-toolbar-expanded-width\)/.test(contentSource) &&
-    !/data-toolbar-entrance-mode="fallback"[\s\S]{0,180}clip-path/.test(contentSource),
-  'the fallback should animate real width instead of clipping the rounded material or its shadow'
+    /data-toolbar-entrance-state="from"\] \.lumno-selection-material\s*\{[\s\S]*?width:\s*0/.test(contentSource) &&
+    /data-toolbar-entrance-state="to"\] \.lumno-selection-material\s*\{[\s\S]*?width:\s*var\(--lumno-toolbar-expanded-width\)/.test(contentSource) &&
+    /data-toolbar-entrance-state="from"\] \.lumno-selection-content\s*\{[\s\S]*?width:\s*0/.test(contentSource) &&
+    /data-toolbar-entrance-state="to"\] \.lumno-selection-content\s*\{[\s\S]*?width:\s*var\(--lumno-toolbar-content-width\)/.test(contentSource),
+  'the fallback should grow material and the shared right-aligned content width together'
 );
 assert(
-  /\.lumno-selection-surface\s*\{[\s\S]*?overflow:\s*hidden[\s\S]*?contain:\s*layout style/.test(contentSource) &&
+  /\.lumno-selection-surface\s*\{[\s\S]*?overflow:\s*visible[\s\S]*?contain:\s*layout style/.test(contentSource) &&
+    /\.lumno-selection-material\s*\{[\s\S]*?overflow:\s*hidden[\s\S]*?box-shadow:/.test(contentSource) &&
     !/\.lumno-selection-surface\s*\{[\s\S]*?contain:\s*layout paint style/.test(contentSource),
-  'the surface should clip only its children while leaving its own rounded border and shadow intact'
+  'the independent material should preserve its rounded glow and shadow outside the unclipped layout shell'
 );
 assert(
-  /\.lumno-selection-main\[data-icon-only="false"\],[\s\S]*?\.lumno-selection-primary-divider,[\s\S]*?\.lumno-selection-actions-viewport,[\s\S]*?\.lumno-selection-toolbar\s*\{[\s\S]*?flex:\s*0 0 auto/.test(contentSource),
-  'the fixed leading region and clipped actions should retain their final geometry while the shell width grows'
+  /\.lumno-selection-main\[data-icon-only="false"\],[\s\S]*?\.lumno-selection-primary-divider,[\s\S]*?\.lumno-selection-toolbar\s*\{[\s\S]*?flex:\s*0 0 auto/.test(contentSource) &&
+    /\.lumno-selection-content\s*\{[\s\S]*?flex:\s*0 1 auto[\s\S]*?min-width:\s*0[\s\S]*?justify-content:\s*flex-end/.test(contentSource) &&
+    /\.lumno-selection-actions-viewport\s*\{[\s\S]*?flex:\s*0 1 auto[\s\S]*?min-width:\s*0[\s\S]*?justify-content:\s*flex-end/.test(contentSource),
+  'all toolbar contents should align to the moving right edge while actions can shrink safely'
 );
 assert(
   /function openLabsSettings\(\)[\s\S]*?action:\s*'openOptionsPage'[\s\S]*?hash:\s*'labs'/.test(contentSource) &&
     /case 'openOptionsPage':[\s\S]*?hash:\s*request\.hash/.test(backgroundSource),
-  'the enlarged leading butterfly should navigate directly to the Labs settings route'
+  'the enlarged trailing butterfly should navigate directly to the Labs settings route'
 );
 assert(
   contentSource.includes('function resolveEntryContrastTone(element)') &&
     contentSource.includes('const entryContrast = resolveEntryContrastTone(candidate.snapshot.element)') &&
     contentSource.includes('host.dataset.entryContrast = entryContrast') &&
-    contentSource.includes("host.style.colorScheme = entryContrast === 'mixed' ? 'light dark' : entryContrast") &&
+    contentSource.includes("setHostColorScheme(entryContrast === 'mixed' ? 'light dark' : entryContrast)") &&
     /data-entry-contrast="dark"/.test(contentSource),
   'the compact butterfly and expanded material should adapt their restrained contrast to the local page surface'
 );
@@ -332,6 +388,12 @@ localeNames.forEach((locale) => {
     assert.strictEqual(messages[key], undefined, `${locale} should remove the obsolete trigger-style copy`);
   });
 });
+const zhCnMessages = JSON.parse(fs.readFileSync('_locales/zh_CN/messages.json', 'utf8'));
+assert.strictEqual(zhCnMessages.settings_selection_quick_actions_group_title.message, '在后台查询');
+assert.strictEqual(
+  zhCnMessages.settings_selection_quick_actions_group_desc.message,
+  '所有 AI 网页皆归入「AI 查询」标签组'
+);
 
 const expectedTaskLabels = {
   en: ['Answer', 'Translate', 'Explain', 'Summarize', 'Research', 'Calculate'],

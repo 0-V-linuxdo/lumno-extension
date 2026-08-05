@@ -75,10 +75,10 @@
     "message": "優先プロバイダー"
   },
   "settings_selection_quick_actions_group_title": {
-    "message": "新しいタブグループを作成"
+    "message": "バックグラウンドで検索"
   },
   "settings_selection_quick_actions_group_desc": {
-    "message": "結果をバックグラウンドで開き、「AI 查询」タブグループにまとめます"
+    "message": "すべての AI ページを「AI 查询」タブグループにまとめます"
   },
   "selection_quick_action_ask": { "message": "回答" },
   "selection_quick_action_translate": { "message": "翻訳" },

@@ -75,10 +75,10 @@
     "message": "优先 Provider"
   },
   "settings_selection_quick_actions_group_title": {
-    "message": "新建标签组"
+    "message": "在后台查询"
   },
   "settings_selection_quick_actions_group_desc": {
-    "message": "在后台将结果归入「AI 查询」标签组"
+    "message": "所有 AI 网页皆归入「AI 查询」标签组"
   },
   "selection_quick_action_ask": { "message": "解答" },
   "selection_quick_action_translate": { "message": "翻译" },

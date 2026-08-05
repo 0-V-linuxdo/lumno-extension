@@ -75,10 +75,10 @@
     "message": "優先 Provider"
   },
   "settings_selection_quick_actions_group_title": {
-    "message": "建立新分頁群組"
+    "message": "在背景查詢"
   },
   "settings_selection_quick_actions_group_desc": {
-    "message": "在背景將結果歸入「AI 查询」分頁群組"
+    "message": "所有 AI 網頁皆歸入「AI 查詢」分頁群組"
   },
   "selection_quick_action_ask": { "message": "解答" },
   "selection_quick_action_translate": { "message": "翻譯" },

@@ -102,6 +102,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/background/selection-quick-action-provider.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load selection quick action provider helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('src/background/message-router.js'));
 } catch (error) {
   console.warn('Lumno: failed to load background message router.', error);
@@ -4760,6 +4766,7 @@ function loadSelectionQuickActionsGroupEnabled() {
 }
 
 let selectionTargetOpenQueue = Promise.resolve();
+let selectionQuickActionFallbackProvidersPromise = null;
 
 function queueSelectionTargetOpen(options) {
   const task = selectionTargetOpenQueue
@@ -4786,6 +4793,24 @@ function selectSelectionQuickActionProvider(providers, requestedKey) {
   return interactive.find((provider) => String(provider && provider.key || '').toLowerCase() === 'gpt') ||
     interactive[0] ||
     null;
+}
+
+function loadSelectionQuickActionFallbackProviders() {
+  if (selectionQuickActionFallbackProvidersPromise) {
+    return selectionQuickActionFallbackProvidersPromise;
+  }
+  const localUrl = chrome.runtime.getURL('assets/data/site-search.json');
+  const fallbackDefaults = typeof SEARCH_UTILS.getDefaultSiteSearchProviders === 'function'
+    ? SEARCH_UTILS.getDefaultSiteSearchProviders()
+    : [];
+  selectionQuickActionFallbackProvidersPromise = fetch(localUrl)
+    .then((response) => response.json())
+    .then((data) => {
+      const items = data && Array.isArray(data.items) ? data.items : [];
+      return sanitizeSiteSearchProviders(items.length > 0 ? items : fallbackDefaults);
+    })
+    .catch(() => sanitizeSiteSearchProviders(fallbackDefaults));
+  return selectionQuickActionFallbackProvidersPromise;
 }
 
 function submitSelectionPromptInTab(provider, prompt, entryUrl, tab, targetInfo) {
@@ -4815,11 +4840,47 @@ function submitSelectionPromptInTab(provider, prompt, entryUrl, tab, targetInfo)
     }));
 }
 
+async function openAndSubmitSelectionPrompt(provider, prompt, entryUrl, sourceTab, groupEnabled) {
+  const targetOptions = {
+    url: entryUrl,
+    sourceTab,
+    groupEnabled,
+    groupTitle: SELECTION_TARGET.DEFAULT_GROUP_TITLE,
+    groupColor: 'blue',
+    splitViewAdapter: globalThis.LumnoChromeSplitViewAdapter || null
+  };
+  let targetInfo = await queueSelectionTargetOpen(targetOptions);
+  if (!targetInfo || targetInfo.ok === false || !targetInfo.tab) {
+    return {
+      ok: false,
+      reason: targetInfo && targetInfo.reason ? targetInfo.reason : 'selection-target-open-failed'
+    };
+  }
+  const firstResult = await submitSelectionPromptInTab(provider, prompt, entryUrl, targetInfo.tab, targetInfo);
+  if (targetInfo.mode === 'reused' && !firstResult.ok) {
+    targetInfo = await queueSelectionTargetOpen({
+      ...targetOptions,
+      reuseExisting: false
+    });
+    if (!targetInfo || targetInfo.ok === false || !targetInfo.tab) {
+      return {
+        ok: false,
+        reason: targetInfo && targetInfo.reason
+          ? targetInfo.reason
+          : (firstResult.reason || 'selection-target-open-failed')
+      };
+    }
+    return submitSelectionPromptInTab(provider, prompt, entryUrl, targetInfo.tab, targetInfo);
+  }
+  return firstResult;
+}
+
 async function runSelectionQuickAction(request, sender) {
-  const [enabled, preferredProviderKey, groupEnabled] = await Promise.all([
+  const [enabled, preferredProviderKey, groupEnabled, bundledProviders] = await Promise.all([
     loadSelectionQuickActionsEnabled(),
     loadSelectionQuickActionsProvider(),
-    loadSelectionQuickActionsGroupEnabled()
+    loadSelectionQuickActionsGroupEnabled(),
+    loadSelectionQuickActionFallbackProviders()
   ]);
   if (!enabled) {
     return { ok: false, reason: 'selection-quick-actions-disabled' };
@@ -4840,7 +4901,16 @@ async function runSelectionQuickAction(request, sender) {
     return { ok: false, reason: 'invalid-selection-text' };
   }
   const providers = await loadSiteSearchProviders();
-  const provider = selectSelectionQuickActionProvider(providers, preferredProviderKey);
+  const provider = SELECTION_QUICK_ACTION_PROVIDER &&
+    typeof SELECTION_QUICK_ACTION_PROVIDER.resolveSelectionQuickActionProvider === 'function'
+    ? SELECTION_QUICK_ACTION_PROVIDER.resolveSelectionQuickActionProvider(
+        providers,
+        bundledProviders,
+        preferredProviderKey,
+        isInteractiveSiteSearchProvider
+      )
+    : selectSelectionQuickActionProvider(providers, preferredProviderKey) ||
+      selectSelectionQuickActionProvider(bundledProviders, preferredProviderKey);
   if (!provider) {
     return { ok: false, reason: 'selection-provider-unavailable' };
   }
@@ -4850,21 +4920,7 @@ async function runSelectionQuickAction(request, sender) {
     return { ok: false, reason: 'selection-provider-url-unavailable' };
   }
   const sourceTab = sender && sender.tab ? sender.tab : null;
-  const targetInfo = await queueSelectionTargetOpen({
-    url: entryUrl,
-    sourceTab,
-    groupEnabled,
-    groupTitle: SELECTION_TARGET.DEFAULT_GROUP_TITLE,
-    groupColor: 'blue',
-    splitViewAdapter: globalThis.LumnoChromeSplitViewAdapter || null
-  });
-  if (!targetInfo || targetInfo.ok === false || !targetInfo.tab) {
-    return {
-      ok: false,
-      reason: targetInfo && targetInfo.reason ? targetInfo.reason : 'selection-target-open-failed'
-    };
-  }
-  return submitSelectionPromptInTab(provider, prompt, entryUrl, targetInfo.tab, targetInfo);
+  return openAndSubmitSelectionPrompt(provider, prompt, entryUrl, sourceTab, groupEnabled);
 }
 
 function runInteractiveSiteSearchProvider(provider, query, sender, disposition) {
@@ -5811,6 +5867,7 @@ const SEARCH_UTILS = globalThis.LumnoSearchUtils || {};
 const AI_PROVIDER_SUBMIT = globalThis.LumnoAiProviderSubmit || {};
 const SELECTION_INTENT = globalThis.LumnoSelectionIntent || {};
 const SELECTION_TARGET = globalThis.LumnoSelectionTarget || {};
+const SELECTION_QUICK_ACTION_PROVIDER = globalThis.LumnoSelectionQuickActionProvider || {};
 const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = '_x_extension_default_search_engine_2024_unique_';
 const CHROME_SYNC_STORAGE_KEYS = globalThis.LumnoSettings &&
   Array.isArray(globalThis.LumnoSettings.CHROME_SYNC_STORAGE_KEYS)
