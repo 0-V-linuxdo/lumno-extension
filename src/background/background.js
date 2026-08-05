@@ -5554,7 +5554,7 @@ function handleLocaleAndPermissionMessage(request, sender, sendResponse) {
 function handleExtensionPageMessage(request, sender, sendResponse) {
   switch (request.action) {
     case 'openOptionsPage': {
-      openExtensionOptionsPage({ disposition: request.disposition }, (ok) => {
+      openExtensionOptionsPage({ disposition: request.disposition, hash: request.hash }, (ok) => {
         sendResponse({ ok: ok !== false });
       });
       return true;

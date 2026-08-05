@@ -13,6 +13,7 @@ function wait(ms) {
     <p id="question">How should I structure this rollout?</p>
     <p><span id="generic-context"><em id="generic">React</em> trailing text</span></p>
     <p id="cjk">这是你需要的资料</p>
+    <div id="dark-context" style="background-color: rgb(20, 24, 32);"><span id="dark-copy">serendipity</span></div>
     <button id="selectable-button" type="button">Why is this unavailable?</button>
     <a id="selectable-link" href="#selected-link">React components</a>
     <span id="selectable-role-button" role="button" tabindex="0">React components</span>
@@ -84,6 +85,7 @@ function wait(ms) {
     selectionShadow = attachShadow.call(this, options);
     return selectionShadow;
   };
+  const runtimeMessages = [];
   window.chrome = {
     i18n: {
       getMessage() { return ''; },
@@ -93,7 +95,10 @@ function wait(ms) {
       id: 'kkcjcneagmlhpeaafngjdlpcfjakejgb',
       getURL(path) { return `chrome-extension://lumno/${path}`; },
       lastError: null,
-      sendMessage(_message, callback) { callback({ ok: true }); }
+      sendMessage(message, callback) {
+        runtimeMessages.push(message);
+        if (callback) callback({ ok: true });
+      }
     },
     storage: {
       local: {
@@ -126,6 +131,7 @@ function wait(ms) {
   const question = window.document.getElementById('question');
   const generic = window.document.getElementById('generic');
   const cjk = window.document.getElementById('cjk');
+  const darkCopy = window.document.getElementById('dark-copy');
   const selectableButton = window.document.getElementById('selectable-button');
   const selectableLink = window.document.getElementById('selectable-link');
   const selectableRoleButton = window.document.getElementById('selectable-role-button');
@@ -211,7 +217,11 @@ function wait(ms) {
   assert.strictEqual(host.dataset.visible, 'true');
   assert.strictEqual(host.dataset.iconSet, 'remix', 'obsolete icon-set storage should not change the toolbar renderer');
   assert.strictEqual(host.dataset.selectionMark, 'lumno', 'the entry should always use the fixed Lumno mark');
-  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v13');
+  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v14');
+  assert.strictEqual(host.dataset.entryContrast, 'light',
+    'an entry on the default light page should use the restrained light-surface contrast treatment');
+  assert.strictEqual(host.style.colorScheme, 'light',
+    'the expanded material should remain light on a locally light page surface');
   assert.strictEqual(host.dataset.runtimeId, 'kkcjcneagmlhpeaafngjdlpcfjakejgb');
   assert.strictEqual(host.dataset.triggerStyle, undefined);
   assert.strictEqual(host.dataset.triggerStyleSource, undefined);
@@ -289,24 +299,34 @@ function wait(ms) {
     'opening the toolbar should focus its container without pre-highlighting the inferred first action');
   assert.notStrictEqual(selectionShadow.activeElement, translatedToolbarActions[0],
     'the first action should remain visually neutral until the user navigates to it');
+  assert.strictEqual(highEntry.hidden, false,
+    'the same butterfly button should remain as the first item after the toolbar opens');
+  assert.strictEqual(highEntry.dataset.iconOnly, 'false',
+    'the shared butterfly should enlarge from compact-entry mode into its toolbar slot');
+  assert.strictEqual(highSurface.firstElementChild, highEntry,
+    'the butterfly should occupy the leading toolbar position');
   assert(translatedToolbarActions.every((button) => button.querySelector('.lumno-selection-action-icon > path')),
     'toolbar actions should use the filled Remix SVG definitions');
-  assert.strictEqual(toolbarAnimations.length, 1, 'opening the toolbar should animate from the butterfly bounds');
-  assert.strictEqual(toolbarAnimations[0].target, highSurface);
-  assert.strictEqual(toolbarAnimations[0].options.duration, 180);
-  assert.strictEqual(toolbarAnimations[0].options.easing, 'cubic-bezier(0.22, 1, 0.36, 1)');
-  assert.deepStrictEqual(Array.from(toolbarAnimations[0].keyframes, (frame) => frame.opacity), [0.76, 1]);
-  assert.match(
-    toolbarAnimations[0].keyframes[0].transform,
-    /translate\(.+px, .+px\) scale\(.+, .+\)/
-  );
-  assert.deepStrictEqual(
-    Object.keys(toolbarAnimations[0].keyframes[0]).sort(),
-    ['opacity', 'transform'],
-    'the entrance should animate only compositor-friendly transform and opacity'
-  );
-  window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
-  assert.strictEqual(toolbarAnimations[0].cancelled, true,
+  const surfaceGrowth = toolbarAnimations.find((record) => record.target === highSurface);
+  const sharedButterflyGrowth = toolbarAnimations.find((record) => record.target === highEntry);
+  const labelReveals = toolbarAnimations.filter((record) => (
+    record.target.classList && record.target.classList.contains('lumno-selection-action-label')
+  ));
+  assert(surfaceGrowth, 'opening should animate the toolbar shell from the butterfly edge');
+  assert.strictEqual(surfaceGrowth.options.duration, 230);
+  assert.strictEqual(surfaceGrowth.options.easing, 'cubic-bezier(0.22, 1, 0.36, 1)');
+  assert.deepStrictEqual(Object.keys(surfaceGrowth.keyframes[0]).sort(), ['clipPath'],
+    'the shell should grow through a bounded clipping reveal instead of scaling its contents');
+  assert(sharedButterflyGrowth, 'the compact butterfly should use a shared-element transform into the first slot');
+  assert.strictEqual(sharedButterflyGrowth.options.duration, 220);
+  assert.match(sharedButterflyGrowth.keyframes[0].transform, /translate\(.+px, .+px\) scale\(.+\)/);
+  assert.strictEqual(labelReveals.length, 3, 'each action label should reveal from its own clipping mask');
+  assert(labelReveals.every((record) => record.options.duration === 280 && record.options.delay === 65),
+    'text should enter later and more slowly than the shell growth to create visual layering');
+  highEntry.click();
+  assert(runtimeMessages.some((message) => message.action === 'openOptionsPage' && message.hash === 'labs'),
+    'clicking the enlarged leading butterfly should open the Labs settings route');
+  assert.strictEqual(surfaceGrowth.cancelled, true,
     'dismissing the selection surface should cancel an in-flight toolbar animation');
   delete highSurface.getBoundingClientRect;
 
@@ -410,22 +430,18 @@ function wait(ms) {
   selectionShadow.querySelector('.lumno-selection-main').click();
   assert.strictEqual(highSurface.dataset.iconOnly, 'false');
   assert.strictEqual(highSurface.getBoundingClientRect().width, 240);
-  for (let attempt = 0; attempt < 20 && !highSurface.style.transition.includes('transform 180ms'); attempt += 1) {
+  for (let attempt = 0; attempt < 20 && highSurface.dataset.toolbarEntranceState !== 'to'; attempt += 1) {
     await wait(10);
   }
   assert.strictEqual(host.hidden, false);
   assert.strictEqual(host.dataset.visible, 'true');
   assert.strictEqual(highSurface.dataset.toolbarEntranceMode, 'fallback');
-  assert.match(
-    highSurface.style.transition,
-    /transform 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\), opacity 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\)/,
-    'browsers without Web Animations should retain the same FLIP motion through a CSS fallback'
-  );
-  assert.strictEqual(highSurface.style.opacity, '1');
+  assert.strictEqual(highSurface.dataset.toolbarEntranceState, 'to',
+    'browsers without Web Animations should retain the staged reveal through CSS state');
   window.HTMLElement.prototype.focus = nativeFocus;
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
-  assert.strictEqual(highSurface.style.transition, '',
-    'dismissing the CSS fallback should clear its temporary inline transition');
+  assert.strictEqual(highSurface.dataset.toolbarEntranceState, undefined,
+    'dismissing the CSS fallback should clear its temporary animation state');
   delete highSurface.getBoundingClientRect;
 
   await selectDomText(selectableLink);
@@ -566,16 +582,16 @@ function wait(ms) {
     'light and dark toolbar materials should use independently tuned borders and foregrounds'
   );
   assert(
-    /box-shadow:\s*inset 0 1px 0 light-dark\(rgba\(255, 255, 255, 0\.34\), rgba\(255, 255, 255, 0\.04\)\),[\s\S]*?inset 0 2px 10px light-dark\(rgba\(255, 255, 255, 0\.55\), rgba\(255, 255, 255, 0\.10\)\),[\s\S]*?0 8px 24px light-dark\(rgba\(15, 23, 42, 0\.14\), rgba\(0, 0, 0, 0\.38\)\)/.test(selectionStyles),
-    'the toolbar should combine a soft edge with the approved broader blurred inner glow'
+    /\.lumno-selection-surface::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(selectionStyles),
+    'the toolbar should use broad static gradient diffusion instead of an animated large blur layer'
   );
   assert(
     /\.lumno-selection-surface\s*\{[\s\S]*?-webkit-backdrop-filter:\s*blur\(14px\) saturate\(130%\)[\s\S]*?backdrop-filter:\s*blur\(14px\) saturate\(130%\)/.test(selectionStyles),
     'the translucent toolbar material should softly blend with the page underneath'
   );
   assert(
-    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*32px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(selectionStyles),
-    'toolbar actions should use the approved compact spacing and type scale'
+    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(selectionStyles),
+    '30px actions should leave the same 3px inset on all four sides inside the 38px shell'
   );
   assert(
     /button:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 1px/.test(selectionStyles),
@@ -590,8 +606,14 @@ function wait(ms) {
     'the neutral toolbar focus target should not add a second outline around the surface'
   );
   assert(
-    /\.lumno-selection-toolbar button \+ button::before[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles),
-    'toolbar actions should be divided into distinct groups'
+    /\.lumno-selection-toolbar::before[\s\S]*?margin-inline:\s*3px[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles) &&
+      /\.lumno-selection-toolbar button \+ button\s*\{[\s\S]*?margin-inline-start:\s*7px/.test(selectionStyles) &&
+      /\.lumno-selection-toolbar button \+ button::before[\s\S]*?inset-inline-start:\s*-4px[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles),
+    'every divider should retain the same 3px clearance from both neighboring hover backgrounds'
+  );
+  assert(
+    /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),
+    'the toolbar shell and controls should share the Overlay superellipse corner treatment'
   );
   assert(
     /\.lumno-selection-action-icon\s*\{[\s\S]*?width:\s*16px[\s\S]*?height:\s*16px/.test(selectionStyles),
@@ -599,6 +621,12 @@ function wait(ms) {
   );
   assert(!selectionStyles.includes('lumno-selection-butterfly'),
     'the selection styles should not retain butterfly-only rules');
+
+  await selectDomText(darkCopy);
+  assert.strictEqual(host.dataset.entryContrast, 'dark',
+    'a butterfly placed over a dark page surface should adapt without a conspicuous global inversion effect');
+  assert.strictEqual(host.style.colorScheme, 'dark',
+    'opening from a dark page surface should keep the toolbar material dark instead of flashing white');
 
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
   selection.removeAllRanges();

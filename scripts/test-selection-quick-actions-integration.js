@@ -120,9 +120,9 @@ assert(
   'the default floating selection affordance should use the supplied Lumno mark'
 );
 assert(
-  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v13'") &&
-    contentSource.includes('const RUNTIME_VERSION = 13'),
-  'the selection runtime should expose the compact-toolbar revision for live diagnostics'
+  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v14'") &&
+    contentSource.includes('const RUNTIME_VERSION = 14'),
+  'the selection runtime should expose the layered-toolbar revision for live diagnostics'
 );
 assert(
   /\.lumno-selection-surface\[data-icon-only="true"\][\s\S]*?border:\s*0[;\s\S]*?box-shadow:\s*none/.test(contentSource),
@@ -163,10 +163,10 @@ assert(
   'the hover state should use a translucent acrylic treatment'
 );
 assert(
-  /\.lumno-selection-main\[data-icon-only="true"\][\s\S]*?filter:\s*blur\(8px\)/.test(contentSource) &&
-    /\.lumno-selection-surface\[data-icon-only="true"\] \.lumno-selection-main\s*\{[\s\S]*?transition:[\s\S]*?filter\s+240ms/.test(contentSource) &&
-    /:host\(\[data-visible="true"\]\) \.lumno-selection-main\[data-icon-only="true"\][\s\S]*?filter:\s*blur\(0\)/.test(contentSource),
-  'the floating selection mark should animate from blurred to sharp when it appears'
+  !contentSource.includes('filter: blur(8px)') &&
+    /\.lumno-selection-main\[data-icon-only="true"\][\s\S]*?opacity:\s*0[\s\S]*?transform:\s*translateY\(2px\) scale\(0\.9\)/.test(contentSource) &&
+    /:host\(\[data-visible="true"\]\) \.lumno-selection-main\[data-icon-only="true"\][\s\S]*?opacity:\s*1[\s\S]*?transform:\s*translateY\(0\) scale\(1\)/.test(contentSource),
+  'the floating selection mark should use a clean low-cost rise instead of a blur-to-sharp loading effect'
 );
 assert(contentSource.includes('let enabled = false;'), 'content runtime should start disabled');
 assert(contentSource.includes('lumno-selection-action-icon'), 'content runtime should render inline action SVGs');
@@ -198,8 +198,8 @@ assert(
   'the expanded toolbar should tune border and text contrast for each theme'
 );
 assert(
-  /box-shadow:\s*inset 0 1px 0 light-dark\(rgba\(255, 255, 255, 0\.34\), rgba\(255, 255, 255, 0\.04\)\),[\s\S]*?inset 0 2px 10px light-dark\(rgba\(255, 255, 255, 0\.55\), rgba\(255, 255, 255, 0\.10\)\),[\s\S]*?0 8px 24px light-dark\(rgba\(15, 23, 42, 0\.14\), rgba\(0, 0, 0, 0\.38\)\)/.test(contentSource),
-  'the expanded toolbar should pair a soft edge with a broader blurred inset glow'
+  /\.lumno-selection-surface::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(contentSource),
+  'the expanded toolbar should use broad static gradient diffusion for its inner glow'
 );
 assert(
   /\.lumno-selection-surface\s*\{[\s\S]*?-webkit-backdrop-filter:\s*blur\(14px\) saturate\(130%\)[\s\S]*?backdrop-filter:\s*blur\(14px\) saturate\(130%\)/.test(contentSource),
@@ -207,10 +207,16 @@ assert(
 );
 assert(
   /\.lumno-selection-toolbar\s*\{[\s\S]*?gap:\s*0/.test(contentSource) &&
-    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*32px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(contentSource) &&
-    /\.lumno-selection-toolbar button \+ button::before[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(contentSource) &&
+    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(contentSource) &&
+    /\.lumno-selection-toolbar::before[\s\S]*?margin-inline:\s*3px[\s\S]*?height:\s*18px/.test(contentSource) &&
+    /\.lumno-selection-toolbar button \+ button\s*\{[\s\S]*?margin-inline-start:\s*7px/.test(contentSource) &&
+    /\.lumno-selection-toolbar button \+ button::before[\s\S]*?inset-inline-start:\s*-4px[\s\S]*?height:\s*18px/.test(contentSource) &&
     /\.lumno-selection-action-icon\s*\{[\s\S]*?width:\s*16px[\s\S]*?height:\s*16px/.test(contentSource),
-  'the expanded toolbar should separate its action groups with compact vertical dividers'
+  'the expanded toolbar should separate hover regions and dividers with the same 3px rhythm'
+);
+assert(
+  /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
+  'the toolbar should use the same supported smooth-corner primitive as Overlay'
 );
 assert(
   contentSource.includes('menu.tabIndex = -1') &&
@@ -222,13 +228,29 @@ assert(
 assert(
   contentSource.includes('function animateToolbarEntrance(originRect)') &&
     contentSource.includes("window.matchMedia('(prefers-reduced-motion: reduce)').matches") &&
-    /surface\.animate\(\[[\s\S]*?opacity:\s*0\.76,[\s\S]*?transform:[\s\S]*?opacity:\s*1,[\s\S]*?transform:[\s\S]*?duration:\s*180,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource),
-  'the toolbar should use the approved 180ms transform-and-opacity FLIP entrance'
+    /surface\.animate\(\[[\s\S]*?clipPath:[\s\S]*?clipPath:[\s\S]*?duration:\s*230,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource) &&
+    /mainButton\.animate\(\[[\s\S]*?transform:[\s\S]*?duration:\s*220/.test(contentSource) &&
+    /label\.animate\(\[[\s\S]*?clipPath:[\s\S]*?duration:\s*280,[\s\S]*?delay:\s*65/.test(contentSource),
+  'the toolbar should layer shell growth, shared-butterfly motion and slower masked label reveals'
 );
 assert(
   contentSource.includes('function runToolbarEntranceFallback') &&
-    contentSource.includes("transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms cubic-bezier(0.22, 1, 0.36, 1)"),
-  'the same entrance motion should remain available when Web Animations is unavailable'
+    contentSource.includes("surface.dataset.toolbarEntranceState = 'from'") &&
+    contentSource.includes("surface.dataset.toolbarEntranceState = 'to'"),
+  'the same staged entrance should remain available when Web Animations is unavailable'
+);
+assert(
+  /function openLabsSettings\(\)[\s\S]*?action:\s*'openOptionsPage'[\s\S]*?hash:\s*'labs'/.test(contentSource) &&
+    /case 'openOptionsPage':[\s\S]*?hash:\s*request\.hash/.test(backgroundSource),
+  'the enlarged leading butterfly should navigate directly to the Labs settings route'
+);
+assert(
+  contentSource.includes('function resolveEntryContrastTone(element)') &&
+    contentSource.includes('const entryContrast = resolveEntryContrastTone(candidate.snapshot.element)') &&
+    contentSource.includes('host.dataset.entryContrast = entryContrast') &&
+    contentSource.includes("host.style.colorScheme = entryContrast === 'mixed' ? 'light dark' : entryContrast") &&
+    /data-entry-contrast="dark"/.test(contentSource),
+  'the compact butterfly and expanded material should adapt their restrained contrast to the local page surface'
 );
 assert(
   /function hideSurface\(options\)\s*\{[\s\S]*?cancelToolbarEntranceAnimation\(\)/.test(contentSource) &&

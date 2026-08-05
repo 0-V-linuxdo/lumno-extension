@@ -1,78 +1,69 @@
-# Selection Toolbar v13 Design QA
+# Selection Toolbar v14 Design QA
 
-## Comparison Target
+## Comparison target
 
-- Source visual truth: `/var/folders/gg/xnc31wr97vz9fwdhwlc17jvc0000gn/T/codex-clipboard-a7edde3f-fe4d-4390-86f2-8344baaa9f5a.png`
-- Source pixels: 858 x 294.
-- Browser viewport: 1200 x 620 CSS px, device scale factor 1.
-- Light neutral implementation: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-light.png` (325 x 98 px focused clip).
-- Light hover implementation: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-hover.png` (325 x 98 px focused clip).
-- Dark neutral implementation: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-dark.png` (325 x 98 px focused clip).
-- Animation start: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-animation-start.png` (420 x 130 px focused clip).
-- Animation end: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-animation-end.png` (420 x 130 px focused clip).
-- Combined comparison: `/Users/kevinrzxu/.codex/visualizations/2026/08/04/019fca91-ef32-71d0-b12f-5be82340a7db/selection-toolbar-v13-comparison.png` (1185 x 971 px).
+- Source visual: `/var/folders/gg/xnc31wr97vz9fwdhwlc17jvc0000gn/T/codex-clipboard-db4cc33a-5d20-41ed-b250-615134a033a4.png`.
+- Runtime preview: `http://127.0.0.1:8766/.tmp/selection-entry-inner.html`.
+- Runtime identity: `selection-toolbar-v14`, version `14`.
 
-The focused implementation clips were captured at 1 CSS px to 1 image px. The source screenshot has an unknown page viewport, so page chrome was excluded from fidelity judgment; the Toolbar region, interaction state, density and approved component measurements were compared directly.
+The source image was used for the shell proportions, separator rhythm, neutral action backgrounds and soft gray material. The implementation retains the previously approved 38 px compact height while adding a dedicated leading Lumno control.
 
-## States And Measurements
+## Geometry and material
 
-- Runtime: `selection-toolbar-v13`, version `13`.
-- Expanded surface: 264.57 x 38 CSS px in the preview content, with 13 px radius and 3 px padding.
-- Actions: three neutral buttons in `translate, ask, search` order for the selected foreign term.
-- Action geometry: 32 px height, 8 px horizontal padding, 9 px radius, 5 px icon-label gap, 12 px/500 labels and 16 px Remix icons.
-- Dividers: 1 x 18 px.
-- Light material: `rgba(244, 245, 247, 0.94)` with 0.34 edge inset and 0.55 / 10 px broad inset glow.
-- Dark material: `rgba(26, 27, 31, 0.96)` with 0.04 edge inset and 0.10 / 10 px broad inset glow.
-- Motion: Web Animations path detected in Chrome. The start/end visual capture used a 0.1x QA-only playback wrapper so the compressed FLIP state could be photographed; production options remain 180 ms with `cubic-bezier(0.22, 1, 0.36, 1)`.
+- Expanded surface: 38 px total height, 13 px radius and 3 px padding on all four sides.
+- Smooth corners: `corner-shape: superellipse(1.25)` when supported, matching Overlay.
+- Leading Lumno control: the same 18 x 18 px entry enlarges into a 30 x 30 px first Toolbar item.
+- Actions: three neutral 30 px buttons with 8 px horizontal padding, 9 px radius, 5 px icon-label gap, 12 px/500 labels and 16 px Remix icons.
+- Separators: 1 x 18 px. Every separator keeps 3 px clearance from both neighboring hover backgrounds.
+- Light surface: `rgba(244, 245, 247, 0.94)`.
+- Dark surface: `rgba(26, 27, 31, 0.96)`.
+- Inner illumination: two broad static radial gradients replace a large animated blur layer. This increases diffusion without adding per-frame filter repaint work.
 
-## Full-view Comparison Evidence
+## Motion
 
-- The source and all implementation states were opened together in one comparison input. The combined sheet confirms the intended hierarchy: selected text remains primary, the compact Toolbar stays secondary, and the surface does not reflow page content.
-- The implementation is intentionally smaller than the source reference because the approved revision reduces the Toolbar to 38 px total height. Its three-part structure, separators, rounded gray material and hover tile remain faithful to the reference direction.
-- Light and dark surfaces remain readable against their page backgrounds without clipping, inversion artifacts or a highlighted first action.
+- Shell growth: 230 ms, left-to-right `clip-path` reveal with `cubic-bezier(0.22, 1, 0.36, 1)`.
+- Shared Lumno control: 220 ms transform from the compact entry bounds into the first 30 px slot.
+- Labels: each label reveals from its own clipping mask over 280 ms with a 65 ms delay, so text finishes after the shell.
+- CSS fallback preserves the same staged structure when Web Animations is unavailable.
+- All active animations are interruptible and their temporary `will-change` hints are removed after 360 ms.
+- `prefers-reduced-motion: reduce` bypasses the choreography.
+- The old blur-to-sharp entry loading effect was removed; the entry now uses a short opacity and scale rise.
 
-## Focused Region Comparison Evidence
+## Dynamic contrast
 
-- The source's Ask hover state was compared directly with `selection-toolbar-v13-hover.png`. The implementation preserves the single neutral hover tile and avoids nested borders or a competing focus highlight.
-- The neutral light and dark captures show all action backgrounds as transparent while focus remains on the Toolbar container.
-- The animation start/end captures show one coordinated surface transforming from the compact entry bounds into the final Toolbar. No per-action stagger, bounce, width animation, height animation, filter animation or shadow animation is present.
+- The entry inspects the selected element's composited ancestor backgrounds once when it appears.
+- Light, dark and mixed treatments are selected without `mix-blend-mode: difference` or continuous pixel sampling.
+- Dark local surfaces receive a restrained translucent charcoal backing and softened light mark.
+- The same resolved tone controls the expanded material, preventing a bright Toolbar flash on dark webpages.
+- Complex image backgrounds fall back to a neutral dual-edge treatment.
 
-## Findings
+## Interaction and accessibility
 
-- No actionable P0, P1 or P2 issue remains.
-- Fonts and typography: the approved 12 px/500 label scale is crisp and single-line. English preview labels come from the local harness fallback; product localization keys and action content are unchanged.
-- Spacing and layout rhythm: measured 38 px height, 13 px radius, 3 px shell padding, 32 px actions, 5 px icon-label gaps and 18 px dividers match the approved compact spec.
-- Colors and visual tokens: both themes use the requested broader, softer two-layer inner illumination. The light surface stays cool gray rather than pure white; the dark surface uses independently tuned charcoal and off-white foreground values.
-- Image quality and asset fidelity: no new raster art was required for the Toolbar. The entry continues using the existing Lumno butterfly mark, and all three actions use the bundled Remix definitions as requested.
-- Copy and content: exactly three existing actions remain, ordered by inferred intent first. No extra labels or disclosure controls were introduced.
-- Icons: 16 px Remix icons share one optical scale. Ask AI uses the approved simple single-sparkle icon.
-- Interaction and accessibility: the Toolbar has `role="toolbar"`, receives neutral container focus, preserves button hover/focus-visible feedback, cancels entrance motion on dismissal, and bypasses motion under `prefers-reduced-motion: reduce`.
-- Selection behavior: selectable text in buttons, links, role-buttons, custom clickable nodes, contenteditable regions, inputs and textareas reaches intent evaluation. Password, payment and explicitly sensitive fields remain blocked before their values are read.
-- Responsiveness: the existing viewport collision logic remains active; the focused browser capture showed no clipping or overlap.
-- Console: the preview's `qaError` remained empty. Chrome logged no Lumno preview errors; observed warnings belonged to an unrelated AutoConsent extension.
+- The inferred action remains first among exactly three Remix actions.
+- Opening focus stays on the neutral Toolbar container; no action is highlighted by default.
+- The leading Lumno item has its own hover/focus treatment.
+- Clicking the enlarged Lumno item sends `openOptionsPage` with `hash: 'labs'`; the background route now preserves that hash.
+- Existing selection intent, clickable-element eligibility, text-control support and sensitive-field rejection remain unchanged.
 
-## Patches Made Since The Previous QA Pass
+## Browser QA
 
-- Replaced the 48 px v12 Toolbar with the approved 38 px v13 geometry.
-- Replaced the crisp single inset highlight with a faint edge plus a broader 10 px blurred inner glow.
-- Added interruptible 180 ms FLIP motion using transform and opacity, plus a matching CSS fallback when Web Animations is unavailable.
-- Added immutable pointer-up selection snapshots so clickable elements may collapse the live selection without losing the Lumno candidate.
-- Added text-control acquisition through `selectionStart` / `selectionEnd` while preserving password, payment and explicit-sensitive exclusions.
-- Kept the opening focus neutral and retained exactly three Remix actions in intent-derived order.
+- Light page: 38 px surface, 3 px padding, 13 px radius, `superellipse(1.25)`, 30 x 30 px leading item and three expected labels rendered.
+- Leading-item Hover: `rgba(15, 23, 42, 0.067)` background appeared without a nested border.
+- Dark page entry: `entryContrast=dark`, 18 x 18 px entry, `rgba(19, 22, 28, 0.32)` backing.
+- Dark expanded surface: `rgba(26, 27, 31, 0.96)` background, off-white foreground and dark color scheme.
+- Direct entry click expanded the same DOM control from 18 x 18 px to 30 x 30 px.
+- No relevant console errors or warnings were observed.
 
 ## Verification
 
-- `npm test`: passed; all 114 legacy test files and all 45 React test files / 229 React tests passed.
-- Focused selection tests: classifier, DOM behavior and integration contracts passed.
-- Browser QA: light, dark, hover, animation start and animation end states captured at runtime v13.
-- Production motion timing: automated assertions require 180 ms, `cubic-bezier(0.22, 1, 0.36, 1)`, opacity 0.76 to 1 and transform/opacity-only keyframes.
+- TDD RED: the v13 implementation failed the new geometry, routing, motion and contrast assertions.
+- TDD GREEN: selection DOM and integration tests passed after implementation.
+- `npm test`: build passed; all 114 legacy test files passed; all 45 React test files / 229 tests passed.
+- `scripts/test-performance-stability.js` passed as part of the full suite.
+- `git diff --check` passed.
 
-## Open Questions
+## Open questions
 
 - None for this scoped revision.
-
-## Follow-up Polish
-
-- No remaining P3 item is required for handoff.
 
 final result: passed

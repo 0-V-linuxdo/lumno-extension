@@ -16,8 +16,8 @@
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
-  const RUNTIME_REVISION = 'selection-toolbar-v13';
-  const RUNTIME_VERSION = 13;
+  const RUNTIME_REVISION = 'selection-toolbar-v14';
+  const RUNTIME_VERSION = 14;
   const RUNTIME_ID = chrome && chrome.runtime && chrome.runtime.id
     ? String(chrome.runtime.id)
     : '';
@@ -61,7 +61,7 @@
   let menu = null;
   let status = null;
   let ownershipObserver = null;
-  let toolbarEntranceAnimation = null;
+  let toolbarEntranceAnimations = [];
   let toolbarEntranceFrame = null;
   let toolbarEntranceCleanupTimer = null;
 
@@ -189,26 +189,40 @@
       window.clearTimeout(toolbarEntranceCleanupTimer);
       toolbarEntranceCleanupTimer = null;
     }
-    if (toolbarEntranceAnimation) {
-      toolbarEntranceAnimation.cancel();
-      toolbarEntranceAnimation = null;
-    }
+    toolbarEntranceAnimations.forEach((animation) => {
+      if (animation && typeof animation.cancel === 'function') {
+        animation.cancel();
+      }
+    });
+    toolbarEntranceAnimations = [];
     if (surface) {
-      surface.style.removeProperty('transition');
-      surface.style.removeProperty('opacity');
-      surface.style.removeProperty('transform');
-      surface.style.removeProperty('transform-origin');
+      delete surface.dataset.toolbarEntranceState;
+      surface.style.removeProperty('--lumno-entry-width');
+      surface.style.removeProperty('--lumno-entry-x');
+      surface.style.removeProperty('--lumno-entry-y');
+      surface.style.removeProperty('--lumno-entry-scale');
+      surface.style.removeProperty('will-change');
+    }
+    if (mainButton) {
+      mainButton.style.removeProperty('will-change');
+    }
+    if (menu) {
+      menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
+        label.style.removeProperty('will-change');
+      });
     }
   }
 
-  function runToolbarEntranceFallback(startTransform) {
-    if (!surface) {
+  function runToolbarEntranceFallback(geometry) {
+    if (!surface || !mainButton || !geometry) {
       return;
     }
     surface.dataset.toolbarEntranceMode = 'fallback';
-    surface.style.transition = 'none';
-    surface.style.opacity = '0.76';
-    surface.style.transform = startTransform;
+    surface.style.setProperty('--lumno-entry-width', `${geometry.originWidth}px`);
+    surface.style.setProperty('--lumno-entry-x', `${geometry.translateX}px`);
+    surface.style.setProperty('--lumno-entry-y', `${geometry.translateY}px`);
+    surface.style.setProperty('--lumno-entry-scale', String(geometry.scale));
+    surface.dataset.toolbarEntranceState = 'from';
     void surface.offsetWidth;
     toolbarEntranceFrame = window.setTimeout(() => {
       toolbarEntranceFrame = null;
@@ -216,18 +230,17 @@
         cancelToolbarEntranceAnimation();
         return;
       }
-      surface.style.transition = 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms cubic-bezier(0.22, 1, 0.36, 1)';
-      surface.style.opacity = '1';
-      surface.style.transform = 'translate(0px, 0px) scale(1, 1)';
+      surface.dataset.toolbarEntranceState = 'to';
       toolbarEntranceCleanupTimer = window.setTimeout(() => {
         toolbarEntranceCleanupTimer = null;
         if (surface) {
-          surface.style.removeProperty('transition');
-          surface.style.removeProperty('opacity');
-          surface.style.removeProperty('transform');
-          surface.style.removeProperty('transform-origin');
+          delete surface.dataset.toolbarEntranceState;
+          surface.style.removeProperty('--lumno-entry-width');
+          surface.style.removeProperty('--lumno-entry-x');
+          surface.style.removeProperty('--lumno-entry-y');
+          surface.style.removeProperty('--lumno-entry-scale');
         }
-      }, 180);
+      }, 360);
     }, 0);
   }
 
@@ -255,32 +268,74 @@
         surface.dataset.toolbarEntranceMode = 'invalid-destination';
         return;
       }
+      const measuredButtonRect = mainButton.getBoundingClientRect();
+      const destinationButtonRect = measuredButtonRect.width > 0 && measuredButtonRect.height > 0
+        ? measuredButtonRect
+        : {
+            height: 30,
+            left: destinationRect.left + 4,
+            top: destinationRect.top + 4,
+            width: 30
+          };
       const originX = originRect.left + originRect.width / 2;
       const originY = originRect.top + originRect.height / 2;
-      const destinationX = destinationRect.left + destinationRect.width / 2;
-      const destinationY = destinationRect.top + destinationRect.height / 2;
-      const scaleX = Math.max(0.12, Math.min(1, originRect.width / destinationRect.width));
-      const scaleY = Math.max(0.12, Math.min(1, originRect.height / destinationRect.height));
-      const startTransform = `translate(${originX - destinationX}px, ${originY - destinationY}px) scale(${scaleX}, ${scaleY})`;
-      surface.style.transformOrigin = originX <= destinationX ? 'left center' : 'right center';
+      const destinationX = destinationButtonRect.left + destinationButtonRect.width / 2;
+      const destinationY = destinationButtonRect.top + destinationButtonRect.height / 2;
+      const geometry = {
+        originWidth: Math.max(1, Math.min(destinationRect.width, originRect.width)),
+        scale: Math.max(0.4, Math.min(1, originRect.width / destinationButtonRect.width)),
+        translateX: originX - destinationX,
+        translateY: originY - destinationY
+      };
       if (!useWebAnimations) {
-        runToolbarEntranceFallback(startTransform);
+        runToolbarEntranceFallback(geometry);
         return;
       }
       surface.dataset.toolbarEntranceMode = 'web-animations';
-      toolbarEntranceAnimation = surface.animate([
-        {
-          opacity: 0.76,
-          transform: startTransform
-        },
-        {
-          opacity: 1,
-          transform: 'translate(0px, 0px) scale(1, 1)'
-        }
+      surface.style.willChange = 'clip-path';
+      mainButton.style.willChange = 'transform';
+      const surfaceAnimation = surface.animate([
+        { clipPath: `inset(0 ${Math.max(0, destinationRect.width - geometry.originWidth)}px 0 0 round 13px)` },
+        { clipPath: 'inset(0 0px 0 0 round 13px)' }
       ], {
-        duration: 180,
-        easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+        duration: 230,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        fill: 'both'
       });
+      const sharedAnimation = mainButton.animate([
+        { transform: `translate(${geometry.translateX}px, ${geometry.translateY}px) scale(${geometry.scale})` },
+        { transform: 'translate(0px, 0px) scale(1)' }
+      ], {
+        duration: 220,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        fill: 'both'
+      });
+      toolbarEntranceAnimations = [surfaceAnimation, sharedAnimation];
+      menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
+        label.style.willChange = 'clip-path, transform, opacity';
+        const labelAnimation = label.animate([
+          { clipPath: 'inset(0 100% 0 0)', opacity: 0, transform: 'translateX(-4px)' },
+          { clipPath: 'inset(0 0% 0 0)', opacity: 1, transform: 'translateX(0)' }
+        ], {
+          duration: 280,
+          delay: 65,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'both'
+        });
+        toolbarEntranceAnimations.push(labelAnimation);
+      });
+      toolbarEntranceCleanupTimer = window.setTimeout(() => {
+        toolbarEntranceCleanupTimer = null;
+        toolbarEntranceAnimations.forEach((animation) => animation.cancel());
+        toolbarEntranceAnimations = [];
+        if (surface) surface.style.removeProperty('will-change');
+        if (mainButton) mainButton.style.removeProperty('will-change');
+        if (menu) {
+          menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
+            label.style.removeProperty('will-change');
+          });
+        }
+      }, 360);
     });
   }
 
@@ -631,6 +686,84 @@
     return isSameSelection(candidate.snapshot, liveSnapshot);
   }
 
+  function parseCssColor(value) {
+    const match = String(value || '').match(
+      /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i
+    );
+    if (!match) {
+      return null;
+    }
+    return {
+      a: match[4] == null ? 1 : Math.max(0, Math.min(1, Number(match[4]))),
+      b: Math.max(0, Math.min(255, Number(match[3]))),
+      g: Math.max(0, Math.min(255, Number(match[2]))),
+      r: Math.max(0, Math.min(255, Number(match[1])))
+    };
+  }
+
+  function compositeBackground(front, back) {
+    const alpha = front.a + back.a * (1 - front.a);
+    if (alpha <= 0) {
+      return { a: 0, b: 0, g: 0, r: 0 };
+    }
+    const backWeight = back.a * (1 - front.a);
+    return {
+      a: alpha,
+      b: (front.b * front.a + back.b * backWeight) / alpha,
+      g: (front.g * front.a + back.g * backWeight) / alpha,
+      r: (front.r * front.a + back.r * backWeight) / alpha
+    };
+  }
+
+  function getRelativeLuminance(color) {
+    const channel = (value) => {
+      const normalized = value / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(color.r) +
+      0.7152 * channel(color.g) +
+      0.0722 * channel(color.b);
+  }
+
+  function resolveEntryContrastTone(element) {
+    let current = element && element.nodeType === Node.ELEMENT_NODE
+      ? element
+      : (document.body || document.documentElement);
+    let composite = { a: 0, b: 0, g: 0, r: 0 };
+    let complexBackdrop = false;
+    while (current && composite.a < 0.98) {
+      try {
+        const computed = window.getComputedStyle(current);
+        const background = parseCssColor(computed.backgroundColor);
+        if (background && background.a > 0) {
+          composite = compositeBackground(composite, background);
+        }
+        if (computed.backgroundImage && computed.backgroundImage !== 'none') {
+          complexBackdrop = true;
+        }
+      } catch (e) {
+        // Keep the neutral fallback when a hostile page blocks style inspection.
+      }
+      current = current.parentElement;
+    }
+    if (composite.a < 1) {
+      composite = compositeBackground(composite, { a: 1, b: 255, g: 255, r: 255 });
+    }
+    const luminance = getRelativeLuminance(composite);
+    if (complexBackdrop && luminance >= 0.34 && luminance <= 0.78) {
+      return 'mixed';
+    }
+    if (luminance < 0.42) {
+      return 'dark';
+    }
+    if (luminance > 0.72) {
+      return 'light';
+    }
+    return 'mixed';
+  }
+
   function ensureSurface() {
     if (host && host.isConnected) {
       updateRuntimeDebugState();
@@ -671,14 +804,29 @@
         -webkit-backdrop-filter: blur(14px) saturate(130%);
         backdrop-filter: blur(14px) saturate(130%);
         box-shadow:
-          inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.04)),
-          inset 0 2px 10px light-dark(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.10)),
+          inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06)),
           0 8px 24px light-dark(rgba(15, 23, 42, 0.14), rgba(0, 0, 0, 0.38)),
           0 2px 6px light-dark(rgba(15, 23, 42, 0.08), rgba(0, 0, 0, 0.24));
         opacity: 0;
         transform: translateY(-3px) scale(0.96);
         transition: opacity 140ms ease, transform 160ms ease;
         box-sizing: border-box;
+        contain: layout paint style;
+      }
+      .lumno-selection-surface::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        border-radius: inherit;
+        background:
+          radial-gradient(125% 165% at 50% -38%, light-dark(rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.16)) 0%, transparent 72%),
+          radial-gradient(115% 145% at 50% 138%, light-dark(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08)) 0%, transparent 78%);
+        pointer-events: none;
+      }
+      .lumno-selection-surface > * {
+        position: relative;
+        z-index: 1;
       }
       .lumno-selection-surface[data-icon-only="true"] {
         height: auto;
@@ -689,6 +837,7 @@
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
       }
+      .lumno-selection-surface[data-icon-only="true"]::before { display: none; }
       :host([data-visible="true"]) .lumno-selection-surface {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -698,7 +847,7 @@
         border: 0;
         margin: 0;
         padding: 0 8px;
-        min-height: 32px;
+        min-height: 30px;
         border-radius: 9px;
         background: transparent;
         color: inherit;
@@ -727,12 +876,10 @@
         background: rgba(250, 250, 250, 0.76);
         -webkit-backdrop-filter: blur(10px) saturate(150%);
         backdrop-filter: blur(10px) saturate(150%);
-        filter: blur(8px);
         opacity: 0;
-        transform: translateY(3px) scale(0.86);
+        transform: translateY(2px) scale(0.9);
         transition: background 120ms ease, backdrop-filter 120ms ease,
-          filter 240ms cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+          opacity 160ms ease, transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       .lumno-selection-main[data-icon-only="true"]::before {
         content: "";
@@ -740,6 +887,12 @@
         inset: -5px;
       }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-label { display: none; }
+      .lumno-selection-main[data-icon-only="false"] {
+        width: 30px;
+        min-height: 30px;
+        padding: 0;
+      }
+      .lumno-selection-main[data-icon-only="false"] .lumno-selection-label { display: none; }
       .lumno-selection-logo { width: 17px; height: 17px; display: block; }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
         width: 12px;
@@ -749,8 +902,7 @@
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main {
         transition: background 120ms ease, backdrop-filter 120ms ease,
-          filter 240ms cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+          opacity 160ms ease, transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       .lumno-selection-surface[data-icon-only="true"] .lumno-selection-main:hover {
         background: rgba(255, 255, 255, 0.94);
@@ -762,14 +914,38 @@
         box-shadow: none;
       }
       :host([data-visible="true"]) .lumno-selection-main[data-icon-only="true"] {
-        filter: blur(0);
         opacity: 1;
         transform: translateY(0) scale(1);
+      }
+      :host([data-entry-contrast="dark"]) .lumno-selection-main[data-icon-only="true"] {
+        background: rgba(19, 22, 28, 0.32);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 1px 3px rgba(0, 0, 0, 0.18);
+      }
+      :host([data-entry-contrast="dark"]) .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
+        filter: brightness(1.45) contrast(0.88) drop-shadow(0 0 1px rgba(0, 0, 0, 0.2));
+        opacity: 0.84;
+      }
+      :host([data-entry-contrast="mixed"]) .lumno-selection-main[data-icon-only="true"] {
+        background: rgba(250, 250, 250, 0.3);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.14);
+      }
+      :host([data-entry-contrast="mixed"]) .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
+        filter: brightness(0.62) contrast(1.05) drop-shadow(0 0 1px rgba(255, 255, 255, 0.72));
+        opacity: 0.86;
       }
       .lumno-selection-toolbar {
         display: flex;
         align-items: center;
         gap: 0;
+      }
+      .lumno-selection-toolbar::before {
+        content: "";
+        flex: 0 0 auto;
+        width: 1px;
+        height: 18px;
+        margin-inline: 3px;
+        background: light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.16));
+        pointer-events: none;
       }
       .lumno-selection-toolbar:focus {
         outline: none;
@@ -778,12 +954,12 @@
         position: relative;
       }
       .lumno-selection-toolbar button + button {
-        margin-inline-start: 1px;
+        margin-inline-start: 7px;
       }
       .lumno-selection-toolbar button + button::before {
         content: "";
         position: absolute;
-        inset-inline-start: -1px;
+        inset-inline-start: -4px;
         top: 50%;
         width: 1px;
         height: 18px;
@@ -803,19 +979,64 @@
         display: block;
         color: currentColor;
       }
+      .lumno-selection-action-label {
+        display: block;
+        overflow: hidden;
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] {
+        transition: clip-path 230ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] {
+        clip-path: inset(0 calc(100% - var(--lumno-entry-width)) 0 0 round 13px);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] {
+        clip-path: inset(0 0 0 0 round 13px);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-main[data-icon-only="false"] {
+        transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-main[data-icon-only="false"] {
+        transform: translate(var(--lumno-entry-x), var(--lumno-entry-y)) scale(var(--lumno-entry-scale));
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-main[data-icon-only="false"] {
+        transform: translate(0, 0) scale(1);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-action-label {
+        transition: clip-path 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms,
+          opacity 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms,
+          transform 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms;
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-action-label {
+        clip-path: inset(0 100% 0 0);
+        opacity: 0;
+        transform: translateX(-4px);
+      }
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-action-label {
+        clip-path: inset(0 0 0 0);
+        opacity: 1;
+        transform: translateX(0);
+      }
       .lumno-selection-status {
         padding: 0 8px;
         font: 500 12px/1 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         white-space: nowrap;
       }
       .lumno-selection-status[hidden] { display: none; }
+      @supports (corner-shape: superellipse(1.25)) {
+        .lumno-selection-surface,
+        button {
+          corner-shape: superellipse(1.25);
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         .lumno-selection-surface,
         .lumno-selection-main[data-icon-only="true"] {
           transition: none;
         }
-        .lumno-selection-main[data-icon-only="true"] {
-          filter: none;
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"],
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-main,
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-action-label {
+          transition: none;
         }
       }
     `;
@@ -876,7 +1097,11 @@
       if (!currentCandidate) {
         return;
       }
-      renderMenu();
+      if (surface && surface.dataset.iconOnly === 'true') {
+        renderMenu();
+        return;
+      }
+      openLabsSettings();
     });
     return true;
   }
@@ -962,6 +1187,9 @@
     const label = getActionLabel(action);
     host.hidden = false;
     host.dataset.iconSet = 'remix';
+    const entryContrast = resolveEntryContrastTone(candidate.snapshot.element);
+    host.dataset.entryContrast = entryContrast;
+    host.style.colorScheme = entryContrast === 'mixed' ? 'light dark' : entryContrast;
     host.dataset.visible = 'false';
     surface.dataset.iconOnly = 'true';
     delete surface.dataset.toolbarEntranceMode;
@@ -992,6 +1220,7 @@
     button.dataset.intent = action;
     const icon = buildActionIcon(action);
     const label = document.createElement('span');
+    label.className = 'lumno-selection-action-label';
     label.textContent = getActionLabel(action);
     if (icon) {
       button.appendChild(icon);
@@ -1007,6 +1236,18 @@
       .slice(0, 3);
   }
 
+  function openLabsSettings() {
+    try {
+      chrome.runtime.sendMessage({
+        action: 'openOptionsPage',
+        hash: 'labs'
+      });
+    } catch (e) {
+      // The entry disappears even if an extension update interrupts navigation.
+    }
+    hideSurface();
+  }
+
   function renderMenu() {
     if (!currentCandidate || !host) {
       return;
@@ -1018,7 +1259,9 @@
     const actions = getToolbarActions(primary);
     const actionButtons = actions.map(buildMenuAction);
     surface.dataset.iconOnly = 'false';
-    mainButton.hidden = true;
+    mainButton.hidden = false;
+    mainButton.dataset.iconOnly = 'false';
+    mainButton.setAttribute('aria-label', getMessage('settings_tab_labs', '实验室功能'));
     mainButton.setAttribute('aria-expanded', 'true');
     menu.replaceChildren(...actionButtons);
     host.dataset.iconSet = 'remix';
