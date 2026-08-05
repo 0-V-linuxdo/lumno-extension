@@ -160,7 +160,9 @@
   const confirmMessage = document.getElementById('_x_extension_confirm_message_2024_unique_');
   const confirmOk = document.getElementById('_x_extension_confirm_ok_2024_unique_');
   const confirmCancel = document.getElementById('_x_extension_confirm_cancel_2024_unique_');
-  const confirmDialog = document.querySelector('._x_extension_confirm_dialog_2024_unique_');
+  const confirmDialog = confirmMask
+    ? confirmMask.querySelector('._x_extension_confirm_dialog_2024_unique_')
+    : null;
   const optionsBlacklistListApi = globalThis.LumnoOptionsBlacklistList || {};
   const optionsFeedbackSupportApi = globalThis.LumnoOptionsFeedbackSupport || {};
   const optionsToastApi = globalThis.LumnoOptionsToast || {};
@@ -2837,11 +2839,6 @@
       const label = getMessage('cloud_status_error', '同步异常');
       const detail = String(sync.lastError || '').trim();
       return detail ? `${label}：${detail}` : label;
-    }
-    if (sync.conflictCount > 0) {
-      return formatTemplate(getMessage('cloud_sync_conflicts', '有 {count} 项配置冲突，已保留本机版本等待处理'), {
-        count: sync.conflictCount
-      });
     }
     if (sync.pendingCount > 0) {
       return formatTemplate(getMessage('cloud_sync_pending', '{count} 项改动等待上传'), {

@@ -1964,7 +1964,6 @@
   "cloud_error_web_security": { "message": "登录安全校验失败，请重新发起" },
   "cloud_error_web_expired": { "message": "登录请求已过期，请重新发起" },
   "cloud_error_generic": { "message": "操作失败，请稍后重试" },
-  "cloud_sync_conflicts": { "message": "有 {count} 项配置冲突，已保留本机版本等待处理" },
   "cloud_sync_pending": { "message": "{count} 项改动等待上传" },
   "cloud_sync_last": { "message": "最近同步：{time}" },
   "cloud_sync_ready_detail": { "message": "配置已启用账号级跨设备同步" },

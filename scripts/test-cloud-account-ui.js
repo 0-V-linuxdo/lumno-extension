@@ -246,6 +246,17 @@ function run() {
     /\._x_extension_cloud_consent_actions_2026_unique_ button\s*\{[\s\S]*?border-radius:\s*999px\s*!important;/,
     'consent actions should use the same pill radius as shortcut dialog buttons'
   );
+  assert.match(
+    runtime,
+    /const confirmDialog = confirmMask\s*\?\s*confirmMask\.querySelector\(/,
+    'the legacy confirm controller should resolve its dialog inside its own existing modal shell'
+  );
+  assert.doesNotMatch(html, /cloud_conflict_|_x_extension_cloud_conflict_/,
+    'automatic conflict resolution should not expose a conflict popup or action in the options page');
+  assert.doesNotMatch(runtime, /cloudConflict|cloudGetConflicts|cloudResolveConflict/,
+    'the options runtime should not load or manage conflicts interactively');
+  assert.match(controller, /autoResolveConflicts/,
+    'the account controller should normalize existing conflicts automatically');
   assert.match(html, /data-i18n="cloud_consent_account_isolation">请始终使用原登录方式/,
     'the pre-auth disclosure should explain that different-email accounts stay isolated');
   assert.match(html, /账号和数据暂不支持关联或合并；相同已验证邮箱可能被识别为同一账号/,

@@ -2928,10 +2928,13 @@
       ._x_extension_cloud_consent_dialog_2026_unique_ {
         --x-extension-cloud-consent-enter-x: 0px;
         --x-extension-cloud-consent-enter-y: 12px;
-        width: min(520px, 100%);
-        max-width: 520px;
+        --x-extension-cloud-dialog-width: 520px;
+        --x-extension-cloud-dialog-padding: 22px;
+        --x-extension-cloud-dialog-mobile-padding: 18px;
+        width: min(var(--x-extension-cloud-dialog-width), 100%);
+        max-width: var(--x-extension-cloud-dialog-width);
         max-height: calc(100dvh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-        padding: 22px;
+        padding: var(--x-extension-cloud-dialog-padding);
         border-radius: 27px;
         filter: blur(6px);
         transform: translate3d(
@@ -3140,11 +3143,8 @@
         ._x_extension_cloud_actions_2026_unique_ button {
           flex: 1 1 140px;
         }
-        ._x_extension_cloud_sync_detail_2026_unique_ {
-          margin-left: 0;
-        }
         ._x_extension_cloud_consent_dialog_2026_unique_ {
-          padding: 18px;
+          padding: var(--x-extension-cloud-dialog-mobile-padding, 18px);
         }
         ._x_extension_cloud_consent_actions_2026_unique_ {
           flex-direction: column-reverse;

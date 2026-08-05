@@ -150,15 +150,43 @@ async function run() {
   pushMode = 'conflict';
   await runtime.queueSettingChange(themeKey, 'dark');
   const conflictPush = await runtime.flush();
-  assert.strictEqual(conflictPush.conflicts.length, 1);
+  assert.strictEqual(conflictPush.autoResolved, 1,
+    'a real version conflict should be resolved automatically');
+  assert.deepStrictEqual(conflictPush.conflicts, []);
   assert.strictEqual((await runtime.getState()).outbox.length, 0,
     'rejected operations must leave the outbox to avoid a retry livelock');
   assert.strictEqual(localArea.values[themeKey], 'light', 'the active value should follow the server');
-  await runtime.resolveConflict(themeKey, 'device');
-  assert.strictEqual((await runtime.getState()).outbox[0].base_version, 2,
-    'keeping the device value should create a fresh edit against the remote version');
+  assert.strictEqual((await runtime.getState()).conflicts.length, 0);
   pushMode = 'accept';
-  await runtime.flush();
+
+  pushMode = 'conflict';
+  await runtime.queueSettingChange(themeKey, 'system');
+  const secondConflictPush = await runtime.flush();
+  assert.strictEqual(secondConflictPush.autoResolved, 1);
+  assert.strictEqual(localArea.values[themeKey], 'light',
+    'automatic conflict handling must apply the cloud version');
+  assert.strictEqual((await runtime.getState()).conflicts.length, 0);
+
+  await runtime.queueSettingChange(themeKey, 'light');
+  const equivalentConflict = await runtime.flush();
+  assert.strictEqual(equivalentConflict.conflicts.length, 0,
+    'a version mismatch with equivalent values should resolve automatically');
+  assert.strictEqual((await runtime.getState()).conflicts.length, 0);
+  pushMode = 'accept';
+
+  localArea.values[schema.CLOUD_LOCAL_KEYS.status] = { state: 'conflict' };
+  await runtime.autoResolveConflicts();
+  assert.strictEqual((await runtime.getState()).status.state, 'ready',
+    'a stale conflict status without records should also recover automatically');
+
+  await runtime.queueSettingChange(themeKey, 'local-pull');
+  pullRows = [{ key: themeKey, value: 'server-pull', version: 7, change_id: 51 }];
+  const autoPull = await runtime.pull();
+  assert.strictEqual(autoPull.autoResolved, 1,
+    'pull conflicts should resolve to the cloud value without waiting for UI input');
+  assert.deepStrictEqual(autoPull.conflicts, []);
+  assert.strictEqual(localArea.values[themeKey], 'server-pull');
+  assert.strictEqual((await runtime.getState()).outbox.length, 0);
 
   await runtime.disableCloudMode({ copyToBrowserSync: true });
   assert.strictEqual(syncArea.values[languageKey], undefined);
@@ -258,7 +286,7 @@ async function run() {
     [rejoinOperation]
   );
   assert.strictEqual(advancedRemote.conflicts.length, 1,
-    'a remote version advance must still create a real multi-device conflict');
+    'the pure state helper should still identify a remote version advance');
 
   const legacyOnlyKey = schema.STORAGE_KEYS.selectionQuickActionsTriggerStyle;
   const legacyArea = createArea({

@@ -1964,7 +1964,6 @@
   "cloud_error_web_security": { "message": "登入安全驗證失敗，請重新發起" },
   "cloud_error_web_expired": { "message": "登入請求已過期，請重新發起" },
   "cloud_error_generic": { "message": "操作失敗，請稍後再試" },
-  "cloud_sync_conflicts": { "message": "有 {count} 項設定衝突，已保留本機版本等待處理" },
   "cloud_sync_pending": { "message": "{count} 項變更等待上傳" },
   "cloud_sync_last": { "message": "最近同步：{time}" },
   "cloud_sync_ready_detail": { "message": "已啟用帳號層級的跨裝置同步" },

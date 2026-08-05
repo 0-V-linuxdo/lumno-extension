@@ -305,6 +305,10 @@ async function run() {
       replacementQueuedSettings.push({ key, value });
       return true;
     },
+    async autoResolveConflicts() {
+      transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts] = [];
+      return { resolved: 1, discarded: 1, keptLocal: 0 };
+    },
     async syncNow() { return { ok: true }; },
     async getState() {
       return {
@@ -357,7 +361,8 @@ async function run() {
   assert.strictEqual(clearedMediaCount, 1,
     'wallpaper and shortcut-icon caches must be cleared when the cache owner changes');
   assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.cacheOwner], 'account-b');
-  assert.strictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts], undefined);
+  assert.deepStrictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts], [],
+    'account transitions should leave no legacy conflict records behind');
   assert(registeredDeviceIds.length > 0);
   assert(registeredDeviceIds.every((id) => id === 'account-b-device'),
     'the replacement account must never register or push with Account A device state');
@@ -378,12 +383,11 @@ async function run() {
     'same-account reauthentication must not rewrite every cloud setting or advance versions');
 
   transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts] = [{ key: themeKey }];
-  await assert.rejects(
-    () => transitionController.setSyncProvider('chrome'),
-    (error) => error && error.code === 'sync_conflicts_must_be_resolved' && error.conflictCount === 1
-  );
-  assert.strictEqual(await transitionRepository.getMode(), repositoryApi.MODE_CLOUD,
-    'switching back to Chrome Sync must be blocked until all Lumno conflicts are resolved');
+  await transitionController.setSyncProvider('chrome');
+  assert.strictEqual(await transitionRepository.getMode(), repositoryApi.MODE_GUEST,
+    'switching back to Chrome Sync should not be blocked by an automatically resolved conflict');
+  assert.deepStrictEqual(transitionLocalArea.values[schema.CLOUD_LOCAL_KEYS.conflicts], [],
+    'switching providers should clear any legacy conflict records automatically');
 
   assert.strictEqual(controllerApi.isTrustedExtensionSender({
     id: 'extension-id',

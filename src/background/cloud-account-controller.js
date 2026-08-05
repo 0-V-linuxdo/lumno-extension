@@ -412,8 +412,11 @@
     }
 
     async function getStatus() {
-      const [mode, session, local] = await Promise.all([
-        repository.getMode(),
+      const mode = await repository.getMode();
+      if (mode === repositoryApi.MODE_CLOUD && runtime && typeof runtime.autoResolveConflicts === 'function') {
+        await runtime.autoResolveConflicts();
+      }
+      const [session, local] = await Promise.all([
         transport.getSession({ refresh: false }),
         readLocal([
           schema.CLOUD_LOCAL_KEYS.status,
@@ -797,24 +800,14 @@
       }
       if (currentMode === repositoryApi.MODE_CLOUD) {
         await syncNow({ force: true });
-        const syncState = await runtime.getState();
-        if (Array.isArray(syncState && syncState.conflicts) && syncState.conflicts.length > 0) {
-          const error = new Error('sync_conflicts_must_be_resolved');
-          error.code = 'sync_conflicts_must_be_resolved';
-          error.conflictCount = syncState.conflicts.length;
-          throw error;
+        if (runtime && typeof runtime.autoResolveConflicts === 'function') {
+          await runtime.autoResolveConflicts();
         }
         await runtime.disableCloudMode({ copyToBrowserSync: true });
       }
       return getStatus();
     }
 
-    async function resolveConflict(key, resolution) {
-      const result = await runtime.resolveConflict(key, resolution);
-      if (!result || result.ok === false) return result;
-      if (String(resolution || '').toLowerCase() === 'device') await syncNow({ force: true });
-      return { ...result, status: await getStatus() };
-    }
 
     async function setAnalyticsConsent(consented) {
       const enabled = consented === true;
@@ -858,7 +851,6 @@
         return syncNow({ force: true, fullPull: true, uploadWallpapers: true });
       }
       if (action === 'cloudSetSyncProvider') return setSyncProvider(request.provider);
-      if (action === 'cloudResolveConflict') return resolveConflict(request.key, request.resolution);
       if (action === 'cloudRecordUsage') {
         return usage && typeof usage.record === 'function'
           ? usage.record(request.metric, request.count)
@@ -916,7 +908,6 @@
       signInWithWeb,
       signOut,
       setSyncProvider,
-      resolveConflict,
       setAnalyticsConsent,
       recordUsage: usage && typeof usage.record === 'function' ? usage.record : async () => ({ recorded: false }),
       deleteWallpaper,

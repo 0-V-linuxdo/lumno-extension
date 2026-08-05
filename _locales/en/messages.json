@@ -1964,7 +1964,6 @@
   "cloud_error_web_security": { "message": "The sign-in security check failed. Please start again." },
   "cloud_error_web_expired": { "message": "The sign-in request expired. Please start again." },
   "cloud_error_generic": { "message": "Something went wrong. Please try again later." },
-  "cloud_sync_conflicts": { "message": "{count} settings have conflicts. The version on this device was kept for review." },
   "cloud_sync_pending": { "message": "{count} changes are waiting to upload" },
   "cloud_sync_last": { "message": "Last synced: {time}" },
   "cloud_sync_ready_detail": { "message": "Cross-device sync via your account is enabled." },

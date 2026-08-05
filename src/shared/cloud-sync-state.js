@@ -32,6 +32,32 @@
       : '';
   }
 
+  function jsonValuesEqual(left, right) {
+    if (left === right) return true;
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+      return false;
+    }
+    if (Array.isArray(left) || Array.isArray(right)) {
+      return Array.isArray(left) && Array.isArray(right) &&
+        left.length === right.length &&
+        left.every((item, index) => jsonValuesEqual(item, right[index]));
+    }
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return leftKeys.length === rightKeys.length &&
+      leftKeys.every((key, index) => (
+        key === rightKeys[index] && jsonValuesEqual(left[key], right[key])
+      ));
+  }
+
+  function areConflictValuesEquivalent(conflict) {
+    const source = conflict && typeof conflict === 'object' ? conflict : {};
+    const localDeleted = source.local_deleted === true;
+    const remoteDeleted = source.remote_deleted === true;
+    if (localDeleted !== remoteDeleted) return false;
+    return localDeleted || jsonValuesEqual(source.local_value, source.remote_value);
+  }
+
   function createOperation(input) {
     const source = input && typeof input === 'object' ? input : {};
     const key = String(source.key || '').trim();
@@ -205,6 +231,8 @@
     acknowledgeOperations,
     buildPushBatch,
     applyRemoteRows,
-    resolveInitialSnapshot
+    resolveInitialSnapshot,
+    jsonValuesEqual,
+    areConflictValuesEquivalent
   });
 });

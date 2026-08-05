@@ -1971,7 +1971,6 @@
   "cloud_error_web_security": { "message": "ログインの安全確認に失敗しました。もう一度開始してください。" },
   "cloud_error_web_expired": { "message": "ログインリクエストの有効期限が切れました。もう一度開始してください。" },
   "cloud_error_generic": { "message": "操作に失敗しました。しばらくしてからお試しください。" },
-  "cloud_sync_conflicts": { "message": "{count} 件の設定競合があります。確認のため端末側の値を保持しています。" },
   "cloud_sync_pending": { "message": "{count} 件の変更がアップロード待ちです" },
   "cloud_sync_last": { "message": "最終同期：{time}" },
   "cloud_sync_ready_detail": { "message": "アカウント単位のデバイス間同期が有効です" },

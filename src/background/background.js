@@ -5066,7 +5066,6 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'cloudSignOut',
       'cloudSyncNow',
       'cloudSetSyncProvider',
-      'cloudResolveConflict',
       'cloudRecordUsage',
       'cloudScheduleWallpaperSync',
       'cloudCommitWallpaperSync',
