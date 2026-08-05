@@ -189,7 +189,6 @@ assert.deepStrictEqual(
 );
 
 async function testProviderStorageRuntime() {
-  const listeners = [];
   function createArea(initial) {
     const values = { ...(initial || {}) };
     return {
@@ -213,8 +212,7 @@ async function testProviderStorageRuntime() {
   const chromeApi = {
     storage: {
       sync,
-      local,
-      onChanged: { addListener(listener) { listeners.push(listener); } }
+      local
     }
   };
   const runtime = settings.createProviderStorageRuntime(chromeApi);
@@ -226,23 +224,16 @@ async function testProviderStorageRuntime() {
   );
   await runtime.area.set({ theme: 'chrome' });
   assert.strictEqual(sync.values.theme, 'chrome');
-  local.values[settings.CLOUD_SYNC_MODE_STORAGE_KEY] = 'cloud';
   local.values[triggerStyleKey] = 'lumno';
-  listeners.forEach((listener) => listener({
-    [settings.CLOUD_SYNC_MODE_STORAGE_KEY]: { newValue: 'cloud' }
-  }, 'local'));
   await runtime.area.set({ theme: 'lumno' });
-  assert.strictEqual(local.values.theme, 'lumno');
-  assert.strictEqual(sync.values.theme, 'chrome', 'inactive Chrome Sync must not receive Lumno writes');
-  assert.strictEqual(runtime.isActiveAreaName('local'), true);
+  assert.strictEqual(sync.values.theme, 'lumno', 'settings writes should stay on Chrome Sync');
+  assert.strictEqual(local.values.theme, undefined, 'local storage should not receive synced settings');
+  assert.strictEqual(runtime.isActiveAreaName('sync'), true);
   assert.deepStrictEqual(
     await runtime.area.get([triggerStyleKey]),
-    { [triggerStyleKey]: 'lumno' },
-    'Lumno Cloud mode should read the trigger style from local primary storage'
+    { [triggerStyleKey]: 'butterfly' },
+    'the runtime should keep reading the Chrome Sync value'
   );
-  await runtime.area.set({ [triggerStyleKey]: 'butterfly' });
-  assert.strictEqual(local.values[triggerStyleKey], 'butterfly');
-  assert.strictEqual(sync.values[triggerStyleKey], 'butterfly', 'inactive Chrome Sync should remain untouched');
 }
 
 testProviderStorageRuntime().then(() => {

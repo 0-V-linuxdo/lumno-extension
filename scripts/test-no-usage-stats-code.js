@@ -27,28 +27,17 @@ function assertPathMissing(relativePath) {
   'scripts/test-options-telemetry-copy.js'
 ].forEach(assertPathMissing);
 
-const analyticsRuntime = read('src/background/usage-analytics-runtime.js');
-const analyticsSchema = read('src/shared/cloud-sync-schema.js');
 const accountUi = read('src/options/options.html');
-const edgeIngest = read('supabase/functions/telemetry-ingest/index.ts');
+const background = read('src/background/background.js');
 
-assert.match(analyticsRuntime, /if \(!schema\.USAGE_METRICS\.includes\(metric\) \|\| !\(await isConsented\(\)\)\)/,
-  'usage counters must not be created before explicit consent');
-assert.match(analyticsRuntime, /usage\.clear\(\)|CLOUD_LOCAL_KEYS\.usage/,
-  'pending local usage counters should be removable');
-assert.match(analyticsSchema, /FORBIDDEN_ANALYTICS_KEY_PATTERN/,
-  'the analytics data contract should reject browsing-value field names');
-assert.doesNotMatch(accountUi, /_x_extension_cloud_analytics_toggle_2026_unique_/,
-  'analytics should not have a separate post-login switch');
-assert.match(accountUi, /_x_extension_cloud_consent_dialog_2026_unique_[\s\S]*aria-modal="true"/,
-  'the combined disclosure must appear before web authentication');
-assert.match(accountUi, /不会上传：[\s\S]*搜索词、书签内容和 Cookie/,
-  'the consent surface should prominently disclose excluded browsing data');
-assert.match(accountUi, /产品使用统计：[\s\S]*?与账号关联[\s\S]*?最多保留 24 个月/,
-  'the consent surface should disclose account linkage and the detailed retention period');
-assert.doesNotMatch(accountUi, /匿名化产品使用统计|去识别化产品使用统计/,
-  'account-linked analytics must not be described as anonymous');
-assert.match(edgeIngest, /sanitizeUsageBatch/,
-  'the server should independently sanitize every usage batch');
+[
+  'src/background/usage-analytics-runtime.js',
+  'src/shared/cloud-sync-schema.js',
+  'supabase/functions/telemetry-ingest/index.ts'
+].forEach(assertPathMissing);
+assert.doesNotMatch(accountUi, /_x_extension_cloud_|Lumno 账号同步|开启账号同步/,
+  'the account page should not expose account sync or analytics controls');
+assert.doesNotMatch(background, /cloudRecordUsage|recordCloudUsageMetric|usage-analytics-runtime/,
+  'the extension runtime should not collect or upload account-linked usage statistics');
 
-console.log('privacy-gated usage statistics tests passed');
+console.log('usage statistics removal tests passed');

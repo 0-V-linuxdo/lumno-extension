@@ -54,24 +54,6 @@ try {
 }
 
 try {
-  importScripts(
-    chrome.runtime.getURL('src/shared/cloud-sync-schema.js'),
-    chrome.runtime.getURL('src/shared/cloud-config.js'),
-    chrome.runtime.getURL('src/shared/cloud-sync-state.js'),
-    chrome.runtime.getURL('src/shared/settings-repository.js'),
-    chrome.runtime.getURL('src/background/cloud-sync-runtime.js'),
-    chrome.runtime.getURL('src/background/secure-session-store.js'),
-    chrome.runtime.getURL('src/background/supabase-transport.js'),
-    chrome.runtime.getURL('src/background/web-auth-flow.js'),
-    chrome.runtime.getURL('src/background/usage-analytics-runtime.js'),
-    chrome.runtime.getURL('src/background/cloud-wallpaper-runtime.js'),
-    chrome.runtime.getURL('src/background/cloud-account-controller.js')
-  );
-} catch (error) {
-  console.warn('Lumno: failed to load cloud account runtime.', error);
-}
-
-try {
   importScripts(chrome.runtime.getURL('src/shared/update-notice.js'));
 } catch (error) {
   console.warn('Lumno: failed to load update notice utils.', error);
@@ -201,16 +183,6 @@ const BACKGROUND_SHORTCUT_RULES = globalThis.LumnoShortcutRules || {};
 const RECENT_TAB_SWITCHER = globalThis.LumnoRecentTabSwitcher || {};
 const DEV_EXTENSION_STARTUP = globalThis.LumnoDevExtensionStartup || {};
 const CODEX_DEBUG_BRIDGE = globalThis.LumnoCodexDebugBackground || {};
-const CLOUD_ACCOUNT_CONTROLLER = globalThis.LumnoCloudAccountController || {};
-const cloudAccountController = CLOUD_ACCOUNT_CONTROLLER && typeof CLOUD_ACCOUNT_CONTROLLER.createController === 'function'
-  ? CLOUD_ACCOUNT_CONTROLLER.createController({ chromeApi: chrome })
-  : null;
-function recordCloudUsageMetric(metric, count) {
-  if (!cloudAccountController || typeof cloudAccountController.recordUsage !== 'function') {
-    return;
-  }
-  cloudAccountController.recordUsage(metric, count).catch(() => {});
-}
 const codexDebugBridge = CODEX_DEBUG_BRIDGE && typeof CODEX_DEBUG_BRIDGE.create === 'function'
   ? CODEX_DEBUG_BRIDGE.create({ chromeApi: chrome })
   : null;
@@ -3523,7 +3495,6 @@ function focusWindowAndActivateTab(tabId, windowId, callback) {
         .then((result) => {
           if (result && result.ok && typeof tabId === 'number') {
             recordTabSwitchEvent(tabId);
-            recordCloudUsageMetric('tab_switch_completed');
           }
           if (typeof callback === 'function') {
             callback(result || { ok: false });
@@ -3545,7 +3516,6 @@ function focusWindowAndActivateTab(tabId, windowId, callback) {
       const ok = !(chrome.runtime && chrome.runtime.lastError);
       if (ok) {
         recordTabSwitchEvent(tabId);
-        recordCloudUsageMetric('tab_switch_completed');
       }
       if (typeof callback === 'function') {
         callback({
@@ -4461,7 +4431,6 @@ chrome.commands.onCommand.addListener(function(command) {
     return;
   }
   if (command !== SHOW_TAB_SWITCHER_COMMAND_NAME) {
-    recordCloudUsageMetric('command_bar_opened');
   }
   const source = command === SHOW_SEARCH_COMMAND_NAME
     ? 'commands'
@@ -5057,24 +5026,6 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'resolveSiteThemeColor'
     ],
     handler: handleFaviconMessage
-  },
-  cloudAccount: {
-    actions: [
-      'cloudGetStatus',
-      'cloudPrepareWebSignIn',
-      'cloudSignInWithWeb',
-      'cloudSignOut',
-      'cloudSyncNow',
-      'cloudSetSyncProvider',
-      'cloudResolveConflict',
-      'cloudRecordUsage',
-      'cloudScheduleWallpaperSync',
-      'cloudCommitWallpaperSync',
-      'cloudDeleteWallpaper',
-      'cloudUploadShortcutIcon',
-      'cloudDeleteShortcutIcon'
-    ],
-    handler: handleCloudAccountMessage
   }
 });
 
@@ -5096,18 +5047,6 @@ function dispatchBackgroundMessage(request, sender, sendResponse) {
 
 // Listen for extension runtime messages.
 chrome.runtime.onMessage.addListener(dispatchBackgroundMessage);
-
-if (cloudAccountController && typeof cloudAccountController.start === 'function') {
-  cloudAccountController.start();
-}
-
-function handleCloudAccountMessage(request, sender, sendResponse) {
-  if (!cloudAccountController || typeof cloudAccountController.handleMessage !== 'function') {
-    sendResponse({ ok: false, error: 'cloud_runtime_unavailable' });
-    return undefined;
-  }
-  return cloudAccountController.handleMessage(request, sender, sendResponse);
-}
 
 function handleTabMessage(request, sender, sendResponse) {
   switch (request.action) {
@@ -5272,7 +5211,6 @@ function handleShortcutMessage(request, sender, sendResponse) {
         prefillCurrentUrl: shouldPrefillCurrentUrl
       });
       rememberPageHotkeyContext(senderTab);
-      recordCloudUsageMetric('command_bar_opened');
       triggerShowSearchForTab(senderTab, triggerSource);
       sendResponse({ ok: true });
       return;
@@ -5410,7 +5348,6 @@ function handleSearchMessage(request, sender, sendResponse) {
           });
         } else {
           // It's a search query - use browser default search engine
-          recordCloudUsageMetric('web_search_submitted');
           const fallbackUrl = buildDefaultSearchUrl(query);
           if (openInBackgroundTab) {
             createResolvedTab(fallbackUrl, () => {
@@ -5547,9 +5484,7 @@ function handleSiteSearchMessage(request, sender, sendResponse) {
         request.disposition
       ).then((result) => {
         if (result && result.ok) {
-          recordCloudUsageMetric('site_search_submitted');
           if (request.provider && request.provider.category === 'aiSearch') {
-            recordCloudUsageMetric('ai_search_submitted');
           }
         }
         sendResponse(result);
@@ -5573,8 +5508,6 @@ function handleSelectionQuickActionMessage(request, sender, sendResponse) {
   runSelectionQuickAction(request, sender)
     .then((result) => {
       if (result && result.ok) {
-        recordCloudUsageMetric('site_search_submitted');
-        recordCloudUsageMetric('ai_search_submitted');
       }
       sendResponse(result);
     })

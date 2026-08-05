@@ -73,9 +73,7 @@
         thumbnailDataUrl,
         width: Math.max(0, Number(record.width) || 0),
         height: Math.max(0, Number(record.height) || 0),
-        updatedAt: Number(record.updatedAt) || Date.now(),
-        cloudAssetId: String(record.cloudAssetId || ''),
-        cloudUpdatedAt: String(record.cloudUpdatedAt || '')
+        updatedAt: Number(record.updatedAt) || Date.now()
       };
     }
 

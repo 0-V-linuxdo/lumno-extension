@@ -1,6 +1,0 @@
--- Reserved migration version.
---
--- The third-party moderation design was withdrawn before this migration was
--- applied to production. Keep the version as a no-op so existing development
--- databases that recorded it retain a linear migration history. Migration
--- 202608030008 removes any obsolete accounting objects from such databases.

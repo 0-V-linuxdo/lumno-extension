@@ -30,8 +30,6 @@
     'ds',
     'kimi'
   ]);
-  const CLOUD_SYNC_MODE_STORAGE_KEY = '_lumno_cloud_mode_v1_';
-  const CLOUD_SYNC_MODE = 'cloud';
   // Keep the original key value so existing installations migrate from boolean to mode in place.
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_TOP_CONTENT_BRAND = 'brand';
@@ -247,43 +245,11 @@
     const storage = chromeApi && chromeApi.storage ? chromeApi.storage : null;
     const syncArea = storage && storage.sync ? storage.sync : null;
     const localArea = storage && storage.local ? storage.local : syncArea;
-    let activeAreaName = syncArea ? 'sync' : (localArea ? 'local' : '');
-
-    const modeReady = new Promise((resolve) => {
-      if (!localArea || typeof localArea.get !== 'function') {
-        resolve(activeAreaName);
-        return;
-      }
-      let settled = false;
-      const finish = (result) => {
-        if (settled) return;
-        settled = true;
-        activeAreaName = result && result[CLOUD_SYNC_MODE_STORAGE_KEY] === CLOUD_SYNC_MODE
-          ? 'local'
-          : (syncArea ? 'sync' : 'local');
-        resolve(activeAreaName);
-      };
-      try {
-        const maybePromise = localArea.get([CLOUD_SYNC_MODE_STORAGE_KEY], finish);
-        if (maybePromise && typeof maybePromise.then === 'function') {
-          maybePromise.then(finish).catch(() => finish({}));
-        }
-      } catch (_error) {
-        finish({});
-      }
-    });
-
-    if (storage && storage.onChanged && typeof storage.onChanged.addListener === 'function') {
-      storage.onChanged.addListener((changes, areaName) => {
-        if (areaName !== 'local' || !changes || !changes[CLOUD_SYNC_MODE_STORAGE_KEY]) return;
-        activeAreaName = changes[CLOUD_SYNC_MODE_STORAGE_KEY].newValue === CLOUD_SYNC_MODE
-          ? 'local'
-          : (syncArea ? 'sync' : 'local');
-      });
-    }
+    const activeAreaName = syncArea ? 'sync' : (localArea ? 'local' : '');
+    const modeReady = Promise.resolve(activeAreaName);
 
     function getActiveArea() {
-      return activeAreaName === 'local' ? localArea : (syncArea || localArea);
+      return syncArea || localArea;
     }
 
     function invoke(method, args) {
@@ -323,7 +289,7 @@
 
     return Object.freeze({
       area,
-      name: 'provider',
+      name: activeAreaName,
       ready: modeReady,
       getActiveAreaName() { return activeAreaName; },
       isActiveAreaName(areaName) { return String(areaName || '') === activeAreaName; }
@@ -347,7 +313,6 @@
     SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
-    CLOUD_SYNC_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_BRAND,
     NEWTAB_TOP_CONTENT_TIME,

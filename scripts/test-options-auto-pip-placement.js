@@ -21,22 +21,18 @@ const labsContent = getContentBlock('labs');
 const updateNoticeTitleIndex = generalContent.indexOf('data-i18n="settings_update_notice_title"');
 const autoPipTitleIndex = generalContent.indexOf('data-i18n="settings_auto_pip_title"');
 const searchResultsSectionIndex = generalContent.indexOf('data-i18n="settings_search_results_section_title"');
-const accountSectionTitleIndex = accountContent.indexOf('data-i18n="cloud_account_section_title"');
 const syncTitleIndex = accountContent.indexOf('data-i18n="settings_sync_title"');
 
 assert.notStrictEqual(updateNoticeTitleIndex, -1, 'update notice switch should live in general settings');
 assert.notStrictEqual(autoPipTitleIndex, -1, 'auto picture-in-picture should live in general settings');
 assert.notStrictEqual(searchResultsSectionIndex, -1, 'general settings should include search results section');
-assert.notStrictEqual(accountSectionTitleIndex, -1, 'account settings should include the account and sync heading');
-assert.notStrictEqual(syncTitleIndex, -1, 'account settings should include Lumno configuration');
-assert.ok(
-  syncTitleIndex < accountSectionTitleIndex,
-  'browser sync configuration should appear above the account sync method heading'
-);
+assert.notStrictEqual(syncTitleIndex, -1, 'account settings should retain browser sync status');
+assert.doesNotMatch(accountContent, /cloud_|sync_action_|<button|<input/,
+  'account settings should contain only the built-in browser sync row');
 assert.doesNotMatch(
   generalContent,
   /data-i18n="settings_sync_title"/,
-  'Lumno configuration should no longer appear in general settings'
+  'browser sync status should no longer appear in general settings'
 );
 assert.ok(
   updateNoticeTitleIndex < autoPipTitleIndex,

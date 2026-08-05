@@ -64,7 +64,6 @@
       return false;
     }
   }
-  sendRuntimeMessage({ action: 'cloudRecordUsage', metric: 'newtab_opened' });
   function getNewtabVisualViewportInsets() {
     const visualViewport = window.visualViewport;
     if (!visualViewport) {
@@ -8267,25 +8266,6 @@
       leftKeys.every((key, index) => key === rightKeys[index] && left[key] === right[key]);
   }
 
-  function syncShortcutIconChanges(previousValue, nextValue) {
-    const previous = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(previousValue);
-    const next = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(nextValue);
-    Object.keys(previous).forEach((shortcutId) => {
-      if (!next[shortcutId]) {
-        sendRuntimeMessage({ action: 'cloudDeleteShortcutIcon', id: shortcutId });
-      }
-    });
-    Object.entries(next).forEach(([shortcutId, dataUrl]) => {
-      if (previous[shortcutId] !== dataUrl) {
-        sendRuntimeMessage({
-          action: 'cloudUploadShortcutIcon',
-          id: shortcutId,
-          dataUrl
-        });
-      }
-    });
-  }
-
   function persistShortcuts(nextShortcuts, toastMessage, iconChange) {
     const options = getShortcutStoreOptions();
     const normalized = NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(nextShortcuts, options);
@@ -8312,7 +8292,6 @@
       })
       .then((items) => {
         newtabShortcuts = Array.isArray(items) ? items : normalized;
-        if (iconsChanged) syncShortcutIconChanges(previousIcons, nextIcons);
         pruneShortcutFavicons(newtabShortcuts);
         renderShortcuts();
         if (toastMessage) {

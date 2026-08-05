@@ -8,7 +8,6 @@ const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8')
 const contentSource = fs.readFileSync('src/content/selection-quick-actions.js', 'utf8');
 const iconSource = fs.readFileSync('src/shared/selection-action-icons.js', 'utf8');
 const butterflySource = fs.readFileSync('src/shared/selection-butterfly.js', 'utf8');
-const cloudSchemaSource = fs.readFileSync('src/shared/cloud-sync-schema.js', 'utf8');
 const selectStyles = fs.readFileSync('src/shared/custom-select.css', 'utf8');
 const localeNames = ['en', 'ja', 'zh_CN', 'zh_TW'];
 const storageKey = '_x_extension_selection_quick_actions_enabled_2026_unique_';
@@ -86,11 +85,6 @@ assert(
   /const SYNC_KEYS = \[[\s\S]*SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
   'selection trigger style should participate in sync/export/import'
 );
-assert(cloudSchemaSource.includes(storageKey), 'cloud settings schema should include the selection setting');
-assert(cloudSchemaSource.includes(providerStorageKey), 'cloud settings schema should include the selection provider');
-assert(cloudSchemaSource.includes(iconSetStorageKey), 'cloud settings schema should include the selection icon set');
-assert(cloudSchemaSource.includes(triggerStyleStorageKey), 'cloud settings schema should include the selection trigger style');
-
 assert(
   /selectionQuickActions:[\s\S]*runSelectionQuickAction[\s\S]*handleSelectionQuickActionMessage/.test(backgroundSource),
   'background message routing should isolate the selection quick action feature'

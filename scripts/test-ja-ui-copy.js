@@ -79,7 +79,7 @@ const expectedMessages = {
   sync_tooltip_import: '設定を読み込む',
   sync_export_done: '設定を書き出しました',
   sync_import_done: '読み込み完了',
-  sync_status_hint: 'ブラウザにログインすると設定が自動同期されます。別のブラウザでは手動で書き出し/読み込みしてください',
+  sync_status_hint: 'Lumno の設定は Chrome の標準同期で自動的に同期されます',
   copy_page_url_failed_permission: 'コピーできませんでした。権限を確認してください'
 };
 

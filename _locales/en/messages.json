@@ -1556,13 +1556,13 @@
     "message": "Browser sync"
   },
   "settings_sync_desc": {
-    "message": "Check sync status, sync manually, or import/export settings"
+    "message": "Settings sync through Chrome's built-in sync"
   },
   "sync_status_unavailable": {
     "message": "Sync unavailable"
   },
   "sync_status_unavailable_hint": {
-    "message": "Sync unavailable: not signed in or browser doesn't support sync."
+    "message": "Sync unavailable: Chrome Sync is off or unsupported."
   },
   "sync_status_ready": {
     "message": "Auto sync enabled"
@@ -1598,7 +1598,7 @@
     "message": "Manual sync"
   },
   "sync_status_hint": {
-    "message": "When signed in, settings sync with your browser account; cross-browser requires manual export/import."
+    "message": "Lumno settings sync automatically through Chrome's built-in sync."
   },
   "sync_export_done": {
     "message": "Settings exported"
@@ -1899,78 +1899,5 @@
   "command_tabs_action": { "message": "Search tabs" },
   "command_copy_title": { "message": "Copy current page link" },
   "command_copy_action": { "message": "Copy link" },
-  "settings_tab_account": { "message": "Account & sync" },
-  "cloud_account_section_title": { "message": "Sync method" },
-  "cloud_account_section_desc": { "message": "Sync Lumno settings, wallpapers, and usage stats without uploading browser privacy data." },
-  "cloud_sync_method_browser_title": { "message": "Browser sync" },
-  "cloud_sync_method_browser_current": { "message": "Current" },
-  "cloud_sync_method_browser_limit_scope": { "message": "No Lumno sign-in; works across devices" },
-  "cloud_sync_method_browser_limit_cross_browser": { "message": "Same browser only" },
-  "cloud_sync_method_browser_limit_wallpaper": { "message": "No wallpaper or shortcut icon sync" },
-  "cloud_sync_method_account_title": { "message": "Lumno sync" },
-  "cloud_sync_method_account_benefit_scope": { "message": "Works across browsers; move your setup easily" },
-  "cloud_sync_method_account_benefit_restore": { "message": "Syncs wallpapers and shortcut icons" },
-  "cloud_sync_method_account_benefit_security": { "message": "Browsing data is never synced" },
-  "cloud_sync_method_account_benefit_security_info_label": { "message": "Security details" },
-  "cloud_sync_method_account_benefit_security_tooltip": { "message": "Syncs only Lumno settings, shortcut icons, uploaded wallpapers, and usage stats—not your browsing history, current page, page titles, search terms, bookmarks, or cookies." },
-  "cloud_status_loading": { "message": "Checking…" },
-  "cloud_status_unconfigured": { "message": "Not configured" },
-  "cloud_status_error": { "message": "Sync issue" },
-  "cloud_status_connected": { "message": "Connected" },
-  "cloud_status_signed_out": { "message": "Signed out" },
-  "cloud_unconfigured_title": { "message": "Cloud sync isn't connected" },
-  "cloud_unconfigured_desc": { "message": "Browser sync remains active. Account features will be available once Supabase is deployed and its public project URL and Publishable Key are configured." },
-  "cloud_signin_title": { "message": "Sign in to enable account sync" },
-  "cloud_signin_desc": { "message": "Use the same sign-in method each time. Google and GitHub accounts with different email addresses remain separate and can't be linked or merged." },
-  "cloud_web_signin": { "message": "Enable account sync" },
-  "cloud_signin_provider_support_prefix": { "message": "Supports" },
-  "cloud_signin_provider_support_suffix": { "message": "OAuth" },
-  "cloud_signin_provider_support_aria": { "message": "Supports Google and GitHub OAuth" },
-  "cloud_web_signin_security": { "message": "You'll return automatically after authorization. Your password and third-party credentials are never shared with the extension." },
-  "cloud_consent_title": { "message": "Enable account sync" },
-  "cloud_consent_intro": { "message": "You'll be taken to Lumno's secure sign-in page. Once you authorize, account sync and product usage analytics will be enabled." },
-  "cloud_consent_account_isolation": { "message": "Use the same sign-in method each time. Google and GitHub accounts with different email addresses remain separate and can't be linked or merged. The same verified email address may be recognized as the same account." },
-  "cloud_last_signin_hint": { "message": "You last signed in with {provider}. Use the same method to continue." },
-  "cloud_signin_status_waiting": { "message": "Waiting for sign-in…" },
-  "cloud_signin_status_checking": { "message": "Confirming sign-in…" },
-  "cloud_signin_status_finishing": { "message": "Signed in. Finishing initial sync…" },
-  "cloud_signin_status_done": { "message": "Signed in. Account sync is on." },
-  "cloud_signin_status_sync_retry": { "message": "Signed in. Initial sync will retry automatically." },
-  "cloud_consent_sync": { "message": "Your account sync includes Lumno settings, custom shortcuts, blocklist rules, and wallpapers and icons you upload." },
-  "cloud_consent_media_review": { "message": "Uploaded wallpapers and custom icons are compressed and automatically checked for content safety. Media is not stored unless the check explicitly allows it." },
-  "cloud_consent_analytics": { "message": "Product usage analytics: feature-use counts and account-linked configuration values (booleans, enums, and quantities). Detailed records are retained for up to 24 months." },
-  "cloud_consent_excluded": { "message": "We never upload your browsing history, current page, page titles, tab content, search terms, bookmark content, or cookies." },
-  "cloud_consent_control": { "message": "Only this device signs out. Local settings keep working, while your cloud account and other devices stay signed in. Signing back into the same account checks server versions before multi-device sync resumes." },
-  "cloud_consent_cancel": { "message": "Cancel" },
-  "cloud_consent_continue": { "message": "Agree and continue" },
-  "cloud_signed_in_title": { "message": "Signed in" },
-  "cloud_sync_now": { "message": "Sync now" },
-  "cloud_signout": { "message": "Sign out this device" },
-  "cloud_data_scope_title": { "message": "Data scope" },
-  "cloud_data_scope_sync": { "message": "Synced data: Lumno settings, custom shortcuts, blocklist rules, and wallpapers you upload." },
-  "cloud_data_scope_identity": { "message": "Identity data: email address, generated user ID, device ID, extension version, and general platform type." },
-  "cloud_data_scope_usage": { "message": "Usage analytics: feature-use counts and account-linked configuration values (booleans, enums, and quantities). Detailed records are retained for up to 24 months." },
-  "cloud_data_scope_excluded": { "message": "We never collect your browsing history, current page, page titles, tab content, search terms, bookmark content, or cookies." },
-  "cloud_data_scope_control": { "message": "You can sign out only this device to stop sync and analytics. Local settings keep working, and signing back into the same account safely merges offline changes. You can also export local settings or permanently delete your account on the Lumno website." },
-  "cloud_privacy_policy_link": { "message": "View the privacy policy and full list of uploaded data" },
-  "cloud_delete_title": { "message": "Permanently delete your account" },
-  "cloud_delete_desc": { "message": "You can only delete your account on Lumno's secure website; the extension can't delete it directly." },
-  "cloud_delete_action": { "message": "Manage account on Lumno's website" },
-  "cloud_error_not_configured": { "message": "Cloud sync isn't configured" },
-  "cloud_error_rate_limit": { "message": "Too many requests. Try again later." },
-  "cloud_error_signin_required": { "message": "Your session has expired. Sign in again." },
-  "cloud_error_web_not_configured": { "message": "Web sign-in isn't configured yet." },
-  "cloud_error_web_cancelled": { "message": "Sign-in was canceled." },
-  "cloud_error_web_security": { "message": "The sign-in security check failed. Please start again." },
-  "cloud_error_web_expired": { "message": "The sign-in request expired. Please start again." },
-  "cloud_error_generic": { "message": "Something went wrong. Please try again later." },
-  "cloud_sync_conflicts": { "message": "{count} settings have conflicts. The version on this device was kept for review." },
-  "cloud_sync_pending": { "message": "{count} changes are waiting to upload" },
-  "cloud_sync_last": { "message": "Last synced: {time}" },
-  "cloud_sync_ready_detail": { "message": "Cross-device sync via your account is enabled." },
-  "cloud_signin_done": { "message": "Signed in. Settings sync and product usage analytics are enabled." },
-  "cloud_sync_done": { "message": "Cloud sync is complete." },
-  "cloud_signout_done": { "message": "This device is signed out. Local settings keep working; other devices are unaffected." },
-  "cloud_delete_confirm": { "message": "This can't be undone. Type DELETE to permanently delete your account:" },
-  "cloud_delete_done": { "message": "Your account and cloud data have been deleted." }
+  "settings_tab_account": { "message": "Account & sync" }
 }
