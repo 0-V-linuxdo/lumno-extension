@@ -2383,6 +2383,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     applyNoTranslate(suggestionsContainer);
     suggestionsContainer.id = '_x_extension_suggestions_container_2024_unique_';
     suggestionsContainer.className = 'x-ov-suggestions-container';
+    suggestionsContainer.addEventListener('wheel', function(event) {
+      SUGGESTION_NAVIGATION.preventNumberShortcutWheel(event, suggestionsContainer);
+    }, { passive: false });
+    overlay.addEventListener('pointerdown', function() {
+      SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
+    }, true);
     suggestionsContainer.addEventListener('animationend', (event) => {
       if (!event || event.animationName !== '_x_ov_scope_result_enter_2026_unique_') {
         return;
@@ -4477,13 +4483,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       target.style.setProperty('--x-ext-icon-color', resolvedTheme.accent);
     }
 
-    function applyMarkVariables(target, theme) {
+    function applyMarkVariables(target, theme, active) {
       if (!target || !theme) {
         return;
       }
       const resolvedTheme = getThemeForMode(theme);
-      target.style.setProperty('--x-ext-mark-bg', resolvedTheme.markBg);
-      target.style.setProperty('--x-ext-mark-text', resolvedTheme.markText);
+      const markBg = active
+        ? resolvedTheme.activeMarkBg || resolvedTheme.markBg
+        : resolvedTheme.markBg;
+      const markText = active
+        ? resolvedTheme.activeMarkText || resolvedTheme.markText
+        : resolvedTheme.markText;
+      target.style.setProperty('--x-ext-mark-bg', markBg);
+      target.style.setProperty('--x-ext-mark-text', markText);
     }
 
     function preloadThemeFromFavicon(url, dataUrl, hostOverride) {
@@ -6623,6 +6635,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       syncSuggestionActionModifiersFromEvent(e);
+      if (SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+        e,
+        suggestionItems,
+        suggestionsContainer
+      )) {
+        return;
+      }
       if (isImeCompositionEvent(e)) {
         return;
       }
@@ -6942,6 +6961,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         e.stopImmediatePropagation();
         return;
       }
+      syncSuggestionActionModifiersFromEvent(e);
+      if (e.type === 'keydown' &&
+          SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+            e,
+            suggestionItems,
+            suggestionsContainer
+          )) {
+        e.stopImmediatePropagation();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return;
       }
@@ -6965,6 +6994,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     document.addEventListener('keyup', keyupHandler);
     overlayModifierBlurHandler = function() {
       setSuggestionActionModifiersActive(false, false, false);
+      SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
     };
     window.addEventListener('blur', overlayModifierBlurHandler);
 

@@ -26,6 +26,41 @@ const localeMessages = Object.fromEntries(localeNames.map((locale) => [
   locale,
   JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'))
 ]));
+const expectedBrowserSyncHints = {
+  en: 'Lumno settings sync automatically through your current browser\'s built-in sync service. Sync works across devices signed in to the same browser account, but not across different browsers.',
+  ja: 'Lumno の設定は、現在のブラウザの標準同期サービスで自動的に同期されます。同じブラウザアカウントでログインしている端末間のみ同期でき、異なるブラウザ間では同期できません。',
+  zh_CN: 'Lumno 配置通过当前浏览器的内置同步服务自动同步，仅支持同一浏览器账号下的设备，不支持跨浏览器同步。',
+  zh_TW: 'Lumno 設定會透過目前瀏覽器的內建同步服務自動同步；僅支援同一瀏覽器帳號下的裝置，不支援跨瀏覽器同步。'
+};
+const expectedBrowserSyncDescriptions = {
+  en: 'Settings sync automatically through your current browser\'s built-in sync service',
+  ja: '現在のブラウザの標準同期サービスで設定を自動的に同期します',
+  zh_CN: '配置通过当前浏览器的内置同步服务自动同步',
+  zh_TW: '設定會透過目前瀏覽器的內建同步服務自動同步'
+};
+const expectedBrowserSyncUnavailableHints = {
+  en: 'Sync unavailable: check whether your current browser supports built-in sync and has it turned on.',
+  ja: '同期できません。現在のブラウザが標準同期に対応し、同期が有効になっているか確認してください。',
+  zh_CN: '同步不可用：请检查当前浏览器是否支持并已开启内置同步。',
+  zh_TW: '同步無法使用：請檢查目前瀏覽器是否支援並已開啟內建同步。'
+};
+localeNames.forEach((locale) => {
+  assert.strictEqual(
+    String(localeMessages[locale].settings_sync_desc?.message || ''),
+    expectedBrowserSyncDescriptions[locale],
+    `${locale} browser sync description should refer to the current browser instead of Chrome`
+  );
+  assert.strictEqual(
+    String(localeMessages[locale].sync_status_hint?.message || ''),
+    expectedBrowserSyncHints[locale],
+    `${locale} browser sync tooltip should explain same-browser support and the cross-browser boundary`
+  );
+  assert.strictEqual(
+    String(localeMessages[locale].sync_status_unavailable_hint?.message || ''),
+    expectedBrowserSyncUnavailableHints[locale],
+    `${locale} unavailable sync tooltip should refer to the current browser instead of Chrome`
+  );
+});
 const optionsMigratesSyncKeys = /migrateStorageIfNeeded\(SYNC_KEYS\);/.test(optionsSource);
 const chromeSyncKeys = settings.CHROME_SYNC_STORAGE_KEYS;
 const backgroundMigratesChromeSyncContract = /migrateStorageIfNeeded\(CHROME_SYNC_STORAGE_KEYS\);/.test(

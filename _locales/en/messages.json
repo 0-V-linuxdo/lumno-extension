@@ -69,27 +69,23 @@
     "message": "Selection quick actions"
   },
   "settings_selection_quick_actions_desc": {
-    "message": "Show contextual AI actions for selected text and open results in a background Lumno AI tab group"
+    "message": "Show contextual AI actions for selected text and open results in a new tab"
   },
   "settings_selection_quick_actions_provider_title": {
     "message": "Preferred provider"
   },
-  "settings_selection_quick_actions_trigger_style_title": {
-    "message": "Selection trigger icon"
+  "settings_selection_quick_actions_group_title": {
+    "message": "Create a tab group"
   },
-  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
-  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno Butterfly" },
-  "settings_selection_quick_actions_icon_set_title": {
-    "message": "Action icons"
+  "settings_selection_quick_actions_group_desc": {
+    "message": "Open results in the background and collect them in the “AI 查询” tab group"
   },
-  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
-  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
-  "selection_quick_action_ask": { "message": "Ask AI" },
+  "selection_quick_action_ask": { "message": "Answer" },
   "selection_quick_action_translate": { "message": "Translate" },
   "selection_quick_action_explain": { "message": "Explain" },
   "selection_quick_action_summarize": { "message": "Summarize" },
   "selection_quick_action_search": { "message": "Research" },
-  "selection_quick_action_calculate": { "message": "Convert" },
+  "selection_quick_action_calculate": { "message": "Calculate" },
   "selection_quick_action_open_menu": { "message": "Use Lumno with selected text" },
   "selection_quick_action_more": { "message": "More actions" },
   "selection_quick_action_sending": { "message": "Opening in the background…" },
@@ -1555,14 +1551,17 @@
   "settings_sync_title": {
     "message": "Browser sync"
   },
+  "settings_sync_section_title": {
+    "message": "Sync method"
+  },
   "settings_sync_desc": {
-    "message": "Settings sync through Chrome's built-in sync"
+    "message": "Settings sync automatically through your current browser's built-in sync service"
   },
   "sync_status_unavailable": {
     "message": "Sync unavailable"
   },
   "sync_status_unavailable_hint": {
-    "message": "Sync unavailable: Chrome Sync is off or unsupported."
+    "message": "Sync unavailable: check whether your current browser supports built-in sync and has it turned on."
   },
   "sync_status_ready": {
     "message": "Auto sync enabled"
@@ -1598,7 +1597,7 @@
     "message": "Manual sync"
   },
   "sync_status_hint": {
-    "message": "Lumno settings sync automatically through Chrome's built-in sync."
+    "message": "Lumno settings sync automatically through your current browser's built-in sync service. Sync works across devices signed in to the same browser account, but not across different browsers."
   },
   "sync_export_done": {
     "message": "Settings exported"
@@ -1740,6 +1739,12 @@
   },
   "shortcut_reference_search_navigate_desc": {
     "message": "Move the active result in Lumno search and New Tab"
+  },
+  "shortcut_reference_search_number_jump_title": {
+    "message": "Jump to a numbered result"
+  },
+  "shortcut_reference_search_number_jump_desc": {
+    "message": "Enter number jump mode, then press 0–9 to activate the matching result"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "Run selected action"

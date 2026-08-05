@@ -128,6 +128,14 @@ assert.match(
   'React inactive suggestions should clear row state for dark favicon styling'
 );
 
+[newtabJs, overlayJs].forEach((source) => {
+  assert.match(
+    source,
+    /function applyMarkVariables\(target, theme, active\)[\s\S]*?active\s*\?\s*resolvedTheme\.activeMarkBg\s*\|\|\s*resolvedTheme\.markBg\s*:\s*resolvedTheme\.markBg/,
+    'suggestion theme bridges should strengthen match highlighting only for the selected row'
+  );
+});
+
 assert.match(
   suggestionsReact,
   /data-favicon=\{isFavicon \? 'true' : 'false'\}/,

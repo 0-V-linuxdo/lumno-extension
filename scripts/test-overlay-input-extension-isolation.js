@@ -72,6 +72,8 @@ const { window } = dom;
 const { document } = window;
 const overlay = document.getElementById('overlay');
 const host = document.getElementById('lumno-host');
+const suggestionsContainer = document.createElement('div');
+overlay.appendChild(suggestionsContainer);
 const shadowRoot = host.attachShadow({ mode: 'open' });
 const searchInput = document.createElement('input');
 const modeMenu = document.createElement('div');
@@ -82,6 +84,12 @@ const handledInputKeys = [];
 const handledModeMenuKeys = [];
 const hostPageKeys = [];
 const hostPageKeyups = [];
+const activatedSuggestionIndexes = [];
+const suggestionItems = Array.from({ length: 3 }, (_, index) => ({
+  click() {
+    activatedSuggestionIndexes.push(index);
+  }
+}));
 const createHandler = new Function(
   'overlay',
   'searchInput',
@@ -90,6 +98,9 @@ const createHandler = new Function(
   'isImeCompositionEvent',
   'handleSearchInputKeydown',
   'syncSuggestionActionModifiersFromEvent',
+  'SUGGESTION_NAVIGATION',
+  'suggestionItems',
+  'suggestionsContainer',
   `let overlayKeyCaptureHandler;\n${trustedHandlerSource}\nreturn overlayKeyCaptureHandler;`
 );
 const overlayKeyCaptureHandler = createHandler(
@@ -116,7 +127,10 @@ const overlayKeyCaptureHandler = createHandler(
       event.preventDefault();
     }
   },
-  () => {}
+  () => {},
+  require('../src/shared/suggestion-navigation.js'),
+  suggestionItems,
+  suggestionsContainer
 );
 
 window.addEventListener('keydown', overlayKeyCaptureHandler, true);
@@ -208,6 +222,48 @@ assert.deepStrictEqual(
   hostPageKeyups,
   [],
   'double-Tab keyup events should not reach host-page shortcuts'
+);
+
+const enterNumberModeEvent = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: ' ',
+  code: 'Space',
+  metaKey: true,
+  shiftKey: true
+});
+searchInput.dispatchEvent(enterNumberModeEvent);
+assert.strictEqual(
+  suggestionsContainer.getAttribute('data-number-shortcuts-active'),
+  'true',
+  'the Overlay capture handler should enter number jump mode'
+);
+assert.strictEqual(enterNumberModeEvent.defaultPrevented, true);
+
+const chooseNumberEvent = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: '2',
+  code: 'Digit2'
+});
+searchInput.dispatchEvent(chooseNumberEvent);
+assert.deepStrictEqual(
+  activatedSuggestionIndexes,
+  [2],
+  'a plain number should activate the mapped Overlay result'
+);
+assert.strictEqual(
+  suggestionsContainer.getAttribute('data-number-shortcuts-active'),
+  null,
+  'the Overlay number jump mode should close after selection'
+);
+assert.strictEqual(chooseNumberEvent.defaultPrevented, true);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'number jump mode keys should not reach host-page shortcuts'
 );
 
 modeMenu.focus();

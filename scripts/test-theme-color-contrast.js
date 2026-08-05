@@ -80,6 +80,31 @@ accentSamples.forEach((accent) => {
     assertContrast(theme.accent, theme.highlightBg, 4.5, `${label} themed icon`);
     assertContrast(theme.placeholderText, base, 4.5, `${label} themed placeholder`);
     assertContrast(theme.markText, theme.markBg, 4.5, `${label} highlighted text`);
+    const expectedPassiveMarkBg = faviconTheme.mixColor(
+      faviconTheme.getSaturationCappedColor(
+        theme.accentRgb,
+        mode === 'dark' ? 0.6 : 0.68
+      ),
+      base,
+      mode === 'dark' ? 0.74 : 0.78
+    );
+    assert.deepStrictEqual(
+      parseThemeColor(theme.markBg),
+      expectedPassiveMarkBg,
+      `${label} non-selected match should keep its original subtle surface`
+    );
+    assertContrast(
+      theme.activeMarkText,
+      theme.activeMarkBg,
+      4.5,
+      `${label} selected-row highlighted text`
+    );
+    assertContrast(
+      theme.activeMarkBg,
+      theme.highlightBg,
+      1.4,
+      `${label} highlighted match on selected row`
+    );
     assertContrast(theme.tagText, theme.tagBg, 4.5, `${label} action tag text`);
     assertContrast(theme.keyText, theme.keyBg, 4.5, `${label} shortcut key text`);
     assertContrast(theme.buttonText, theme.buttonBg, 4.5, `${label} action button text`);

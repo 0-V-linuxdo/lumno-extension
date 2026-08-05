@@ -18,8 +18,7 @@
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
-  const SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
-  const SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY = '_x_extension_selection_quick_actions_trigger_style_2026_unique_';
+  const SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_group_enabled_2026_unique_';
   // User-controlled preferences that are safe to store in chrome.storage.sync.
   // Keep generated caches, device state, and custom wallpaper media out of this list.
   const CHROME_SYNC_STORAGE_KEYS = Object.freeze([
@@ -58,8 +57,7 @@
     '_x_extension_pinned_tab_recovery_enabled_2026_unique_',
     '_x_extension_selection_quick_actions_enabled_2026_unique_',
     '_x_extension_selection_quick_actions_provider_2026_unique_',
-    '_x_extension_selection_quick_actions_icon_set_2026_unique_',
-    '_x_extension_selection_quick_actions_trigger_style_2026_unique_',
+    '_x_extension_selection_quick_actions_group_enabled_2026_unique_',
     '_x_extension_overlay_tab_priority_2024_unique_',
     '_x_extension_newtab_wordmark_visible_2026_unique_',
     '_x_extension_restricted_action_2024_unique_',
@@ -257,19 +255,8 @@
     return SELECTION_QUICK_ACTIONS_PROVIDER_KEYS.includes(key) ? key : 'gpt';
   }
 
-  function normalizeSelectionQuickActionsIconSet(value) {
-    const key = String(value || '').trim().toLowerCase();
-    return key === 'hugeicons' ? key : 'remix';
-  }
-
-  function normalizeSelectionQuickActionsTriggerStyle(value) {
-    return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
-  }
-
-  function resolveSelectionQuickActionsTriggerStyle(...values) {
-    return values.some((value) => normalizeSelectionQuickActionsTriggerStyle(value) === 'butterfly')
-      ? 'butterfly'
-      : 'lumno';
+  function normalizeSelectionQuickActionsGroupEnabled(value) {
+    return value === true;
   }
 
   function normalizeThemePreference(value) {
@@ -364,8 +351,7 @@
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
-    SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
-    SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
+    SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
     CHROME_SYNC_STORAGE_KEYS,
     SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
@@ -394,9 +380,7 @@
     normalizeTabSwitcherEnabled,
     normalizeSelectionQuickActionsEnabled,
     normalizeSelectionQuickActionsProvider,
-    normalizeSelectionQuickActionsIconSet,
-    normalizeSelectionQuickActionsTriggerStyle,
-    resolveSelectionQuickActionsTriggerStyle,
+    normalizeSelectionQuickActionsGroupEnabled,
     normalizeThemePreference,
     normalizeThemeMode,
     createGlobalThemeModeStorageUpdate,

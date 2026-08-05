@@ -69,27 +69,23 @@
     "message": "划词快捷操作"
   },
   "settings_selection_quick_actions_desc": {
-    "message": "根据所选文字动态显示 AI 操作，并在后台的 Lumno AI 标签组中打开结果"
+    "message": "根据所选文字动态显示 AI 操作，并在新标签页中打开结果"
   },
   "settings_selection_quick_actions_provider_title": {
     "message": "优先 Provider"
   },
-  "settings_selection_quick_actions_trigger_style_title": {
-    "message": "划词入口图标"
+  "settings_selection_quick_actions_group_title": {
+    "message": "新建标签组"
   },
-  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
-  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno 蝴蝶" },
-  "settings_selection_quick_actions_icon_set_title": {
-    "message": "操作图标"
+  "settings_selection_quick_actions_group_desc": {
+    "message": "在后台将结果归入「AI 查询」标签组"
   },
-  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
-  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
-  "selection_quick_action_ask": { "message": "问 AI" },
+  "selection_quick_action_ask": { "message": "解答" },
   "selection_quick_action_translate": { "message": "翻译" },
   "selection_quick_action_explain": { "message": "解释" },
   "selection_quick_action_summarize": { "message": "总结" },
-  "selection_quick_action_search": { "message": "查资料" },
-  "selection_quick_action_calculate": { "message": "换算" },
+  "selection_quick_action_search": { "message": "调研" },
+  "selection_quick_action_calculate": { "message": "计算" },
   "selection_quick_action_open_menu": { "message": "使用 Lumno 处理所选文字" },
   "selection_quick_action_more": { "message": "更多操作" },
   "selection_quick_action_sending": { "message": "正在后台打开…" },
@@ -1555,14 +1551,17 @@
   "settings_sync_title": {
     "message": "浏览器内置同步"
   },
+  "settings_sync_section_title": {
+    "message": "同步方式"
+  },
   "settings_sync_desc": {
-    "message": "配置通过 Chrome 浏览器内置同步自动同步"
+    "message": "配置通过当前浏览器的内置同步服务自动同步"
   },
   "sync_status_unavailable": {
     "message": "同步不可用"
   },
   "sync_status_unavailable_hint": {
-    "message": "同步不可用：Chrome 同步未开启或浏览器不支持同步"
+    "message": "同步不可用：请检查当前浏览器是否支持并已开启内置同步。"
   },
   "sync_status_ready": {
     "message": "自动同步已开启"
@@ -1598,7 +1597,7 @@
     "message": "手动同步"
   },
   "sync_status_hint": {
-    "message": "Lumno 配置通过 Chrome 浏览器内置同步自动同步"
+    "message": "Lumno 配置通过当前浏览器的内置同步服务自动同步，仅支持同一浏览器账号下的设备，不支持跨浏览器同步。"
   },
   "sync_export_done": {
     "message": "已导出配置"
@@ -1740,6 +1739,12 @@
   },
   "shortcut_reference_search_navigate_desc": {
     "message": "在聚焦搜索和新标签页中移动当前候选项"
+  },
+  "shortcut_reference_search_number_jump_title": {
+    "message": "按编号跳转搜索结果"
+  },
+  "shortcut_reference_search_number_jump_desc": {
+    "message": "进入数字跳转模式后，按 0–9 执行对应候选项"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "执行当前候选项"

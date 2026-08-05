@@ -21,14 +21,38 @@ const labsContent = getContentBlock('labs');
 const updateNoticeTitleIndex = generalContent.indexOf('data-i18n="settings_update_notice_title"');
 const autoPipTitleIndex = generalContent.indexOf('data-i18n="settings_auto_pip_title"');
 const searchResultsSectionIndex = generalContent.indexOf('data-i18n="settings_search_results_section_title"');
+const syncSectionTitleIndex = accountContent.indexOf('data-i18n="settings_sync_section_title"');
 const syncTitleIndex = accountContent.indexOf('data-i18n="settings_sync_title"');
 
 assert.notStrictEqual(updateNoticeTitleIndex, -1, 'update notice switch should live in general settings');
 assert.notStrictEqual(autoPipTitleIndex, -1, 'auto picture-in-picture should live in general settings');
 assert.notStrictEqual(searchResultsSectionIndex, -1, 'general settings should include search results section');
+assert.notStrictEqual(syncSectionTitleIndex, -1, 'account settings should label the sync method section');
 assert.notStrictEqual(syncTitleIndex, -1, 'account settings should retain browser sync status');
-assert.doesNotMatch(accountContent, /cloud_|sync_action_|<button|<input/,
-  'account settings should contain only the built-in browser sync row');
+assert.ok(syncSectionTitleIndex < syncTitleIndex, 'the sync method heading should appear above the browser sync row');
+assert.match(
+  optionsHtml,
+  /#_x_extension_account_settings_content_2026_unique_\s*\{\s*padding-bottom:\s*0;/,
+  'account settings bottom padding should match the panel side padding'
+);
+assert.doesNotMatch(accountContent, /cloud_/,
+  'account settings should not restore the paused account sync UI');
+[
+  ['_x_extension_sync_export_2024_unique_', 'sync_action_export'],
+  ['_x_extension_sync_import_2024_unique_', 'sync_action_import'],
+  ['_x_extension_sync_now_2024_unique_', 'sync_action_now']
+].forEach(([id, i18nKey]) => {
+  assert.match(
+    accountContent,
+    new RegExp(`<button[^>]+id="${id}"[\\s\\S]*?data-i18n="${i18nKey}"[\\s\\S]*?</button>`),
+    `${i18nKey} should remain available on the browser sync row`
+  );
+});
+assert.match(
+  accountContent,
+  /<input[^>]+id="_x_extension_sync_import_input_2024_unique_"[^>]+type="file"/,
+  'browser sync import should retain its file input'
+);
 assert.doesNotMatch(
   generalContent,
   /data-i18n="settings_sync_title"/,

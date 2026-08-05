@@ -95,6 +95,14 @@ const doubleTabDefinition = shortcutDefinitions.find((definition) => (
 ));
 assert.ok(doubleTabDefinition, 'Options should list the double-Tab search scope shortcut');
 assert.strictEqual(doubleTabDefinition.shortcut, 'Tab Tab');
+const numberJumpDefinition = shortcutDefinitions.find((definition) => (
+  definition.id === 'search-number-jump'
+));
+assert.ok(numberJumpDefinition, 'Options should list the number jump mode shortcut');
+assert.deepStrictEqual(numberJumpDefinition.defaultShortcut, {
+  default: 'Ctrl+Shift+Space → 0–9',
+  mac: 'Command+Shift+Space → 0–9'
+});
 const searchShortcutGroup = shortcutReference
   .getShortcutReferenceGroups({ platform: 'mac' })
   .find((group) => group.id === 'search');
@@ -104,6 +112,42 @@ assert.ok(
   )),
   'the double-Tab shortcut should appear in the global Options shortcut reference'
 );
+const macNumberJump = searchShortcutGroup.items.find((item) => (
+  item.id === 'search-number-jump'
+));
+const windowsNumberJump = shortcutReference
+  .getShortcutReferenceGroups({ platform: 'windows' })
+  .find((group) => group.id === 'search')
+  .items.find((item) => item.id === 'search-number-jump');
+assert.strictEqual(macNumberJump.shortcut, 'Command+Shift+Space → 0–9');
+assert.strictEqual(windowsNumberJump.shortcut, 'Ctrl+Shift+Space → 0–9');
+assert.strictEqual(
+  shortcutDisplay.formatShortcutReference(macNumberJump.shortcut, {
+    platform: 'mac'
+  }),
+  '⌘⇧Space → 0–9'
+);
+assert.strictEqual(
+  shortcutDisplay.formatShortcutReference(windowsNumberJump.shortcut, {
+    platform: 'windows'
+  }),
+  'Ctrl+Shift+Space → 0–9'
+);
+['en', 'ja', 'zh_CN', 'zh_TW'].forEach((locale) => {
+  const messages = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '..', `_locales/${locale}/messages.json`),
+    'utf8'
+  ));
+  [
+    'shortcut_reference_search_number_jump_title',
+    'shortcut_reference_search_number_jump_desc'
+  ].forEach((key) => {
+    assert.ok(
+      messages[key] && String(messages[key].message || '').trim(),
+      `${locale} should localize ${key}`
+    );
+  });
+});
 shortcutDefinitions.forEach((definition) => {
   const macSource = definition.shortcut ||
     (definition.defaultShortcut && definition.defaultShortcut.mac) ||

@@ -5875,13 +5875,19 @@
     target.style.setProperty('--x-nt-suggestion-hover-bg', hover.bg);
   }
 
-  function applyMarkVariables(target, theme) {
+  function applyMarkVariables(target, theme, active) {
     if (!target || !theme) {
       return;
     }
     const resolvedTheme = getThemeForMode(theme);
-    target.style.setProperty('--x-ext-mark-bg', resolvedTheme.markBg);
-    target.style.setProperty('--x-ext-mark-text', resolvedTheme.markText);
+    const markBg = active
+      ? resolvedTheme.activeMarkBg || resolvedTheme.markBg
+      : resolvedTheme.markBg;
+    const markText = active
+      ? resolvedTheme.activeMarkText || resolvedTheme.markText
+      : resolvedTheme.markText;
+    target.style.setProperty('--x-ext-mark-bg', markBg);
+    target.style.setProperty('--x-ext-mark-text', markText);
   }
 
   const faviconDataCache = new Map();
@@ -6295,6 +6301,12 @@
     getRiSvg
   });
   const suggestionsContainer = pageStructureRuntime.suggestions.container;
+  suggestionsContainer.addEventListener('wheel', function(event) {
+    SUGGESTION_NAVIGATION.preventNumberShortcutWheel(event, suggestionsContainer);
+  }, { passive: false });
+  document.addEventListener('pointerdown', function() {
+    SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
+  }, true);
   const suggestionsSurface = pageStructureRuntime.suggestions.surface;
   const suggestionsOutline = pageStructureRuntime.suggestions.outline;
   const bookmarkSection = pageStructureRuntime.bookmark.section;
@@ -15551,6 +15563,13 @@
 
   document.addEventListener('keydown', function(event) {
     syncSuggestionActionModifiersFromEvent(event);
+    if (SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+      event,
+      suggestionItems,
+      suggestionsContainer
+    )) {
+      return;
+    }
     if (event.key !== 'Tab') {
       return;
     }
@@ -15566,6 +15585,7 @@
   }, true);
   window.addEventListener('blur', function() {
     setSuggestionActionModifiersActive(false, false, false);
+    SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
   });
 
   getSiteSearchProviders();

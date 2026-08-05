@@ -69,27 +69,23 @@
     "message": "選択テキストのクイック操作"
   },
   "settings_selection_quick_actions_desc": {
-    "message": "選択したテキストに応じて AI 操作を表示し、結果をバックグラウンドの Lumno AI タブグループで開きます"
+    "message": "選択したテキストに応じて AI 操作を表示し、結果を新しいタブで開きます"
   },
   "settings_selection_quick_actions_provider_title": {
     "message": "優先プロバイダー"
   },
-  "settings_selection_quick_actions_trigger_style_title": {
-    "message": "選択トリガーアイコン"
+  "settings_selection_quick_actions_group_title": {
+    "message": "新しいタブグループを作成"
   },
-  "selection_quick_actions_trigger_style_lumno": { "message": "Lumno" },
-  "selection_quick_actions_trigger_style_butterfly": { "message": "Lumno バタフライ" },
-  "settings_selection_quick_actions_icon_set_title": {
-    "message": "操作アイコン"
+  "settings_selection_quick_actions_group_desc": {
+    "message": "結果をバックグラウンドで開き、「AI 查询」タブグループにまとめます"
   },
-  "selection_quick_actions_icon_set_remix": { "message": "Remix" },
-  "selection_quick_actions_icon_set_hugeicons": { "message": "Hugeicons" },
-  "selection_quick_action_ask": { "message": "AI に質問" },
+  "selection_quick_action_ask": { "message": "回答" },
   "selection_quick_action_translate": { "message": "翻訳" },
   "selection_quick_action_explain": { "message": "説明" },
   "selection_quick_action_summarize": { "message": "要約" },
-  "selection_quick_action_search": { "message": "調べる" },
-  "selection_quick_action_calculate": { "message": "換算" },
+  "selection_quick_action_search": { "message": "調査" },
+  "selection_quick_action_calculate": { "message": "計算" },
   "selection_quick_action_open_menu": { "message": "選択したテキストを Lumno で処理" },
   "selection_quick_action_more": { "message": "その他の操作" },
   "selection_quick_action_sending": { "message": "バックグラウンドで開いています…" },
@@ -1555,14 +1551,17 @@
   "settings_sync_title": {
     "message": "ブラウザ内蔵同期"
   },
+  "settings_sync_section_title": {
+    "message": "同期方法"
+  },
   "settings_sync_desc": {
-    "message": "Chrome の標準同期で設定を同期します"
+    "message": "現在のブラウザの標準同期サービスで設定を自動的に同期します"
   },
   "sync_status_unavailable": {
     "message": "同期できません"
   },
   "sync_status_unavailable_hint": {
-    "message": "同期できません：Chrome 同期が無効か、ブラウザが対応していません"
+    "message": "同期できません。現在のブラウザが標準同期に対応し、同期が有効になっているか確認してください。"
   },
   "sync_status_ready": {
     "message": "自動同期オン"
@@ -1598,7 +1597,7 @@
     "message": "手動同期"
   },
   "sync_status_hint": {
-    "message": "Lumno の設定は Chrome の標準同期で自動的に同期されます"
+    "message": "Lumno の設定は、現在のブラウザの標準同期サービスで自動的に同期されます。同じブラウザアカウントでログインしている端末間のみ同期でき、異なるブラウザ間では同期できません。"
   },
   "sync_export_done": {
     "message": "設定を書き出しました"
@@ -1740,6 +1739,12 @@
   },
   "shortcut_reference_search_navigate_desc": {
     "message": "Lumno検索と新しいタブで選択中の候補を移動します"
+  },
+  "shortcut_reference_search_number_jump_title": {
+    "message": "番号で検索結果へ移動"
+  },
+  "shortcut_reference_search_number_jump_desc": {
+    "message": "番号ジャンプモードに入り、0～9で対応する候補を実行します"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "選択中の操作を実行"

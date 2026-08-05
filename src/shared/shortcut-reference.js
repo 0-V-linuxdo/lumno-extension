@@ -74,6 +74,17 @@
       shortcut: 'ArrowUp / ArrowDown'
     },
     {
+      id: 'search-number-jump',
+      titleKey: 'shortcut_reference_search_number_jump_title',
+      titleFallback: 'Jump to a numbered result',
+      descKey: 'shortcut_reference_search_number_jump_desc',
+      descFallback: 'Enter number jump mode, then press 0–9 to activate the matching result',
+      defaultShortcut: {
+        default: 'Ctrl+Shift+Space → 0–9',
+        mac: 'Command+Shift+Space → 0–9'
+      }
+    },
+    {
       id: 'search-confirm',
       titleKey: 'shortcut_reference_search_confirm_title',
       titleFallback: 'Run selected action',
@@ -164,6 +175,7 @@
         'show-search',
         'search-input-history',
         'search-navigate',
+        'search-number-jump',
         'search-confirm',
         'search-tab-mode',
         'search-open-scope-menu',
@@ -253,9 +265,15 @@
         shortcut
       });
     });
-    const fixedItems = FIXED_SHORTCUTS.map((item) => Object.assign(cloneShortcut(item), {
-      editable: false
-    }));
+    const fixedItems = FIXED_SHORTCUTS.map((item) => {
+      const definition = cloneShortcut(item);
+      return Object.assign(definition, {
+        editable: false,
+        shortcut: definition.defaultShortcut
+          ? getDefaultShortcut(definition, platform)
+          : definition.shortcut
+      });
+    });
     const itemById = new Map(browserItems.concat(fixedItems).map((item) => [item.id, item]));
     return REFERENCE_GROUPS.map((group) => ({
       id: group.id,

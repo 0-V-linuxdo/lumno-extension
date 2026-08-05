@@ -455,6 +455,9 @@
         display: none;
         padding-bottom: var(--settings-content-edge-space);
       }
+      #_x_extension_account_settings_content_2026_unique_ {
+        padding-bottom: 0;
+      }
       ._x_extension_settings_content_2024_unique_[data-active="true"] {
         display: flex;
       }
@@ -2667,7 +2670,10 @@
             </label>
           </div>
         </div>
-        <div class="_x_extension_settings_content_2024_unique_" data-content="account" data-active="false">
+        <div id="_x_extension_account_settings_content_2026_unique_" class="_x_extension_settings_content_2024_unique_" data-content="account" data-active="false">
+          <div class="_x_extension_setting_row_2024_unique_">
+            <p class="_x_extension_section_title_2024_unique_" data-i18n="settings_sync_section_title">同步方式</p>
+          </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_browser_sync_row_2026_unique_">
             <div>
               <div class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_ _x_extension_sync_title_with_status_2026_unique_">
@@ -2677,6 +2683,23 @@
                   <i class="ri-icon ri-size-12 ri-question-line" aria-hidden="true"></i>
                 </span>
               </div>
+            </div>
+            <div class="_x_extension_sync_actions_2024_unique_">
+              <div class="_x_extension_sync_buttons_2024_unique_">
+                <button id="_x_extension_sync_export_2024_unique_" class="_x_extension_sync_button_2024_unique_ _x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_ _x_extension_sync_icon_faded_2024_unique_" type="button">
+                  <i class="ri-icon ri-size-16 ri-upload-line" aria-hidden="true"></i>
+                  <span data-i18n="sync_action_export">导出配置</span>
+                </button>
+                <button id="_x_extension_sync_import_2024_unique_" class="_x_extension_sync_button_2024_unique_ _x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_ _x_extension_sync_icon_faded_2024_unique_" type="button">
+                  <i class="ri-icon ri-size-16 ri-download-line" aria-hidden="true"></i>
+                  <span data-i18n="sync_action_import">导入配置</span>
+                </button>
+                <button id="_x_extension_sync_now_2024_unique_" class="_x_extension_shortcut_submit_2024_unique_ _x_extension_shortcut_secondary_2024_unique_ _x_extension_shortcut_save_2024_unique_ _x_extension_sync_button_2024_unique_" type="button" data-tooltip="">
+                  <i class="ri-icon ri-size-16 _x_extension_sync_now_icon_2024_unique_ ri-refresh-line" aria-hidden="true"></i>
+                  <span data-i18n="sync_action_now">手动同步</span>
+                </button>
+              </div>
+              <input id="_x_extension_sync_import_input_2024_unique_" type="file" accept="application/json" style="display:none;" />
             </div>
           </div>
         </div>
@@ -3051,7 +3074,7 @@
                   <span class="_x_extension_shortcut_badge_2024_unique_ _x_extension_lab_beta_badge_2026_unique_">Beta</span>
                 </span>
               </p>
-              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="settings_selection_quick_actions_desc">根据所选文字动态显示 AI 操作，并在后台的 Lumno AI 标签组中打开结果</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="settings_selection_quick_actions_desc">根据所选文字动态显示 AI 操作，并在新标签页中打开结果</p>
             </div>
             <label class="_x_extension_switch_2024_unique_" for="_x_extension_selection_quick_actions_toggle_2026_unique_">
               <input id="_x_extension_selection_quick_actions_toggle_2026_unique_" type="checkbox">
@@ -3079,41 +3102,15 @@
               <div class="_x_extension_select_menu_2024_unique_" role="listbox"></div>
             </div>
           </div>
-          <div id="_x_extension_selection_quick_actions_trigger_style_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_setting_subrow_2026_unique_ _x_extension_selection_provider_row_2026_unique_" data-disabled="true" aria-disabled="true">
+          <div id="_x_extension_selection_quick_actions_group_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_setting_subrow_2026_unique_" data-disabled="true" aria-disabled="true">
             <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_selection_quick_actions_trigger_style_title">划词入口图标</p>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_selection_quick_actions_group_title">新建标签组</p>
+              <p class="_x_extension_setting_desc_2024_unique_" data-i18n="settings_selection_quick_actions_group_desc">在后台将结果归入「AI 查询」标签组</p>
             </div>
-            <div id="_x_extension_selection_quick_actions_trigger_style_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="划词入口图标" data-i18n-aria-label="settings_selection_quick_actions_trigger_style_title">
-              <span class="_x_extension_theme_indicator_2024_unique_" aria-hidden="true"></span>
-              <button class="_x_extension_theme_option_2024_unique_" type="button" role="tab" data-selection-quick-actions-trigger-style="lumno" data-active="true" aria-selected="true" aria-pressed="true" disabled>
-                <span data-i18n="selection_quick_actions_trigger_style_lumno">Lumno</span>
-              </button>
-              <button class="_x_extension_theme_option_2024_unique_" type="button" role="tab" data-selection-quick-actions-trigger-style="butterfly" data-active="false" aria-selected="false" aria-pressed="false" disabled>
-                <span data-i18n="selection_quick_actions_trigger_style_butterfly">Lumno Butterfly</span>
-              </button>
-              <select id="_x_extension_selection_quick_actions_trigger_style_select_2026_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true" disabled style="display: none;">
-                <option value="lumno" data-i18n="selection_quick_actions_trigger_style_lumno" selected>Lumno</option>
-                <option value="butterfly" data-i18n="selection_quick_actions_trigger_style_butterfly">Lumno Butterfly</option>
-              </select>
-            </div>
-          </div>
-          <div id="_x_extension_selection_quick_actions_icon_set_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_setting_subrow_2026_unique_ _x_extension_selection_provider_row_2026_unique_" data-disabled="true" aria-disabled="true">
-            <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_selection_quick_actions_icon_set_title">操作图标</p>
-            </div>
-            <div id="_x_extension_selection_quick_actions_icon_set_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="操作图标" data-i18n-aria-label="settings_selection_quick_actions_icon_set_title">
-              <span class="_x_extension_theme_indicator_2024_unique_" aria-hidden="true"></span>
-              <button class="_x_extension_theme_option_2024_unique_" type="button" role="tab" data-selection-quick-actions-icon-set="remix" data-active="true" aria-selected="true" aria-pressed="true" disabled>
-                <span data-i18n="selection_quick_actions_icon_set_remix">Remix</span>
-              </button>
-              <button class="_x_extension_theme_option_2024_unique_" type="button" role="tab" data-selection-quick-actions-icon-set="hugeicons" data-active="false" aria-selected="false" aria-pressed="false" disabled>
-                <span data-i18n="selection_quick_actions_icon_set_hugeicons">Hugeicons</span>
-              </button>
-              <select id="_x_extension_selection_quick_actions_icon_set_select_2026_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true" disabled style="display: none;">
-                <option value="remix" data-i18n="selection_quick_actions_icon_set_remix" selected>Remix</option>
-                <option value="hugeicons" data-i18n="selection_quick_actions_icon_set_hugeicons">Hugeicons</option>
-              </select>
-            </div>
+            <label class="_x_extension_switch_2024_unique_" for="_x_extension_selection_quick_actions_group_toggle_2026_unique_">
+              <input id="_x_extension_selection_quick_actions_group_toggle_2026_unique_" type="checkbox" disabled>
+              <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
+            </label>
           </div>
           <div class="_x_extension_setting_divider_wrap_2024_unique_" role="presentation">
             <div class="_x_extension_setting_divider_2024_unique_"></div>

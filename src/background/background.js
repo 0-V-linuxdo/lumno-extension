@@ -1304,6 +1304,7 @@ const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026
 const PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY = '_x_extension_pinned_tab_recovery_enabled_2026_unique_';
 const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
 const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
+const SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_group_enabled_2026_unique_';
 const FALLBACK_SHORTCUT_STORAGE_KEY = '_x_extension_fallback_hotkey_2024_unique_';
 const SEARCH_RESULT_PRIORITY_STORAGE_KEY = '_x_extension_search_result_priority_2026_unique_';
 const SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY = '_x_extension_search_result_source_types_2026_unique_';
@@ -4742,6 +4743,22 @@ function loadSelectionQuickActionsProvider() {
   });
 }
 
+function loadSelectionQuickActionsGroupEnabled() {
+  return new Promise((resolve) => {
+    if (!storageArea || typeof storageArea.get !== 'function') {
+      resolve(false);
+      return;
+    }
+    storageArea.get([SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY], (result) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        resolve(false);
+        return;
+      }
+      resolve(Boolean(result && result[SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY] === true));
+    });
+  });
+}
+
 let selectionTargetOpenQueue = Promise.resolve();
 
 function queueSelectionTargetOpen(options) {
@@ -4799,9 +4816,10 @@ function submitSelectionPromptInTab(provider, prompt, entryUrl, tab, targetInfo)
 }
 
 async function runSelectionQuickAction(request, sender) {
-  const [enabled, preferredProviderKey] = await Promise.all([
+  const [enabled, preferredProviderKey, groupEnabled] = await Promise.all([
     loadSelectionQuickActionsEnabled(),
-    loadSelectionQuickActionsProvider()
+    loadSelectionQuickActionsProvider(),
+    loadSelectionQuickActionsGroupEnabled()
   ]);
   if (!enabled) {
     return { ok: false, reason: 'selection-quick-actions-disabled' };
@@ -4835,7 +4853,8 @@ async function runSelectionQuickAction(request, sender) {
   const targetInfo = await queueSelectionTargetOpen({
     url: entryUrl,
     sourceTab,
-    groupTitle: 'Lumno AI',
+    groupEnabled,
+    groupTitle: SELECTION_TARGET.DEFAULT_GROUP_TITLE,
     groupColor: 'blue',
     splitViewAdapter: globalThis.LumnoChromeSplitViewAdapter || null
   });

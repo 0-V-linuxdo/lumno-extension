@@ -219,7 +219,8 @@ export interface SuggestionsViewOptions {
   ) => void;
   applyMarkVariables?: (
     target: SuggestionElement,
-    theme: ThemeValue
+    theme: ThemeValue,
+    active: boolean
   ) => void;
   applyFaviconOpticalAlignment?: (image: HTMLImageElement) => void;
   applyFaviconOpticalShift?: (image: HTMLImageElement) => void;
@@ -1050,7 +1051,8 @@ function applySearchActionStyles(
   );
   options.applyMarkVariables(
     item,
-    themed ? themeValue : options.defaultTheme
+    themed ? themeValue : options.defaultTheme,
+    active
   );
   if (item._xVisitButton && item._xActionModel) {
     const visible = options.actionModel.shouldShowVisitButton
@@ -1588,6 +1590,17 @@ function SuggestionIcon({
           tone={spec.tone || (failed ? 'subtext' : undefined)}
         />
       )}
+      {index < 10 ? (
+        <span
+          className={surfaceClass(
+            options,
+            'x-nt-suggestion-number-shortcut'
+          )}
+          aria-hidden="true"
+        >
+          {index}
+        </span>
+      ) : null}
     </span>
   );
 }

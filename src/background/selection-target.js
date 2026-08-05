@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  const DEFAULT_GROUP_TITLE = 'Lumno AI';
+  const DEFAULT_GROUP_TITLE = 'AI \u67E5\u8BE2';
   const DEFAULT_GROUP_COLOR = 'blue';
 
   function getChromeApi(chromeApi) {
@@ -246,6 +246,56 @@
     });
   }
 
+  function openInNewTab(chromeApi, options, callback) {
+    const api = getChromeApi(chromeApi);
+    const settings = options && typeof options === 'object' ? options : {};
+    const done = typeof callback === 'function' ? callback : () => {};
+    const sourceTab = settings.sourceTab && typeof settings.sourceTab === 'object'
+      ? settings.sourceTab
+      : null;
+    if (!api || !api.tabs || typeof api.tabs.create !== 'function') {
+      done({ ok: false, mode: 'none', tab: null, groupId: null, reason: 'tabs-api-unavailable' });
+      return;
+    }
+    const createProperties = {
+      url: String(settings.url || ''),
+      active: true
+    };
+    const windowId = sourceTab && typeof sourceTab.windowId === 'number'
+      ? sourceTab.windowId
+      : (typeof settings.windowId === 'number' ? settings.windowId : null);
+    if (typeof windowId === 'number') {
+      createProperties.windowId = windowId;
+    }
+    if (sourceTab && typeof sourceTab.id === 'number') {
+      createProperties.openerTabId = sourceTab.id;
+    }
+    try {
+      api.tabs.create(createProperties, (tab) => {
+        const createError = getRuntimeError(api, 'tab-create-failed');
+        if (createError || !tab || typeof tab.id !== 'number') {
+          done({
+            ok: false,
+            mode: 'none',
+            tab: tab || null,
+            groupId: null,
+            reason: createError || 'tab-unavailable'
+          });
+          return;
+        }
+        done({ ok: true, mode: 'tab', tab, groupId: null, reason: '' });
+      });
+    } catch (error) {
+      done({
+        ok: false,
+        mode: 'none',
+        tab: null,
+        groupId: null,
+        reason: error && error.message ? error.message : 'tab-create-threw'
+      });
+    }
+  }
+
   function openSelectionTarget(chromeApi, options, callback) {
     const settings = options && typeof options === 'object' ? options : {};
     const done = typeof callback === 'function' ? callback : () => {};
@@ -254,7 +304,11 @@
         done(splitResult);
         return;
       }
-      openInSelectionGroup(chromeApi, settings, done);
+      if (settings.groupEnabled === true) {
+        openInSelectionGroup(chromeApi, settings, done);
+        return;
+      }
+      openInNewTab(chromeApi, settings, done);
     });
   }
 
@@ -263,6 +317,7 @@
     DEFAULT_GROUP_TITLE,
     addTabToSelectionGroup,
     findExistingSelectionGroup,
+    openInNewTab,
     openInSelectionGroup,
     openSelectionTarget,
     tryOpenWithSplitViewAdapter,

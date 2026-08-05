@@ -79,7 +79,7 @@ const expectedMessages = {
   sync_tooltip_import: '設定を読み込む',
   sync_export_done: '設定を書き出しました',
   sync_import_done: '読み込み完了',
-  sync_status_hint: 'Lumno の設定は Chrome の標準同期で自動的に同期されます',
+  sync_status_hint: 'Lumno の設定は、現在のブラウザの標準同期サービスで自動的に同期されます。同じブラウザアカウントでログインしている端末間のみ同期でき、異なるブラウザ間では同期できません。',
   copy_page_url_failed_permission: 'コピーできませんでした。権限を確認してください'
 };
 

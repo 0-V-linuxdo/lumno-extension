@@ -16,8 +16,8 @@
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
-  const RUNTIME_REVISION = 'selection-toolbar-v14';
-  const RUNTIME_VERSION = 14;
+  const RUNTIME_REVISION = 'selection-toolbar-v18';
+  const RUNTIME_VERSION = 18;
   const RUNTIME_ID = chrome && chrome.runtime && chrome.runtime.id
     ? String(chrome.runtime.id)
     : '';
@@ -58,6 +58,8 @@
   let mainButton = null;
   let selectionLogo = null;
   let mainLabel = null;
+  let primaryDivider = null;
+  let actionsViewport = null;
   let menu = null;
   let status = null;
   let ownershipObserver = null;
@@ -66,14 +68,14 @@
   let toolbarEntranceCleanupTimer = null;
 
   const ACTION_COPY = Object.freeze({
-    ask: ['selection_quick_action_ask', 'Ask AI'],
+    ask: ['selection_quick_action_ask', 'Answer'],
     translate: ['selection_quick_action_translate', 'Translate'],
     explain: ['selection_quick_action_explain', 'Explain'],
     summarize: ['selection_quick_action_summarize', 'Summarize'],
     search: ['selection_quick_action_search', 'Research'],
-    calculate: ['selection_quick_action_calculate', 'Convert']
+    calculate: ['selection_quick_action_calculate', 'Calculate']
   });
-  const TOOLBAR_FALLBACK_ACTIONS = Object.freeze(['ask', 'search', 'translate']);
+  const TOOLBAR_FALLBACK_ACTIONS = Object.freeze(['explain', 'search', 'translate']);
 
   function createInlineIcon(definition, className) {
     if (!definition || !definition.body) {
@@ -198,18 +200,13 @@
     if (surface) {
       delete surface.dataset.toolbarEntranceState;
       surface.style.removeProperty('--lumno-entry-width');
-      surface.style.removeProperty('--lumno-entry-x');
-      surface.style.removeProperty('--lumno-entry-y');
-      surface.style.removeProperty('--lumno-entry-scale');
+      surface.style.removeProperty('--lumno-toolbar-collapsed-width');
+      surface.style.removeProperty('--lumno-toolbar-expanded-width');
+      surface.style.removeProperty('--lumno-toolbar-content-offset');
       surface.style.removeProperty('will-change');
     }
-    if (mainButton) {
-      mainButton.style.removeProperty('will-change');
-    }
     if (menu) {
-      menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
-        label.style.removeProperty('will-change');
-      });
+      menu.style.removeProperty('will-change');
     }
   }
 
@@ -218,10 +215,9 @@
       return;
     }
     surface.dataset.toolbarEntranceMode = 'fallback';
-    surface.style.setProperty('--lumno-entry-width', `${geometry.originWidth}px`);
-    surface.style.setProperty('--lumno-entry-x', `${geometry.translateX}px`);
-    surface.style.setProperty('--lumno-entry-y', `${geometry.translateY}px`);
-    surface.style.setProperty('--lumno-entry-scale', String(geometry.scale));
+    surface.style.setProperty('--lumno-toolbar-collapsed-width', `${geometry.collapsedWidth}px`);
+    surface.style.setProperty('--lumno-toolbar-expanded-width', `${geometry.expandedWidth}px`);
+    surface.style.setProperty('--lumno-toolbar-content-offset', `${geometry.contentOffset}px`);
     surface.dataset.toolbarEntranceState = 'from';
     void surface.offsetWidth;
     toolbarEntranceFrame = window.setTimeout(() => {
@@ -235,10 +231,9 @@
         toolbarEntranceCleanupTimer = null;
         if (surface) {
           delete surface.dataset.toolbarEntranceState;
-          surface.style.removeProperty('--lumno-entry-width');
-          surface.style.removeProperty('--lumno-entry-x');
-          surface.style.removeProperty('--lumno-entry-y');
-          surface.style.removeProperty('--lumno-entry-scale');
+          surface.style.removeProperty('--lumno-toolbar-collapsed-width');
+          surface.style.removeProperty('--lumno-toolbar-expanded-width');
+          surface.style.removeProperty('--lumno-toolbar-content-offset');
         }
       }, 360);
     }, 0);
@@ -277,64 +272,58 @@
             top: destinationRect.top + 4,
             width: 30
           };
-      const originX = originRect.left + originRect.width / 2;
-      const originY = originRect.top + originRect.height / 2;
-      const destinationX = destinationButtonRect.left + destinationButtonRect.width / 2;
-      const destinationY = destinationButtonRect.top + destinationButtonRect.height / 2;
+      const buttonInset = Math.max(0, destinationButtonRect.left - destinationRect.left);
+      const measuredViewportRect = actionsViewport && actionsViewport.getBoundingClientRect
+        ? actionsViewport.getBoundingClientRect()
+        : null;
+      const fixedRegionWidth = measuredViewportRect && measuredViewportRect.left > destinationRect.left
+        ? measuredViewportRect.left - destinationRect.left + buttonInset
+        : destinationButtonRect.width + buttonInset * 2 + 7;
+      const collapsedWidth = Math.max(
+        1,
+        Math.min(
+          destinationRect.width,
+          Math.max(originRect.width, fixedRegionWidth)
+        )
+      );
+      const actionsWidth = measuredViewportRect && measuredViewportRect.width > 0
+        ? measuredViewportRect.width
+        : Math.max(0, destinationRect.width - collapsedWidth);
       const geometry = {
-        originWidth: Math.max(1, Math.min(destinationRect.width, originRect.width)),
-        scale: Math.max(0.4, Math.min(1, originRect.width / destinationButtonRect.width)),
-        translateX: originX - destinationX,
-        translateY: originY - destinationY
+        collapsedWidth,
+        contentOffset: actionsWidth,
+        expandedWidth: destinationRect.width
       };
       if (!useWebAnimations) {
         runToolbarEntranceFallback(geometry);
         return;
       }
       surface.dataset.toolbarEntranceMode = 'web-animations';
-      surface.style.willChange = 'clip-path';
-      mainButton.style.willChange = 'transform';
+      surface.style.willChange = 'width';
+      menu.style.willChange = 'transform';
       const surfaceAnimation = surface.animate([
-        { clipPath: `inset(0 ${Math.max(0, destinationRect.width - geometry.originWidth)}px 0 0 round 13px)` },
-        { clipPath: 'inset(0 0px 0 0 round 13px)' }
+        { width: `${geometry.collapsedWidth}px` },
+        { width: `${destinationRect.width}px` }
       ], {
-        duration: 230,
+        duration: 260,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'both'
       });
-      const sharedAnimation = mainButton.animate([
-        { transform: `translate(${geometry.translateX}px, ${geometry.translateY}px) scale(${geometry.scale})` },
-        { transform: 'translate(0px, 0px) scale(1)' }
+      const toolbarContentAnimation = menu.animate([
+        { transform: `translateX(-${geometry.contentOffset}px)` },
+        { transform: 'translateX(0px)' }
       ], {
-        duration: 220,
+        duration: 260,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'both'
       });
-      toolbarEntranceAnimations = [surfaceAnimation, sharedAnimation];
-      menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
-        label.style.willChange = 'clip-path, transform, opacity';
-        const labelAnimation = label.animate([
-          { clipPath: 'inset(0 100% 0 0)', opacity: 0, transform: 'translateX(-4px)' },
-          { clipPath: 'inset(0 0% 0 0)', opacity: 1, transform: 'translateX(0)' }
-        ], {
-          duration: 280,
-          delay: 65,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-          fill: 'both'
-        });
-        toolbarEntranceAnimations.push(labelAnimation);
-      });
+      toolbarEntranceAnimations = [surfaceAnimation, toolbarContentAnimation];
       toolbarEntranceCleanupTimer = window.setTimeout(() => {
         toolbarEntranceCleanupTimer = null;
         toolbarEntranceAnimations.forEach((animation) => animation.cancel());
         toolbarEntranceAnimations = [];
         if (surface) surface.style.removeProperty('will-change');
-        if (mainButton) mainButton.style.removeProperty('will-change');
-        if (menu) {
-          menu.querySelectorAll('.lumno-selection-action-label').forEach((label) => {
-            label.style.removeProperty('will-change');
-          });
-        }
+        if (menu) menu.style.removeProperty('will-change');
       }, 360);
     });
   }
@@ -811,7 +800,8 @@
         transform: translateY(-3px) scale(0.96);
         transition: opacity 140ms ease, transform 160ms ease;
         box-sizing: border-box;
-        contain: layout paint style;
+        overflow: hidden;
+        contain: layout style;
       }
       .lumno-selection-surface::before {
         content: "";
@@ -836,6 +826,7 @@
         box-shadow: none;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
+        overflow: visible;
       }
       .lumno-selection-surface[data-icon-only="true"]::before { display: none; }
       :host([data-visible="true"]) .lumno-selection-surface {
@@ -855,7 +846,7 @@
         align-items: center;
         justify-content: center;
         gap: 5px;
-        font: 500 12px/1.2 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font: 400 12px/1.2 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         white-space: nowrap;
         cursor: pointer;
       }
@@ -893,6 +884,12 @@
         padding: 0;
       }
       .lumno-selection-main[data-icon-only="false"] .lumno-selection-label { display: none; }
+      .lumno-selection-main[data-icon-only="false"],
+      .lumno-selection-primary-divider,
+      .lumno-selection-actions-viewport,
+      .lumno-selection-toolbar {
+        flex: 0 0 auto;
+      }
       .lumno-selection-logo { width: 17px; height: 17px; display: block; }
       .lumno-selection-main[data-icon-only="true"] .lumno-selection-logo {
         width: 12px;
@@ -936,16 +933,22 @@
       .lumno-selection-toolbar {
         display: flex;
         align-items: center;
+        justify-content: flex-end;
+        transform-origin: right center;
         gap: 0;
       }
-      .lumno-selection-toolbar::before {
-        content: "";
-        flex: 0 0 auto;
+      .lumno-selection-primary-divider {
+        display: block;
         width: 1px;
         height: 18px;
         margin-inline: 3px;
         background: light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.16));
         pointer-events: none;
+      }
+      .lumno-selection-actions-viewport {
+        display: flex;
+        align-items: center;
+        overflow: hidden;
       }
       .lumno-selection-toolbar:focus {
         outline: none;
@@ -971,7 +974,10 @@
         background: transparent;
         box-shadow: none;
       }
-      .lumno-selection-toolbar[hidden], .lumno-selection-main[hidden] { display: none; }
+      .lumno-selection-toolbar[hidden],
+      .lumno-selection-main[hidden],
+      .lumno-selection-primary-divider[hidden],
+      .lumno-selection-actions-viewport[hidden] { display: none; }
       .lumno-selection-action-icon {
         width: 16px;
         height: 16px;
@@ -984,41 +990,26 @@
         overflow: hidden;
       }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] {
-        transition: clip-path 230ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1);
       }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] {
-        clip-path: inset(0 calc(100% - var(--lumno-entry-width)) 0 0 round 13px);
+        width: var(--lumno-toolbar-collapsed-width);
       }
       .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] {
-        clip-path: inset(0 0 0 0 round 13px);
+        width: var(--lumno-toolbar-expanded-width);
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-main[data-icon-only="false"] {
-        transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-toolbar {
+        transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-main[data-icon-only="false"] {
-        transform: translate(var(--lumno-entry-x), var(--lumno-entry-y)) scale(var(--lumno-entry-scale));
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-toolbar {
+        transform: translateX(calc(-1 * var(--lumno-toolbar-content-offset)));
       }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-main[data-icon-only="false"] {
-        transform: translate(0, 0) scale(1);
-      }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-action-label {
-        transition: clip-path 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms,
-          opacity 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms,
-          transform 280ms cubic-bezier(0.22, 1, 0.36, 1) 65ms;
-      }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="from"] .lumno-selection-action-label {
-        clip-path: inset(0 100% 0 0);
-        opacity: 0;
-        transform: translateX(-4px);
-      }
-      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-action-label {
-        clip-path: inset(0 0 0 0);
-        opacity: 1;
+      .lumno-selection-surface[data-toolbar-entrance-mode="fallback"][data-toolbar-entrance-state="to"] .lumno-selection-toolbar {
         transform: translateX(0);
       }
       .lumno-selection-status {
         padding: 0 8px;
-        font: 500 12px/1 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font: 400 12px/1 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         white-space: nowrap;
       }
       .lumno-selection-status[hidden] { display: none; }
@@ -1034,8 +1025,7 @@
           transition: none;
         }
         .lumno-selection-surface[data-toolbar-entrance-mode="fallback"],
-        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-main,
-        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-action-label {
+        .lumno-selection-surface[data-toolbar-entrance-mode="fallback"] .lumno-selection-toolbar {
           transition: none;
         }
       }
@@ -1061,6 +1051,15 @@
     mainButton.setAttribute('aria-controls', 'lumno-selection-toolbar');
     mainButton.setAttribute('aria-expanded', 'false');
 
+    primaryDivider = document.createElement('span');
+    primaryDivider.className = 'lumno-selection-primary-divider';
+    primaryDivider.hidden = true;
+    primaryDivider.setAttribute('aria-hidden', 'true');
+
+    actionsViewport = document.createElement('div');
+    actionsViewport.className = 'lumno-selection-actions-viewport';
+    actionsViewport.hidden = true;
+
     menu = document.createElement('div');
     menu.id = 'lumno-selection-toolbar';
     menu.className = 'lumno-selection-toolbar';
@@ -1068,13 +1067,14 @@
     menu.hidden = true;
     menu.setAttribute('role', 'toolbar');
     menu.setAttribute('aria-label', getMessage('selection_quick_action_open_menu', '使用 Lumno 处理所选文字'));
+    actionsViewport.append(menu);
 
     status = document.createElement('span');
     status.className = 'lumno-selection-status';
     status.hidden = true;
     status.setAttribute('role', 'status');
 
-    surface.append(mainButton, menu, status);
+    surface.append(mainButton, primaryDivider, actionsViewport, status);
     shadow.appendChild(surface);
     (document.documentElement || document.body).appendChild(host);
 
@@ -1106,13 +1106,17 @@
     return true;
   }
 
-  function positionSurface(rect, placement) {
+  function positionSurface(rect, placement, anchorRect) {
     if (!host || !surface || !rect) {
       return;
     }
     const isInline = placement === 'inline' && rect.inline;
-    host.style.left = '8px';
-    host.style.top = '8px';
+    const hasPanelAnchor = placement === 'panel' && anchorRect &&
+      Number.isFinite(anchorRect.left) && Number.isFinite(anchorRect.top);
+    if (!hasPanelAnchor) {
+      host.style.left = '8px';
+      host.style.top = '8px';
+    }
     window.requestAnimationFrame(() => {
       if (!host || host.hidden) {
         return;
@@ -1120,6 +1124,22 @@
       const bounds = surface.getBoundingClientRect();
       const viewportWidth = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
       const viewportHeight = Math.max(240, window.innerHeight || document.documentElement.clientHeight || 0);
+      if (hasPanelAnchor) {
+        const anchorHeight = Number.isFinite(anchorRect.height) && anchorRect.height > 0
+          ? anchorRect.height
+          : 18;
+        const left = Math.min(
+          viewportWidth - bounds.width - 8,
+          Math.max(8, anchorRect.left)
+        );
+        const top = Math.min(
+          viewportHeight - bounds.height - 8,
+          Math.max(8, anchorRect.top - Math.max(0, (bounds.height - anchorHeight) / 2))
+        );
+        host.style.left = `${Math.round(left)}px`;
+        host.style.top = `${Math.round(top)}px`;
+        return;
+      }
       if (isInline) {
         const anchor = rect.inline;
         const gap = 2;
@@ -1200,6 +1220,8 @@
     mainButton.setAttribute('aria-label', getMessage('selection_quick_action_open_menu', '使用 Lumno 处理所选文字'));
     mainButton.setAttribute('aria-expanded', 'false');
     mainLabel.textContent = label;
+    primaryDivider.hidden = true;
+    actionsViewport.hidden = true;
     menu.hidden = true;
     menu.replaceChildren();
     status.hidden = true;
@@ -1265,9 +1287,11 @@
     mainButton.setAttribute('aria-expanded', 'true');
     menu.replaceChildren(...actionButtons);
     host.dataset.iconSet = 'remix';
+    primaryDivider.hidden = false;
+    actionsViewport.hidden = false;
     menu.hidden = false;
     status.hidden = true;
-    positionSurface(currentCandidate.rect, 'panel');
+    positionSurface(currentCandidate.rect, 'panel', originRect);
     menu.focus({ preventScroll: true });
     animateToolbarEntrance(originRect);
     scheduleDismiss(TOOLBAR_DISMISS_MS);
@@ -1277,12 +1301,15 @@
     if (!host || !currentCandidate) {
       return;
     }
+    const originRect = surface.getBoundingClientRect();
     surface.dataset.iconOnly = 'false';
     mainButton.hidden = true;
+    primaryDivider.hidden = true;
+    actionsViewport.hidden = true;
     menu.hidden = true;
     status.textContent = getMessage('selection_quick_action_sending', '正在后台打开…');
     status.hidden = false;
-    positionSurface(currentCandidate.rect, 'panel');
+    positionSurface(currentCandidate.rect, 'panel', originRect);
   }
 
   function renderFailureStatus() {
@@ -1294,6 +1321,8 @@
     host.hidden = false;
     host.dataset.visible = 'true';
     mainButton.hidden = true;
+    primaryDivider.hidden = true;
+    actionsViewport.hidden = true;
     menu.hidden = true;
     status.textContent = getMessage('selection_quick_action_failed', '发送失败，请重试');
     status.hidden = false;

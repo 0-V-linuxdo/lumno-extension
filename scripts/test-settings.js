@@ -1,7 +1,7 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 50);
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 49);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
@@ -10,7 +10,9 @@ assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_2024_un
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_mode_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_color_light_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_color_dark_2026_unique_'));
-assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_trigger_style_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_group_enabled_2026_unique_'));
+assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_trigger_style_2026_unique_'));
+assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_icon_set_2026_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_messages_2024_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_local_wallpaper_2026_unique_'));
 
@@ -160,23 +162,19 @@ assert.strictEqual(
   settings.SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
   '_x_extension_selection_quick_actions_provider_2026_unique_'
 );
-assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('remix'), 'remix');
-assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet(' HUGEICONS '), 'hugeicons');
-assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('butterfly'), 'remix');
-assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet('unsupported'), 'remix');
+assert.strictEqual(settings.normalizeSelectionQuickActionsGroupEnabled(false), false);
+assert.strictEqual(settings.normalizeSelectionQuickActionsGroupEnabled(true), true);
+assert.strictEqual(settings.normalizeSelectionQuickActionsGroupEnabled(undefined), false);
+assert.strictEqual(settings.normalizeSelectionQuickActionsGroupEnabled('true'), false);
 assert.strictEqual(
-  settings.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY,
-  '_x_extension_selection_quick_actions_icon_set_2026_unique_'
+  settings.SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
+  '_x_extension_selection_quick_actions_group_enabled_2026_unique_'
 );
-assert.strictEqual(settings.normalizeSelectionQuickActionsTriggerStyle('butterfly'), 'butterfly');
-assert.strictEqual(settings.normalizeSelectionQuickActionsTriggerStyle('unsupported'), 'lumno');
-assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('lumno', 'butterfly'), 'butterfly');
-assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('butterfly', 'lumno'), 'butterfly');
-assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle('lumno', undefined), 'lumno');
-assert.strictEqual(
-  settings.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY,
-  '_x_extension_selection_quick_actions_trigger_style_2026_unique_'
-);
+assert.strictEqual(settings.normalizeSelectionQuickActionsIconSet, undefined);
+assert.strictEqual(settings.SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY, undefined);
+assert.strictEqual(settings.normalizeSelectionQuickActionsTriggerStyle, undefined);
+assert.strictEqual(settings.resolveSelectionQuickActionsTriggerStyle, undefined);
+assert.strictEqual(settings.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY, undefined);
 
 assert.strictEqual(settings.normalizeThemePreference('dark'), 'dark');
 assert.strictEqual(settings.normalizeThemePreference('light'), 'light');
@@ -219,8 +217,8 @@ async function testProviderStorageRuntime() {
       clear(callback) { Object.keys(values).forEach((key) => delete values[key]); if (callback) callback(); }
     };
   }
-  const triggerStyleKey = settings.SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY;
-  const sync = createArea({ [triggerStyleKey]: 'butterfly' });
+  const languageKey = '_x_extension_language_2024_unique_';
+  const sync = createArea({ [languageKey]: 'zh_CN' });
   const local = createArea({});
   const chromeApi = {
     storage: {
@@ -231,20 +229,20 @@ async function testProviderStorageRuntime() {
   const runtime = settings.createProviderStorageRuntime(chromeApi);
   await runtime.ready;
   assert.deepStrictEqual(
-    await runtime.area.get([triggerStyleKey]),
-    { [triggerStyleKey]: 'butterfly' },
-    'Chrome Sync mode should expose the stored butterfly entry style'
+    await runtime.area.get([languageKey]),
+    { [languageKey]: 'zh_CN' },
+    'Chrome Sync mode should expose stored settings'
   );
   await runtime.area.set({ theme: 'chrome' });
   assert.strictEqual(sync.values.theme, 'chrome');
-  local.values[triggerStyleKey] = 'lumno';
+  local.values[languageKey] = 'en';
   await runtime.area.set({ theme: 'lumno' });
   assert.strictEqual(sync.values.theme, 'lumno', 'settings writes should stay on Chrome Sync');
   assert.strictEqual(local.values.theme, undefined, 'local storage should not receive synced settings');
   assert.strictEqual(runtime.isActiveAreaName('sync'), true);
   assert.deepStrictEqual(
-    await runtime.area.get([triggerStyleKey]),
-    { [triggerStyleKey]: 'butterfly' },
+    await runtime.area.get([languageKey]),
+    { [languageKey]: 'zh_CN' },
     'the runtime should keep reading the Chrome Sync value'
   );
 }

@@ -31,19 +31,25 @@ function wait(ms) {
   });
   const { window } = dom;
   window.LumnoSelectionIntent = selectionIntent;
-  window.Range.prototype.getBoundingClientRect = () => ({
-    bottom: 44,
-    height: 18,
-    left: 20,
-    right: 110,
-    top: 26,
-    width: 90
-  });
+  window.Range.prototype.getBoundingClientRect = function() {
+    const node = this.commonAncestorContainer;
+    const element = node.nodeType === window.Node.ELEMENT_NODE ? node : node.parentElement;
+    if (element && element.id === 'copy') {
+      return { bottom: 88, height: 62, left: 20, right: 900, top: 26, width: 880 };
+    }
+    return { bottom: 44, height: 18, left: 20, right: 110, top: 26, width: 90 };
+  };
   window.Range.prototype.getClientRects = function() {
     const node = this.commonAncestorContainer;
     const element = node.nodeType === window.Node.ELEMENT_NODE ? node : node.parentElement;
     if (element && element.id === 'generic') {
       return [{ bottom: 88, height: 18, left: 20, right: 70, top: 70, width: 50 }];
+    }
+    if (element && element.id === 'copy') {
+      return [
+        { bottom: 44, height: 18, left: 20, right: 900, top: 26, width: 880 },
+        { bottom: 88, height: 18, left: 20, right: 110, top: 70, width: 90 }
+      ];
     }
     return [];
   };
@@ -217,7 +223,7 @@ function wait(ms) {
   assert.strictEqual(host.dataset.visible, 'true');
   assert.strictEqual(host.dataset.iconSet, 'remix', 'obsolete icon-set storage should not change the toolbar renderer');
   assert.strictEqual(host.dataset.selectionMark, 'lumno', 'the entry should always use the fixed Lumno mark');
-  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v14');
+  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v18');
   assert.strictEqual(host.dataset.entryContrast, 'light',
     'an entry on the default light page should use the restrained light-surface contrast treatment');
   assert.strictEqual(host.style.colorScheme, 'light',
@@ -265,6 +271,10 @@ function wait(ms) {
     'the compact entry should open the toolbar directly without a second disclosure button');
   const highEntry = selectionShadow.querySelector('.lumno-selection-main');
   const highSurface = selectionShadow.querySelector('.lumno-selection-surface');
+  const primaryDivider = selectionShadow.querySelector('.lumno-selection-primary-divider');
+  const actionsViewport = selectionShadow.querySelector('.lumno-selection-actions-viewport');
+  assert(primaryDivider, 'the fixed butterfly region should own a dedicated divider');
+  assert(actionsViewport, 'the moving actions should live in a dedicated clipping viewport');
   highSurface.getBoundingClientRect = function() {
     const iconOnly = this.dataset.iconOnly === 'true';
     return {
@@ -286,11 +296,19 @@ function wait(ms) {
   await wait(30);
   const toolbar = selectionShadow.querySelector('.lumno-selection-toolbar');
   assert(toolbar, 'clicking the butterfly should open a toolbar');
+  assert.strictEqual(primaryDivider.hidden, false, 'the primary divider should become visible without moving');
+  assert.strictEqual(actionsViewport.hidden, false, 'the actions clipping viewport should open beside the fixed divider');
+  assert.strictEqual(toolbar.parentElement, actionsViewport,
+    'only the red-box actions should be children of the clipping viewport');
+  assert.strictEqual(host.style.left, '112px',
+    'a multi-line selection toolbar should inherit the compact entry anchor instead of jumping to the selection bounding box edge');
+  assert.strictEqual(host.style.top, '56px',
+    'the expanded toolbar should remain vertically centered around the compact entry anchor');
   assert.strictEqual(toolbar.getAttribute('role'), 'toolbar');
   const translatedToolbarActions = Array.from(toolbar.querySelectorAll('[data-intent]'));
   assert.deepStrictEqual(
     translatedToolbarActions.map((button) => button.dataset.intent),
-    ['translate', 'ask', 'search'],
+    ['translate', 'explain', 'search'],
     'the inferred intent should be first and the toolbar should render exactly three actions'
   );
   assert.strictEqual(toolbar.getAttribute('tabindex'), '-1',
@@ -309,20 +327,27 @@ function wait(ms) {
     'toolbar actions should use the filled Remix SVG definitions');
   const surfaceGrowth = toolbarAnimations.find((record) => record.target === highSurface);
   const sharedButterflyGrowth = toolbarAnimations.find((record) => record.target === highEntry);
-  const labelReveals = toolbarAnimations.filter((record) => (
-    record.target.classList && record.target.classList.contains('lumno-selection-action-label')
-  ));
+  const toolbarContentGrowth = toolbarAnimations.find((record) => record.target === toolbar);
   assert(surfaceGrowth, 'opening should animate the toolbar shell from the butterfly edge');
-  assert.strictEqual(surfaceGrowth.options.duration, 230);
+  assert.strictEqual(surfaceGrowth.options.duration, 260);
   assert.strictEqual(surfaceGrowth.options.easing, 'cubic-bezier(0.22, 1, 0.36, 1)');
-  assert.deepStrictEqual(Object.keys(surfaceGrowth.keyframes[0]).sort(), ['clipPath'],
-    'the shell should grow through a bounded clipping reveal instead of scaling its contents');
-  assert(sharedButterflyGrowth, 'the compact butterfly should use a shared-element transform into the first slot');
-  assert.strictEqual(sharedButterflyGrowth.options.duration, 220);
-  assert.match(sharedButterflyGrowth.keyframes[0].transform, /translate\(.+px, .+px\) scale\(.+\)/);
-  assert.strictEqual(labelReveals.length, 3, 'each action label should reveal from its own clipping mask');
-  assert(labelReveals.every((record) => record.options.duration === 280 && record.options.delay === 65),
-    'text should enter later and more slowly than the shell growth to create visual layering');
+  assert.deepStrictEqual(Array.from(surfaceGrowth.keyframes, (keyframe) => keyframe.width), ['45px', '240px'],
+    'the shell should begin after the fixed butterfly and divider before revealing the red-box actions');
+  assert.strictEqual(sharedButterflyGrowth, undefined,
+    'the butterfly should switch directly into its toolbar slot without a transform animation');
+  assert.strictEqual(toolbarAnimations.some((record) => record.target === primaryDivider), false,
+    'the divider beside the butterfly should remain fixed throughout the reveal');
+  assert(toolbarContentGrowth, 'toolbar contents should move as one right-aligned layer');
+  assert.strictEqual(toolbarContentGrowth.options.duration, 260);
+  assert.match(toolbarContentGrowth.keyframes[0].transform, /translateX\(-\d+(?:\.\d+)?px\)/);
+  assert.strictEqual(toolbarContentGrowth.keyframes[1].transform, 'translateX(0px)');
+  assert.strictEqual(
+    toolbarAnimations.filter((record) => (
+      record.target.classList && record.target.classList.contains('lumno-selection-action-label')
+    )).length,
+    0,
+    'individual labels should not float in independently of the right-aligned toolbar content'
+  );
   highEntry.click();
   assert(runtimeMessages.some((message) => message.action === 'openOptionsPage' && message.hash === 'labs'),
     'clicking the enlarged leading butterfly should open the Labs settings route');
@@ -487,8 +512,8 @@ function wait(ms) {
   assert.deepStrictEqual(
     Array.from(selectionShadow.querySelectorAll('.lumno-selection-toolbar [data-intent]'))
       .map((button) => button.dataset.intent),
-    ['ask', 'search', 'translate'],
-    'an Ask-first toolbar should still contain three distinct actions'
+    ['ask', 'explain', 'search'],
+    'a question should expose Answer first without using it as a generic fallback'
   );
 
   storageChangeListeners.forEach((listener) => listener({
@@ -590,8 +615,12 @@ function wait(ms) {
     'the translucent toolbar material should softly blend with the page underneath'
   );
   assert(
-    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(selectionStyles),
-    '30px actions should leave the same 3px inset on all four sides inside the 38px shell'
+    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*400 12px/.test(selectionStyles),
+    '30px actions should use the lighter text weight and retain the same 3px shell inset'
+  );
+  assert(
+    /\.lumno-selection-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?transform-origin:\s*right center/.test(selectionStyles),
+    'toolbar contents should remain aligned to the moving right edge during growth'
   );
   assert(
     /button:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 1px/.test(selectionStyles),
@@ -606,10 +635,12 @@ function wait(ms) {
     'the neutral toolbar focus target should not add a second outline around the surface'
   );
   assert(
-    /\.lumno-selection-toolbar::before[\s\S]*?margin-inline:\s*3px[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles) &&
+    /\.lumno-selection-primary-divider\s*\{[\s\S]*?margin-inline:\s*3px[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles) &&
+      /\.lumno-selection-actions-viewport\s*\{[\s\S]*?overflow:\s*hidden/.test(selectionStyles) &&
+      !/\.lumno-selection-toolbar::before/.test(selectionStyles) &&
       /\.lumno-selection-toolbar button \+ button\s*\{[\s\S]*?margin-inline-start:\s*7px/.test(selectionStyles) &&
       /\.lumno-selection-toolbar button \+ button::before[\s\S]*?inset-inline-start:\s*-4px[\s\S]*?width:\s*1px[\s\S]*?height:\s*18px/.test(selectionStyles),
-    'every divider should retain the same 3px clearance from both neighboring hover backgrounds'
+    'the fixed primary divider and in-toolbar dividers should retain the same 3px clearance'
   );
   assert(
     /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),

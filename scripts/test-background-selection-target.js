@@ -38,11 +38,32 @@ function createChromeStub(options) {
 }
 
 {
-  const { chromeApi, groupedTabs, updatedGroups } = createChromeStub({ existingGroup: true });
+  const { chromeApi, createdTabs, groupedTabs } = createChromeStub({ existingGroup: true });
   let response = null;
   selectionTarget.openSelectionTarget(chromeApi, {
     url: 'https://chatgpt.com/',
     sourceTab: { id: 12, windowId: 9, groupId: 77 }
+  }, (result) => {
+    response = result;
+  });
+  assert.deepStrictEqual(createdTabs[0], {
+    url: 'https://chatgpt.com/',
+    active: true,
+    windowId: 9,
+    openerTabId: 12
+  }, 'selection targets should open an active new tab by default');
+  assert.strictEqual(groupedTabs.length, 0, 'selection targets should stay ungrouped by default');
+  assert.strictEqual(response.mode, 'tab');
+  assert.strictEqual(response.groupId, null);
+}
+
+{
+  const { chromeApi, groupedTabs, updatedGroups } = createChromeStub({ existingGroup: true });
+  let response = null;
+  selectionTarget.openSelectionTarget(chromeApi, {
+    url: 'https://chatgpt.com/',
+    sourceTab: { id: 12, windowId: 9, groupId: 77 },
+    groupEnabled: true
   }, (result) => {
     response = result;
   });
@@ -61,7 +82,8 @@ function createChromeStub(options) {
   let response = null;
   selectionTarget.openSelectionTarget(chromeApi, {
     url: 'https://chatgpt.com/',
-    sourceTab: { id: 7, windowId: 9 }
+    sourceTab: { id: 7, windowId: 9 },
+    groupEnabled: true
   }, (result) => {
     response = result;
   });
@@ -74,7 +96,7 @@ function createChromeStub(options) {
   assert.deepStrictEqual(groupedTabs[0], { tabIds: 100, groupId: 33 });
   assert.deepStrictEqual(updatedGroups[0], {
     groupId: 33,
-    title: 'Lumno AI',
+    title: 'AI 查询',
     color: 'blue',
     collapsed: true
   });
@@ -87,7 +109,8 @@ function createChromeStub(options) {
   let response = null;
   selectionTarget.openSelectionTarget(chromeApi, {
     url: 'https://gemini.google.com/app',
-    sourceTab: { id: 8, windowId: 2 }
+    sourceTab: { id: 8, windowId: 2 },
+    groupEnabled: true
   }, (result) => {
     response = result;
   });

@@ -148,6 +148,29 @@ afterEach(() => {
 });
 
 describe('Suggestions React island', () => {
+  it('maps visible result rows to 0-9 on both search surfaces', () => {
+    (['newtab', 'overlay'] as const).forEach((surface) => {
+      const { view, container } = createView({ surface });
+      const className = surface === 'overlay'
+        ? '.x-ov-suggestion-number-shortcut'
+        : '.x-nt-suggestion-number-shortcut';
+      render(
+        view,
+        Array.from({ length: 11 }, (_, index) => ({
+          type: 'history',
+          title: `Result ${index}`,
+          url: `https://example.com/${index}`
+        }))
+      );
+
+      expect(
+        Array.from(container.querySelectorAll(className)).map(
+          (badge) => badge.textContent
+        )
+      ).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+    });
+  });
+
   it('exposes the React API and renders legacy metadata synchronously', () => {
     const actionModel = {
       createSearchActionModel: () => ({
@@ -221,6 +244,32 @@ describe('Suggestions React island', () => {
         mark.textContent
       )
     ).toEqual(['Codex', '最爱']);
+  });
+
+  it('reports whether highlighted text belongs to the selected row', () => {
+    const markStates = new Map<SuggestionElement, unknown>();
+    const { view, items } = createView({
+      applyMarkVariables: (...args: unknown[]) => {
+        const [item, _theme, active] = args;
+        markStates.set(item as SuggestionElement, active);
+      }
+    });
+
+    render(view, [
+      {
+        type: 'history',
+        title: 'Example selected',
+        url: 'https://example.com/selected'
+      },
+      {
+        type: 'history',
+        title: 'Example passive',
+        url: 'https://example.com/passive'
+      }
+    ]);
+
+    expect(markStates.get(items[0])).toBe(true);
+    expect(markStates.get(items[1])).toBe(false);
   });
 
   it('keeps existing row nodes during an incremental append', () => {

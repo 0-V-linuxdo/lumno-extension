@@ -120,9 +120,9 @@ assert(
   'the default floating selection affordance should use the supplied Lumno mark'
 );
 assert(
-  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v14'") &&
-    contentSource.includes('const RUNTIME_VERSION = 14'),
-  'the selection runtime should expose the layered-toolbar revision for live diagnostics'
+  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v18'") &&
+    contentSource.includes('const RUNTIME_VERSION = 18'),
+  'the selection runtime should expose the fixed-leading-region revision for live diagnostics'
 );
 assert(
   /\.lumno-selection-surface\[data-icon-only="true"\][\s\S]*?border:\s*0[;\s\S]*?box-shadow:\s*none/.test(contentSource),
@@ -135,6 +135,11 @@ assert(
 assert(
   contentSource.includes("positionSurface(candidate.rect, 'inline')"),
   'every triggerable selection should anchor the same compact entry inline with the selected text'
+);
+assert(
+  contentSource.includes("positionSurface(currentCandidate.rect, 'panel', originRect)") &&
+    /function positionSurface\(rect, placement, anchorRect\)[\s\S]*?const hasPanelAnchor = placement === 'panel'[\s\S]*?anchorRect\.left[\s\S]*?anchorRect\.top/.test(contentSource),
+  'the expanded toolbar should inherit the compact entry rectangle instead of re-anchoring to the full selection bounds'
 );
 assert(
   contentSource.includes('const inlineRect = clientRects.length > 0') &&
@@ -172,14 +177,21 @@ assert(contentSource.includes('let enabled = false;'), 'content runtime should s
 assert(contentSource.includes('lumno-selection-action-icon'), 'content runtime should render inline action SVGs');
 assert(!contentSource.includes('ICON_SET_STORAGE_KEY'), 'content runtime should not read an obsolete icon-set choice');
 assert(
-  contentSource.includes("const TOOLBAR_FALLBACK_ACTIONS = Object.freeze(['ask', 'search', 'translate'])") &&
+  contentSource.includes("const TOOLBAR_FALLBACK_ACTIONS = Object.freeze(['explain', 'search', 'translate'])") &&
     /function getToolbarActions\(primary\)[\s\S]*?\.slice\(0, 3\)/.test(contentSource),
-  'the inferred action should lead an exactly three-item toolbar'
+  'the inferred task should lead a three-item toolbar without exposing generic Ask AI as a fallback'
 );
 assert(
   contentSource.includes("menu.setAttribute('role', 'toolbar')") &&
     !contentSource.includes('lumno-selection-more'),
   'the butterfly should open the toolbar directly without a second disclosure control'
+);
+assert(
+  contentSource.includes("primaryDivider.className = 'lumno-selection-primary-divider'") &&
+    contentSource.includes("actionsViewport.className = 'lumno-selection-actions-viewport'") &&
+    contentSource.includes('actionsViewport.append(menu)') &&
+    contentSource.includes('surface.append(mainButton, primaryDivider, actionsViewport, status)'),
+  'the fixed butterfly divider should be outside the independently clipped actions viewport'
 );
 assert(!contentSource.toLowerCase().includes('butterfly'),
   'content runtime should render only the fixed Lumno selection mark');
@@ -206,13 +218,15 @@ assert(
   'the expanded toolbar should use a translucent acrylic backdrop treatment'
 );
 assert(
-  /\.lumno-selection-toolbar\s*\{[\s\S]*?gap:\s*0/.test(contentSource) &&
-    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*500 12px/.test(contentSource) &&
-    /\.lumno-selection-toolbar::before[\s\S]*?margin-inline:\s*3px[\s\S]*?height:\s*18px/.test(contentSource) &&
+  /\.lumno-selection-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?transform-origin:\s*right center[\s\S]*?gap:\s*0/.test(contentSource) &&
+    /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*400 12px/.test(contentSource) &&
+    /\.lumno-selection-primary-divider\s*\{[\s\S]*?margin-inline:\s*3px[\s\S]*?height:\s*18px/.test(contentSource) &&
+    /\.lumno-selection-actions-viewport\s*\{[\s\S]*?overflow:\s*hidden/.test(contentSource) &&
+    !/\.lumno-selection-toolbar::before/.test(contentSource) &&
     /\.lumno-selection-toolbar button \+ button\s*\{[\s\S]*?margin-inline-start:\s*7px/.test(contentSource) &&
     /\.lumno-selection-toolbar button \+ button::before[\s\S]*?inset-inline-start:\s*-4px[\s\S]*?height:\s*18px/.test(contentSource) &&
     /\.lumno-selection-action-icon\s*\{[\s\S]*?width:\s*16px[\s\S]*?height:\s*16px/.test(contentSource),
-  'the expanded toolbar should separate hover regions and dividers with the same 3px rhythm'
+  'the fixed divider and clipped actions viewport should retain the same 3px rhythm'
 );
 assert(
   /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
@@ -228,16 +242,32 @@ assert(
 assert(
   contentSource.includes('function animateToolbarEntrance(originRect)') &&
     contentSource.includes("window.matchMedia('(prefers-reduced-motion: reduce)').matches") &&
-    /surface\.animate\(\[[\s\S]*?clipPath:[\s\S]*?clipPath:[\s\S]*?duration:\s*230,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource) &&
-    /mainButton\.animate\(\[[\s\S]*?transform:[\s\S]*?duration:\s*220/.test(contentSource) &&
-    /label\.animate\(\[[\s\S]*?clipPath:[\s\S]*?duration:\s*280,[\s\S]*?delay:\s*65/.test(contentSource),
-  'the toolbar should layer shell growth, shared-butterfly motion and slower masked label reveals'
+    /surface\.animate\(\[[\s\S]*?width:\s*`\$\{geometry\.collapsedWidth\}px`[\s\S]*?width:\s*`\$\{destinationRect\.width\}px`[\s\S]*?duration:\s*260,[\s\S]*?easing:\s*'cubic-bezier\(0\.22, 1, 0\.36, 1\)'/.test(contentSource) &&
+    !contentSource.includes('mainButton.animate([') &&
+    /menu\.animate\(\[[\s\S]*?translateX\(-\$\{geometry\.contentOffset\}px\)[\s\S]*?translateX\(0px\)[\s\S]*?duration:\s*260/.test(contentSource) &&
+    !contentSource.includes('label.animate(['),
+  'the material should grow through real width while the stationary butterfly and right-aligned content remain independent layers'
 );
 assert(
   contentSource.includes('function runToolbarEntranceFallback') &&
+    contentSource.includes("surface.style.setProperty('--lumno-toolbar-collapsed-width'") &&
+    contentSource.includes("surface.style.setProperty('--lumno-toolbar-expanded-width'") &&
+    contentSource.includes("surface.style.setProperty('--lumno-toolbar-content-offset'") &&
     contentSource.includes("surface.dataset.toolbarEntranceState = 'from'") &&
-    contentSource.includes("surface.dataset.toolbarEntranceState = 'to'"),
-  'the same staged entrance should remain available when Web Animations is unavailable'
+    contentSource.includes("surface.dataset.toolbarEntranceState = 'to'") &&
+    /data-toolbar-entrance-state="from"\][\s\S]*?width:\s*var\(--lumno-toolbar-collapsed-width\)/.test(contentSource) &&
+    /data-toolbar-entrance-state="to"\][\s\S]*?width:\s*var\(--lumno-toolbar-expanded-width\)/.test(contentSource) &&
+    !/data-toolbar-entrance-mode="fallback"[\s\S]{0,180}clip-path/.test(contentSource),
+  'the fallback should animate real width instead of clipping the rounded material or its shadow'
+);
+assert(
+  /\.lumno-selection-surface\s*\{[\s\S]*?overflow:\s*hidden[\s\S]*?contain:\s*layout style/.test(contentSource) &&
+    !/\.lumno-selection-surface\s*\{[\s\S]*?contain:\s*layout paint style/.test(contentSource),
+  'the surface should clip only its children while leaving its own rounded border and shadow intact'
+);
+assert(
+  /\.lumno-selection-main\[data-icon-only="false"\],[\s\S]*?\.lumno-selection-primary-divider,[\s\S]*?\.lumno-selection-actions-viewport,[\s\S]*?\.lumno-selection-toolbar\s*\{[\s\S]*?flex:\s*0 0 auto/.test(contentSource),
+  'the fixed leading region and clipped actions should retain their final geometry while the shell width grows'
 );
 assert(
   /function openLabsSettings\(\)[\s\S]*?action:\s*'openOptionsPage'[\s\S]*?hash:\s*'labs'/.test(contentSource) &&
@@ -301,6 +331,28 @@ localeNames.forEach((locale) => {
   ].forEach((key) => {
     assert.strictEqual(messages[key], undefined, `${locale} should remove the obsolete trigger-style copy`);
   });
+});
+
+const expectedTaskLabels = {
+  en: ['Answer', 'Translate', 'Explain', 'Summarize', 'Research', 'Calculate'],
+  ja: ['回答', '翻訳', '説明', '要約', '調査', '計算'],
+  zh_CN: ['解答', '翻译', '解释', '总结', '调研', '计算'],
+  zh_TW: ['解答', '翻譯', '解釋', '總結', '研究', '計算']
+};
+localeNames.forEach((locale) => {
+  const messages = JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'));
+  assert.deepStrictEqual(
+    [
+      'selection_quick_action_ask',
+      'selection_quick_action_translate',
+      'selection_quick_action_explain',
+      'selection_quick_action_summarize',
+      'selection_quick_action_search',
+      'selection_quick_action_calculate'
+    ].map((key) => messages[key].message),
+    expectedTaskLabels[locale],
+    `${locale} should describe every toolbar item as a user task instead of mixing tasks with the AI channel`
+  );
 });
 
 console.log('selection quick actions integration tests passed');

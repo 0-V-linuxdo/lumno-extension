@@ -287,6 +287,12 @@
       MIN_THEME_HIGHLIGHT_CONTRAST
     );
     const markBg = mixColor(surfaceAccent, base, isDark ? 0.74 : 0.78);
+    const activeMarkBg = getTintedSurfaceColor(
+      surfaceAccent,
+      highlightBg,
+      1,
+      MIN_THEME_SOFT_BOUNDARY_CONTRAST
+    );
     const tagBg = mixColor(surfaceAccent, base, isDark ? 0.76 : 0.74);
     const keyBg = mixColor(surfaceAccent, base, isDark ? 0.88 : 0.9);
     const buttonBg = mixColor(surfaceAccent, base, isDark ? 0.8 : 0.94);
@@ -320,6 +326,8 @@
       highlightBorder: rgbToCss(highlightBorder),
       markBg: rgbToCss(markBg),
       markText: getReadableTextColor(markBg),
+      activeMarkBg: rgbToCss(activeMarkBg),
+      activeMarkText: getReadableTextColor(activeMarkBg),
       tagBg: rgbToCss(tagBg),
       tagText: getReadableTextColor(tagBg),
       tagBorder: rgbToCss(tagBorder),

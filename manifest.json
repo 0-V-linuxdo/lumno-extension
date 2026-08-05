@@ -43,7 +43,7 @@
       },
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/settings.js", "src/shared/selection-butterfly.js", "src/shared/selection-action-icons.js", "src/shared/selection-intent.js", "src/content/selection-quick-actions.js" ],
+         "js": [ "src/shared/settings.js", "src/shared/selection-action-icons.js", "src/shared/selection-intent.js", "src/content/selection-quick-actions.js" ],
          "run_at": "document_idle"
       },
       {
