@@ -348,9 +348,9 @@ function createEligibleState(surface, now) {
     'newtab should not create the prompt until language and update arbitration are ready'
   );
   assert(
-    newtabSource.includes('loadPackagedMessages(fallbackMessages);') &&
-      !newtabSource.includes('currentMessages = payload.messages || {};'),
-    'newtab should prefer packaged locale messages over a potentially stale storage payload'
+    newtabSource.includes('loadLocaleMessages(targetLocale).then(applyResolvedMessages);') &&
+      !newtabSource.includes('_x_extension_language_messages_2024_unique_'),
+    'newtab should load packaged locale messages without a synced cache payload'
   );
   assert(
     overlaySource.includes('overlayEngagementNoticeController.recordMeaningfulUse()'),

@@ -10,7 +10,6 @@
   const PAGE_TOAST_ID = '_x_extension_page_toast_2026_unique_';
   const PAGE_TOAST_SHOW_DURATION_MS = 2000;
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
-  const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
   const providerStorageRuntime = globalThis.LumnoSettings &&
     typeof globalThis.LumnoSettings.createProviderStorageRuntime === 'function'
     ? globalThis.LumnoSettings.createProviderStorageRuntime(chrome)
@@ -66,17 +65,13 @@
     if (!storageArea || typeof storageArea.get !== 'function') {
       return;
     }
-    storageArea.get([LANGUAGE_STORAGE_KEY, LANGUAGE_MESSAGES_STORAGE_KEY], (result) => {
+    storageArea.get([LANGUAGE_STORAGE_KEY], (result) => {
       if (chrome.runtime && chrome.runtime.lastError) {
         return;
       }
       currentLanguageMode = result && result[LANGUAGE_STORAGE_KEY]
         ? String(result[LANGUAGE_STORAGE_KEY])
         : 'system';
-      const payload = result && result[LANGUAGE_MESSAGES_STORAGE_KEY];
-      if (payload && payload.messages) {
-        currentMessages = payload.messages;
-      }
       refreshLocaleMessages();
     });
   }
@@ -620,10 +615,6 @@
           ? String(changes[LANGUAGE_STORAGE_KEY].newValue)
           : 'system';
         refreshLocaleMessages();
-      }
-      if (changes[LANGUAGE_MESSAGES_STORAGE_KEY]) {
-        const payload = changes[LANGUAGE_MESSAGES_STORAGE_KEY].newValue;
-        currentMessages = payload && payload.messages ? payload.messages : null;
       }
     });
   }

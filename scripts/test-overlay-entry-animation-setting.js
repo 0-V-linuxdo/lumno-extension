@@ -5,6 +5,7 @@ const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const overlayRuntimeSource = fs.readFileSync('src/overlay/runtime.js', 'utf8');
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
+const settings = require('../src/shared/settings.js');
 
 const sizeRowIndex = optionsHtml.indexOf('data-i18n="settings_overlay_size_title"');
 const animationRowIndex = optionsHtml.indexOf('data-i18n="settings_overlay_enter_animation_title"');
@@ -51,8 +52,12 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /migrateStorageIfNeeded\(\[[\s\S]*?OVERLAY_SIZE_MODE_STORAGE_KEY,[\s\S]*?OVERLAY_ENTER_ANIMATION_STORAGE_KEY,/,
+  /migrateStorageIfNeeded\(CHROME_SYNC_STORAGE_KEYS\);/,
   'the background migration should include the animation preference'
+);
+assert(
+  settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_enter_animation_2026_unique_'),
+  'the shared Chrome Sync contract should include the animation preference'
 );
 
 const expectedLabels = {

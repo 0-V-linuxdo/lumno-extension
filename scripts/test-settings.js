@@ -1,6 +1,19 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 50);
+assert.strictEqual(
+  new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
+  settings.CHROME_SYNC_STORAGE_KEYS.length
+);
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_2024_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_mode_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_color_light_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_color_dark_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_trigger_style_2026_unique_'));
+assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_messages_2024_unique_'));
+assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_local_wallpaper_2026_unique_'));
+
 assert.strictEqual(settings.normalizeLocale(''), 'en');
 assert.strictEqual(settings.normalizeLocale('en-US'), 'en');
 assert.strictEqual(settings.normalizeLocale('ja-JP'), 'ja');

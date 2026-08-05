@@ -235,7 +235,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const overlayStorageKeys = overlayRuntime.STORAGE_KEYS;
   const THEME_STORAGE_KEY = overlayStorageKeys.themeMode;
   const LANGUAGE_STORAGE_KEY = overlayStorageKeys.language;
-  const LANGUAGE_MESSAGES_STORAGE_KEY = overlayStorageKeys.languageMessages;
   const DEFAULT_SEARCH_ENGINE_STORAGE_KEY = overlayStorageKeys.defaultSearchEngine;
   const OVERLAY_MODE_MENU_DOUBLE_TAB_DURATION_MS = 700;
   const OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS = 120;
@@ -604,16 +603,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   }
 
   async function bootstrapOverlayLanguageForInitialRender() {
-    const result = await getStorageValuesAsync([LANGUAGE_STORAGE_KEY, LANGUAGE_MESSAGES_STORAGE_KEY]);
+    const result = await getStorageValuesAsync([LANGUAGE_STORAGE_KEY]);
     overlayLanguageMode = result[LANGUAGE_STORAGE_KEY] || 'system';
     const targetLocale = overlayLanguageMode === 'system'
       ? getSystemLocale()
       : normalizeLocale(overlayLanguageMode);
-    const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
-    const fallbackMessages = payload && payload.locale === targetLocale
-      ? payload.messages
-      : null;
-    currentMessages = await loadPreferredLocaleMessages(targetLocale, fallbackMessages);
+    currentMessages = await loadPreferredLocaleMessages(targetLocale, null);
   }
 
   function formatMessage(key, fallback, params) {
@@ -2618,19 +2613,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const targetLocale = overlayLanguageMode === 'system'
         ? getSystemLocale()
         : normalizeLocale(overlayLanguageMode);
-      if (storageArea) {
-        storageArea.get([LANGUAGE_MESSAGES_STORAGE_KEY], (result) => {
-          const payload = result[LANGUAGE_MESSAGES_STORAGE_KEY];
-          const fallbackMessages = payload && payload.locale === targetLocale
-            ? payload.messages
-            : null;
-          loadPreferredLocaleMessages(targetLocale, fallbackMessages).then((messages) => {
-            currentMessages = messages || {};
-            applyLanguageStrings();
-          });
-        });
-        return;
-      }
       loadPreferredLocaleMessages(targetLocale, null).then((messages) => {
         currentMessages = messages || {};
         applyLanguageStrings();
@@ -3641,18 +3623,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       if (changes[LANGUAGE_STORAGE_KEY]) {
         applyLanguageMode(changes[LANGUAGE_STORAGE_KEY].newValue || 'system');
-      }
-      if (changes[LANGUAGE_MESSAGES_STORAGE_KEY]) {
-        const payload = changes[LANGUAGE_MESSAGES_STORAGE_KEY].newValue;
-        const targetLocale = overlayLanguageMode === 'system'
-          ? getSystemLocale()
-          : normalizeLocale(overlayLanguageMode);
-        if (payload && payload.locale === targetLocale && payload.messages) {
-          loadPreferredLocaleMessages(targetLocale, payload.messages).then((messages) => {
-            currentMessages = messages || {};
-            applyLanguageStrings();
-          });
-        }
       }
     };
     chrome.storage.onChanged.addListener(overlayLanguageStorageListener);

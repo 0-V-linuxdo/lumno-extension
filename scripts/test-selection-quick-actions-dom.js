@@ -138,11 +138,11 @@ function wait(ms) {
   assert.strictEqual(host.dataset.runtimeRevision, 'selection-butterfly-v6');
   assert.strictEqual(host.dataset.runtimeId, 'kkcjcneagmlhpeaafngjdlpcfjakejgb');
   assert.strictEqual(host.dataset.triggerStyle, 'butterfly');
-  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:local');
+  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:sync');
   assert.strictEqual(
     localStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_,
-    'butterfly',
-    'an existing butterfly choice should replace a stale local Lumno mirror'
+    'lumno',
+    'Chrome Sync hydration should not rewrite an obsolete local mirror'
   );
   syncStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_ = 'lumno';
   storageChangeListeners.forEach((listener) => listener({
@@ -154,11 +154,17 @@ function wait(ms) {
   await wait(0);
   assert.strictEqual(
     host.dataset.selectionMark,
-    'butterfly',
-    'rehydration should keep the local butterfly mirror when the active provider still contains a stale Lumno value'
+    'lumno',
+    'rehydration should continue using the current Chrome Sync value'
   );
-  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:local');
+  assert.strictEqual(host.dataset.triggerStyleSource, 'hydrate:sync');
   syncStorageValues._x_extension_selection_quick_actions_trigger_style_2026_unique_ = 'butterfly';
+  storageChangeListeners.forEach((listener) => listener({
+    _x_extension_selection_quick_actions_trigger_style_2026_unique_: {
+      oldValue: 'lumno',
+      newValue: 'butterfly'
+    }
+  }, 'sync'));
   assert.strictEqual(
     window.document.querySelectorAll('[id="_x_extension_selection_quick_actions_host_2026_unique_"]').length,
     1,
@@ -208,8 +214,8 @@ function wait(ms) {
   }, 'local'));
   assert.strictEqual(
     host.dataset.selectionMark,
-    'lumno',
-    'a local runtime mirror update should win even while Chrome Sync is the primary provider'
+    'butterfly',
+    'obsolete local mirror updates should be ignored while Chrome Sync is primary'
   );
   storageChangeListeners.forEach((listener) => listener({
     _x_extension_selection_quick_actions_trigger_style_2026_unique_: {

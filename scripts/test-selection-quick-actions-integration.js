@@ -40,7 +40,7 @@ assert(optionsSource.includes(providerStorageKey), 'options should persist the p
 assert(optionsSource.includes(iconSetStorageKey), 'options should persist the selection icon set');
 assert(optionsSource.includes(triggerStyleStorageKey), 'options should persist the selection trigger style');
 assert(
-  /function handleSelectionQuickActionsTriggerStyleSelection\(value\)[\s\S]*?Promise\.all\(writes\)[\s\S]*?recoverInvalidatedOptionsContext\(error\)/.test(optionsSource),
+  /function handleSelectionQuickActionsTriggerStyleSelection\(value\)[\s\S]*?storageSet\(storageArea[\s\S]*?recoverInvalidatedOptionsContext\(error\)/.test(optionsSource),
   'the trigger style should only update visually after persistence and recover a stale options context'
 );
 assert(
@@ -181,17 +181,15 @@ assert(
   'content runtime should require an explicit enabled setting'
 );
 assert(
-  contentSource.includes('triggerStyleStorageArea') &&
-    contentSource.includes('resolveTriggerStyle(localTriggerStyle, providerTriggerStyle)') &&
-    contentSource.includes("triggerStyleSource = hasLocalTriggerStyle") &&
-    contentSource.includes("areaName === 'local'"),
-  'the content runtime should use a local trigger-style mirror across provider modes'
+  contentSource.includes('triggerStyle = normalizeTriggerStyle(result && result[TRIGGER_STYLE_STORAGE_KEY])') &&
+    !contentSource.includes('triggerStyleStorageArea') &&
+    !contentSource.includes('mirrorTriggerStyleToLocal'),
+  'the content runtime should use Chrome Sync as the only trigger-style source'
 );
 assert(
-  optionsSource.includes('writes.push(storageSet(triggerStyleStorageArea, payload))') &&
-    optionsSource.includes('writes.push(storageSet(storageArea, payload))') &&
-    optionsSource.includes('Promise.all(writes)'),
-  'the options control should await entry-style persistence locally and in the active sync provider'
+  optionsSource.includes('storageSet(storageArea, {') &&
+    !optionsSource.includes('triggerStyleStorageArea'),
+  'the options control should await entry-style persistence in Chrome Sync'
 );
 assert(
   backgroundSource.includes('result[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] === true'),

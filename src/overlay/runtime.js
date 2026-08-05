@@ -8,7 +8,6 @@
   const STORAGE_KEYS = Object.freeze({
     themeMode: '_x_extension_theme_mode_2024_unique_',
     language: '_x_extension_language_2024_unique_',
-    languageMessages: '_x_extension_language_messages_2024_unique_',
     defaultSearchEngine: '_x_extension_default_search_engine_2024_unique_',
     siteSearchCustom: '_x_extension_site_search_custom_2024_unique_',
     siteSearchDisabled: '_x_extension_site_search_disabled_2024_unique_',

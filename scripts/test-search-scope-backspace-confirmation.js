@@ -93,9 +93,9 @@ for (const [runtime, source] of [
 
 assert.ok(
   overlaySource.includes('function loadPreferredLocaleMessages(locale, fallbackMessages)') &&
-    overlaySource.includes('currentMessages = await loadPreferredLocaleMessages(targetLocale, fallbackMessages);') &&
-    !overlaySource.includes('currentMessages = payload.messages || {};'),
-  'overlay should prefer packaged locale messages and use stored messages only as a fallback'
+    overlaySource.includes('currentMessages = await loadPreferredLocaleMessages(targetLocale, null);') &&
+    !overlaySource.includes('_x_extension_language_messages_2024_unique_'),
+  'overlay should load packaged locale messages without a synced cache payload'
 );
 
 console.log('search scope Backspace confirmation tests passed');

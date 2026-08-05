@@ -17,7 +17,6 @@
   const ICON_SET_STORAGE_KEY = '_x_extension_selection_quick_actions_icon_set_2026_unique_';
   const TRIGGER_STYLE_STORAGE_KEY = '_x_extension_selection_quick_actions_trigger_style_2026_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
-  const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
   const RUNTIME_REVISION = 'selection-butterfly-v6';
@@ -44,9 +43,6 @@
   const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea && storageArea === (chrome && chrome.storage ? chrome.storage.sync : null)
     ? 'sync'
     : 'local');
-  const triggerStyleStorageArea = chrome && chrome.storage && chrome.storage.local
-    ? chrome.storage.local
-    : storageArea;
 
   let enabled = false;
   let iconSet = 'remix';
@@ -123,19 +119,6 @@
       return globalThis.LumnoSettings.normalizeSelectionQuickActionsTriggerStyle(value);
     }
     return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
-  }
-
-  function resolveTriggerStyle(localValue, providerValue) {
-    if (globalThis.LumnoSettings &&
-        typeof globalThis.LumnoSettings.resolveSelectionQuickActionsTriggerStyle === 'function') {
-      return globalThis.LumnoSettings.resolveSelectionQuickActionsTriggerStyle(
-        localValue,
-        providerValue
-      );
-    }
-    return [localValue, providerValue].some((value) => (
-      String(value || '').trim().toLowerCase() === 'butterfly'
-    )) ? 'butterfly' : 'lumno';
   }
 
   function createInlineIcon(definition, className) {
@@ -291,6 +274,21 @@
     return normalizeLocale(navigator.language || 'en');
   }
 
+  function refreshLocaleMessages() {
+    if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+      return;
+    }
+    chrome.runtime.sendMessage({ action: 'getLocaleMessages', locale: getCurrentLocale() }, (response) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        return;
+      }
+      localeMessages = response && response.messages ? response.messages : null;
+      if (menu && !menu.hidden && currentCandidate) {
+        renderMenu();
+      }
+    });
+  }
+
   function getActionLabel(action) {
     const copy = ACTION_COPY[action] || ACTION_COPY.ask;
     return getMessage(copy[0], copy[1]);
@@ -444,13 +442,6 @@
     host.dataset.storageArea = getActiveStorageAreaName() || '';
     host.dataset.triggerStyle = triggerStyle;
     host.dataset.triggerStyleSource = triggerStyleSource;
-  }
-
-  function mirrorTriggerStyleToLocal(value) {
-    if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.set !== 'function') {
-      return;
-    }
-    triggerStyleStorageArea.set({ [TRIGGER_STYLE_STORAGE_KEY]: normalizeTriggerStyle(value) });
   }
 
   function isEditableElement(element) {
@@ -1271,55 +1262,29 @@
       ENABLED_STORAGE_KEY,
       ICON_SET_STORAGE_KEY,
       TRIGGER_STYLE_STORAGE_KEY,
-      LANGUAGE_STORAGE_KEY,
-      LANGUAGE_MESSAGES_STORAGE_KEY
+      LANGUAGE_STORAGE_KEY
     ], (result) => {
       if (chrome.runtime && chrome.runtime.lastError) {
         return;
       }
-      const applyHydratedSettings = (localResult) => {
-        const hasLocalTriggerStyle = Boolean(localResult) &&
-          Object.prototype.hasOwnProperty.call(localResult, TRIGGER_STYLE_STORAGE_KEY);
-        const localTriggerStyle = hasLocalTriggerStyle
-          ? localResult[TRIGGER_STYLE_STORAGE_KEY]
-          : undefined;
-        const providerTriggerStyle = result && result[TRIGGER_STYLE_STORAGE_KEY];
-        enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
-        iconSet = normalizeIconSet(result && result[ICON_SET_STORAGE_KEY]);
-        triggerStyle = resolveTriggerStyle(localTriggerStyle, providerTriggerStyle);
-        triggerStyleSource = hasLocalTriggerStyle
-          ? 'hydrate:local'
-          : `hydrate:${getActiveStorageAreaName() || 'unknown'}`;
-        if (!hasLocalTriggerStyle || localTriggerStyle !== triggerStyle) {
-          mirrorTriggerStyleToLocal(triggerStyle);
-        }
-        languageMode = result && result[LANGUAGE_STORAGE_KEY]
-          ? String(result[LANGUAGE_STORAGE_KEY])
-          : 'system';
-        const payload = result && result[LANGUAGE_MESSAGES_STORAGE_KEY];
-        localeMessages = payload && payload.messages ? payload.messages : null;
-        if (!enabled) {
-          cancelSelectionGesture();
-          clearOwnedSurface();
-        }
-        setOwnershipMonitoring(enabled);
-        if (currentCandidate && host && !host.hidden) {
-          updateSelectionMark(currentCandidate.mode);
-        } else {
-          updateRuntimeDebugState();
-        }
-      };
-      if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.get !== 'function') {
-        applyHydratedSettings({});
-        return;
+      enabled = Boolean(result && result[ENABLED_STORAGE_KEY] === true);
+      iconSet = normalizeIconSet(result && result[ICON_SET_STORAGE_KEY]);
+      triggerStyle = normalizeTriggerStyle(result && result[TRIGGER_STYLE_STORAGE_KEY]);
+      triggerStyleSource = `hydrate:${getActiveStorageAreaName() || 'unknown'}`;
+      languageMode = result && result[LANGUAGE_STORAGE_KEY]
+        ? String(result[LANGUAGE_STORAGE_KEY])
+        : 'system';
+      refreshLocaleMessages();
+      if (!enabled) {
+        cancelSelectionGesture();
+        clearOwnedSurface();
       }
-      triggerStyleStorageArea.get([TRIGGER_STYLE_STORAGE_KEY], (localResult) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          applyHydratedSettings({});
-          return;
-        }
-        applyHydratedSettings(localResult || {});
-      });
+      setOwnershipMonitoring(enabled);
+      if (currentCandidate && host && !host.hidden) {
+        updateSelectionMark(currentCandidate.mode);
+      } else {
+        updateRuntimeDebugState();
+      }
     });
   }
 
@@ -1346,9 +1311,7 @@
       const isPrimaryArea = providerStorageRuntime
         ? providerStorageRuntime.isActiveAreaName(areaName)
         : areaName === storageAreaName;
-      const hasLocalTriggerStyleChange = areaName === 'local' &&
-        Boolean(changes[TRIGGER_STYLE_STORAGE_KEY]);
-      if (!isPrimaryArea && !hasLocalTriggerStyleChange) {
+      if (!isPrimaryArea) {
         return;
       }
       if (isPrimaryArea && changes[ENABLED_STORAGE_KEY]) {
@@ -1365,19 +1328,16 @@
           renderMenu();
         }
       }
-      if (changes[TRIGGER_STYLE_STORAGE_KEY] && (isPrimaryArea || hasLocalTriggerStyleChange)) {
+      if (changes[TRIGGER_STYLE_STORAGE_KEY]) {
         triggerStyle = normalizeTriggerStyle(changes[TRIGGER_STYLE_STORAGE_KEY].newValue);
         triggerStyleSource = `change:${areaName || 'unknown'}`;
-        if (areaName !== 'local') {
-          mirrorTriggerStyleToLocal(triggerStyle);
-        }
         if (currentCandidate && host && !host.hidden) {
           updateSelectionMark(currentCandidate.mode);
         } else {
           updateRuntimeDebugState();
         }
       }
-      if (isPrimaryArea && (changes[LANGUAGE_STORAGE_KEY] || changes[LANGUAGE_MESSAGES_STORAGE_KEY])) {
+      if (changes[LANGUAGE_STORAGE_KEY]) {
         hydrateSettings();
       }
     });

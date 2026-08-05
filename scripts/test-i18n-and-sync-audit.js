@@ -1,6 +1,7 @@
 const assert = require('assert');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
+const settings = require('../src/shared/settings.js');
 
 const auditOutput = execFileSync(process.execPath, ['scripts/audit-i18n.js'], {
   encoding: 'utf8'
@@ -26,6 +27,10 @@ const localeMessages = Object.fromEntries(localeNames.map((locale) => [
   JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'))
 ]));
 const optionsMigratesSyncKeys = /migrateStorageIfNeeded\(SYNC_KEYS\);/.test(optionsSource);
+const chromeSyncKeys = settings.CHROME_SYNC_STORAGE_KEYS;
+const backgroundMigratesChromeSyncContract = /migrateStorageIfNeeded\(CHROME_SYNC_STORAGE_KEYS\);/.test(
+  backgroundSource
+);
 
 function getFunctionSource(source, name) {
   const marker = `function ${name}(`;
@@ -46,6 +51,39 @@ function getFunctionSource(source, name) {
   assert.fail(`${name} should have a complete body`);
 }
 
+function getStorageConstantValue(source, name) {
+  const start = source.indexOf(`const ${name}`);
+  assert(start >= 0, `${name} should exist`);
+  const end = source.indexOf(';', start);
+  const declaration = source.slice(start, end + 1);
+  const values = [...declaration.matchAll(/['"](_x_extension_[a-z0-9_]+_unique_)['"]/g)];
+  assert(values.length > 0, `${name} should include a storage key fallback`);
+  return values[values.length - 1][1];
+}
+
+{
+  const syncKeysBlock = optionsSource.match(/const SYNC_KEYS = \[([\s\S]*?)\n  \];/);
+  assert(syncKeysBlock, 'options should define its Chrome Sync export/import contract');
+  const optionSyncKeys = [...syncKeysBlock[1].matchAll(/\b([A-Z][A-Z0-9_]+_STORAGE_KEY)\b/g)]
+    .map((match) => getStorageConstantValue(optionsSource, match[1]));
+  assert.deepStrictEqual(
+    optionSyncKeys,
+    chromeSyncKeys,
+    'options export/import keys must exactly match the shared Chrome Sync contract'
+  );
+  assert(backgroundMigratesChromeSyncContract, 'background startup should migrate the full Chrome Sync contract');
+  assert(
+    /chrome\.storage\.sync\.remove\(LANGUAGE_MESSAGES_STORAGE_KEY/.test(backgroundSource),
+    'background startup should remove the obsolete oversized language cache from Chrome Sync'
+  );
+  [optionsSource, newtabSource, overlaySource].forEach((source) => {
+    assert(
+      !source.includes('_x_extension_language_messages_2024_unique_'),
+      'runtime surfaces must load packaged locale messages instead of syncing the language cache'
+    );
+  });
+}
+
 {
   const animationKey = '_x_extension_overlay_enter_animation_2026_unique_';
   assert(
@@ -62,7 +100,8 @@ function getFunctionSource(source, name) {
     'options should migrate overlay opening animation from local to sync storage'
   );
   assert(
-    /migrateStorageIfNeeded\(\[[\s\S]*OVERLAY_ENTER_ANIMATION_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
+    backgroundMigratesChromeSyncContract &&
+      chromeSyncKeys.includes('_x_extension_overlay_enter_animation_2026_unique_'),
     'background should migrate overlay opening animation from local to sync storage'
   );
   assert(
@@ -139,7 +178,8 @@ assert(
   'background should define the bookmark folder icons storage key'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
+  backgroundMigratesChromeSyncContract &&
+    chromeSyncKeys.includes('_x_extension_bookmark_folder_icons_visible_2026_unique_'),
   'background should migrate the bookmark folder icon setting to sync storage'
 );
 
@@ -160,231 +200,51 @@ assert(
   'background sync migration should define the bookmark view mode storage key'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*BOOKMARK_VIEW_MODE_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
+  backgroundMigratesChromeSyncContract &&
+    chromeSyncKeys.includes('_x_extension_bookmark_view_mode_2026_unique_'),
   'background local-to-sync migration should include the bookmark view mode'
 );
-[
-  [
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY',
+{
+  const topbarSyncKeys = [
+    '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
     '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
-    'light'
-  ],
-  [
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY',
-    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
-    'dark'
-  ]
-].forEach(([constantName, storageKey, theme]) => {
-  assert(
-    new RegExp(`${constantName}\\s*=\\s*[\\s\\S]*?['"]${storageKey}['"]`).test(newtabSource),
-    `new tab should define the local-only ${theme} bookmark topbar surface color storage key`
-  );
-  [
-    ['options', optionsSource],
-    ['background', backgroundSource],
-    ['shared sync settings', sharedSettingsSource]
-  ].forEach(([surface, source]) => {
-    assert(
-      !source.includes(storageKey),
-      `${surface} should not include the local-only ${theme} bookmark topbar surface color key`
-    );
+    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_'
+  ];
+  topbarSyncKeys.forEach((key) => {
+    assert(chromeSyncKeys.includes(key), `${key} should be part of the Chrome Sync contract`);
+    assert(optionsSource.includes(key), `options should export and import ${key}`);
+    assert(newtabSource.includes(key), `new tab should persist and apply ${key}`);
   });
-});
-{
-  const modeKey = '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
   assert(
-    /BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY\s*=\s*[\s\S]*?['_"]_x_extension_bookmark_topbar_surface_mode_2026_unique_['_"]/.test(newtabSource),
-    'new tab should define the local-only bookmark topbar surface mode key'
+    !chromeSyncKeys.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_'),
+    'the legacy single-color key should not remain in the Chrome Sync contract'
   );
-  [
-    ['options', optionsSource],
-    ['background', backgroundSource],
-    ['shared sync settings', sharedSettingsSource]
-  ].forEach(([surface, source]) => {
-    assert(
-      !source.includes(modeKey),
-      `${surface} should not include the local-only bookmark topbar surface mode key`
-    );
-  });
-  const persistModeSource = getFunctionSource(
-    newtabSource,
-    'persistBookmarkTopbarSurfaceMode'
-  );
-  assert(
-    /bookmarkTopbarSurfaceColorStorageArea\.set/.test(persistModeSource) &&
-      !/storage\.sync|syncArea/.test(persistModeSource),
-    'bookmark topbar surface mode changes should persist only through local storage'
-  );
-}
-assert(
-  !optionsSource.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_') &&
-    !backgroundSource.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_') &&
-    !sharedSettingsSource.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_'),
-  'the legacy bookmark topbar color key should not remain part of sync settings'
-);
-{
-  const persistSource = getFunctionSource(newtabSource, 'persistBookmarkTopbarSurfaceColor');
-  const loadSource = getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceColors');
+  const persistModeSource = getFunctionSource(newtabSource, 'persistBookmarkTopbarSurfaceMode');
+  const persistColorSource = getFunctionSource(newtabSource, 'persistBookmarkTopbarSurfaceColor');
+  const migrationSource = getFunctionSource(newtabSource, 'migrateBookmarkTopbarSurfaceSettings');
+  const loadColorSource = getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceColors');
   const changeSource = getFunctionSource(
     newtabSource,
     'handleBookmarkTopbarSurfaceColorStorageChanges'
   );
   assert(
-    /bookmarkTopbarSurfaceColorStorageArea\.set/.test(persistSource) &&
-      !/storage\.sync|syncArea/.test(persistSource),
-    'bookmark topbar color changes should persist only through the local storage adapter'
+    /bookmarkTopbarSurfaceStorageArea\.set/.test(persistModeSource) &&
+      /bookmarkTopbarSurfaceStorageArea\.set/.test(persistColorSource),
+    'bookmark topbar material preferences should write through the primary Chrome Sync adapter'
   );
   assert(
-    /localArea\.get\(keys/.test(loadSource) &&
-      /localArea\.set\(localUpdates, finishLocalMigration\)/.test(loadSource) &&
-      /hasSyncedColor[\s\S]*syncArea\.remove\(keys\)/.test(loadSource) &&
-      !/syncResult\[key\][\s\S]*localUpdates\[key\]/.test(loadSource),
-    'existing synced bookmark topbar colors should be removed without being imported locally'
+    /localArea\.get\(readKeys/.test(migrationSource) &&
+      /syncArea\.get\(readKeys/.test(migrationSource) &&
+      /syncArea\.set\(updates, finish\)/.test(migrationSource),
+    'existing local bookmark topbar material preferences should migrate into Chrome Sync'
   );
   assert(
-    /areaName !== ['"]local['"]/.test(changeSource),
-    'live bookmark topbar color updates should only accept local storage changes'
+    /migrateBookmarkTopbarSurfaceSettings\(\)[\s\S]*syncArea\.get/.test(loadColorSource),
+    'bookmark topbar colors should load from Chrome Sync after local migration'
   );
-}
-{
-  const legacyKey = '_x_extension_bookmark_topbar_surface_color_2026_unique_';
-  const lightKey = '_x_extension_bookmark_topbar_surface_color_light_2026_unique_';
-  const darkKey = '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
-  const localData = { [lightKey]: '#f1f2f3' };
-  const syncData = {
-    [legacyKey]: '#445566',
-    [lightKey]: '#aabbcc',
-    [darkKey]: '#112233'
-  };
-  const localWrites = [];
-  const localRemovals = [];
-  const syncRemovals = [];
-  const appliedResults = [];
-  const localArea = {
-    get(keys, callback) {
-      callback(Object.fromEntries(keys.flatMap((key) => (
-        Object.prototype.hasOwnProperty.call(localData, key) ? [[key, localData[key]]] : []
-      ))));
-    },
-    set(payload, callback) {
-      localWrites.push(payload);
-      Object.assign(localData, payload);
-      callback();
-    },
-    remove(keys) {
-      const removedKeys = Array.isArray(keys) ? keys : [keys];
-      localRemovals.push(...removedKeys);
-      removedKeys.forEach((key) => delete localData[key]);
-    }
-  };
-  const syncArea = {
-    get(keys, callback) {
-      callback(Object.fromEntries(keys.flatMap((key) => (
-        Object.prototype.hasOwnProperty.call(syncData, key) ? [[key, syncData[key]]] : []
-      ))));
-    },
-    remove(keys) {
-      syncRemovals.push(...keys);
-    }
-  };
-  const createInitialColorLoader = new Function(
-    'bookmarkTopbarSurfaceColorStorageArea',
-    'chrome',
-    'initialThemeReadyPromise',
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY',
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY',
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY',
-    'getCurrentBookmarkTopbarResolvedTheme',
-    'getBookmarkTopbarSurfaceColorStorageKey',
-    'bookmarkTopbarSurfaceColorRevisions',
-    'applyInitialBookmarkTopbarSurfaceColors',
-    `${getFunctionSource(newtabSource, 'getBookmarkTopbarSurfaceColorStorageKeys')}
-    ${getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceColors')}
-    return loadInitialBookmarkTopbarSurfaceColors;`
-  );
-  const loadInitialBookmarkTopbarSurfaceColors = createInitialColorLoader(
-    localArea,
-    { storage: { local: localArea, sync: syncArea } },
-    { then(callback) { callback(); } },
-    legacyKey,
-    lightKey,
-    darkKey,
-    () => 'dark',
-    (theme) => theme === 'dark' ? darkKey : lightKey,
-    { light: 0, dark: 0 },
-    (result) => appliedResults.push(result)
-  );
-  loadInitialBookmarkTopbarSurfaceColors();
-  assert.deepStrictEqual(
-    localWrites,
-    [],
-    'the current machine should not copy a synced color into local storage'
-  );
-  assert.strictEqual(localData[lightKey], '#f1f2f3');
-  assert.strictEqual(localData[darkKey], undefined);
-  assert.deepStrictEqual(
-    localRemovals,
-    [],
-    'migration should not issue a redundant local removal when no local legacy color exists'
-  );
-  assert.deepStrictEqual(
-    syncRemovals,
-    [lightKey, darkKey, legacyKey],
-    'all bookmark topbar color keys should be removed from sync without importing their values'
-  );
-  assert.deepStrictEqual(
-    appliedResults,
-    [{ [lightKey]: '#f1f2f3' }],
-    'initial rendering should use only colors already stored on the current machine'
-  );
-}
-{
-  const modeKey = '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
-  const legacyKey = '_x_extension_bookmark_topbar_surface_color_2026_unique_';
-  const darkKey = '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
-  const appliedModes = [];
-  const localArea = {
-    get(keys, callback) {
-      assert.deepStrictEqual(keys, [modeKey, darkKey, legacyKey]);
-      callback({ [darkKey]: '#223344' });
-    }
-  };
-  const createInitialModeLoader = new Function(
-    'bookmarkTopbarSurfaceColorStorageArea',
-    'initialThemeReadyPromise',
-    'BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY',
-    'BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY',
-    'getCurrentBookmarkTopbarResolvedTheme',
-    'getBookmarkTopbarSurfaceColorStorageKey',
-    'normalizeBookmarkTopbarSurfaceColor',
-    'bookmarkTopbarSurfaceModeRevision',
-    'applyBookmarkTopbarSurfaceMode',
-    `${getFunctionSource(newtabSource, 'isBookmarkTopbarSurfaceMode')}
-    ${getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceMode')}
-    return loadInitialBookmarkTopbarSurfaceMode;`
-  );
-  const loadInitialBookmarkTopbarSurfaceMode = createInitialModeLoader(
-    localArea,
-    { then(callback) { callback(); } },
-    modeKey,
-    legacyKey,
-    () => 'dark',
-    () => darkKey,
-    (value) => /^#[0-9a-f]{6}$/.test(String(value || '')) ? value : '',
-    0,
-    (mode, options) => appliedModes.push({ mode, options })
-  );
-  loadInitialBookmarkTopbarSurfaceMode();
-  assert.strictEqual(appliedModes.length, 1);
-  assert.strictEqual(
-    appliedModes[0].mode,
-    'custom',
-    'an existing per-theme color should migrate to custom material mode'
-  );
-  assert.strictEqual(
-    appliedModes[0].options.persist,
-    true,
-    'the inferred custom material mode should be persisted locally'
+  assert(
+    /isPrimaryStorageAreaName\(areaName\)/.test(changeSource),
+    'live bookmark topbar material updates should only accept the primary sync area'
   );
 }
 localeNames.forEach((locale) => {
@@ -491,8 +351,8 @@ localeNames.forEach((locale) => {
   assert.deepStrictEqual(syncWrites, [{ [key]: 'top' }]);
   assert.deepStrictEqual(
     localWrites,
-    [{ [key]: 'top' }],
-    'changing bookmark mode should update the local fallback with the sync value'
+    [],
+    'changing bookmark mode should not maintain a second local source of truth'
   );
 }
 {
@@ -555,8 +415,8 @@ assert(
   'New Tab shortcuts should be included in options local-to-sync migration'
 );
 assert(
-  /changes\[NEWTAB_SHORTCUTS_STORAGE_KEY\]/.test(optionsSource),
-  'New Tab shortcuts changes should refresh options sync status'
+  /SYNC_KEYS\.some\(\(key\) => changes\[key\]\)/.test(optionsSource),
+  'all Chrome Sync preference changes should refresh options sync status'
 );
 assert(
   /NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY\s*=\s*['_"]_x_extension_newtab_shortcut_add_visible_2026_unique_['_"]/.test(optionsSource),
@@ -616,6 +476,7 @@ assert(
   'background sync migration should define the New Tab shortcuts storage key'
 );
 assert(
-  /migrateStorageIfNeeded\(\[[\s\S]*NEWTAB_SHORTCUTS_STORAGE_KEY[\s\S]*\]\);/.test(backgroundSource),
+  backgroundMigratesChromeSyncContract &&
+    chromeSyncKeys.includes('_x_extension_newtab_shortcuts_2026_unique_'),
   'background local-to-sync migration should include New Tab shortcuts'
 );

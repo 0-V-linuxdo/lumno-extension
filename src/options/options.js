@@ -469,9 +469,6 @@
   const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
     ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null);
-  const triggerStyleStorageArea = chrome && chrome.storage && chrome.storage.local
-    ? chrome.storage.local
-    : storageArea;
   function getActivePrimaryAreaName() {
     return providerStorageRuntime
       ? providerStorageRuntime.getActiveAreaName()
@@ -497,7 +494,6 @@
 
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
-  const LANGUAGE_MESSAGES_STORAGE_KEY = '_x_extension_language_messages_2024_unique_';
   const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
@@ -516,6 +512,9 @@
   const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
   const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY = '_x_extension_bookmark_topbar_surface_mode_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY = '_x_extension_bookmark_topbar_surface_color_light_2026_unique_';
+  const BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY = '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_';
   const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
   const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
@@ -563,7 +562,6 @@
   const SYNC_KEYS = [
     THEME_STORAGE_KEY,
     LANGUAGE_STORAGE_KEY,
-    LANGUAGE_MESSAGES_STORAGE_KEY,
     RECENT_MODE_STORAGE_KEY,
     RECENT_COUNT_STORAGE_KEY,
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
@@ -581,6 +579,9 @@
     BOOKMARK_COLUMNS_STORAGE_KEY,
     BOOKMARK_VIEW_MODE_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+    BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
     PINNED_RECENT_SITES_STORAGE_KEY,
     HIDDEN_RECENT_SITES_STORAGE_KEY,
     NEWTAB_SHORTCUTS_STORAGE_KEY,
@@ -1470,15 +1471,6 @@
     return String(value || '').trim().toLowerCase() === 'butterfly' ? 'butterfly' : 'lumno';
   }
 
-  function resolveSelectionQuickActionsTriggerStyle(localValue, providerValue) {
-    if (typeof SETTINGS.resolveSelectionQuickActionsTriggerStyle === 'function') {
-      return SETTINGS.resolveSelectionQuickActionsTriggerStyle(localValue, providerValue);
-    }
-    return [localValue, providerValue].some((value) => (
-      String(value || '').trim().toLowerCase() === 'butterfly'
-    )) ? 'butterfly' : 'lumno';
-  }
-
   function normalizeSearchResultPriority(value) {
     return typeof SETTINGS.normalizeSearchResultPriority === 'function'
       ? SETTINGS.normalizeSearchResultPriority(value)
@@ -2121,15 +2113,12 @@
   function handleSelectionQuickActionsTriggerStyleSelection(value) {
     const nextStyle = normalizeSelectionQuickActionsTriggerStyle(value);
     const previousStyle = currentSelectionQuickActionsTriggerStyle;
-    const payload = { [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: nextStyle };
-    const writes = [];
-    if (triggerStyleStorageArea && typeof triggerStyleStorageArea.set === 'function') {
-      writes.push(storageSet(triggerStyleStorageArea, payload));
+    if (!storageArea) {
+      return;
     }
-    if (storageArea && storageArea !== triggerStyleStorageArea) {
-      writes.push(storageSet(storageArea, payload));
-    }
-    Promise.all(writes)
+    storageSet(storageArea, {
+      [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: nextStyle
+    })
       .then(() => {
         setSelectionQuickActionsTriggerStyleTabState(nextStyle);
       })
@@ -2879,20 +2868,6 @@
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
       renderSiteSearchList();
       renderSearchBlacklistList();
-      if (shouldPersist) {
-        if (!storageArea) {
-          return;
-        }
-        const syncArea = chrome && chrome.storage ? chrome.storage.sync : null;
-        if (storageArea !== syncArea) {
-          storageArea.set({
-            [LANGUAGE_MESSAGES_STORAGE_KEY]: {
-              locale: targetLocale,
-              messages: currentMessages
-            }
-          });
-        }
-      }
     });
   }
 
@@ -4962,31 +4937,12 @@
       }
     });
     storageArea.get([SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY], (result) => {
-      const providerRawValue = result[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY];
-      const applyTriggerStyle = (localResult) => {
-        const hasLocalValue = Boolean(localResult) && Object.prototype.hasOwnProperty.call(
-          localResult,
-          SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY
-        );
-        const localRawValue = hasLocalValue
-          ? localResult[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]
-          : undefined;
-        const stored = resolveSelectionQuickActionsTriggerStyle(localRawValue, providerRawValue);
-        setSelectionQuickActionsTriggerStyleTabState(stored);
-        if (triggerStyleStorageArea && (!hasLocalValue || localRawValue !== stored)) {
-          triggerStyleStorageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: stored });
-        }
-        if (providerRawValue !== stored) {
-          storageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: stored });
-        }
-      };
-      if (!triggerStyleStorageArea || typeof triggerStyleStorageArea.get !== 'function') {
-        applyTriggerStyle({});
-        return;
+      const rawValue = result[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY];
+      const stored = normalizeSelectionQuickActionsTriggerStyle(rawValue);
+      setSelectionQuickActionsTriggerStyleTabState(stored);
+      if (rawValue !== stored) {
+        storageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: stored });
       }
-      triggerStyleStorageArea.get([SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY], (localResult) => {
-        applyTriggerStyle(localResult || {});
-      });
     });
 
     storageArea.get([RESTRICTED_ACTION_STORAGE_KEY], (result) => {
@@ -5962,46 +5918,10 @@
 
   addStorageChangeListener((changes, areaName) => {
     const isPrimaryArea = isPrimaryStorageAreaName(areaName);
-    const hasLocalTriggerStyleChange = areaName === 'local' &&
-      Boolean(changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]);
-    if (!isPrimaryArea && !hasLocalTriggerStyleChange) {
+    if (!isPrimaryArea) {
       return;
     }
-    if (changes[SYNC_META_KEY] ||
-        changes[THEME_STORAGE_KEY] ||
-        changes[LANGUAGE_STORAGE_KEY] ||
-        changes[RECENT_MODE_STORAGE_KEY] ||
-        changes[RECENT_COUNT_STORAGE_KEY] ||
-        changes[NEWTAB_WIDTH_MODE_STORAGE_KEY] ||
-        changes[OVERLAY_SIZE_MODE_STORAGE_KEY] ||
-        changes[OVERLAY_ENTER_ANIMATION_STORAGE_KEY] ||
-        changes[BOOKMARK_COUNT_STORAGE_KEY] ||
-        changes[BOOKMARK_COLUMNS_STORAGE_KEY] ||
-        changes[BOOKMARK_VIEW_MODE_STORAGE_KEY] ||
-        changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] ||
-        changes[NEWTAB_SHORTCUTS_STORAGE_KEY] ||
-        changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY] ||
-        changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] ||
-        changes[AUTO_PIP_ENABLED_STORAGE_KEY] ||
-        changes[PINNED_TAB_RECOVERY_ENABLED_STORAGE_KEY] ||
-        changes[SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY] ||
-        changes[SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY] ||
-        changes[SELECTION_QUICK_ACTIONS_ICON_SET_STORAGE_KEY] ||
-        changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY] ||
-        changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY] ||
-        changes[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY] ||
-        changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] ||
-        changes[RESTRICTED_ACTION_STORAGE_KEY] ||
-        changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY] ||
-        changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY] ||
-        changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY] ||
-        changes[FALLBACK_SHORTCUT_STORAGE_KEY] ||
-        changes[SITE_SEARCH_STORAGE_KEY] ||
-        changes[SITE_SEARCH_DISABLED_STORAGE_KEY] ||
-        changes[SEARCH_BLACKLIST_STORAGE_KEY] ||
-        changes[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY] ||
-        changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] ||
-        changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
+    if (changes[SYNC_META_KEY] || SYNC_KEYS.some((key) => changes[key])) {
       refreshSyncStatus();
     }
     if (changes[THEME_STORAGE_KEY]) {
@@ -6218,9 +6138,6 @@
       const raw = changes[SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY].newValue;
       const next = normalizeSelectionQuickActionsTriggerStyle(raw);
       setSelectionQuickActionsTriggerStyleTabState(next);
-      if (areaName !== 'local' && triggerStyleStorageArea) {
-        triggerStyleStorageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: next });
-      }
       if (raw !== next && storageArea) {
         storageArea.set({ [SELECTION_QUICK_ACTIONS_TRIGGER_STYLE_STORAGE_KEY]: next });
       }
