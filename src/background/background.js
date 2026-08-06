@@ -1297,6 +1297,10 @@ const BOOKMARK_COUNT_STORAGE_KEY = '_x_extension_bookmark_count_2024_unique_';
 const BOOKMARK_COLUMNS_STORAGE_KEY = '_x_extension_bookmark_columns_2024_unique_';
 const BOOKMARK_VIEW_MODE_STORAGE_KEY = '_x_extension_bookmark_view_mode_2026_unique_';
 const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
+const BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS = globalThis.LumnoSettings &&
+  Array.isArray(globalThis.LumnoSettings.BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS)
+  ? globalThis.LumnoSettings.BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS
+  : [];
 const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
 const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
 const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
@@ -1517,6 +1521,17 @@ function cleanupRemovedAiStorageKeys() {
   if (localArea && typeof localArea.remove === 'function') {
     localArea.remove(REMOVED_AI_LOCAL_STORAGE_KEYS, () => {});
   }
+}
+
+function cleanupLocalOnlyBookmarkTopbarSyncStorage() {
+  if (!chrome || !chrome.storage || !chrome.storage.sync ||
+      typeof chrome.storage.sync.remove !== 'function' ||
+      BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS.length === 0) {
+    return;
+  }
+  chrome.storage.sync.remove(BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS, () => {
+    void (chrome.runtime && chrome.runtime.lastError);
+  });
 }
 
 function getTabSwitchStorageArea() {
@@ -4527,6 +4542,7 @@ if (chrome && chrome.runtime && chrome.runtime.onStartup) {
 ensureTabSwitchStatsLoaded().catch(() => {});
 ensureTabSwitcherStateLoaded().catch(() => {});
 cleanupRemovedAiStorageKeys();
+cleanupLocalOnlyBookmarkTopbarSyncStorage();
 
 if (chrome.action && chrome.action.onClicked) {
   chrome.action.onClicked.addListener((tab) => {

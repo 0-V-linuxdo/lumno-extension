@@ -20,7 +20,10 @@
   const localStorageArea = (chrome && chrome.storage && chrome.storage.local)
     ? chrome.storage.local
     : storageArea;
-  const bookmarkTopbarSurfaceStorageArea = storageArea;
+  const bookmarkTopbarSurfaceStorageArea =
+    (chrome && chrome.storage && chrome.storage.local)
+      ? chrome.storage.local
+      : null;
   const recentSitesStorageArea = storageArea || localStorageArea;
   const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
     ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
@@ -399,7 +402,6 @@
   let bookmarkViewModeRevision = 0;
   let bookmarkTopbarSurfaceMode = 'adaptive';
   let bookmarkTopbarSurfaceModeRevision = 0;
-  let bookmarkTopbarSurfaceMigrationPromise = null;
   let currentBookmarkTopbarSurfaceColor = '';
   const bookmarkTopbarSurfaceColors = {
     light: '',
@@ -821,73 +823,9 @@
     return nextMode;
   }
 
-  function migrateBookmarkTopbarSurfaceSettings() {
-    if (bookmarkTopbarSurfaceMigrationPromise) {
-      return bookmarkTopbarSurfaceMigrationPromise;
-    }
-    bookmarkTopbarSurfaceMigrationPromise = initialThemeReadyPromise.then(() => new Promise((resolve) => {
-      const syncArea = bookmarkTopbarSurfaceStorageArea;
-      const localArea = localStorageArea;
-      if (!syncArea || !localArea || syncArea === localArea ||
-          typeof syncArea.get !== 'function' || typeof localArea.get !== 'function') {
-        resolve();
-        return;
-      }
-      const syncedKeys = [
-        BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY,
-        BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
-        BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY
-      ];
-      const readKeys = syncedKeys.concat(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
-      localArea.get(readKeys, (localResult) => {
-        syncArea.get(readKeys, (syncResult) => {
-          const localValues = localResult || {};
-          const syncedValues = syncResult || {};
-          const updates = {};
-          syncedKeys.forEach((key) => {
-            if (typeof syncedValues[key] === 'undefined' &&
-                typeof localValues[key] !== 'undefined') {
-              updates[key] = localValues[key];
-            }
-          });
-          const currentThemeKey = getBookmarkTopbarSurfaceColorStorageKey(
-            getCurrentBookmarkTopbarResolvedTheme()
-          );
-          const legacyColor = normalizeBookmarkTopbarSurfaceColor(
-            syncedValues[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY] ||
-              localValues[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY]
-          );
-          if (legacyColor && typeof syncedValues[currentThemeKey] === 'undefined' &&
-              typeof updates[currentThemeKey] === 'undefined') {
-            updates[currentThemeKey] = legacyColor;
-          }
-          const finish = () => {
-            if (chrome && chrome.runtime && chrome.runtime.lastError) {
-              resolve();
-              return;
-            }
-            if (typeof syncArea.remove === 'function') {
-              syncArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
-            }
-            if (typeof localArea.remove === 'function') {
-              localArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
-            }
-            resolve();
-          };
-          if (Object.keys(updates).length > 0 && typeof syncArea.set === 'function') {
-            syncArea.set(updates, finish);
-            return;
-          }
-          finish();
-        });
-      });
-    }));
-    return bookmarkTopbarSurfaceMigrationPromise;
-  }
-
   function loadInitialBookmarkTopbarSurfaceMode() {
-    const syncArea = bookmarkTopbarSurfaceStorageArea;
-    if (!syncArea || typeof syncArea.get !== 'function') {
+    if (!bookmarkTopbarSurfaceStorageArea ||
+        typeof bookmarkTopbarSurfaceStorageArea.get !== 'function') {
       return;
     }
     const expectedRevision = bookmarkTopbarSurfaceModeRevision;
@@ -895,16 +833,18 @@
       const currentThemeColorKey = getBookmarkTopbarSurfaceColorStorageKey(
         getCurrentBookmarkTopbarResolvedTheme()
       );
-      migrateBookmarkTopbarSurfaceSettings().then(() => syncArea.get([
+      bookmarkTopbarSurfaceStorageArea.get([
         BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY,
-        currentThemeColorKey
+        currentThemeColorKey,
+        BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
       ], (result) => {
         if (bookmarkTopbarSurfaceModeRevision !== expectedRevision) {
           return;
         }
         const rawMode = result && result[BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY];
         const storedColor = normalizeBookmarkTopbarSurfaceColor(
-          result && result[currentThemeColorKey]
+          result && (result[currentThemeColorKey] ||
+            result[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY])
         );
         applyBookmarkTopbarSurfaceMode(
           isBookmarkTopbarSurfaceMode(rawMode)
@@ -917,7 +857,7 @@
             scheduleTone: true
           }
         );
-      }));
+      });
     });
   }
 
@@ -1024,6 +964,21 @@
     });
   }
 
+  function getBookmarkTopbarSurfaceColorStorageKeys() {
+    return [
+      BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
+      BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY,
+      BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
+    ];
+  }
+
+  function getBookmarkTopbarSurfaceCleanupKeys() {
+    return [
+      BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY,
+      ...getBookmarkTopbarSurfaceColorStorageKeys()
+    ];
+  }
+
   function applyInitialBookmarkTopbarSurfaceColors(result, readRevisions) {
     [
       {
@@ -1051,28 +1006,57 @@
   }
 
   function loadInitialBookmarkTopbarSurfaceColors() {
-    const syncArea = bookmarkTopbarSurfaceStorageArea;
-    if (!syncArea || typeof syncArea.get !== 'function') {
+    const localArea = bookmarkTopbarSurfaceStorageArea;
+    if (!localArea || typeof localArea.get !== 'function') {
       return;
     }
+    const colorKeys = getBookmarkTopbarSurfaceColorStorageKeys();
+    const cleanupKeys = getBookmarkTopbarSurfaceCleanupKeys();
+    const syncArea = chrome && chrome.storage ? chrome.storage.sync : null;
     initialThemeReadyPromise.then(() => {
-      migrateBookmarkTopbarSurfaceSettings().then(() => {
+      localArea.get(colorKeys, (localResult) => {
+        const resolvedLocalResult = Object.assign({}, localResult || {});
+        const localUpdates = {};
+        const hasLocalLegacyColor = Object.prototype.hasOwnProperty.call(
+          resolvedLocalResult,
+          BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY
+        );
+        const localLegacyColor = resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
+        const currentThemeKey = getBookmarkTopbarSurfaceColorStorageKey(
+          getCurrentBookmarkTopbarResolvedTheme()
+        );
+        if (typeof localLegacyColor !== 'undefined' &&
+            typeof resolvedLocalResult[currentThemeKey] === 'undefined') {
+          resolvedLocalResult[currentThemeKey] = localLegacyColor;
+          localUpdates[currentThemeKey] = localLegacyColor;
+        }
+        delete resolvedLocalResult[BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY];
         const readRevisions = {
           light: bookmarkTopbarSurfaceColorRevisions.light,
           dark: bookmarkTopbarSurfaceColorRevisions.dark
         };
-        syncArea.get([
-          BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY,
-          BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY
-        ], (result) => {
-          applyInitialBookmarkTopbarSurfaceColors(result || {}, readRevisions);
-        });
+        const finishLocalMigration = () => {
+          if (hasLocalLegacyColor && typeof localArea.remove === 'function') {
+            localArea.remove(BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY);
+          }
+          applyInitialBookmarkTopbarSurfaceColors(resolvedLocalResult, readRevisions);
+        };
+        if (Object.keys(localUpdates).length > 0 && typeof localArea.set === 'function') {
+          localArea.set(localUpdates, finishLocalMigration);
+          return;
+        }
+        finishLocalMigration();
       });
+      if (syncArea && syncArea !== localArea && typeof syncArea.remove === 'function') {
+        syncArea.remove(cleanupKeys, () => {
+          void (chrome.runtime && chrome.runtime.lastError);
+        });
+      }
     });
   }
 
   function handleBookmarkTopbarSurfaceColorStorageChanges(changes, areaName) {
-    if (!isPrimaryStorageAreaName(areaName)) {
+    if (areaName !== 'local') {
       return false;
     }
     let handled = false;

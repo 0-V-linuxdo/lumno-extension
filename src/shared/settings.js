@@ -19,6 +19,13 @@
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
   const SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_group_enabled_2026_unique_';
+  // Device-specific appearance. Never import these values from Chrome Sync.
+  const BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS = Object.freeze([
+    '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
+    '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
+    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
+    '_x_extension_bookmark_topbar_surface_color_2026_unique_'
+  ]);
   // User-controlled preferences that are safe to store in chrome.storage.sync.
   // Keep generated caches, device state, and custom wallpaper media out of this list.
   const CHROME_SYNC_STORAGE_KEYS = Object.freeze([
@@ -41,9 +48,6 @@
     '_x_extension_bookmark_columns_2024_unique_',
     '_x_extension_bookmark_view_mode_2026_unique_',
     '_x_extension_bookmark_folder_icons_visible_2026_unique_',
-    '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
-    '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
-    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
     '_x_extension_newtab_pinned_recent_sites_2026_unique_',
     '_x_extension_newtab_hidden_recent_sites_2026_unique_',
     '_x_extension_newtab_shortcuts_2026_unique_',
@@ -352,6 +356,7 @@
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
+    BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS,
     CHROME_SYNC_STORAGE_KEYS,
     SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,

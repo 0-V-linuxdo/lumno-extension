@@ -240,23 +240,30 @@ assert(
   'background local-to-sync migration should include the bookmark view mode'
 );
 {
-  const topbarSyncKeys = [
+  const topbarLocalKeys = [
     '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
     '_x_extension_bookmark_topbar_surface_color_light_2026_unique_',
-    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_'
+    '_x_extension_bookmark_topbar_surface_color_dark_2026_unique_',
+    '_x_extension_bookmark_topbar_surface_color_2026_unique_'
   ];
-  topbarSyncKeys.forEach((key) => {
-    assert(chromeSyncKeys.includes(key), `${key} should be part of the Chrome Sync contract`);
-    assert(optionsSource.includes(key), `options should export and import ${key}`);
-    assert(newtabSource.includes(key), `new tab should persist and apply ${key}`);
+  assert.deepStrictEqual(
+    settings.BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS,
+    topbarLocalKeys,
+    'shared settings should publish one explicit local-only bookmark topbar contract'
+  );
+  topbarLocalKeys.forEach((key) => {
+    assert(!chromeSyncKeys.includes(key), `${key} must stay out of the Chrome Sync contract`);
+    assert(!optionsSource.includes(key), `options must not export or import local-only ${key}`);
+    assert(newtabSource.includes(key), `new tab should persist and apply local-only ${key}`);
   });
   assert(
-    !chromeSyncKeys.includes('_x_extension_bookmark_topbar_surface_color_2026_unique_'),
-    'the legacy single-color key should not remain in the Chrome Sync contract'
+    /const bookmarkTopbarSurfaceStorageArea =\s*\n\s*\(chrome && chrome\.storage && chrome\.storage\.local\)/.test(newtabSource) &&
+      !/const bookmarkTopbarSurfaceStorageArea = (?:storageArea|localStorageArea);/.test(newtabSource),
+    'bookmark topbar material preferences should require real local storage without a Sync fallback'
   );
   const persistModeSource = getFunctionSource(newtabSource, 'persistBookmarkTopbarSurfaceMode');
   const persistColorSource = getFunctionSource(newtabSource, 'persistBookmarkTopbarSurfaceColor');
-  const migrationSource = getFunctionSource(newtabSource, 'migrateBookmarkTopbarSurfaceSettings');
+  const loadModeSource = getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceMode');
   const loadColorSource = getFunctionSource(newtabSource, 'loadInitialBookmarkTopbarSurfaceColors');
   const changeSource = getFunctionSource(
     newtabSource,
@@ -265,22 +272,139 @@ assert(
   assert(
     /bookmarkTopbarSurfaceStorageArea\.set/.test(persistModeSource) &&
       /bookmarkTopbarSurfaceStorageArea\.set/.test(persistColorSource),
-    'bookmark topbar material preferences should write through the primary Chrome Sync adapter'
+    'bookmark topbar material preferences should write through the local-only adapter'
   );
   assert(
-    /localArea\.get\(readKeys/.test(migrationSource) &&
-      /syncArea\.get\(readKeys/.test(migrationSource) &&
-      /syncArea\.set\(updates, finish\)/.test(migrationSource),
-    'existing local bookmark topbar material preferences should migrate into Chrome Sync'
+    /bookmarkTopbarSurfaceStorageArea\.get/.test(loadModeSource) &&
+      !/syncArea|storage\.sync/.test(loadModeSource),
+    'bookmark topbar material mode should load only from local storage'
   );
   assert(
-    /migrateBookmarkTopbarSurfaceSettings\(\)[\s\S]*syncArea\.get/.test(loadColorSource),
-    'bookmark topbar colors should load from Chrome Sync after local migration'
+    /localArea\.get\(colorKeys/.test(loadColorSource) &&
+      /syncArea\.remove\(cleanupKeys/.test(loadColorSource) &&
+      !/syncResult\[/.test(loadColorSource),
+    'bookmark topbar colors should load locally and purge Sync copies without importing them'
   );
   assert(
-    /isPrimaryStorageAreaName\(areaName\)/.test(changeSource),
-    'live bookmark topbar material updates should only accept the primary sync area'
+    /areaName !== ['"]local['"]/.test(changeSource),
+    'live bookmark topbar material updates should only accept local storage changes'
   );
+  const backgroundCleanupSource = getFunctionSource(
+    backgroundSource,
+    'cleanupLocalOnlyBookmarkTopbarSyncStorage'
+  );
+  assert(
+    /BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS/.test(backgroundCleanupSource) &&
+      /chrome\.storage\.sync\.remove/.test(backgroundCleanupSource),
+    'background startup should purge local-only bookmark topbar values from Chrome Sync'
+  );
+
+  const [modeKey, lightKey, darkKey, legacyKey] = topbarLocalKeys;
+  const localData = {
+    [modeKey]: 'custom',
+    [lightKey]: '#112233'
+  };
+  const syncData = {
+    [modeKey]: 'adaptive',
+    [lightKey]: '#aabbcc',
+    [darkKey]: '#ddeeff',
+    [legacyKey]: '#445566'
+  };
+  const localWrites = [];
+  const syncRemovals = [];
+  const appliedColors = [];
+  const localArea = {
+    get(keys, callback) {
+      callback(Object.fromEntries(keys.flatMap((key) => (
+        Object.prototype.hasOwnProperty.call(localData, key) ? [[key, localData[key]]] : []
+      ))));
+    },
+    set(payload, callback) {
+      localWrites.push(payload);
+      Object.assign(localData, payload);
+      if (callback) callback();
+    },
+    remove(keys) {
+      const removedKeys = Array.isArray(keys) ? keys : [keys];
+      removedKeys.forEach((key) => delete localData[key]);
+    }
+  };
+  const syncArea = {
+    remove(keys, callback) {
+      syncRemovals.push(...keys);
+      keys.forEach((key) => delete syncData[key]);
+      if (callback) callback();
+    }
+  };
+  const createInitialColorLoader = new Function(
+    'bookmarkTopbarSurfaceStorageArea',
+    'chrome',
+    'initialThemeReadyPromise',
+    'BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_LIGHT_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_DARK_STORAGE_KEY',
+    'getCurrentBookmarkTopbarResolvedTheme',
+    'getBookmarkTopbarSurfaceColorStorageKey',
+    'bookmarkTopbarSurfaceColorRevisions',
+    'applyInitialBookmarkTopbarSurfaceColors',
+    `${getFunctionSource(newtabSource, 'getBookmarkTopbarSurfaceColorStorageKeys')}
+    ${getFunctionSource(newtabSource, 'getBookmarkTopbarSurfaceCleanupKeys')}
+    ${loadColorSource}
+    return loadInitialBookmarkTopbarSurfaceColors;`
+  );
+  const loadInitialBookmarkTopbarSurfaceColors = createInitialColorLoader(
+    localArea,
+    { runtime: { lastError: null }, storage: { local: localArea, sync: syncArea } },
+    { then(callback) { callback(); } },
+    modeKey,
+    legacyKey,
+    lightKey,
+    darkKey,
+    () => 'light',
+    (theme) => theme === 'dark' ? darkKey : lightKey,
+    { light: 0, dark: 0 },
+    (result) => appliedColors.push(result)
+  );
+  loadInitialBookmarkTopbarSurfaceColors();
+  assert.deepStrictEqual(localWrites, [], 'Sync values must never be imported into local topbar settings');
+  assert.deepStrictEqual(
+    appliedColors,
+    [{ [lightKey]: '#112233' }],
+    'initial topbar appearance should use only current-device values'
+  );
+  assert.deepStrictEqual(syncRemovals, topbarLocalKeys, 'all local-only keys should be purged from Sync');
+  assert.deepStrictEqual(syncData, {}, 'no local-only topbar value should survive in Sync');
+
+  const appliedModes = [];
+  const createInitialModeLoader = new Function(
+    'bookmarkTopbarSurfaceStorageArea',
+    'initialThemeReadyPromise',
+    'BOOKMARK_TOPBAR_SURFACE_MODE_STORAGE_KEY',
+    'BOOKMARK_TOPBAR_SURFACE_COLOR_STORAGE_KEY',
+    'getCurrentBookmarkTopbarResolvedTheme',
+    'getBookmarkTopbarSurfaceColorStorageKey',
+    'normalizeBookmarkTopbarSurfaceColor',
+    'bookmarkTopbarSurfaceModeRevision',
+    'applyBookmarkTopbarSurfaceMode',
+    `${getFunctionSource(newtabSource, 'isBookmarkTopbarSurfaceMode')}
+    ${loadModeSource}
+    return loadInitialBookmarkTopbarSurfaceMode;`
+  );
+  const loadInitialBookmarkTopbarSurfaceMode = createInitialModeLoader(
+    localArea,
+    { then(callback) { callback(); } },
+    modeKey,
+    legacyKey,
+    () => 'light',
+    () => lightKey,
+    (value) => /^#[0-9a-f]{6}$/.test(String(value || '')) ? value : '',
+    0,
+    (mode, options) => appliedModes.push({ mode, options })
+  );
+  loadInitialBookmarkTopbarSurfaceMode();
+  assert.strictEqual(appliedModes.length, 1);
+  assert.strictEqual(appliedModes[0].mode, 'custom', 'material mode should load from current-device storage');
 }
 localeNames.forEach((locale) => {
   [
