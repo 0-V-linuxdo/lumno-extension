@@ -26,6 +26,7 @@ function wait(ms) {
     </style>
     <p id="copy">serendipity</p>
     <p id="question">How should I structure this rollout?</p>
+    <p id="article-paragraph">今年初，一款名为 Bookology 的读书管理应用进入我的视野，它集合了我需要的原本分散在各个读书应用中的功能。总结来说，Bookology 将书籍管理、阅读进度、阅读笔记和数据统计整合在一个简洁的数字书架中，在这一个 App 中就可以建立专属于我自己的阅读档案。</p>
     <p><span id="generic-context"><em id="generic">React</em> trailing text</span></p>
     <p id="cjk">这是你需要的资料</p>
     <div id="dark-context" style="background-color: rgb(20, 24, 32);"><span id="dark-copy">serendipity</span></div>
@@ -161,6 +162,7 @@ function wait(ms) {
 
   const paragraph = window.document.getElementById('copy');
   const question = window.document.getElementById('question');
+  const articleParagraph = window.document.getElementById('article-paragraph');
   const generic = window.document.getElementById('generic');
   const cjk = window.document.getElementById('cjk');
   const darkCopy = window.document.getElementById('dark-copy');
@@ -260,7 +262,7 @@ function wait(ms) {
     'the selection host should expose the common notranslate class used by translation extensions');
   assert.strictEqual(host.dataset.iconSet, 'remix', 'obsolete icon-set storage should not change the toolbar renderer');
   assert.strictEqual(host.dataset.selectionMark, 'lumno', 'the entry should always use the fixed Lumno mark');
-  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v29');
+  assert.strictEqual(host.dataset.runtimeRevision, 'selection-toolbar-v32');
   assert.strictEqual(host.dataset.entryContrast, 'light',
     'an entry on the default light page should use the restrained light-surface contrast treatment');
   assert.strictEqual(host.style.colorScheme, 'light',
@@ -541,6 +543,16 @@ function wait(ms) {
     await wait(460);
   }
 
+  await selectDomText(articleParagraph);
+  assert.strictEqual(host.hidden, false,
+    'a substantial article paragraph should expose the entry without relying on line count');
+  selectionShadow.querySelector('.lumno-selection-main').click();
+  assert.strictEqual(
+    selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]').dataset.intent,
+    'summarize',
+    'a substantial article paragraph should put Summarize first'
+  );
+
   await selectDomText(selectableButton, { clickAfterPointerUp: true });
   assert.strictEqual(selectableButtonClicks, 1, 'Lumno should not block the selected button click');
   assert.strictEqual(host.hidden, false,
@@ -794,6 +806,11 @@ function wait(ms) {
   assert(
     /button\s*\{[\s\S]*?padding:\s*0 8px[\s\S]*?min-height:\s*30px[\s\S]*?border-radius:\s*9px[\s\S]*?gap:\s*5px[\s\S]*?font:\s*400 12px/.test(selectionStyles),
     '30px actions should use the lighter text weight and retain the same 3px shell inset'
+  );
+  assert(
+    /\.lumno-selection-surface\[data-icon-only="false"\]\s*\{[\s\S]*?padding-inline-end:\s*1px/.test(selectionStyles) &&
+      !/\.lumno-selection-main\[data-icon-only="false"\] \.lumno-selection-logo\s*\{/.test(selectionStyles),
+    'the expanded toolbar should shorten only the trailing shell inset while keeping the butterfly centered in its hit area'
   );
   assert(
     /\.lumno-selection-content\s*\{[\s\S]*?justify-content:\s*flex-end[\s\S]*?overflow:\s*hidden/.test(selectionStyles) &&

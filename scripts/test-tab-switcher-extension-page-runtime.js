@@ -117,7 +117,17 @@ assert.strictEqual(
   'the page must not be able to traverse the tab switcher Shadow DOM'
 );
 
-latestViewOptions.root.querySelector('.x-tab-switcher-card').click();
+const switcherCard = latestViewOptions.root.querySelector('.x-tab-switcher-card');
+switcherCard.dispatchEvent(new window.MouseEvent('pointerdown', {
+  bubbles: true,
+  composed: true
+}));
+assert.ok(
+  switcherHost.isConnected,
+  'pointerdown inside the closed tab switcher must not be treated as an outside click'
+);
+
+switcherCard.click();
 window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
 window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Alt' }));
 assert.deepStrictEqual(

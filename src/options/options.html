@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111111" />
     <title data-i18n="options_page_title">Lumno 设置</title>
+    <script src="../shared/icon-font-preload.js"></script>
+    <script src="theme-preload.js"></script>
     <link rel="stylesheet" href="../../assets/fonts/open-sans/open-sans.css" />
     <link rel="stylesheet" href="../../assets/remixicon/fonts/remixicon.css" />
     <link rel="stylesheet" href="../shared/tooltip.css" />
@@ -72,7 +74,7 @@
         transform: translateX(-50%);
         width: min(900px, calc(100vw - 40px));
         height: 332px;
-        background: url("../../assets/images/settings-bg-light.png") center top / contain no-repeat;
+        background: url("../../assets/images/settings-bg-light.webp") center top / contain no-repeat;
         border-radius: 24px;
         z-index: 0;
         pointer-events: none;
@@ -80,7 +82,7 @@
       }
       body[data-theme="dark"] .settings-bg-light {
         opacity: 1;
-        background-image: url("../../assets/images/settings-bg-dark.png");
+        background-image: url("../../assets/images/settings-bg-dark.webp");
       }
       body[data-theme="light"] {
         background: #f1f5f9;

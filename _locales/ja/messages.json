@@ -1503,6 +1503,9 @@
   "search_scope_remove_confirmation": {
     "message": "もう一度 Backspace で検索範囲を解除"
   },
+  "search_number_jump_release_hint": {
+    "message": "離すと数字を表示"
+  },
   "search_scope_menu_shortcut_hint": {
     "message": "パネルを開く"
   },
@@ -1744,7 +1747,10 @@
     "message": "番号で検索結果へ移動"
   },
   "shortcut_reference_search_number_jump_desc": {
-    "message": "番号ジャンプモードに入り、0～9で対応する候補を実行します"
+    "message": "主修飾キーを長押しして離し、0～9で対応する候補を実行します"
+  },
+  "shortcut_reference_search_number_jump_shortcut": {
+    "message": "{modifier} を0.4秒長押しし、離してから0～9を押す"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "選択中の操作を実行"

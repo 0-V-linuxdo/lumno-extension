@@ -3680,6 +3680,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     return;
   }
   const overlayInjectionFiles = [
+    'src/shared/icon-font-preload.js',
     'src/shared/codex-debug-surface.js',
     'src/shared/settings.js',
     'src/shared/navigation-disposition.js',
@@ -3876,6 +3877,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
       files: [
+        'src/shared/icon-font-preload.js',
         'src/shared/codex-debug-surface.js',
         'src/react/overlay-islands.js',
         'src/overlay/tab-switcher.js'

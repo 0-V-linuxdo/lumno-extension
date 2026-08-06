@@ -1503,6 +1503,9 @@
   "search_scope_remove_confirmation": {
     "message": "Press Backspace again to remove the scope"
   },
+  "search_number_jump_release_hint": {
+    "message": "Release to show numbers"
+  },
   "search_scope_menu_shortcut_hint": {
     "message": "Open panel"
   },
@@ -1744,7 +1747,10 @@
     "message": "Jump to a numbered result"
   },
   "shortcut_reference_search_number_jump_desc": {
-    "message": "Enter number jump mode, then press 0–9 to activate the matching result"
+    "message": "Hold the primary modifier, release it, then press 0–9 to activate the matching result"
+  },
+  "shortcut_reference_search_number_jump_shortcut": {
+    "message": "Hold {modifier} for 0.4s, release, then press 0–9"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "Run selected action"

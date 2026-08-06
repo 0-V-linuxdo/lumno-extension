@@ -11305,11 +11305,23 @@
     }
   }
 
-  function showToast(message, isError) {
+  function showToast(message, isError, options) {
     if (toastController && typeof toastController.show === 'function') {
-      toastController.show(message, { error: Boolean(isError) });
+      toastController.show(message, Object.assign({}, options, {
+        error: Boolean(isError)
+      }));
     }
   }
+
+  const numberShortcutOptions = {
+    onHoldStart: function() {
+      showToast(t(
+        'search_number_jump_release_hint',
+        'Release to show numbers'
+      ), false, { duration: 0 });
+    },
+    onHoldEnd: hideToast
+  };
 
   function fallbackCopyText(text) {
     if (!document || !document.body || typeof document.execCommand !== 'function') {
@@ -15563,10 +15575,11 @@
 
   document.addEventListener('keydown', function(event) {
     syncSuggestionActionModifiersFromEvent(event);
-    if (SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+    if (SUGGESTION_NAVIGATION.handleNumberShortcutKeyEvent(
       event,
       suggestionItems,
-      suggestionsContainer
+      suggestionsContainer,
+      numberShortcutOptions
     )) {
       return;
     }
@@ -15582,6 +15595,12 @@
   }, true);
   document.addEventListener('keyup', function(event) {
     syncSuggestionActionModifiersFromEvent(event);
+    SUGGESTION_NAVIGATION.handleNumberShortcutKeyEvent(
+      event,
+      suggestionItems,
+      suggestionsContainer,
+      numberShortcutOptions
+    );
   }, true);
   window.addEventListener('blur', function() {
     setSuggestionActionModifiersActive(false, false, false);

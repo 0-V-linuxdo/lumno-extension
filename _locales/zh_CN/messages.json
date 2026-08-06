@@ -1503,6 +1503,9 @@
   "search_scope_remove_confirmation": {
     "message": "再按一次退格键，移除搜索范围"
   },
+  "search_number_jump_release_hint": {
+    "message": "松开显示数字"
+  },
   "search_scope_menu_shortcut_hint": {
     "message": "打开面板"
   },
@@ -1744,7 +1747,10 @@
     "message": "按编号跳转搜索结果"
   },
   "shortcut_reference_search_number_jump_desc": {
-    "message": "进入数字跳转模式后，按 0–9 执行对应候选项"
+    "message": "长按主修饰键并松开，再按 0–9 执行对应候选项"
+  },
+  "shortcut_reference_search_number_jump_shortcut": {
+    "message": "长按 {modifier} 0.4 秒，松开后按 0–9"
   },
   "shortcut_reference_search_confirm_title": {
     "message": "执行当前候选项"

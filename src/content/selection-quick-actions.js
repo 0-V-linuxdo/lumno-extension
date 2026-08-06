@@ -16,8 +16,8 @@
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const HOST_ID = '_x_extension_selection_quick_actions_host_2026_unique_';
   const DEVELOPMENT_EXTENSION_ID = 'kkcjcneagmlhpeaafngjdlpcfjakejgb';
-  const RUNTIME_REVISION = 'selection-toolbar-v29';
-  const RUNTIME_VERSION = 29;
+  const RUNTIME_REVISION = 'selection-toolbar-v32';
+  const RUNTIME_VERSION = 32;
   const RUNTIME_ID = chrome && chrome.runtime && chrome.runtime.id
     ? String(chrome.runtime.id)
     : '';
@@ -1076,6 +1076,9 @@
         flex: 0 0 auto;
         overflow: visible;
       }
+      .lumno-selection-surface[data-icon-only="false"] {
+        padding-inline-end: 1px;
+      }
       :host([data-visible="true"]) .lumno-selection-surface {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -1182,6 +1185,7 @@
         justify-content: flex-end;
         flex: 0 1 auto;
         min-width: 0;
+        border-radius: 2px;
         overflow: hidden;
       }
       .lumno-selection-toolbar {

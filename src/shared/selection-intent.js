@@ -181,10 +181,73 @@
       /(?:最新|ニュース|価格|料金|レビュー|リリース|公式|ドキュメント|バージョン|更新)/.test(source);
   }
 
-  function getSentenceCount(text) {
-    const terminalCount = countMatches(text, /[。！？]/g) +
-      countMatches(text, /[.!?](?:\s|$)/g);
-    return Math.max(terminalCount, String(text || '').includes('\n\n') ? 2 : 0);
+  function getFallbackSentenceCount(text) {
+    const source = String(text || '').trim();
+    if (!source) {
+      return 0;
+    }
+    const terminalCount = countMatches(source, /[。！？]/g) +
+      countMatches(source, /[.!?](?:\s|$)/g);
+    const trailingClause = terminalCount > 0 && !/[.!?。！？]\s*$/.test(source) ? 1 : 0;
+    return Math.max(1, terminalCount + trailingClause);
+  }
+
+  function getSegmentationLocale(value) {
+    const locale = String(value || '').replace(/_/g, '-').trim();
+    if (!locale || typeof Intl !== 'object' || typeof Intl.getCanonicalLocales !== 'function') {
+      return undefined;
+    }
+    try {
+      return Intl.getCanonicalLocales(locale)[0];
+    } catch (_error) {
+      return undefined;
+    }
+  }
+
+  function getTextStructureStats(text, locale) {
+    const source = String(text || '');
+    const sentenceSource = source.replace(/\n+/g, ' ');
+    const segmentationLocale = getSegmentationLocale(locale);
+    let lexicalUnits = [];
+    let sentenceCount = 0;
+
+    if (typeof Intl === 'object' && typeof Intl.Segmenter === 'function') {
+      try {
+        lexicalUnits = Array.from(
+          new Intl.Segmenter(segmentationLocale, { granularity: 'word' }).segment(source)
+        )
+          .filter((segment) => segment.isWordLike === true)
+          .map((segment) => segment.segment.toLowerCase());
+        sentenceCount = Array.from(
+          new Intl.Segmenter(segmentationLocale, { granularity: 'sentence' }).segment(sentenceSource)
+        ).filter((segment) => segment.segment.trim()).length;
+      } catch (_error) {
+        lexicalUnits = [];
+      }
+    }
+
+    if (!lexicalUnits.length && source) {
+      lexicalUnits = source.match(/[A-Za-z\u00C0-\u024F0-9]+|[\u3040-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF]/g) || [];
+      lexicalUnits = lexicalUnits.map((unit) => unit.toLowerCase());
+    }
+    if (sentenceCount === 0) {
+      sentenceCount = getFallbackSentenceCount(sentenceSource);
+    }
+
+    const compactCharacters = Array.from(source).filter((character) => !/\s/u.test(character));
+    const contentCharacterCount = compactCharacters.filter((character) => /[\p{L}\p{N}]/u.test(character)).length;
+    const lexicalUnitCount = lexicalUnits.length;
+    const uniqueLexicalUnitCount = new Set(lexicalUnits).size;
+    return Object.freeze({
+      averageSentenceUnits: lexicalUnitCount / Math.max(1, sentenceCount),
+      contentCharacterRatio: compactCharacters.length > 0
+        ? contentCharacterCount / compactCharacters.length
+        : 0,
+      lexicalDiversity: lexicalUnitCount > 0 ? uniqueLexicalUnitCount / lexicalUnitCount : 0,
+      lexicalUnitCount,
+      sentenceCount,
+      uniqueLexicalUnitCount
+    });
   }
 
   function isLanguageMismatch(text, options, scriptStats, codeLike) {
@@ -217,7 +280,11 @@
     const length = text.length;
     const lineCount = text ? text.split('\n').length : 0;
     const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
-    const sentenceCount = getSentenceCount(text);
+    const textStructure = getTextStructureStats(
+      text,
+      settings.pageLanguage || settings.uiLanguage
+    );
+    const sentenceCount = textStructure.sentenceCount;
     const scriptStats = getScriptStats(text);
     const symbolRatio = getSymbolRatio(text);
     const urlLike = isUrlLike(text);
@@ -226,8 +293,21 @@
     const errorLike = isErrorLike(text, { ...settings, codeLike });
     const questionLike = isQuestionLike(text);
     const numericLike = isNumericLike(text);
-    const paragraphLike = length >= 160 && (sentenceCount >= 2 || lineCount >= 3);
     const genericUiLike = isGenericUiText(text);
+    const developedMultiSentenceProse = sentenceCount >= 2 &&
+      textStructure.lexicalUnitCount >= 16 &&
+      textStructure.averageSentenceUnits >= 6;
+    const sustainedSingleSentenceProse = sentenceCount === 1 &&
+      textStructure.lexicalUnitCount >= 28;
+    const substantialProseLike =
+      textStructure.contentCharacterRatio >= 0.7 &&
+      textStructure.uniqueLexicalUnitCount >= 8 &&
+      (developedMultiSentenceProse || sustainedSingleSentenceProse) &&
+      !codeLike &&
+      !errorLike &&
+      !questionLike &&
+      !numericLike &&
+      !genericUiLike;
     const plainClauseLike = /^(?:这是|这个|这些|那是|那个|那些|我们|你们|他们|我在|你在|他在|她在|它在|これは|それは|あれは)/.test(text);
     const shortTermLike = length >= MIN_SELECTION_LENGTH &&
       length <= 48 &&
@@ -240,11 +320,10 @@
     const languageMismatch = isLanguageMismatch(text, settings, scriptStats, codeLike);
     const meaningfulTermLike = shortTermLike && isMeaningfulTermLike(text, { genericUiLike });
     const searchLike = isSearchLike(text, shortTermLike);
-    const strongIntentLike = questionLike ||
+    const explicitIntentLike = questionLike ||
       (languageMismatch && !numericLike && !genericUiLike) ||
       (errorLike && (codeLike || !questionLike)) ||
       codeLike ||
-      paragraphLike ||
       numericLike ||
       searchLike;
     const suppressed = !text ||
@@ -271,7 +350,7 @@
         scores.explain = 0.84;
         scores.ask = Math.max(scores.ask, 0.2);
       }
-      if (paragraphLike) {
+      if (substantialProseLike) {
         scores.summarize = 0.9;
       }
       if (numericLike) {
@@ -285,7 +364,7 @@
         scores.explain = 0.5;
         scores.search = 0.46;
       }
-      if (!paragraphLike && !shortTermLike && length >= 20) {
+      if (!substantialProseLike && !shortTermLike && length >= 20) {
         scores.ask = Math.max(scores.ask, 0.3);
       }
     }
@@ -315,17 +394,22 @@
         lineCount,
         meaningfulTermLike,
         numericLike,
-        paragraphLike,
         questionLike,
         searchLike,
         scriptStats,
         sentenceCount,
         shortTermLike,
+        substantialProseLike,
         symbolRatio,
+        textStructure,
         urlLike,
         wordCount
       }),
-      triggerable: !suppressed && !genericUiLike && (strongIntentLike || meaningfulTermLike)
+      triggerable: !suppressed && !genericUiLike && (
+        explicitIntentLike ||
+        meaningfulTermLike ||
+        substantialProseLike
+      )
     });
   }
 

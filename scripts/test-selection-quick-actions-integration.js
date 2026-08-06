@@ -137,9 +137,9 @@ assert(
   'the default floating selection affordance should use the supplied Lumno mark'
 );
 assert(
-  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v29'") &&
-    contentSource.includes('const RUNTIME_VERSION = 29'),
-  'the selection runtime should expose the stable-width smooth-hover revision for live diagnostics'
+  contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v32'") &&
+    contentSource.includes('const RUNTIME_VERSION = 32'),
+  'the selection runtime should expose the general prose-intent revision for live diagnostics'
 );
 assert(
   /\.lumno-selection-surface\[data-icon-only="true"\][\s\S]*?border:\s*0[;\s\S]*?box-shadow:\s*none/.test(contentSource),
@@ -190,6 +190,11 @@ assert(
 assert(
   /\.lumno-selection-main\[data-icon-only="true"\]::before[\s\S]*?inset:\s*-5px/.test(contentSource),
   'the compact visual should keep a forgiving invisible pointer target'
+);
+assert(
+  /\.lumno-selection-surface\[data-icon-only="false"\]\s*\{[\s\S]*?padding-inline-end:\s*1px/.test(contentSource) &&
+    !/\.lumno-selection-main\[data-icon-only="false"\] \.lumno-selection-logo\s*\{/.test(contentSource),
+  'the expanded toolbar should shorten only the trailing shell inset while keeping the butterfly centered in its hit area'
 );
 assert(
   /\.lumno-selection-main\[data-icon-only="true"\]\s*\{[\s\S]*?background:\s*rgba\(250,\s*250,\s*250,\s*0\.76\)[\s\S]*?backdrop-filter:\s*blur\(10px\)/.test(contentSource),

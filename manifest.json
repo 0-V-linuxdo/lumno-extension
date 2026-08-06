@@ -38,7 +38,7 @@
    "content_scripts": [
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/settings.js", "src/content/hotkey-listener.js" ],
+         "js": [ "src/shared/icon-font-preload.js", "src/shared/settings.js", "src/content/hotkey-listener.js" ],
          "run_at": "document_start"
       },
       {
@@ -116,5 +116,5 @@
    "name": "__MSG_ext_name__",
    "author": "Kubai087",
    "permissions": [ "scripting", "tabs", "tabGroups", "history", "topSites", "bookmarks", "storage", "search", "favicon" ],
-   "version": "0.9.30"
+   "version": "0.9.31"
 }

@@ -477,6 +477,7 @@
   }
 
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
+  const OPTIONS_THEME_PRELOAD_STORAGE_KEY = '_x_extension_options_theme_preload_2026_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
@@ -3219,16 +3220,24 @@
         title: getMessage(group.titleKey, group.titleFallback || ''),
         items: group.items.map((item) => {
           const parts = getShortcutReferenceParts(item.shortcut || '');
+          const customShortcutLabel = item.shortcutLabelKey
+            ? formatTemplate(getMessage(
+              item.shortcutLabelKey,
+              item.shortcutLabelFallback || ''
+            ), {
+              modifier: isMacPlatform ? '⌘' : 'Ctrl'
+            })
+            : '';
           return {
             id: item && item.id ? String(item.id) : '',
             commandName: item && item.commandName ? String(item.commandName) : '',
             editable: Boolean(item && item.editable),
             titleKey: item && item.titleKey ? String(item.titleKey) : '',
             title: getMessage(item.titleKey, item.titleFallback || ''),
-            shortcutEmpty: parts.length === 0,
-            shortcutLabel: parts.length > 0
+            shortcutEmpty: !customShortcutLabel && parts.length === 0,
+            shortcutLabel: customShortcutLabel || (parts.length > 0
               ? parts.join(' / ')
-              : getMessage('shortcut_reference_unset', '未设置')
+              : getMessage('shortcut_reference_unset', '未设置'))
           };
         })
       }))
@@ -3576,6 +3585,7 @@
     }
     const updates = getThemeStorageUpdate(mode);
     const nextMode = updates[THEME_STORAGE_KEY];
+    cacheOptionsThemeMode(nextMode);
     storageArea.set(updates, () => {
       updateThemeButtons(nextMode);
       applyResolvedTheme(resolveTheme(nextMode));
@@ -3603,6 +3613,17 @@
     });
   }
 
+  function cacheOptionsThemeMode(mode) {
+    const nextMode = mode === 'dark' || mode === 'light' ? mode : 'system';
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(OPTIONS_THEME_PRELOAD_STORAGE_KEY, nextMode);
+      }
+    } catch (e) {
+      // The early theme preloader falls back to the system theme when caching is unavailable.
+    }
+  }
+
   async function initTheme() {
     let ready = false;
     const fallbackTimer = setTimeout(() => {
@@ -3614,6 +3635,7 @@
     }, 800);
     try {
       const storedMode = await getStoredThemeMode();
+      cacheOptionsThemeMode(storedMode);
       updateThemeButtons(storedMode);
       applyResolvedTheme(resolveTheme(storedMode));
       if (storedMode === 'system' && !mediaListenerAttached) {

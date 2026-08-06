@@ -12,6 +12,7 @@ const suggestionNavigation = require('../src/shared/suggestion-navigation.js');
 
 function createKeyEvent(overrides) {
   return {
+    type: 'keydown',
     key: '',
     code: '',
     metaKey: false,
@@ -51,135 +52,246 @@ const shortcutContainer = {
   }
 };
 
-const commandModeEvent = createKeyEvent({
-  key: ' ',
-  code: 'Space',
-  metaKey: true,
-  shiftKey: true
-});
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    commandModeEvent,
+const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
+
+async function run() {
+  const holdSignals = [];
+  const commandHoldOptions = {
+    primaryModifier: 'meta',
+    holdDurationMs: 5,
+    timeoutMs: 20,
+    onHoldStart() {
+      holdSignals.push('start');
+    },
+    onHoldEnd() {
+      holdSignals.push('end');
+    }
+  };
+
+  const commandDownEvent = createKeyEvent({
+    key: 'Meta',
+    code: 'MetaLeft',
+    metaKey: true
+  });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      commandDownEvent,
+      shortcutItems,
+      shortcutContainer,
+      commandHoldOptions
+    ),
+    false,
+    'pressing Command should begin the hold without consuming the browser event'
+  );
+  assert.strictEqual(commandDownEvent.defaultPrevented, false);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    null,
+    'number badges should stay hidden while the hold threshold is pending'
+  );
+  await wait(10);
+  assert.deepStrictEqual(holdSignals, ['start']);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-scroll-locked'),
+    'true',
+    'reaching the hold threshold should lock result scrolling'
+  );
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    null,
+    'reaching the hold threshold should show only the Toast, not the badges'
+  );
+
+  const wheelEvent = createKeyEvent();
+  assert.strictEqual(
+    suggestionNavigation.preventNumberShortcutWheel(wheelEvent, shortcutContainer),
+    true,
+    'wheel scrolling should be blocked once the long hold is armed'
+  );
+  assert.strictEqual(wheelEvent.defaultPrevented, true);
+
+  const commandUpEvent = createKeyEvent({
+    type: 'keyup',
+    key: 'Meta',
+    code: 'MetaLeft',
+    metaKey: false
+  });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      commandUpEvent,
+      shortcutItems,
+      shortcutContainer,
+      commandHoldOptions
+    ),
+    true,
+    'releasing Command after a long hold should enter number jump mode'
+  );
+  assert.deepStrictEqual(holdSignals, ['start', 'end']);
+  assert.strictEqual(commandUpEvent.defaultPrevented, true);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    'true'
+  );
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-scroll-locked'),
+    'true'
+  );
+  assert.deepStrictEqual(activatedIndexes, []);
+
+  const numberEvent = createKeyEvent({ key: '2', code: 'Digit2' });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      numberEvent,
+      shortcutItems,
+      shortcutContainer,
+      commandHoldOptions
+    ),
+    true,
+    'a plain number should activate its result after the modifier is released'
+  );
+  assert.strictEqual(numberEvent.defaultPrevented, true);
+  assert.strictEqual(numberEvent.propagationStopped, true);
+  assert.deepStrictEqual(activatedIndexes, [2]);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    null,
+    'number jump mode should close after a selection'
+  );
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-scroll-locked'),
+    null
+  );
+
+  const quickSignals = [];
+  const quickOptions = {
+    primaryModifier: 'meta',
+    holdDurationMs: 20,
+    onHoldStart() {
+      quickSignals.push('start');
+    },
+    onHoldEnd() {
+      quickSignals.push('end');
+    }
+  };
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ key: 'Meta', metaKey: true }),
     shortcutItems,
     shortcutContainer,
-    { timeoutMs: 100 }
-  ),
-  true,
-  'Command-Shift-Space should enter number jump mode'
-);
-assert.strictEqual(commandModeEvent.defaultPrevented, true);
-assert.strictEqual(commandModeEvent.propagationStopped, true);
-assert.strictEqual(
-  shortcutContainer.getAttribute('data-number-shortcuts-active'),
-  'true'
-);
-assert.deepStrictEqual(activatedIndexes, []);
+    quickOptions
+  );
+  const quickReleaseEvent = createKeyEvent({ type: 'keyup', key: 'Meta' });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      quickReleaseEvent,
+      shortcutItems,
+      shortcutContainer,
+      quickOptions
+    ),
+    false,
+    'a quick Command tap should remain invisible and unconsumed'
+  );
+  await wait(25);
+  assert.deepStrictEqual(quickSignals, []);
+  assert.strictEqual(shortcutContainer.getAttribute('data-number-shortcuts-active'), null);
 
-const numberEvent = createKeyEvent({ key: '2', code: 'Digit2' });
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    numberEvent,
-    shortcutItems,
-    shortcutContainer
-  ),
-  true,
-  'a plain number should activate its result after jump mode is entered'
-);
-assert.strictEqual(numberEvent.defaultPrevented, true);
-assert.strictEqual(numberEvent.propagationStopped, true);
-assert.deepStrictEqual(activatedIndexes, [2]);
-assert.strictEqual(
-  shortcutContainer.getAttribute('data-number-shortcuts-active'),
-  null,
-  'number jump mode should close after a selection'
-);
+  const oldCommandNumberEvent = createKeyEvent({ key: '1', metaKey: true });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      oldCommandNumberEvent,
+      shortcutItems,
+      shortcutContainer,
+      commandHoldOptions
+    ),
+    false,
+    'Command-number should remain available to Chrome while Command is held'
+  );
+  assert.strictEqual(oldCommandNumberEvent.defaultPrevented, false);
+  assert.deepStrictEqual(activatedIndexes, [2]);
 
-const oldCommandNumberEvent = createKeyEvent({ key: '1', metaKey: true });
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    oldCommandNumberEvent,
-    shortcutItems,
-    shortcutContainer
-  ),
-  false,
-  'Command-number should remain available to Chrome outside jump mode'
-);
-assert.strictEqual(oldCommandNumberEvent.defaultPrevented, false);
-assert.deepStrictEqual(activatedIndexes, [2]);
-
-const controlModeEvent = createKeyEvent({
-  key: ' ',
-  code: 'Space',
-  ctrlKey: true,
-  shiftKey: true
-});
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    controlModeEvent,
+  const cancelSignals = [];
+  const controlOptions = {
+    primaryModifier: 'ctrl',
+    holdDurationMs: 5,
+    timeoutMs: 10,
+    onHoldStart() {
+      cancelSignals.push('start');
+    },
+    onHoldEnd() {
+      cancelSignals.push('end');
+    }
+  };
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ key: 'Control', ctrlKey: true }),
     shortcutItems,
     shortcutContainer,
-    { timeoutMs: 100 }
-  ),
-  true,
-  'Control-Shift-Space should enter number jump mode'
-);
-const escapeEvent = createKeyEvent({ key: 'Escape', code: 'Escape' });
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    escapeEvent,
-    shortcutItems,
-    shortcutContainer
-  ),
-  true,
-  'Escape should cancel number jump mode'
-);
-assert.strictEqual(escapeEvent.defaultPrevented, true);
-assert.strictEqual(
-  shortcutContainer.getAttribute('data-number-shortcuts-active'),
-  null
-);
+    controlOptions
+  );
+  await wait(10);
+  const commandEnterEvent = createKeyEvent({ key: 'Enter', ctrlKey: true });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      commandEnterEvent,
+      shortcutItems,
+      shortcutContainer,
+      controlOptions
+    ),
+    false,
+    'another key should cancel an armed hold without intercepting Ctrl+Enter'
+  );
+  assert.deepStrictEqual(cancelSignals, ['start', 'end']);
+  assert.strictEqual(commandEnterEvent.defaultPrevented, false);
+  assert.strictEqual(shortcutContainer.getAttribute('data-number-shortcuts-scroll-locked'), null);
 
-suggestionNavigation.handleNumberShortcutKeydown(
-  commandModeEvent,
-  shortcutItems,
-  shortcutContainer,
-  { timeoutMs: 100 }
-);
-const ordinaryKeyEvent = createKeyEvent({ key: 'x', code: 'KeyX' });
-assert.strictEqual(
-  suggestionNavigation.handleNumberShortcutKeydown(
-    ordinaryKeyEvent,
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ key: 'Control', ctrlKey: true }),
     shortcutItems,
-    shortcutContainer
-  ),
-  false,
-  'ordinary input should cancel jump mode and continue normally'
-);
-assert.strictEqual(ordinaryKeyEvent.defaultPrevented, false);
-assert.strictEqual(
-  shortcutContainer.getAttribute('data-number-shortcuts-active'),
-  null
-);
+    shortcutContainer,
+    controlOptions
+  );
+  await wait(10);
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ type: 'keyup', key: 'Control' }),
+    shortcutItems,
+    shortcutContainer,
+    controlOptions
+  );
+  const escapeEvent = createKeyEvent({ key: 'Escape', code: 'Escape' });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      escapeEvent,
+      shortcutItems,
+      shortcutContainer,
+      controlOptions
+    ),
+    true,
+    'Escape should cancel active number jump mode'
+  );
+  assert.strictEqual(escapeEvent.defaultPrevented, true);
 
-suggestionNavigation.handleNumberShortcutKeydown(
-  commandModeEvent,
-  shortcutItems,
-  shortcutContainer,
-  { timeoutMs: 100 }
-);
-const wheelEvent = createKeyEvent();
-assert.strictEqual(
-  suggestionNavigation.preventNumberShortcutWheel(wheelEvent, shortcutContainer),
-  true,
-  'wheel scrolling should be blocked while number shortcuts are visible'
-);
-assert.strictEqual(wheelEvent.defaultPrevented, true);
-suggestionNavigation.cancelNumberShortcuts(shortcutContainer);
-assert.strictEqual(
-  suggestionNavigation.preventNumberShortcutWheel(createKeyEvent(), shortcutContainer),
-  false,
-  'wheel scrolling should resume after number jump mode closes'
-);
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ key: 'Control', ctrlKey: true }),
+    shortcutItems,
+    shortcutContainer,
+    controlOptions
+  );
+  await wait(10);
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ type: 'keyup', key: 'Control' }),
+    shortcutItems,
+    shortcutContainer,
+    controlOptions
+  );
+  await wait(15);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    null,
+    'number jump mode should expire after its timeout'
+  );
+  assert.strictEqual(
+    suggestionNavigation.preventNumberShortcutWheel(createKeyEvent(), shortcutContainer),
+    false,
+    'wheel scrolling should resume after number jump mode closes'
+  );
 
 assert.match(
   suggestionsSource,
@@ -189,14 +301,24 @@ assert.match(
 
 assert.match(
   newtabSource,
-  /document\.addEventListener\('keydown',[\s\S]*?SUGGESTION_NAVIGATION\.handleNumberShortcutKeydown\(\s*event,\s*suggestionItems,\s*suggestionsContainer\s*\)[\s\S]*?return;/,
-  'New Tab should consume number jump mode keys before ordinary input handling'
+  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideToast[\s\S]*?\};/,
+  'New Tab should reuse its existing Toast while the number shortcut hold is armed'
+);
+assert.match(
+  newtabSource,
+  /document\.addEventListener\('keydown',[\s\S]*?handleNumberShortcutKeyEvent\(\s*event,\s*suggestionItems,\s*suggestionsContainer,\s*numberShortcutOptions\s*\)[\s\S]*?return;/,
+  'New Tab should route keydown events through the long-hold state machine'
 );
 
 assert.match(
   overlaySource,
-  /overlayKeyCaptureHandler = function\(e\)[\s\S]*?SUGGESTION_NAVIGATION\.handleNumberShortcutKeydown\(\s*e,\s*suggestionItems,\s*suggestionsContainer\s*\)[\s\S]*?stopImmediatePropagation\(\)[\s\S]*?return;/,
-  'Overlay should capture number jump mode keys before the host page handles them'
+  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showOverlayToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideOverlayToast[\s\S]*?\};/,
+  'Overlay should reuse its existing Toast while the number shortcut hold is armed'
+);
+assert.match(
+  overlaySource,
+  /overlayKeyCaptureHandler = function\(e\)[\s\S]*?\(e\.type === 'keydown' \|\| e\.type === 'keyup'\)[\s\S]*?handleNumberShortcutKeyEvent\(\s*e,\s*suggestionItems,\s*suggestionsContainer,\s*numberShortcutOptions\s*\)[\s\S]*?stopImmediatePropagation\(\)[\s\S]*?return;/,
+  'Overlay should capture the modifier release transition before the host page'
 );
 
 const newtabModifierSource = newtabSource.slice(
@@ -234,9 +356,21 @@ assert.match(
 );
 
 assert.match(
+  newtabHtml,
+  /data-number-shortcuts-scroll-locked="true"[\s\S]*?overflow-y:\s*hidden/,
+  'New Tab should lock scrolling before the badges are revealed'
+);
+
+assert.match(
   overlayCss,
   /data-number-shortcuts-active="true"[\s\S]*?\.x-ov-suggestion-number-shortcut[\s\S]*?display:\s*inline-flex/,
   'Overlay should reveal number badges only while number jump mode is active'
+);
+
+assert.match(
+  overlayCss,
+  /data-number-shortcuts-scroll-locked="true"[\s\S]*?overflow-y:\s*hidden/,
+  'Overlay should lock scrolling before the badges are revealed'
 );
 
 assert.match(
@@ -251,17 +385,62 @@ assert.match(
   'the Overlay onboarding mirror should keep consuming the shared Overlay result styles'
 );
 
-suggestionNavigation.handleNumberShortcutKeydown(
-  commandModeEvent,
-  shortcutItems,
-  shortcutContainer,
-  { timeoutMs: 5 }
-);
-setTimeout(() => {
-  assert.strictEqual(
-    shortcutContainer.getAttribute('data-number-shortcuts-active'),
-    null,
-    'number jump mode should expire after its timeout'
+[
+  ['New Tab', newtabHtml, 'x-nt'],
+  ['Overlay', overlayCss, 'x-ov'],
+  ['New Tab onboarding mirror', onboardingHtml, 'x-nt']
+].forEach(([surface, source, prefix]) => {
+  const className = `${prefix}-suggestion-number-shortcut`;
+  const styleBlocks = Array.from(source.matchAll(
+    new RegExp(`[^\\n{}]*\\.${className}\\s*\\{([^{}]*)\\}`, 'g')
+  )).map((match) => match[1]);
+  const baseStyles = styleBlocks.find((block) => /all:\s*unset;/.test(block)) || '';
+  assert.match(baseStyles, /width:\s*16px;/, `${surface} number label should be square`);
+  assert.match(baseStyles, /height:\s*16px;/, `${surface} number label should be square`);
+  assert.match(baseStyles, /border-radius:\s*5px;/, `${surface} should retain continuous rounded corners`);
+  assert.match(
+    baseStyles,
+    /background:\s*#111827;[\s\S]*?color:\s*#FFFFFF;[\s\S]*?font:\s*600 11px/,
+    `${surface} should use a lighter number weight without reducing contrast`
   );
+  styleBlocks.filter((block) => /background:|width:/.test(block)).forEach((block) => {
+    assert.doesNotMatch(block, /border(?:-color)?:|box-shadow:/, `${surface} number label should stay flat and borderless`);
+  });
+  assert.match(
+    source,
+    new RegExp(`@supports \\(corner-shape: superellipse\\(1\\.25\\)\\)[\\s\\S]*?\\.${className}[\\s\\S]*?corner-shape:\\s*superellipse\\(1\\.25\\)`),
+    `${surface} should opt into continuous corners when supported`
+  );
+});
+
+function relativeLuminance(hex) {
+  const channels = String(hex).replace('#', '').match(/.{2}/g).map((value) => (
+    parseInt(value, 16) / 255
+  )).map((value) => (
+    value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4)
+  ));
+  return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+}
+
+function contrastRatio(foreground, background) {
+  const values = [relativeLuminance(foreground), relativeLuminance(background)]
+    .sort((left, right) => right - left);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
+assert.ok(
+  contrastRatio('#FFFFFF', '#111827') >= 7,
+  'the dark number label should exceed WCAG AAA contrast'
+);
+assert.ok(
+  contrastRatio('#0F172A', '#FFFFFF') >= 7,
+  'the light number label should exceed WCAG AAA contrast'
+);
+
   console.log('search result number shortcut tests passed');
-}, 15);
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

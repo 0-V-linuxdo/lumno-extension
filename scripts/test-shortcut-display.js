@@ -100,9 +100,13 @@ const numberJumpDefinition = shortcutDefinitions.find((definition) => (
 ));
 assert.ok(numberJumpDefinition, 'Options should list the number jump mode shortcut');
 assert.deepStrictEqual(numberJumpDefinition.defaultShortcut, {
-  default: 'Ctrl+Shift+Space → 0–9',
-  mac: 'Command+Shift+Space → 0–9'
+  default: 'Ctrl 0.4s → 0–9',
+  mac: 'Command 0.4s → 0–9'
 });
+assert.strictEqual(
+  numberJumpDefinition.shortcutLabelKey,
+  'shortcut_reference_search_number_jump_shortcut'
+);
 const searchShortcutGroup = shortcutReference
   .getShortcutReferenceGroups({ platform: 'mac' })
   .find((group) => group.id === 'search');
@@ -119,19 +123,19 @@ const windowsNumberJump = shortcutReference
   .getShortcutReferenceGroups({ platform: 'windows' })
   .find((group) => group.id === 'search')
   .items.find((item) => item.id === 'search-number-jump');
-assert.strictEqual(macNumberJump.shortcut, 'Command+Shift+Space → 0–9');
-assert.strictEqual(windowsNumberJump.shortcut, 'Ctrl+Shift+Space → 0–9');
+assert.strictEqual(macNumberJump.shortcut, 'Command 0.4s → 0–9');
+assert.strictEqual(windowsNumberJump.shortcut, 'Ctrl 0.4s → 0–9');
 assert.strictEqual(
   shortcutDisplay.formatShortcutReference(macNumberJump.shortcut, {
     platform: 'mac'
   }),
-  '⌘⇧Space → 0–9'
+  'Command 0.4s → 0–9'
 );
 assert.strictEqual(
   shortcutDisplay.formatShortcutReference(windowsNumberJump.shortcut, {
     platform: 'windows'
   }),
-  'Ctrl+Shift+Space → 0–9'
+  'Ctrl 0.4s → 0–9'
 );
 ['en', 'ja', 'zh_CN', 'zh_TW'].forEach((locale) => {
   const messages = JSON.parse(fs.readFileSync(
@@ -140,7 +144,9 @@ assert.strictEqual(
   ));
   [
     'shortcut_reference_search_number_jump_title',
-    'shortcut_reference_search_number_jump_desc'
+    'shortcut_reference_search_number_jump_desc',
+    'shortcut_reference_search_number_jump_shortcut',
+    'search_number_jump_release_hint'
   ].forEach((key) => {
     assert.ok(
       messages[key] && String(messages[key].message || '').trim(),
@@ -191,6 +197,11 @@ assert.match(
   optionsSource,
   /shortcutsStatus\.textContent = currentShortcutLabel[\s\S]*formatShortcutForDisplay\(currentShortcutLabel\)/,
   'the shortcut status chip should format the raw shortcut for the current platform'
+);
+assert.match(
+  optionsSource,
+  /item\.shortcutLabelKey[\s\S]*?modifier:\s*isMacPlatform \? '⌘' : 'Ctrl'[\s\S]*?shortcutLabel:\s*customShortcutLabel/,
+  'Options should render the localized long-hold instruction with the platform modifier'
 );
 
 console.log('shortcut display tests passed');

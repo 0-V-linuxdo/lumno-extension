@@ -1924,11 +1924,23 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     }
 
-    function showOverlayToast(message, isError) {
+    function showOverlayToast(message, isError, options) {
       if (overlayToastController && typeof overlayToastController.show === 'function') {
-        overlayToastController.show(message, { error: Boolean(isError) });
+        overlayToastController.show(message, Object.assign({}, options, {
+          error: Boolean(isError)
+        }));
       }
     }
+
+    const numberShortcutOptions = {
+      onHoldStart: function() {
+        showOverlayToast(t(
+          'search_number_jump_release_hint',
+          'Release to show numbers'
+        ), false, { duration: 0 });
+      },
+      onHoldEnd: hideOverlayToast
+    };
 
     function fallbackCopyText(text) {
       if (!document || !document.body || typeof document.execCommand !== 'function') {
@@ -6635,10 +6647,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       syncSuggestionActionModifiersFromEvent(e);
-      if (SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+      if (SUGGESTION_NAVIGATION.handleNumberShortcutKeyEvent(
         e,
         suggestionItems,
-        suggestionsContainer
+        suggestionsContainer,
+        numberShortcutOptions
       )) {
         return;
       }
@@ -6931,6 +6944,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       syncSuggestionActionModifiersFromEvent(e);
+      SUGGESTION_NAVIGATION.handleNumberShortcutKeyEvent(
+        e,
+        suggestionItems,
+        suggestionsContainer,
+        numberShortcutOptions
+      );
     };
 
     overlayKeyCaptureHandler = function(e) {
@@ -6962,11 +6981,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       syncSuggestionActionModifiersFromEvent(e);
-      if (e.type === 'keydown' &&
-          SUGGESTION_NAVIGATION.handleNumberShortcutKeydown(
+      if ((e.type === 'keydown' || e.type === 'keyup') &&
+          SUGGESTION_NAVIGATION.handleNumberShortcutKeyEvent(
             e,
             suggestionItems,
-            suggestionsContainer
+            suggestionsContainer,
+            numberShortcutOptions
           )) {
         e.stopImmediatePropagation();
         return;

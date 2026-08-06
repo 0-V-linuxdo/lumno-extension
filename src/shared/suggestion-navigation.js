@@ -5,8 +5,9 @@
   }
   root.LumnoSuggestionNavigation = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
+  const NUMBER_SHORTCUT_HOLD_DURATION_MS = 400;
   const NUMBER_SHORTCUT_TIMEOUT_MS = 2000;
-  const numberShortcutTimers = new WeakMap();
+  const numberShortcutStates = new WeakMap();
 
   function scrollItemIntoView(container, item, options) {
     if (!container || !item || !item.isConnected) {
@@ -39,25 +40,129 @@
       : NUMBER_SHORTCUT_TIMEOUT_MS;
   }
 
+  function getNumberShortcutHoldDurationMs(options) {
+    const configured = Number(options && options.holdDurationMs);
+    return Number.isFinite(configured) && configured >= 0
+      ? configured
+      : NUMBER_SHORTCUT_HOLD_DURATION_MS;
+  }
+
+  function getPrimaryModifier(options) {
+    const configured = String(options && options.primaryModifier || '').toLowerCase();
+    if (configured === 'meta' || configured === 'ctrl') {
+      return configured;
+    }
+    const navigatorLike = options && options.navigatorLike
+      ? options.navigatorLike
+      : (typeof navigator !== 'undefined' ? navigator : null);
+    const platform = [
+      navigatorLike && navigatorLike.userAgentData
+        ? navigatorLike.userAgentData.platform
+        : '',
+      navigatorLike ? navigatorLike.platform : '',
+      navigatorLike ? navigatorLike.userAgent : ''
+    ].filter(Boolean).join(' ');
+    return /Mac|iPhone|iPad|iPod/i.test(platform) ? 'meta' : 'ctrl';
+  }
+
+  function isPrimaryModifierKey(event, primaryModifier) {
+    const key = String(event && event.key || '');
+    const code = String(event && event.code || '');
+    return primaryModifier === 'meta'
+      ? key === 'Meta' || code.indexOf('Meta') === 0
+      : key === 'Control' || code.indexOf('Control') === 0;
+  }
+
+  function hasOnlyPrimaryModifier(event, primaryModifier) {
+    if (!event || event.altKey || event.shiftKey) {
+      return false;
+    }
+    return primaryModifier === 'meta'
+      ? Boolean(event.metaKey && !event.ctrlKey)
+      : Boolean(event.ctrlKey && !event.metaKey);
+  }
+
+  function clearStateTimers(state) {
+    if (!state) {
+      return;
+    }
+    if (state.holdTimer) {
+      clearTimeout(state.holdTimer);
+      state.holdTimer = 0;
+    }
+    if (state.activeTimer) {
+      clearTimeout(state.activeTimer);
+      state.activeTimer = 0;
+    }
+  }
+
+  function invokeStateCallback(state, name) {
+    const callback = state && state.options && state.options[name];
+    if (typeof callback === 'function') {
+      callback();
+    }
+  }
+
+  function removeNumberShortcutAttributes(container) {
+    if (!container) {
+      return;
+    }
+    container.removeAttribute('data-number-shortcuts-active');
+    container.removeAttribute('data-number-shortcuts-scroll-locked');
+  }
+
+  function clearNumberShortcutState(container, options) {
+    if (!container) {
+      return;
+    }
+    const config = options || {};
+    const state = numberShortcutStates.get(container);
+    if (state) {
+      clearStateTimers(state);
+      if (state.phase === 'armed' && config.notifyHoldEnd !== false) {
+        invokeStateCallback(state, 'onHoldEnd');
+      }
+      numberShortcutStates.delete(container);
+    }
+    removeNumberShortcutAttributes(container);
+  }
+
+  function enterNumberShortcutsActive(container, options, existingState) {
+    if (!container) {
+      return;
+    }
+    const state = existingState || {
+      phase: 'active',
+      primaryModifier: getPrimaryModifier(options),
+      options: options || {},
+      holdTimer: 0,
+      activeTimer: 0
+    };
+    clearStateTimers(state);
+    state.phase = 'active';
+    state.options = options || state.options || {};
+    container.setAttribute('data-number-shortcuts-scroll-locked', 'true');
+    container.setAttribute('data-number-shortcuts-active', 'true');
+    state.activeTimer = setTimeout(function() {
+      if (numberShortcutStates.get(container) !== state) {
+        return;
+      }
+      numberShortcutStates.delete(container);
+      removeNumberShortcutAttributes(container);
+    }, getNumberShortcutTimeoutMs(state.options));
+    numberShortcutStates.set(container, state);
+  }
+
   function setNumberShortcutsActive(container, active, options) {
     if (!container) {
       return;
     }
-    const pendingTimer = numberShortcutTimers.get(container);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      numberShortcutTimers.delete(container);
-    }
     if (active) {
-      container.setAttribute('data-number-shortcuts-active', 'true');
-      const timeoutId = setTimeout(function() {
-        numberShortcutTimers.delete(container);
-        container.removeAttribute('data-number-shortcuts-active');
-      }, getNumberShortcutTimeoutMs(options));
-      numberShortcutTimers.set(container, timeoutId);
+      clearNumberShortcutState(container);
+      enterNumberShortcutsActive(container, options);
       return;
     }
-    container.removeAttribute('data-number-shortcuts-active');
+    clearNumberShortcutState(container);
   }
 
   function cancelNumberShortcuts(container) {
@@ -76,34 +181,83 @@
     event.stopPropagation();
   }
 
-  function isNumberShortcutModeTrigger(event) {
-    const key = String(event && event.key || '');
-    const code = String(event && event.code || '');
-    return Boolean(
-      event &&
-      (event.metaKey || event.ctrlKey) &&
-      event.shiftKey &&
-      !event.altKey &&
-      (code === 'Space' || key === ' ' || key === 'Spacebar')
-    );
+  function beginNumberShortcutHold(container, options, primaryModifier) {
+    const state = {
+      phase: 'holding',
+      primaryModifier,
+      options: options || {},
+      holdTimer: 0,
+      activeTimer: 0
+    };
+    state.holdTimer = setTimeout(function() {
+      if (numberShortcutStates.get(container) !== state || state.phase !== 'holding') {
+        return;
+      }
+      state.holdTimer = 0;
+      state.phase = 'armed';
+      container.setAttribute('data-number-shortcuts-scroll-locked', 'true');
+      invokeStateCallback(state, 'onHoldStart');
+    }, getNumberShortcutHoldDurationMs(options));
+    numberShortcutStates.set(container, state);
   }
 
-  function handleNumberShortcutKeydown(event, items, container, options) {
+  function handleNumberShortcutKeyEvent(event, items, container, options) {
     const rows = Array.isArray(items) ? items : [];
-    if (!event) {
+    if (!event || !container) {
       return false;
     }
-    if (isNumberShortcutModeTrigger(event)) {
-      if (rows.length === 0) {
+    const eventType = String(event.type || 'keydown');
+    const configuredPrimaryModifier = getPrimaryModifier(options);
+    let state = numberShortcutStates.get(container);
+    const primaryModifier = state ? state.primaryModifier : configuredPrimaryModifier;
+    const isPrimaryKey = isPrimaryModifierKey(event, primaryModifier);
+
+    if (eventType === 'keyup') {
+      if (!state || !isPrimaryKey) {
         return false;
       }
-      consumeNumberShortcutEvent(event);
-      if (!event.repeat) {
-        setNumberShortcutsActive(container, true, options);
+      if (state.phase === 'holding') {
+        clearNumberShortcutState(container, { notifyHoldEnd: false });
+        return false;
       }
+      if (state.phase !== 'armed') {
+        return false;
+      }
+      if (rows.length === 0) {
+        clearNumberShortcutState(container);
+        return false;
+      }
+      invokeStateCallback(state, 'onHoldEnd');
+      enterNumberShortcutsActive(container, state.options, state);
+      consumeNumberShortcutEvent(event);
       return true;
     }
-    if (!isNumberShortcutsActive(container)) {
+
+    if (eventType !== 'keydown') {
+      return false;
+    }
+
+    if (isPrimaryKey && hasOnlyPrimaryModifier(event, primaryModifier)) {
+      if (rows.length === 0) {
+        clearNumberShortcutState(container);
+        return false;
+      }
+      if (state && (state.phase === 'holding' || state.phase === 'armed')) {
+        return false;
+      }
+      clearNumberShortcutState(container);
+      if (!event.repeat) {
+        beginNumberShortcutHold(container, options, primaryModifier);
+      }
+      return false;
+    }
+
+    state = numberShortcutStates.get(container);
+    if (state && (state.phase === 'holding' || state.phase === 'armed')) {
+      clearNumberShortcutState(container);
+      return false;
+    }
+    if (!state || state.phase !== 'active' || !isNumberShortcutsActive(container)) {
       return false;
     }
     const key = String(event.key || '');
@@ -129,7 +283,7 @@
 
   function preventNumberShortcutWheel(event, container) {
     if (!event || !container ||
-        container.getAttribute('data-number-shortcuts-active') !== 'true') {
+        container.getAttribute('data-number-shortcuts-scroll-locked') !== 'true') {
       return false;
     }
     event.preventDefault();
@@ -138,7 +292,7 @@
 
   return {
     scrollItemIntoView,
-    handleNumberShortcutKeydown,
+    handleNumberShortcutKeyEvent,
     setNumberShortcutsActive,
     cancelNumberShortcuts,
     preventNumberShortcutWheel

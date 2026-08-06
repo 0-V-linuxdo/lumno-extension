@@ -2078,17 +2078,22 @@
         inset-inline-end: -7px;
         width: 16px;
         height: 16px;
-        border: 2px solid var(--x-nt-bg, #FFFFFF);
-        border-radius: 999px;
+        border-radius: 5px;
         box-sizing: border-box;
         display: none;
         align-items: center;
         justify-content: center;
-        background: var(--x-nt-text, #111827);
-        color: var(--x-nt-bg, #FFFFFF);
-        font: 700 10px/1 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #111827;
+        color: #FFFFFF;
+        font: 600 11px/1 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         pointer-events: none;
         z-index: 2;
+      }
+
+      @supports (corner-shape: superellipse(1.25)) {
+        .newtab-preview-viewport .x-nt-suggestion-number-shortcut {
+          corner-shape: superellipse(1.25);
+        }
       }
 
       .newtab-preview-viewport #_x_extension_newtab_suggestions_container_2024_unique_[data-number-shortcuts-active="true"] .x-nt-suggestion-number-shortcut {

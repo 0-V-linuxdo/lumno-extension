@@ -101,8 +101,10 @@ const createHandler = new Function(
   'SUGGESTION_NAVIGATION',
   'suggestionItems',
   'suggestionsContainer',
+  'numberShortcutOptions',
   `let overlayKeyCaptureHandler;\n${trustedHandlerSource}\nreturn overlayKeyCaptureHandler;`
 );
+const numberShortcutSignals = [];
 const overlayKeyCaptureHandler = createHandler(
   overlay,
   searchInput,
@@ -130,7 +132,18 @@ const overlayKeyCaptureHandler = createHandler(
   () => {},
   require('../src/shared/suggestion-navigation.js'),
   suggestionItems,
-  suggestionsContainer
+  suggestionsContainer,
+  {
+    primaryModifier: 'meta',
+    holdDurationMs: 5,
+    timeoutMs: 50,
+    onHoldStart() {
+      numberShortcutSignals.push('toast-show');
+    },
+    onHoldEnd() {
+      numberShortcutSignals.push('toast-hide');
+    }
+  }
 );
 
 window.addEventListener('keydown', overlayKeyCaptureHandler, true);
@@ -141,6 +154,8 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keyup', (event) => {
   hostPageKeyups.push({ key: event.key, targetTag: event.target.tagName });
 });
+
+async function run() {
 searchInput.focus();
 
 const imeKeydown = new window.KeyboardEvent('keydown', {
@@ -228,18 +243,45 @@ const enterNumberModeEvent = new window.KeyboardEvent('keydown', {
   bubbles: true,
   cancelable: true,
   composed: true,
-  key: ' ',
-  code: 'Space',
-  metaKey: true,
-  shiftKey: true
+  key: 'Meta',
+  code: 'MetaLeft',
+  metaKey: true
 });
 searchInput.dispatchEvent(enterNumberModeEvent);
 assert.strictEqual(
   suggestionsContainer.getAttribute('data-number-shortcuts-active'),
-  'true',
-  'the Overlay capture handler should enter number jump mode'
+  null,
+  'the Overlay capture handler should keep number badges hidden during the hold'
 );
-assert.strictEqual(enterNumberModeEvent.defaultPrevented, true);
+assert.strictEqual(enterNumberModeEvent.defaultPrevented, false);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [{ key: 'Meta', targetTag: 'DIV' }],
+  'the initial modifier press should remain available to browser and host shortcuts'
+);
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.deepStrictEqual(numberShortcutSignals, ['toast-show']);
+assert.strictEqual(
+  suggestionsContainer.getAttribute('data-number-shortcuts-scroll-locked'),
+  'true',
+  'the Overlay should lock result scrolling after the long-hold threshold'
+);
+const releaseNumberModeEvent = new window.KeyboardEvent('keyup', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: 'Meta',
+  code: 'MetaLeft'
+});
+searchInput.dispatchEvent(releaseNumberModeEvent);
+assert.strictEqual(
+  suggestionsContainer.getAttribute('data-number-shortcuts-active'),
+  'true',
+  'releasing the modifier should reveal number jump mode'
+);
+assert.strictEqual(releaseNumberModeEvent.defaultPrevented, true);
+assert.deepStrictEqual(numberShortcutSignals, ['toast-show', 'toast-hide']);
+hostPageKeys.length = 0;
 
 const chooseNumberEvent = new window.KeyboardEvent('keydown', {
   bubbles: true,
@@ -304,3 +346,9 @@ assert.deepStrictEqual(
 );
 
 console.log('overlay input extension isolation tests passed');
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

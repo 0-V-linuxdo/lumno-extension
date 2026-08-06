@@ -1131,7 +1131,7 @@
 
     function handlePointerDown(event) {
       const path = event && typeof event.composedPath === 'function' ? event.composedPath() : [];
-      if (!path.includes(panel) && !panel.contains(event.target)) {
+      if (!path.includes(host) && !panel.contains(event.target)) {
         close();
       }
     }

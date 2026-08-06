@@ -78,10 +78,12 @@
       titleKey: 'shortcut_reference_search_number_jump_title',
       titleFallback: 'Jump to a numbered result',
       descKey: 'shortcut_reference_search_number_jump_desc',
-      descFallback: 'Enter number jump mode, then press 0–9 to activate the matching result',
+      descFallback: 'Hold the primary modifier, release it, then press 0–9 to activate the matching result',
+      shortcutLabelKey: 'shortcut_reference_search_number_jump_shortcut',
+      shortcutLabelFallback: 'Hold {modifier} for 0.4s, release, then press 0–9',
       defaultShortcut: {
-        default: 'Ctrl+Shift+Space → 0–9',
-        mac: 'Command+Shift+Space → 0–9'
+        default: 'Ctrl 0.4s → 0–9',
+        mac: 'Command 0.4s → 0–9'
       }
     },
     {
