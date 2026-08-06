@@ -1134,6 +1134,12 @@ assertContains(
   'newtab runtime should include shortcuts in storage handling'
 );
 
+assert.strictEqual(
+  (newtabJs.match(/changes\[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY\]\.newValue/g) || []).length,
+  1,
+  'one shortcut icon storage change should trigger exactly one normalization and render path'
+);
+
 assertContains(
   pageStructureReact,
   "_x_extension_newtab_shortcuts_2026_unique_",

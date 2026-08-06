@@ -131,6 +131,7 @@
           .filter((tab) => (
             tab &&
             typeof tab.id === 'number' &&
+            (!sourceTab || tab.id !== sourceTab.id) &&
             tab.discarded !== true &&
             getHttpOrigin(getTabUrl(tab)) === expectedOrigin
           ))

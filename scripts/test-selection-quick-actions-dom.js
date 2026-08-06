@@ -119,6 +119,9 @@ function wait(ms) {
     return selectionShadow;
   };
   const runtimeMessages = [];
+  const pendingSelectionActionCallbacks = [];
+  let deferSelectionActionResponses = false;
+  let nextSelectionActionResponse;
   window.chrome = {
     i18n: {
       getMessage() { return ''; },
@@ -130,6 +133,16 @@ function wait(ms) {
       lastError: null,
       sendMessage(message, callback) {
         runtimeMessages.push(message);
+        if (message && message.action === 'runSelectionQuickAction' && deferSelectionActionResponses) {
+          pendingSelectionActionCallbacks.push(callback);
+          return;
+        }
+        if (message && message.action === 'runSelectionQuickAction' && nextSelectionActionResponse !== undefined) {
+          const response = nextSelectionActionResponse;
+          nextSelectionActionResponse = undefined;
+          if (callback) callback(response);
+          return;
+        }
         if (callback) callback({ ok: true });
       }
     },
@@ -587,7 +600,9 @@ function wait(ms) {
   const firstAction = selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]');
   const selectedAction = firstAction.dataset.intent;
   const sendingMaterialGrowth = toolbarAnimations.filter((record) => record.target === toolbarMaterial).at(-1);
+  deferSelectionActionResponses = true;
   firstAction.click();
+  deferSelectionActionResponses = false;
   assert.strictEqual(runtimeMessages.length, actionMessageCount + 1,
     'clicking a toolbar action should send exactly one background request');
   assert.deepStrictEqual(JSON.parse(JSON.stringify(runtimeMessages.at(-1))), {
@@ -600,19 +615,57 @@ function wait(ms) {
     'a clicked action should immediately enter the sending state');
   assert.strictEqual(sendingMaterialGrowth.cancelled, true,
     'switching from toolbar controls to the sending status should release the retained entrance width');
+  assert.strictEqual(pendingSelectionActionCallbacks.length, 1,
+    'the regression harness should retain the first action response');
   window.document.dispatchEvent(new window.Event('copy', { bubbles: true }));
 
   await selectTextControl(selectableInput, 0, selectableInput.value.length);
   assert.strictEqual(host.hidden, false, 'ordinary input selections should reach intent evaluation');
+  await wait(700);
+  assert.strictEqual(host.hidden, false,
+    'a stale action hide timer must not dismiss a newer selection candidate');
+  pendingSelectionActionCallbacks.shift()({ ok: false });
+  await wait(0);
+  assert.strictEqual(host.hidden, false,
+    'a stale failed action response must not hide a newer selection candidate');
+  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, true,
+    'a stale failed action response must not replace a newer candidate with an error status');
   selectionShadow.querySelector('.lumno-selection-main').click();
   assert.strictEqual(
     selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]').dataset.intent,
     'translate',
     'a new input selection should replace the stale captured button candidate'
   );
+  nextSelectionActionResponse = { ok: false };
+  selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]').click();
+  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
+    'an immediate action failure should show its error status');
+  await wait(1100);
+  assert.strictEqual(host.hidden, false,
+    'an immediate action failure should not be dismissed by the success hide timer');
+  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
+    'the failure status should remain visible for its dedicated dismissal interval');
 
   await selectTextControl(selectableTextarea, 0, selectableTextarea.value.length);
   assert.strictEqual(host.hidden, false, 'textarea selections should reach intent evaluation');
+  selectionShadow.querySelector('.lumno-selection-main').click();
+  const repeatedAction = selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]');
+  deferSelectionActionResponses = true;
+  repeatedAction.click();
+  await wait(100);
+  repeatedAction.click();
+  deferSelectionActionResponses = false;
+  assert.strictEqual(pendingSelectionActionCallbacks.length, 2,
+    'the regression harness should retain both overlapping action responses');
+  const [olderActionResponse, latestActionResponse] = pendingSelectionActionCallbacks.splice(0, 2);
+  await wait(850);
+  latestActionResponse({ ok: false });
+  await wait(250);
+  assert.strictEqual(host.hidden, false,
+    'an older action timer must not release ownership of the latest action timer');
+  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
+    'the latest overlapping action failure should retain its dedicated error interval');
+  olderActionResponse({ ok: false });
   selectableLink.focus();
   await selectDomText(selectableLink);
   highSurface.getBoundingClientRect = function() {

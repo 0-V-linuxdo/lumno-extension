@@ -27,6 +27,8 @@
   const SELECTION_GESTURE_TIMEOUT_MS = 1600;
   const ENTRY_DISMISS_MS = 2200;
   const TOOLBAR_DISMISS_MS = 3600;
+  const ACTION_SUCCESS_DISMISS_MS = 900;
+  const ACTION_FAILURE_DISMISS_MS = 2200;
   const VIEWPORT_SAFE_MARGIN_PX = 12;
   const TEXT_INPUT_TYPES = new Set(['text', 'search', 'url', 'tel', 'email']);
   const providerStorageRuntime = globalThis.LumnoSettings &&
@@ -47,6 +49,7 @@
   let localeMessages = null;
   let showTimer = null;
   let dismissTimer = null;
+  let selectionActionHideTimer = null;
   let selectionChangeTimer = null;
   let gestureResetTimer = null;
   let requestSequence = 0;
@@ -240,10 +243,19 @@
       window.clearTimeout(dismissTimer);
       dismissTimer = null;
     }
+    clearSelectionActionHideTimer();
     if (selectionChangeTimer) {
       window.clearTimeout(selectionChangeTimer);
       selectionChangeTimer = null;
     }
+  }
+
+  function clearSelectionActionHideTimer() {
+    if (!selectionActionHideTimer) {
+      return;
+    }
+    window.clearTimeout(selectionActionHideTimer);
+    selectionActionHideTimer = null;
   }
 
   function applyHostIsolationStyles() {
@@ -1633,7 +1645,7 @@
     menu.hidden = true;
     status.textContent = getMessage('selection_quick_action_failed', '发送失败，请重试');
     status.hidden = false;
-    scheduleDismiss(2200);
+    scheduleDismiss(ACTION_FAILURE_DISMISS_MS);
   }
 
   function sendSelectionAction(action) {
@@ -1642,7 +1654,26 @@
       hideSurface();
       return;
     }
+    const sequence = ++requestSequence;
     renderSendingStatus();
+    clearSelectionActionHideTimer();
+    const hideTimer = window.setTimeout(() => {
+      if (selectionActionHideTimer !== hideTimer) {
+        return;
+      }
+      selectionActionHideTimer = null;
+      if (sequence === requestSequence && currentCandidate === candidate) {
+        hideSurface({ immediate: false });
+      }
+    }, ACTION_SUCCESS_DISMISS_MS);
+    selectionActionHideTimer = hideTimer;
+    const renderCurrentFailure = () => {
+      if (sequence !== requestSequence || currentCandidate !== candidate) {
+        return;
+      }
+      clearSelectionActionHideTimer();
+      renderFailureStatus();
+    };
     try {
       chrome.runtime.sendMessage({
         action: 'runSelectionQuickAction',
@@ -1651,16 +1682,15 @@
         text: candidate.classification.text
       }, (response) => {
         if (chrome.runtime && chrome.runtime.lastError) {
-          renderFailureStatus();
+          renderCurrentFailure();
           return;
         }
         if (!response || response.ok === false) {
-          renderFailureStatus();
+          renderCurrentFailure();
         }
       });
-      window.setTimeout(() => hideSurface({ immediate: false }), 900);
     } catch (e) {
-      renderFailureStatus();
+      renderCurrentFailure();
     }
   }
 

@@ -4025,12 +4025,6 @@
       });
       renderShortcuts();
     }
-    if (areaName === 'local' && changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY]) {
-      newtabShortcutIcons = NEWTAB_SHORTCUT_ICON_STORE.normalizeIconMap(
-        changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY].newValue
-      );
-      renderShortcuts();
-    }
     if (areaName === 'local' && changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY]) {
       siteSearchIconCache = SHORTCUT_FAVICON.normalizeCacheMap(
         changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY].newValue,

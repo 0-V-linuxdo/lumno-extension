@@ -128,6 +128,40 @@ function createChromeStub(options) {
 }
 
 {
+  const { chromeApi, createdTabs, groupedTabs } = createChromeStub({
+    existingGroup: true,
+    openTabs: [
+      {
+        id: 7,
+        windowId: 9,
+        url: 'https://chatgpt.com/c/source-conversation',
+        status: 'complete',
+        active: true,
+        lastAccessed: 400
+      }
+    ]
+  });
+  let response = null;
+  selectionTarget.openSelectionTarget(chromeApi, {
+    url: 'https://chatgpt.com/',
+    sourceTab: { id: 7, windowId: 9 },
+    groupEnabled: true
+  }, (result) => {
+    response = result;
+  });
+  assert.deepStrictEqual(createdTabs[0], {
+    url: 'https://chatgpt.com/',
+    active: false,
+    windowId: 9,
+    openerTabId: 7
+  }, 'the page that triggered the selection action must not be reused as its own target');
+  assert.deepStrictEqual(groupedTabs[0], { tabIds: 100, groupId: 33 },
+    'a fresh target should join the dedicated AI 查询 group');
+  assert.strictEqual(response.mode, 'group');
+  assert.strictEqual(response.tab.id, 100);
+}
+
+{
   const { chromeApi, createdTabs, groupedTabs, updatedGroups } = createChromeStub({ existingGroup: true });
   let response = null;
   selectionTarget.openSelectionTarget(chromeApi, {

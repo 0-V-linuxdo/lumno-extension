@@ -77,15 +77,19 @@ assert(
   'the Remix stylesheet should request the exact URL that was preloaded'
 );
 
-const startupScripts = manifest.content_scripts[0].js;
+const startupContentScript = manifest.content_scripts.find((entry) => (
+  Array.isArray(entry.matches) &&
+  entry.matches.includes('<all_urls>') &&
+  entry.run_at === 'document_start' &&
+  Array.isArray(entry.js) &&
+  entry.js.includes('src/content/hotkey-listener.js')
+));
+assert(startupContentScript, 'the ordinary-page startup content script should remain declared');
+const startupScripts = startupContentScript.js;
 assert.strictEqual(
-  startupScripts[0],
-  'src/shared/icon-font-preload.js',
-  'new ordinary pages should warm the icon font at document_start'
-);
-assert(
-  startupScripts.indexOf('src/shared/icon-font-preload.js') <
-    startupScripts.indexOf('src/content/hotkey-listener.js')
+  startupScripts.includes('src/shared/icon-font-preload.js'),
+  false,
+  'ordinary pages should not preload an extension font before Overlay UI is requested'
 );
 
 const overlayInjectionStart = backgroundSource.indexOf('const overlayInjectionFiles = [');
