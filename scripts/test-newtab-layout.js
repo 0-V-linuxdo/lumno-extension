@@ -1105,6 +1105,11 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
   );
   assert.match(
     newtabHtml,
+    /body:not\(\[data-nt-ready="1"\]\) \.x-nt-wallpaper-control,\s*body:not\(\[data-nt-ready="1"\]\) \.x-nt-feedback-control,\s*body:not\(\[data-nt-ready="1"\]\) \.x-nt-bookmark-cascade-debug-control\s*\{\s*visibility:\s*hidden;\s*\}/,
+    'corner controls should stay hidden until their entrance animation state is installed'
+  );
+  assert.match(
+    newtabHtml,
     /body\[data-nt-enter="run"\] \.x-nt-initial-background-veil\s*\{[\s\S]*?_x_nt_background_reveal_2026_unique_ 260ms ease-out both;[\s\S]*?@keyframes _x_nt_background_reveal_2026_unique_[\s\S]*?opacity:\s*0\.1;[\s\S]*?opacity:\s*0;/,
     'the wallpaper should enter through a subtle non-blocking background veil'
   );

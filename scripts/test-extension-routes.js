@@ -73,13 +73,13 @@ const repoRoot = path.resolve(__dirname, '..');
 const manifest = require('../manifest.json');
 assert.strictEqual(
   manifest.chrome_url_overrides.newtab,
-  routes.ROUTE_PATHS.newtab,
-  'manifest should keep the browser newtab override on the canonical override route'
+  routes.ROUTE_PATHS.lumnoNewtab,
+  'manifest should use the redirect shell so renderer navigation can hand focus to the page'
 );
 assert.notStrictEqual(
-  routes.ROUTE_PATHS.lumnoNewtab,
+  routes.ROUTE_PATHS.newtab,
   manifest.chrome_url_overrides.newtab,
-  'forced Lumno newtab route should not be the browser override route'
+  'the maintained newtab page should remain distinct from the browser override route'
 );
 assert.ok(
   fs.existsSync(path.join(repoRoot, routes.ROUTE_PATHS.lumnoNewtab)),
