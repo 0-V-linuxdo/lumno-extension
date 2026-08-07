@@ -1323,16 +1323,30 @@
     recentResizeLayoutAnimations.clear();
   }
 
+  function prefersSystemReducedMotion() {
+    return Boolean(
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  function shouldSkipNewtabEntryMotion() {
+    const motionEffectsEnabled = !document.documentElement ||
+      document.documentElement.getAttribute('data-lumno-motion-effects') !== 'off';
+    if (typeof SETTINGS.shouldSkipEntryMotion === 'function') {
+      return SETTINGS.shouldSkipEntryMotion(window, motionEffectsEnabled);
+    }
+    return !motionEffectsEnabled || prefersSystemReducedMotion();
+  }
+
   function shouldAnimateNewtabLayoutShift() {
     const body = document.body;
-    const prefersReducedMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     return Boolean(
       body &&
       body.getAttribute('data-nt-ready') === '1' &&
       body.getAttribute('data-nt-enter') !== 'run' &&
       body.getAttribute('data-nt-suggestions-open') !== 'true' &&
-      !prefersReducedMotion
+      !prefersSystemReducedMotion()
     );
   }
 
@@ -1391,8 +1405,6 @@
     const wasVisible = topContentContainer.getAttribute('data-visible') !== 'false';
     const stateChanged = wasVisible !== nextVisible;
     const layoutChanged = stateChanged || Boolean(transitionOptions.contentChanged);
-    const prefersReducedMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const suggestionsOpen = Boolean(
       body && body.getAttribute('data-nt-suggestions-open') === 'true'
     );
@@ -1401,7 +1413,7 @@
       body.getAttribute('data-nt-ready') === '1' &&
       layoutChanged &&
       !suggestionsOpen &&
-      !prefersReducedMotion
+      !prefersSystemReducedMotion()
     );
     const fromLayout = shouldAnimate
       ? (transitionOptions.fromLayout || captureTopContentLayout())
@@ -1456,9 +1468,7 @@
     if (!topContentContainer) {
       return;
     }
-    const prefersReducedMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (prefersReducedMotion) {
+    if (prefersSystemReducedMotion()) {
       finishWordmarkEntryAnimation();
       return;
     }
@@ -2030,12 +2040,11 @@
       window.clearTimeout(newtabEntryAnimationTimer);
       newtabEntryAnimationTimer = 0;
     }
-    const prefersReducedMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const entryState = prefersReducedMotion ? 'done' : 'run';
+    const reduceMotion = shouldSkipNewtabEntryMotion();
+    const entryState = reduceMotion ? 'done' : 'run';
     document.body.setAttribute('data-nt-enter', entryState);
     root.setAttribute('data-lumno-search-entry', entryState);
-    if (prefersReducedMotion) {
+    if (reduceMotion) {
       return;
     }
     newtabEntryAnimationTimer = window.setTimeout(
@@ -2044,10 +2053,30 @@
     );
   }
 
+  function revealNewtabWithoutEntryMotion() {
+    if (!document.body) {
+      return;
+    }
+    if (newtabReadySettleTimer) {
+      window.clearTimeout(newtabReadySettleTimer);
+      newtabReadySettleTimer = 0;
+    }
+    updateBookmarkSectionPosition({ releaseDockDensityLock: true });
+    document.body.setAttribute('data-nt-enter', 'done');
+    root.setAttribute('data-lumno-search-entry', 'done');
+    finishWordmarkEntryAnimation();
+    document.body.setAttribute('data-nt-ready', '1');
+    rememberSearchEntryViewport();
+  }
+
   function scheduleNewtabReadyAfterViewportSettle() {
     if (!newtabReadyRequested ||
         !document.body ||
         document.body.getAttribute('data-nt-ready') === '1') {
+      return;
+    }
+    if (shouldSkipNewtabEntryMotion()) {
+      revealNewtabWithoutEntryMotion();
       return;
     }
     if (newtabReadySettleTimer) {
@@ -10908,23 +10937,19 @@
 
   function loadBookmarks(options) {
     if (!initialThemeApplied) {
-      bootstrapInitialThemeMode().then(() => {
-        loadBookmarks(options);
-      });
-      return;
+      return bootstrapInitialThemeMode().then(() => loadBookmarks(options));
     }
     const forceReload = Boolean(options && options.force);
     const skipFaviconWait = Boolean(options && options.skipFaviconWait);
     if (!skipFaviconWait && !areFaviconRenderCachesReady()) {
       const waitMs = forceReload ? Math.min(80, FAVICON_CACHE_BOOT_WAIT_MS) : FAVICON_CACHE_BOOT_WAIT_MS;
-      waitForFaviconRenderCaches(waitMs).then(() => {
-        loadBookmarks({ force: forceReload, skipFaviconWait: true });
-      });
-      return;
+      return waitForFaviconRenderCaches(waitMs).then(() => (
+        loadBookmarks({ force: forceReload, skipFaviconWait: true })
+      ));
     }
     if (!forceReload && !bookmarkDataDirty && bookmarkLoadedOnce) {
       updateBookmarkSectionPosition();
-      return;
+      return Promise.resolve();
     }
     const requestToken = ++bookmarkLoadToken;
     if (!currentBookmarkCount || currentBookmarkCount <= 0) {
@@ -10939,9 +10964,9 @@
       bookmarkDataDirty = false;
       bookmarkLoadedOnce = true;
       updateBookmarkSectionPosition();
-      return;
+      return Promise.resolve();
     }
-    getTopBookmarks(0, bookmarkCurrentFolderId).then((items) => {
+    return getTopBookmarks(0, bookmarkCurrentFolderId).then((items) => {
       if (requestToken !== bookmarkLoadToken) {
         return;
       }
@@ -10991,23 +11016,19 @@
 
   function loadRecentSites(options) {
     if (!initialThemeApplied) {
-      bootstrapInitialThemeMode().then(() => {
-        loadRecentSites(options);
-      });
-      return;
+      return bootstrapInitialThemeMode().then(() => loadRecentSites(options));
     }
     const forceReload = Boolean(options && options.force);
     const skipFaviconWait = Boolean(options && options.skipFaviconWait);
     if (!skipFaviconWait && !areFaviconRenderCachesReady()) {
       const waitMs = forceReload ? Math.min(80, FAVICON_CACHE_BOOT_WAIT_MS) : FAVICON_CACHE_BOOT_WAIT_MS;
-      waitForFaviconRenderCaches(waitMs).then(() => {
-        loadRecentSites({ force: forceReload, skipFaviconWait: true });
-      });
-      return;
+      return waitForFaviconRenderCaches(waitMs).then(() => (
+        loadRecentSites({ force: forceReload, skipFaviconWait: true })
+      ));
     }
     if (!forceReload && !recentDataDirty && recentLoadedOnce) {
       updateBookmarkSectionPosition();
-      return;
+      return Promise.resolve();
     }
     const requestToken = ++recentLoadToken;
     const recentSourceLimit = getRecentSourceLimit();
@@ -11019,9 +11040,9 @@
       recentDataDirty = false;
       recentLoadedOnce = true;
       updateBookmarkSectionPosition();
-      return;
+      return Promise.resolve();
     }
-    getRecentSites(recentSourceLimit + MAX_PINNED_RECENT_SITES, currentRecentMode).then((items) => {
+    return getRecentSites(recentSourceLimit + MAX_PINNED_RECENT_SITES, currentRecentMode).then((items) => {
       if (requestToken !== recentLoadToken) {
         return;
       }
@@ -14945,6 +14966,7 @@
   function scheduleAutoFocusRecovery() {
     const hasExplicitFocusHint = window.location.search.includes('focus=1') ||
       window.location.hash.includes('focus');
+    let forceInitialFocusPending = hasExplicitFocusHint;
 
     const retryDelays = [0, 60, 140, 280, 520, 900, 1400];
     const attemptFocusIfVisible = () => {
@@ -14954,7 +14976,10 @@
       if (!document.hasFocus()) {
         return;
       }
-      tryFocusSearchInput(hasExplicitFocusHint);
+      const focused = tryFocusSearchInput(forceInitialFocusPending);
+      if (focused) {
+        forceInitialFocusPending = false;
+      }
     };
 
     retryDelays.forEach((delay) => {
@@ -15116,8 +15141,7 @@
     }
     openExternalNewTabUrl(LUMNO_CHROME_WEB_STORE_URL, event);
   }
-  const shouldAnimateWordmarkEntry = !window.matchMedia ||
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const shouldAnimateWordmarkEntry = !shouldSkipNewtabEntryMotion();
   topContentContainer = document.createElement('div');
   topContentController = NEWTAB_TOP_CONTENT.createTopContentController(
     topContentContainer,
@@ -15437,8 +15461,8 @@
       return false;
     }
     if (inputModeController &&
-        typeof inputModeController.shouldContainModeMenuTab === 'function' &&
-        inputModeController.shouldContainModeMenuTab(event)) {
+        typeof inputModeController.handleModeMenuTabFocusToggle === 'function' &&
+        inputModeController.handleModeMenuTabFocusToggle(event)) {
       return true;
     }
     if (inputModeController &&
@@ -15825,32 +15849,59 @@
   bottomDockRuntime.onScroll(scheduleWallpaperAdaptiveToneUpdate, { passive: true });
   const shortcutPreferencesReadyPromise = loadNewtabShortcutPreferences();
   const shortcutsReadyPromise = shortcutPreferencesReadyPromise.then(loadVisibleShortcuts);
+  const initialShortcutsReadyTask = shortcutsReadyPromise.catch((error) => {
+    console.warn('[Lumno] Deferred shortcut loading failed.', error);
+    return [];
+  });
   const sectionPolicyReadyPromise = Promise.all([
     loadSearchBlacklistItems(),
     loadFaviconRequestBlacklistItems(),
     loadFaviconEnhancedFetchEnabled()
   ]);
   const initialLanguageReadyTask = bootstrapInitialLanguageMode();
+  const initialMotionPreferenceReadyTask = globalThis.LumnoMotionPreferenceReady &&
+    typeof globalThis.LumnoMotionPreferenceReady.then === 'function'
+      ? globalThis.LumnoMotionPreferenceReady
+      : Promise.resolve(true);
+  let initialNewtabSkipsEntryMotion = false;
   const initialVisualReadyPromise = Promise.all([
     initialAppearanceReadyTask,
     initialBookmarkViewModeReadyPromise,
     loadZenMode(),
-    shortcutPreferencesReadyPromise
+    shortcutPreferencesReadyPromise,
+    initialMotionPreferenceReadyTask
   ]).then(() => {
-    hydrateSectionsFromCache();
-    maybeShowFileAccessNotice();
-    markNewtabReady();
+    initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion();
+    if (!initialNewtabSkipsEntryMotion) {
+      hydrateSectionsFromCache();
+      maybeShowFileAccessNotice();
+      markNewtabReady();
+      return;
+    }
+    return Promise.all([
+      initialLanguageReadyTask,
+      sectionPolicyReadyPromise,
+      initialShortcutsReadyTask
+    ]).then(() => Promise.all([
+      loadRecentSites(),
+      loadBookmarks()
+    ])).catch((error) => {
+      console.warn('[Lumno] Motion-free new tab entry setup failed.', error);
+    }).then(() => {
+      maybeShowFileAccessNotice();
+      markNewtabReady();
+    });
   });
   Promise.all([
     initialVisualReadyPromise,
     initialLanguageReadyTask,
     sectionPolicyReadyPromise
   ]).then(() => {
+    if (initialNewtabSkipsEntryMotion) {
+      return;
+    }
     loadRecentSites();
     loadBookmarks();
-  });
-  shortcutsReadyPromise.catch((error) => {
-    console.warn('[Lumno] Deferred shortcut loading failed.', error);
   });
   updateBookmarkSectionPosition();
 

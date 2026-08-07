@@ -10,18 +10,17 @@
     suggestions: '_x_extension_overlay_suggestions_style_2026_unique_'
   });
 
-  const SITE_FIXES = Object.freeze([
-    Object.freeze({
-      id: 'dribbble-overlay-style-reveal',
-      hosts: Object.freeze(['dribbble.com']),
-      waitForStyleSheets: true,
-      styleIds: Object.freeze([
-        OVERLAY_STYLE_IDS.input,
-        OVERLAY_STYLE_IDS.suggestions
-      ]),
-      maxWaitMs: 700
-    })
-  ]);
+  const OVERLAY_STYLE_REVEAL_POLICY = Object.freeze({
+    id: 'overlay-critical-style-reveal',
+    waitForStyleSheets: true,
+    styleIds: Object.freeze([
+      OVERLAY_STYLE_IDS.input,
+      OVERLAY_STYLE_IDS.suggestions
+    ]),
+    maxWaitMs: 700
+  });
+
+  const SITE_FIXES = Object.freeze([]);
 
   function normalizeHostname(value) {
     return String(value || '')
@@ -202,6 +201,38 @@
     });
   }
 
+  function waitForCommittedStylePaint(win, frameCount) {
+    const targetWindow = getTimerWindow(win);
+    const framesToWait = Math.max(1, Number(frameCount) || 1);
+    if (!targetWindow) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let remainingFrames = framesToWait;
+      const onFrame = () => {
+        remainingFrames -= 1;
+        if (remainingFrames <= 0) {
+          resolve();
+          return;
+        }
+        requestFrame();
+      };
+      const requestFrame = () => {
+        if (typeof targetWindow.requestAnimationFrame === 'function') {
+          targetWindow.requestAnimationFrame(onFrame);
+          return;
+        }
+        if (typeof targetWindow.setTimeout === 'function') {
+          targetWindow.setTimeout(onFrame, 0);
+          return;
+        }
+        resolve();
+      };
+      requestFrame();
+    });
+  }
+
   function setOverlayDeferredVisibility(overlay, enabled, fixId) {
     if (!overlay || !overlay.style || typeof overlay.style.setProperty !== 'function') {
       return;
@@ -227,10 +258,8 @@
 
   function createOverlayRevealGate(win, options) {
     const settings = options && typeof options === 'object' ? options : {};
-    const activeFix = getActiveFixes(win).find((fix) => fix && fix.waitForStyleSheets);
-    if (!activeFix) {
-      return createNoopRevealGate();
-    }
+    const activeFix = getActiveFixes(win).find((fix) => fix && fix.waitForStyleSheets) ||
+      OVERLAY_STYLE_REVEAL_POLICY;
 
     const overlay = settings.overlay || null;
     const styleRoot = settings.styleRoot ||
@@ -272,11 +301,13 @@
             fixId: activeFix.id
           });
         } else {
-          waitPromise = waitForStyleLinks(win, links, maxWaitMs).then((result) => ({
-            ok: Boolean(result && result.ok),
-            reason: result && result.reason ? result.reason : 'unknown',
-            fixId: activeFix.id
-          }));
+          waitPromise = waitForStyleLinks(win, links, maxWaitMs).then((result) => (
+            waitForCommittedStylePaint(win, 2).then(() => ({
+              ok: Boolean(result && result.ok),
+              reason: result && result.reason ? result.reason : 'unknown',
+              fixId: activeFix.id
+            }))
+          ));
         }
       }
       return waitPromise;
@@ -293,6 +324,7 @@
 
   return Object.freeze({
     OVERLAY_STYLE_IDS,
+    OVERLAY_STYLE_REVEAL_POLICY,
     SITE_FIXES,
     createOverlayRevealGate,
     getActiveFixes,

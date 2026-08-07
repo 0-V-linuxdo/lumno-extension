@@ -72,7 +72,7 @@ interface ModeController {
     provider?: Record<string, unknown>
   ): void;
   shouldCompleteModeMenuDoubleTab(event: KeyboardEvent): boolean;
-  shouldContainModeMenuTab(event: KeyboardEvent): boolean;
+  handleModeMenuTabFocusToggle(event: KeyboardEvent): boolean;
   shouldHandleModeMenuKeyEvent(event: KeyboardEvent): boolean;
   shouldOpenModeMenuForActiveModeOnTab(event: KeyboardEvent): boolean;
   shouldOpenModeMenuOnDoubleTab(event: KeyboardEvent): boolean;
@@ -322,11 +322,17 @@ describe('Shared search scope menu', () => {
     );
     expect(activeCheckWhileOpen.defaultPrevented).toBe(false);
     const containedOpenTab = createTabEvent();
-    expect(controller.shouldContainModeMenuTab(containedOpenTab)).toBe(true);
+    expect(controller.handleModeMenuTabFocusToggle(containedOpenTab)).toBe(true);
     expect(containedOpenTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(parts.input);
+    const toggledBackTab = createTabEvent();
+    expect(controller.handleModeMenuTabFocusToggle(toggledBackTab)).toBe(true);
+    expect(toggledBackTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(controller.menuElement);
     const modifiedOpenTab = createTabEvent({ shiftKey: true });
-    expect(controller.shouldContainModeMenuTab(modifiedOpenTab)).toBe(false);
+    expect(controller.handleModeMenuTabFocusToggle(modifiedOpenTab)).toBe(false);
     expect(modifiedOpenTab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(controller.menuElement);
     controller.destroy();
   });
 
@@ -371,7 +377,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('can keep the search input focused while opening the scope panel', () => {
+  it('toggles Tab focus between the input and the open scope panel', () => {
     const parts = createModeParts();
     const controller = window.LumnoSearchInputMode.createInputModeController(
       parts,
@@ -394,16 +400,24 @@ describe('Shared search scope menu', () => {
       cancelable: true,
       key: 'Tab'
     });
-    expect(controller.shouldContainModeMenuTab(tabEvent)).toBe(true);
+    expect(controller.handleModeMenuTabFocusToggle(tabEvent)).toBe(true);
     expect(tabEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(controller.menuElement);
+    expect(controller.menuElement.dataset.searchActive).toBe('true');
+    controller.menuElement.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab'
+    }));
     expect(document.activeElement).toBe(parts.input);
+    expect(controller.menuElement.dataset.searchActive).toBe('false');
     controller.destroy();
   });
 
   it('keeps a platform-aware shortcut hint fixed outside the scrollable menu grid', () => {
     const macParts = createModeParts();
     let localizedShortcutHint = '打开面板';
-    let localizedInputFocusHint = '聚焦';
+    let localizedFocusToggleHint = '切换聚焦';
     let localizedFilterHint = '点击面板，输入拼音或英文快速筛选';
     let localizedFilterQuery = '检索：{query}';
     const macController = window.LumnoSearchInputMode.createInputModeController(
@@ -423,8 +437,8 @@ describe('Shared search scope menu', () => {
           if (key === 'search_scope_menu_select_hint') {
             return '切换';
           }
-          if (key === 'search_scope_menu_input_focus_hint') {
-            return localizedInputFocusHint;
+          if (key === 'search_scope_menu_focus_toggle_hint') {
+            return localizedFocusToggleHint;
           }
           if (key === 'search_scope_menu_filter_hint') {
             return localizedFilterHint;
@@ -513,7 +527,7 @@ describe('Shared search scope menu', () => {
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-input-text]'
       )?.textContent
-    ).toBe('聚焦');
+    ).toBe('切换聚焦');
     expect(
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-filter-text]'
@@ -563,7 +577,7 @@ describe('Shared search scope menu', () => {
       )
     ).toBeNull();
     localizedShortcutHint = '開啟面板';
-    localizedInputFocusHint = '聚焦';
+    localizedFocusToggleHint = '切換聚焦';
     localizedFilterHint = '點擊面板，輸入拼音或英文快速篩選';
     localizedFilterQuery = '搜尋：{query}';
     macController.refreshModeMenuLanguage();
@@ -575,7 +589,7 @@ describe('Shared search scope menu', () => {
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-input-text]'
       )?.textContent
-    ).toBe('聚焦');
+    ).toBe('切換聚焦');
     expect(
       macFooter?.querySelector(
         '[data-search-input-mode-menu-footer-filter-text]'
@@ -691,7 +705,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('keeps the menu mounted and updates its checked item after switching scope', async () => {
+  it('returns New Tab pointer selection focus to the input', async () => {
     const parts = createModeParts();
     const items: ModeMenuItem[] = [
       {
@@ -1352,7 +1366,7 @@ describe('Shared search scope menu', () => {
     controller.destroy();
   });
 
-  it('keeps a shadow-root menu open while returning selection focus to its input', async () => {
+  it('enforces Overlay keyboard and pointer selection focus targets', async () => {
     const parts = createModeParts();
     const shadowHost = document.createElement('div');
     const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
@@ -1384,6 +1398,17 @@ describe('Shared search scope menu', () => {
       '[role="menuitemradio"]'
     );
     expect(menuItem).not.toBeNull();
+
+    const enterEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter'
+    });
+    menuItem?.dispatchEvent(enterEvent);
+    await Promise.resolve();
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(shadowRoot.activeElement).toBe(menuItem);
+    expect(controller.menuElement.dataset.searchActive).toBe('true');
 
     menuItem?.dispatchEvent(
       new Event('pointerdown', { bubbles: true, composed: true })

@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-02-scope-chip-v29';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-07-scope-focus-toggle-v33';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -402,7 +402,6 @@
     let modeMenuDoubleTabTimer = 0;
     let modeTagRemovalConfirmationPending = false;
     let modeTagRemovalConfirmationTimer = 0;
-    let modeMenuKeyboardNavigationActive = false;
     let destroyed = false;
 
     function getModeMenuPlaceholder() {
@@ -934,8 +933,8 @@
       );
       modeMenuFooterInputKey.textContent = 'Tab';
       modeMenuFooterInputText.textContent = formatMessage(
-        'search_scope_menu_input_focus_hint',
-        'Focus'
+        'search_scope_menu_focus_toggle_hint',
+        'Switch focus'
       );
       modeMenuFooterKey.textContent =
         typeof shortcutDisplayApi.formatShortcutReference === 'function'
@@ -1938,7 +1937,7 @@
       return true;
     }
 
-    function shouldContainModeMenuTab(event) {
+    function handleModeMenuTabFocusToggle(event) {
       if (destroyed || !event || event.key !== 'Tab' || event.defaultPrevented ||
           (!modeMenuOpen && !modeMenuPending)) {
         return false;
@@ -1953,6 +1952,14 @@
         event.preventDefault();
       }
       resetModeMenuDoubleTab();
+      const activeElement = getModeMenuActiveElement();
+      const focusIsInModeMenu = activeElement === modeMenu ||
+        modeMenu.contains(activeElement);
+      if (focusIsInModeMenu) {
+        focusModeInput();
+      } else {
+        focusModeMenuSearch();
+      }
       return true;
     }
 
@@ -2681,7 +2688,6 @@
       if (destroyed || !input || typeof input.focus !== 'function') {
         return false;
       }
-      modeMenuKeyboardNavigationActive = false;
       setModeMenuSearchActive(false);
       input.focus({ preventScroll: true });
       return true;
@@ -2747,6 +2753,7 @@
       buttons.forEach((button, buttonIndex) => {
         button.tabIndex = buttonIndex === normalizedIndex ? 0 : -1;
       });
+      setModeMenuSearchActive(true);
       buttons[normalizedIndex].focus({ preventScroll: true });
       scrollModeMenuButtonIntoView(buttons[normalizedIndex], {
         smooth: Boolean(focusOptions && focusOptions.smoothScroll)
@@ -2759,11 +2766,8 @@
         normalizeModeMenuSearchText(modeMenuFilterQuery)
       );
       if (hasFilterQuery && focusModeMenuButton(0)) {
-        modeMenuKeyboardNavigationActive = true;
-        setModeMenuSearchActive(true);
         return true;
       }
-      modeMenuKeyboardNavigationActive = false;
       return focusModeMenuSearch();
     }
 
@@ -2889,7 +2893,9 @@
 
     function selectModeMenuItem(item, selectionOptions) {
       const selectOptions = selectionOptions || {};
-      const keepMenuFocus = selectOptions.keepMenuFocus === true;
+      const focusAfterSelect = selectOptions.focusAfterSelect === 'panel'
+        ? 'panel'
+        : 'input';
       let result = null;
       if (typeof config.onModeMenuSelect === 'function') {
         result = config.onModeMenuSelect(item);
@@ -2900,13 +2906,15 @@
           if (!syncModeMenuSelection(selectedModeId)) {
             refreshModeMenu(selectedModeId);
           }
-          if (keepMenuFocus) {
+          if (focusAfterSelect === 'panel') {
             const buttons = getModeMenuButtons();
             const selectedIndex = buttons.findIndex((button) => (
               String(button.dataset.modeId || '') === selectedModeId
             ));
             if (selectedIndex >= 0) {
               focusModeMenuButton(selectedIndex);
+            } else {
+              focusModeMenuSearch();
             }
           } else {
             focusModeInput();
@@ -2965,8 +2973,7 @@
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          modeMenuKeyboardNavigationActive = false;
-          selectModeMenuItem(item);
+          selectModeMenuItem(item, { focusAfterSelect: 'input' });
         });
         modeMenuContent.appendChild(button);
         renderedModeMenuEntries.push({
@@ -3303,7 +3310,6 @@
           return false;
         }
         modeMenuOpen = true;
-        modeMenuKeyboardNavigationActive = false;
         syncModeMenuQueryLift();
         modeMenu.hidden = false;
         syncInputPlaceholder();
@@ -3428,7 +3434,6 @@
         modeMenuCursorTooltipController.hide();
       }
       modeMenuOpen = false;
-      modeMenuKeyboardNavigationActive = false;
       modeMenuFilterQuery = '';
       setModeMenuSearchActive(false);
       concealModeMenuSurface();
@@ -3497,7 +3502,6 @@
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight' ||
           event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
         stopModeMenuKeyEvent(event);
-        modeMenuKeyboardNavigationActive = true;
         const nextIndex = getModeMenuDirectionalIndex(
           buttons,
           currentIndex,
@@ -3507,7 +3511,6 @@
         return true;
       } else if (event.key === 'Home' || event.key === 'End') {
         stopModeMenuKeyEvent(event);
-        modeMenuKeyboardNavigationActive = true;
         focusModeMenuButton(event.key === 'Home' ? 0 : buttons.length - 1);
         return true;
       } else if ((event.key === 'Enter' || event.key === ' ') && currentIndex >= 0) {
@@ -3517,14 +3520,12 @@
         ));
         if (entry) {
           selectModeMenuItem(entry.item, {
-            keepMenuFocus: modeMenuKeyboardNavigationActive
+            focusAfterSelect: 'panel'
           });
         }
         return true;
       } else if (event.key === 'Tab') {
-        stopModeMenuKeyEvent(event);
-        focusModeInput();
-        return true;
+        return handleModeMenuTabFocusToggle(event);
       } else if (!event.isComposing && !event.repeat &&
           !event.metaKey && !event.ctrlKey && !event.altKey &&
           typeof event.key === 'string' && event.key.length === 1 &&
@@ -3548,7 +3549,6 @@
       if (!modeMenuOpen || modeMenu.hidden) {
         return;
       }
-      modeMenuKeyboardNavigationActive = false;
       setModeMenuSearchActive(true);
       const target = event && event.target;
       const button = target && typeof target.closest === 'function'
@@ -3567,15 +3567,29 @@
       const eventPath = event && typeof event.composedPath === 'function'
         ? event.composedPath()
         : [];
+      const containerRoot = typeof container.getRootNode === 'function'
+        ? container.getRootNode()
+        : null;
+      const containerRootHost = containerRoot && containerRoot.host
+        ? containerRoot.host
+        : null;
       const isInsideModeContainer = container.contains(event.target) ||
         eventPath.includes(container) ||
         eventPath.includes(modeMenu) ||
-        eventPath.includes(siteSearchPrefix);
+        eventPath.includes(siteSearchPrefix) ||
+        Boolean(containerRootHost && event.currentTarget !== containerRoot && (
+          event.target === containerRootHost ||
+          eventPath.includes(containerRootHost)
+        ));
       if (!modeMenuOpen || isInsideModeContainer) {
         return;
       }
       closeModeMenu(false);
     }
+
+    const modePointerEventRoot = typeof container.getRootNode === 'function'
+      ? container.getRootNode()
+      : null;
 
     siteSearchPrefix.addEventListener('click', handlePrefixClick);
     siteSearchPrefix.addEventListener('keydown', handlePrefixKeydown);
@@ -3587,6 +3601,14 @@
     modeMenu.addEventListener('pointerdown', handleModeMenuPointerDown);
     if (doc && typeof doc.addEventListener === 'function') {
       doc.addEventListener('pointerdown', handleDocumentPointerDown, true);
+    }
+    if (modePointerEventRoot && modePointerEventRoot !== doc &&
+        typeof modePointerEventRoot.addEventListener === 'function') {
+      modePointerEventRoot.addEventListener(
+        'pointerdown',
+        handleDocumentPointerDown,
+        true
+      );
     }
 
     function onResize() {
@@ -3642,6 +3664,14 @@
       if (doc && typeof doc.removeEventListener === 'function') {
         doc.removeEventListener('pointerdown', handleDocumentPointerDown, true);
       }
+      if (modePointerEventRoot && modePointerEventRoot !== doc &&
+          typeof modePointerEventRoot.removeEventListener === 'function') {
+        modePointerEventRoot.removeEventListener(
+          'pointerdown',
+          handleDocumentPointerDown,
+          true
+        );
+      }
       clearProviderPrefix();
       setTabHintVisible(false);
       if (ownsModeMenuCursorTooltipController &&
@@ -3678,7 +3708,7 @@
       targetModeMenuResultTransition,
       setTabHintVisible,
       shouldCompleteModeMenuDoubleTab,
-      shouldContainModeMenuTab,
+      handleModeMenuTabFocusToggle,
       handleModeMenuKeyEvent,
       shouldHandleModeMenuKeyEvent,
       shouldOpenModeMenuForActiveModeOnTab,

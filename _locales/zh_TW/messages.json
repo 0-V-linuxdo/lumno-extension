@@ -216,6 +216,12 @@
   "settings_update_notice_desc": {
     "message": "更新到新版本時顯示新功能元件"
   },
+  "settings_motion_effects_title": {
+    "message": "動態效果"
+  },
+  "settings_motion_effects_desc": {
+    "message": "若遇到卡頓，或偏好更俐落的喚起方式，可關閉"
+  },
   "settings_auto_pip_title": {
     "message": "自動畫中畫"
   },
@@ -1515,8 +1521,8 @@
   "search_scope_menu_select_hint": {
     "message": "切換"
   },
-  "search_scope_menu_input_focus_hint": {
-    "message": "聚焦"
+  "search_scope_menu_focus_toggle_hint": {
+    "message": "切換聚焦"
   },
   "search_scope_menu_filter_hint": {
     "message": "點擊面板，輸入拼音或英文快速篩選"

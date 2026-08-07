@@ -665,6 +665,15 @@ assertContains(
   'shortcut dialog should animate into its open state'
 );
 
+assert.strictEqual(
+  getCssDeclaration(
+    getCssRuleBlock(shortcutDialogCss, '.x-nt-shortcut-dialog-backdrop'),
+    'pointer-events'
+  ),
+  'pointer-events: auto;',
+  'shortcut dialog backdrop should block the page throughout its opening and closing lifecycle'
+);
+
 assertContains(
   shortcutDialogCss,
   '.x-nt-shortcut-dialog-backdrop[data-preparing="true"] .x-nt-shortcut-dialog',
@@ -2206,7 +2215,7 @@ assert.match(
 assert.match(
   newtabJs,
   /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?shortcutPreferencesReadyPromise[\s\S]*?\]\)\.then\(\(\) => \{[\s\S]*?markNewtabReady\(\);[\s\S]*?\}\);/,
-  'newtab ready transition should wait only for lightweight visual preferences'
+  'newtab ready transition should branch after lightweight visual preferences resolve'
 );
 
 const initialVisualDependencyBlock = newtabJs.slice(
@@ -2220,10 +2229,10 @@ assert.doesNotMatch(
   'newtab ready transition should not wait for wallpaper or shortcut asset payloads'
 );
 
-assert.ok(
-  newtabJs.indexOf('markNewtabReady();') <
-    newtabJs.indexOf("console.warn('[Lumno] Deferred shortcut loading failed.'"),
-  'newtab ready transition should not wait for shortcut icon payloads'
+assert.match(
+  newtabJs,
+  /initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);\s*return;\s*\}[\s\S]*?initialShortcutsReadyTask[\s\S]*?markNewtabReady\(\);/,
+  'animated new tabs should reveal immediately while motion-free entry waits for shortcut content'
 );
 
 assertContains(

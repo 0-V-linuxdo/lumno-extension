@@ -44,8 +44,8 @@ assert.match(
 );
 assert.match(
   sharedSource,
-  /function shouldContainModeMenuTab\(event\)[\s\S]*?!modeMenuOpen && !modeMenuPending[\s\S]*?event\.preventDefault\(\)[\s\S]*?return true;/,
-  'an open scope menu should contain unmodified Tab focus on both search surfaces'
+  /function handleModeMenuTabFocusToggle\(event\)[\s\S]*?!modeMenuOpen && !modeMenuPending[\s\S]*?event\.preventDefault\(\)[\s\S]*?focusIsInModeMenu[\s\S]*?focusModeInput\(\)[\s\S]*?focusModeMenuSearch\(\)[\s\S]*?return true;/,
+  'an open scope menu should toggle unmodified Tab focus between the panel and input'
 );
 assert.match(
   sharedSource,
@@ -64,8 +64,8 @@ assert.match(
 );
 assert.match(
   sharedSource,
-  /search_scope_menu_navigation_hint[\s\S]*?search_scope_menu_select_hint[\s\S]*?search_scope_menu_input_focus_hint[\s\S]*?formatShortcutReference\('Tab Tab'/,
-  'the scope footer should describe arrow navigation, Enter selection, Tab input focus, and the existing open shortcut'
+  /search_scope_menu_navigation_hint[\s\S]*?search_scope_menu_select_hint[\s\S]*?search_scope_menu_focus_toggle_hint[\s\S]*?formatShortcutReference\('Tab Tab'/,
+  'the scope footer should describe arrow navigation, Enter selection, Tab focus switching, and the existing open shortcut'
 );
 assert.match(
   sharedCss,
@@ -94,8 +94,8 @@ for (const [surface, source] of [
   );
   assert.match(
     source,
-    /shouldContainModeMenuTab\((?:event|e)\)[\s\S]*?return true;/,
-    `${surface} should keep Tab from focusing a scroll container while the scope menu is open`
+    /handleModeMenuTabFocusToggle\((?:event|e)\)[\s\S]*?return true;/,
+    `${surface} should toggle Tab focus within the input and open scope menu`
   );
   assert.match(
     source,
@@ -325,11 +325,11 @@ const expectedShortcutHints = {
   zh_CN: '打开面板',
   zh_TW: '開啟面板'
 };
-const expectedInputFocusHints = {
-  en: 'Focus',
-  ja: '入力へ',
-  zh_CN: '聚焦',
-  zh_TW: '聚焦'
+const expectedFocusToggleHints = {
+  en: 'Switch focus',
+  ja: 'フォーカス切替',
+  zh_CN: '切换聚焦',
+  zh_TW: '切換聚焦'
 };
 const expectedSelectHints = {
   en: 'Switch',
@@ -370,10 +370,10 @@ Object.entries(expectedShortcutTitles).forEach(([locale, expectedTitle]) => {
     `${locale} should localize the fixed scope-panel shortcut hint`
   );
   assert.strictEqual(
-    messages.search_scope_menu_input_focus_hint &&
-      messages.search_scope_menu_input_focus_hint.message,
-    expectedInputFocusHints[locale],
-    `${locale} should localize the scope-panel input-focus hint`
+    messages.search_scope_menu_focus_toggle_hint &&
+      messages.search_scope_menu_focus_toggle_hint.message,
+    expectedFocusToggleHints[locale],
+    `${locale} should localize the scope-panel focus-toggle hint`
   );
   assert.strictEqual(
     messages.search_scope_menu_select_hint &&

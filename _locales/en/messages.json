@@ -216,6 +216,12 @@
   "settings_update_notice_desc": {
     "message": "Show what's new after Lumno updates to a new version"
   },
+  "settings_motion_effects_title": {
+    "message": "Motion effects"
+  },
+  "settings_motion_effects_desc": {
+    "message": "Turn this off if performance stutters or you prefer a snappier opening experience"
+  },
   "settings_auto_pip_title": {
     "message": "Auto Picture-in-Picture"
   },
@@ -1515,8 +1521,8 @@
   "search_scope_menu_select_hint": {
     "message": "Switch"
   },
-  "search_scope_menu_input_focus_hint": {
-    "message": "Focus"
+  "search_scope_menu_focus_toggle_hint": {
+    "message": "Switch focus"
   },
   "search_scope_menu_filter_hint": {
     "message": "Type to filter"

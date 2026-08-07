@@ -253,6 +253,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const OVERLAY_SIZE_MODE_STORAGE_KEY = overlayStorageKeys.overlaySizeMode;
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = overlayStorageKeys.overlayEnterAnimation ||
     '_x_extension_overlay_enter_animation_2026_unique_';
+  const MOTION_EFFECTS_ENABLED_STORAGE_KEY = overlayStorageKeys.motionEffectsEnabled ||
+    '_x_extension_motion_effects_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = overlayStorageKeys.overlayTabPriority;
   const TAB_RANK_SCORE_DEBUG_STORAGE_KEY = overlayStorageKeys.tabRankScoreDebug;
   const storageRuntime = overlayRuntime.getStorageArea(chrome);
@@ -279,6 +281,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySearchResultPriorityMode = 'autocomplete';
   let overlaySizeMode = 'standard';
   let overlayEnterAnimation = 'elastic';
+  let motionEffectsEnabled = true;
   const OVERLAY_ENTER_MOTION = Object.freeze({
     elastic: Object.freeze({
       inputBlurPx: 6,
@@ -318,6 +321,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       result[OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
     );
     return overlayEnterAnimation;
+  });
+  const initialMotionEffectsReady = overlayRuntime.getStorageValues(
+    storageArea,
+    [MOTION_EFFECTS_ENABLED_STORAGE_KEY]
+  ).then((result) => {
+    motionEffectsEnabled = typeof SETTINGS.normalizeMotionEffectsEnabled === 'function'
+      ? SETTINGS.normalizeMotionEffectsEnabled(result[MOTION_EFFECTS_ENABLED_STORAGE_KEY])
+      : result[MOTION_EFFECTS_ENABLED_STORAGE_KEY] !== false;
+    return motionEffectsEnabled;
   });
 
   function normalizeOverlaySearchBlacklistItems(items) {
@@ -645,6 +657,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     return typeof SETTINGS.normalizeOverlayEnterAnimation === 'function'
       ? SETTINGS.normalizeOverlayEnterAnimation(mode)
       : (mode === 'fade' ? 'fade' : 'elastic');
+  }
+
+  function shouldSkipOverlayEntryMotion() {
+    if (typeof SETTINGS.shouldSkipEntryMotion === 'function') {
+      return SETTINGS.shouldSkipEntryMotion(window, motionEffectsEnabled);
+    }
+    return motionEffectsEnabled === false ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   function getOverlayEnterAnimationRevealTransform() {
@@ -1884,7 +1904,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       toastCssUrl: TOAST_CSS_URL,
       overlaySuggestionsCssUrl: OVERLAY_SUGGESTIONS_CSS_URL
     });
-
     const overlayToastElement = applyNoTranslate(document.createElement('div'));
     overlayToastElement.id = '_x_extension_overlay_toast_2026_unique_';
     overlayToastElement.className = '_x_extension_overlay_toast_2026_unique_ x-lumno-toast';
@@ -6369,8 +6388,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return false;
       }
       if (inputModeController &&
-          typeof inputModeController.shouldContainModeMenuTab === 'function' &&
-          inputModeController.shouldContainModeMenuTab(e)) {
+          typeof inputModeController.handleModeMenuTabFocusToggle === 'function' &&
+          inputModeController.handleModeMenuTabFocusToggle(e)) {
         return true;
       }
       if (inputModeController &&
@@ -8603,7 +8622,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (overlayRevealGate && typeof overlayRevealGate.release === 'function') {
         overlayRevealGate.release();
       }
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reduceMotion = shouldSkipOverlayEntryMotion();
       const revealTransform = getOverlayEnterAnimationRevealTransform();
       const blurProxy = reduceMotion ? null : createOverlayEntryBlurProxy(overlay);
       if (reduceMotion) {
@@ -8635,6 +8654,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       initialOverlayContentReady,
       initialOverlayEnterAnimationReady.catch(() => {
         overlayEnterAnimation = 'elastic';
+      }),
+      initialMotionEffectsReady.catch(() => {
+        motionEffectsEnabled = true;
       })
     ]).then(() => {
       if (!overlay || !overlay.isConnected) {

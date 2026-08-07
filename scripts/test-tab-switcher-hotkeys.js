@@ -955,11 +955,11 @@ assert.ok(
   optionsHtmlSource.includes('data-i18n="settings_tab_switcher_title"') &&
     optionsHtmlSource.includes('data-i18n="settings_tab_switcher_desc"') &&
     optionsHtmlSource.includes('id="_x_extension_tab_switcher_toggle_2026_unique_"'),
-  'settings Labs should expose a concise localized tab switcher toggle'
+  'settings General should expose a concise localized tab switcher toggle'
 );
 assert.ok(
   optionsHtmlSource.includes('按 {shortcut} 快速切换最近标签页'),
-  'settings Labs fallback copy should use the platform-aware shortcut placeholder'
+  'settings General fallback copy should use the platform-aware shortcut placeholder'
 );
 assert.match(
   optionsSource,
@@ -969,7 +969,7 @@ assert.match(
 assert.match(
   optionsSource,
   /const tabSwitcherToggle = document\.getElementById\('_x_extension_tab_switcher_toggle_2026_unique_'\);/,
-  'settings page should wire the tab switcher Labs toggle'
+  'settings page should wire the tab switcher General toggle'
 );
 assert.match(
   optionsSource,

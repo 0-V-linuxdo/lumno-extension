@@ -136,7 +136,7 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function focusFirstModeMenuFilterResult\(\)[\s\S]*?focusModeMenuButton\(0\)[\s\S]*?modeMenuKeyboardNavigationActive = true[\s\S]*?function handleMenuKeydown\(event\)[\s\S]*?applyModeMenuFilter\(modeMenuFilterQuery \+ event\.key\);[\s\S]*?focusFirstModeMenuFilterResult\(\)/,
+  /function focusFirstModeMenuFilterResult\(\)[\s\S]*?focusModeMenuButton\(0\)[\s\S]*?function handleMenuKeydown\(event\)[\s\S]*?applyModeMenuFilter\(modeMenuFilterQuery \+ event\.key\);[\s\S]*?focusFirstModeMenuFilterResult\(\)/,
   'panel filtering should focus the first match and hand subsequent arrow keys to menu navigation'
 );
 assert.match(
@@ -161,8 +161,8 @@ assert.match(
 );
 assert.match(
   inputModeSource,
-  /function focusModeInput\(\)[\s\S]*?setModeMenuSearchActive\(false\)[\s\S]*?input\.focus\(\{ preventScroll: true \}\)[\s\S]*?function selectModeMenuItem\(item, selectionOptions\)[\s\S]*?keepMenuFocus[\s\S]*?focusModeInput\(\)/,
-  'pointer selection should return to the input while keyboard navigation can retain panel ownership'
+  /button\.addEventListener\('click',[\s\S]*?selectModeMenuItem\(item, \{ focusAfterSelect: 'input' \}\)[\s\S]*?function handleMenuKeydown\(event\)[\s\S]*?selectModeMenuItem\(entry\.item, \{[\s\S]*?focusAfterSelect: 'panel'[\s\S]*?event\.key === 'Tab'[\s\S]*?handleModeMenuTabFocusToggle\(event\)/,
+  'pointer selection, keyboard selection, and Tab should use the shared focus rules'
 );
 assert.match(
   inputModeCss,

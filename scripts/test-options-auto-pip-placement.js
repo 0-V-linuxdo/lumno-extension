@@ -20,12 +20,14 @@ const labsContent = getContentBlock('labs');
 
 const updateNoticeTitleIndex = generalContent.indexOf('data-i18n="settings_update_notice_title"');
 const autoPipTitleIndex = generalContent.indexOf('data-i18n="settings_auto_pip_title"');
+const tabSwitcherTitleIndex = generalContent.indexOf('data-i18n="settings_tab_switcher_title"');
 const searchResultsSectionIndex = generalContent.indexOf('data-i18n="settings_search_results_section_title"');
 const syncSectionTitleIndex = accountContent.indexOf('data-i18n="settings_sync_section_title"');
 const syncTitleIndex = accountContent.indexOf('data-i18n="settings_sync_title"');
 
 assert.notStrictEqual(updateNoticeTitleIndex, -1, 'update notice switch should live in general settings');
 assert.notStrictEqual(autoPipTitleIndex, -1, 'auto picture-in-picture should live in general settings');
+assert.notStrictEqual(tabSwitcherTitleIndex, -1, 'Alt+Q tab switcher should live in general settings');
 assert.notStrictEqual(searchResultsSectionIndex, -1, 'general settings should include search results section');
 assert.notStrictEqual(syncSectionTitleIndex, -1, 'account settings should label the sync method section');
 assert.notStrictEqual(syncTitleIndex, -1, 'account settings should retain browser sync status');
@@ -63,13 +65,18 @@ assert.ok(
   'auto picture-in-picture should appear below the update notice switch'
 );
 assert.ok(
-  autoPipTitleIndex < searchResultsSectionIndex,
-  'auto picture-in-picture should stay in general settings before search results settings'
+  autoPipTitleIndex < tabSwitcherTitleIndex && tabSwitcherTitleIndex < searchResultsSectionIndex,
+  'Alt+Q tab switcher should appear directly after auto picture-in-picture and before search results settings'
 );
 assert.doesNotMatch(
   labsContent,
   /data-i18n="settings_auto_pip_title"/,
   'auto picture-in-picture should no longer appear in Labs'
+);
+assert.doesNotMatch(
+  labsContent,
+  /data-i18n="settings_tab_switcher_title"/,
+  'Alt+Q tab switcher should no longer appear in Labs'
 );
 
 assert.match(

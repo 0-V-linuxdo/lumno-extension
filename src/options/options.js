@@ -84,6 +84,7 @@
   const syncImportButton = document.getElementById('_x_extension_sync_import_2024_unique_');
   const syncImportInput = document.getElementById('_x_extension_sync_import_input_2024_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
+  const motionEffectsToggle = document.getElementById('_x_extension_motion_effects_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
   const fallbackShortcutWrap = document.querySelector('._x_extension_shortcuts_hotkey_wrap_2024_unique_');
@@ -307,6 +308,7 @@
   }
   [
     [updateNoticeToggle, 'update-notice'],
+    [motionEffectsToggle, 'motion-effects'],
     [autoPipToggle, 'auto-pip'],
     [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
     [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
@@ -504,6 +506,8 @@
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
+  const MOTION_EFFECTS_ENABLED_STORAGE_KEY = SETTINGS.MOTION_EFFECTS_ENABLED_STORAGE_KEY ||
+    '_x_extension_motion_effects_enabled_2026_unique_';
   const AUTO_PIP_ENABLED_STORAGE_KEY = '_x_extension_auto_pip_enabled_2026_unique_';
   const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
@@ -566,6 +570,7 @@
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
+    MOTION_EFFECTS_ENABLED_STORAGE_KEY,
     AUTO_PIP_ENABLED_STORAGE_KEY,
     TAB_SWITCHER_ENABLED_STORAGE_KEY,
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
@@ -1390,6 +1395,12 @@
   function normalizeUpdateNoticeEnabled(value) {
     return typeof SETTINGS.normalizeUpdateNoticeEnabled === 'function'
       ? SETTINGS.normalizeUpdateNoticeEnabled(value)
+      : value !== false;
+  }
+
+  function normalizeMotionEffectsEnabled(value) {
+    return typeof SETTINGS.normalizeMotionEffectsEnabled === 'function'
+      ? SETTINGS.normalizeMotionEffectsEnabled(value)
       : value !== false;
   }
 
@@ -4134,6 +4145,16 @@
       storageArea.set({ [UPDATE_NOTICE_ENABLED_STORAGE_KEY]: next });
     });
   }
+  if (motionEffectsToggle) {
+    motionEffectsToggle.addEventListener('change', () => {
+      const next = normalizeMotionEffectsEnabled(motionEffectsToggle.checked);
+      setOptionsToggleState(motionEffectsToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
+    });
+  }
   if (autoPipToggle) {
     autoPipToggle.addEventListener('change', () => {
       const next = Boolean(autoPipToggle.checked);
@@ -4743,6 +4764,17 @@
       }
       if (rawValue !== stored) {
         storageArea.set({ [UPDATE_NOTICE_ENABLED_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([MOTION_EFFECTS_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[MOTION_EFFECTS_ENABLED_STORAGE_KEY];
+      const stored = normalizeMotionEffectsEnabled(rawValue);
+      if (motionEffectsToggle) {
+        setOptionsToggleState(motionEffectsToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -5946,6 +5978,15 @@
       setOptionsToggleState(updateNoticeToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [UPDATE_NOTICE_ENABLED_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[MOTION_EFFECTS_ENABLED_STORAGE_KEY] && motionEffectsToggle) {
+      const raw = changes[MOTION_EFFECTS_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeMotionEffectsEnabled(raw);
+      setOptionsToggleState(motionEffectsToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }

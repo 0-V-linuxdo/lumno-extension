@@ -216,6 +216,12 @@
   "settings_update_notice_desc": {
     "message": "新しいバージョンへの更新後に新機能のお知らせを表示します"
   },
+  "settings_motion_effects_title": {
+    "message": "アニメーション効果"
+  },
+  "settings_motion_effects_desc": {
+    "message": "動作が重い場合や、より素早く表示したい場合はオフにできます"
+  },
   "settings_auto_pip_title": {
     "message": "動画を自動でピクチャーインピクチャー表示"
   },
@@ -1515,8 +1521,8 @@
   "search_scope_menu_select_hint": {
     "message": "切替"
   },
-  "search_scope_menu_input_focus_hint": {
-    "message": "入力へ"
+  "search_scope_menu_focus_toggle_hint": {
+    "message": "フォーカス切替"
   },
   "search_scope_menu_filter_hint": {
     "message": "パネルをクリックし、英字またはピンインで絞り込み"

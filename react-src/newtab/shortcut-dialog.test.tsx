@@ -126,13 +126,18 @@ describe('shortcut dialog React island', () => {
         },
         sourceElement: trigger
       });
-      flushAnimationFrames();
     });
 
     const inputs = controller.element.querySelectorAll<HTMLInputElement>(
       'input[type="text"]'
     );
     expect(controller.element.hidden).toBe(false);
+    expect(document.activeElement).toBe(inputs[0]);
+
+    act(() => {
+      flushAnimationFrames();
+    });
+
     expect(controller.element.dataset.open).toBe('true');
     expect(controller.getState()).toEqual({
       mode: 'edit',
@@ -173,6 +178,43 @@ describe('shortcut dialog React island', () => {
     ]);
     expect(controller.element.hidden).toBe(true);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('isolates the page while open and redirects escaped focus into the dialog', () => {
+    const pageContent = document.createElement('main');
+    const searchInput = document.createElement('input');
+    const backgroundButton = document.createElement('button');
+    pageContent.append(searchInput, backgroundButton);
+    document.body.appendChild(pageContent);
+    searchInput.focus();
+
+    const controller = createController(() => false);
+
+    act(() => {
+      controller.open({ sourceElement: backgroundButton });
+    });
+
+    const nameInput = controller.element.querySelector<HTMLInputElement>(
+      'input[type="text"]'
+    );
+    expect(document.activeElement).toBe(nameInput);
+    expect(pageContent.hasAttribute('inert')).toBe(true);
+
+    act(() => {
+      searchInput.focus();
+    });
+    expect(document.activeElement).toBe(nameInput);
+
+    act(() => {
+      flushAnimationFrames();
+    });
+    expect(controller.getState().open).toBe(true);
+
+    act(() => {
+      controller.close({ restoreFocus: true });
+    });
+    expect(pageContent.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(backgroundButton);
   });
 
   it('uses the shared form for bookmark and folder editing', async () => {

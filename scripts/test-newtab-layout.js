@@ -8,11 +8,39 @@ const layoutRuntime = globalThis.LumnoNewtabLayout;
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const newtabRedirectSource = fs.readFileSync(
+  path.join(repoRoot, 'src/newtab/lumno-newtab.js'),
+  'utf8'
+);
 const sharedSearchInputCss = fs.readFileSync(
   path.join(repoRoot, 'src/shared/search-input.css'),
   'utf8'
 );
 const dockReactSource = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/dock.tsx'), 'utf8');
+
+function testNewtabRedirectFocusHintIsConsumedOnce() {
+  assert.match(
+    newtabRedirectSource,
+    /target\.searchParams\.set\('focus', '1'\);[\s\S]*?window\.location\.replace\(target\.href\);/,
+    'the redirect shell should keep the explicit focus handoff for the real New Tab page'
+  );
+  const recoverySource = newtabSource.slice(
+    newtabSource.indexOf('function scheduleAutoFocusRecovery()'),
+    newtabSource.indexOf('scheduleAutoFocusRecovery();')
+  );
+  assert.match(
+    recoverySource,
+    /let forceInitialFocusPending = hasExplicitFocusHint;[\s\S]*?const focused = tryFocusSearchInput\(forceInitialFocusPending\);[\s\S]*?if \(focused\) \{\s*forceInitialFocusPending = false;/,
+    'the explicit New Tab focus hint should be consumed after the first successful input focus'
+  );
+  assert.doesNotMatch(
+    recoverySource,
+    /tryFocusSearchInput\(hasExplicitFocusHint\)/,
+    'New Tab retries and lifecycle events should not permanently force focus back to the input'
+  );
+}
+
+testNewtabRedirectFocusHintIsConsumedOnce();
 
 class FakeStyle {
   constructor() {
@@ -1095,8 +1123,8 @@ function testContinuousResizeKeepsDockDensityStableUntilSettle() {
 function testInitialEntryMotionIsStaggeredAndTransient() {
   assert.match(
     newtabSource,
-    /const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*bootstrapInitialWallpaper\(\),\s*bootstrapInitialWallpaperOverlay\(\),\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);\s*const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
-    'critical appearance state should settle before entry while language loading continues in parallel'
+    /const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*bootstrapInitialWallpaper\(\),\s*bootstrapInitialWallpaperOverlay\(\),\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
+    'critical appearance and motion preference state should settle before the mode-specific entry path'
   );
   assert.match(
     newtabHtml,
@@ -1125,7 +1153,7 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
   );
   assert.match(
     newtabSource,
-    /function finishNewtabEntryAnimation\(\)[\s\S]*?setAttribute\('data-nt-enter', 'done'\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', 'done'\)[\s\S]*?function startNewtabEntryAnimation\(\)[\s\S]*?const entryState = prefersReducedMotion \? 'done' : 'run';[\s\S]*?setAttribute\('data-nt-enter', entryState\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', entryState\)[\s\S]*?window\.setTimeout\(\s*finishNewtabEntryAnimation,[\s\S]*?NEWTAB_ENTRY_ANIMATION_TOTAL_MS/,
+    /function finishNewtabEntryAnimation\(\)[\s\S]*?setAttribute\('data-nt-enter', 'done'\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', 'done'\)[\s\S]*?function startNewtabEntryAnimation\(\)[\s\S]*?const reduceMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?const entryState = reduceMotion \? 'done' : 'run';[\s\S]*?setAttribute\('data-nt-enter', entryState\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', entryState\)[\s\S]*?window\.setTimeout\(\s*finishNewtabEntryAnimation,[\s\S]*?NEWTAB_ENTRY_ANIMATION_TOTAL_MS/,
     'new-tab entrance motion should drive the shared search-entry state and release it after the sequence'
   );
   assert.match(

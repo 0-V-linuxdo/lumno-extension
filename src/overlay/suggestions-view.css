@@ -63,6 +63,10 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 
+#_x_extension_overlay_2024_unique_[data-lumno-site-fix-reveal] .x-ov-close-other-tabs {
+  transition: none !important;
+}
+
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs[data-hover-active="true"] {
   background: var(--x-ext-input-icon-hover-bg, rgba(148, 163, 184, 0.16));
   color: var(--x-ext-input-icon-hover, #4B5563);

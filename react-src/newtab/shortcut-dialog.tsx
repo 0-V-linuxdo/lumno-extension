@@ -132,6 +132,11 @@ interface ShortcutDialogViewHandle {
   getSnapshot(): Pick<FormState, 'mode' | 'itemType' | 'editingId' | 'busy'>;
 }
 
+interface InertSnapshot {
+  element: HTMLElement;
+  hadInert: boolean;
+}
+
 interface ShortcutDialogViewProps {
   options: NormalizedOptions;
   onRequestClose: () => void;
@@ -323,7 +328,12 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
       },
       cancelPendingIcon,
       focusName() {
-        focusElement(nameInputRef.current);
+        const nameInput = nameInputRef.current;
+        if (nameInput && !nameInput.disabled) {
+          focusElement(nameInput);
+          return;
+        }
+        focusElement(dialogRef.current);
       },
       getDialogElement() {
         return dialogRef.current;
@@ -482,6 +492,7 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
         ref={dialogRef}
         className="x-nt-shortcut-dialog"
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={titleId}
       >
@@ -815,6 +826,8 @@ export function createShortcutDialog(
   };
   const reactRoot: Root = createRoot(host);
   let previousFocus: HTMLElement | null = null;
+  let inertSnapshots: InertSnapshot[] = [];
+  let modalActive = false;
   let openFrame = 0;
   let closeTimer = 0;
   let destroyed = false;
@@ -846,6 +859,47 @@ export function createShortcutDialog(
     });
   }
 
+  function releaseBackgroundIsolation(): void {
+    inertSnapshots.forEach(({ element, hadInert }) => {
+      if (!hadInert) {
+        element.removeAttribute('inert');
+      }
+    });
+    inertSnapshots = [];
+  }
+
+  function isolateBackground(): void {
+    releaseBackgroundIsolation();
+    const targets: HTMLElement[] = [];
+    let modalBranch: HTMLElement | null = host;
+    while (modalBranch && modalBranch !== options.documentObj.body) {
+      const parentElement: HTMLElement | null = modalBranch.parentElement;
+      if (!parentElement) {
+        break;
+      }
+      Array.from(parentElement.children).forEach((sibling) => {
+        if (sibling !== modalBranch && sibling instanceof HTMLElement) {
+          targets.push(sibling);
+        }
+      });
+      modalBranch = parentElement;
+    }
+    inertSnapshots = targets.map((element) => ({
+      element,
+      hadInert: element.hasAttribute('inert')
+    }));
+    inertSnapshots.forEach(({ element }) => {
+      element.setAttribute('inert', '');
+    });
+  }
+
+  function keepFocusInDialog(): void {
+    if (!modalActive) {
+      return;
+    }
+    getView()?.focusName();
+  }
+
   function close(closeOptions: ShortcutDialogCloseOptions = {}): boolean {
     if (destroyed) {
       return false;
@@ -857,6 +911,8 @@ export function createShortcutDialog(
       cancelFrame(openFrame);
       openFrame = 0;
     }
+    modalActive = false;
+    releaseBackgroundIsolation();
     host.removeAttribute('data-preparing');
     if (closeTimer) {
       clearTimer(closeTimer);
@@ -902,11 +958,13 @@ export function createShortcutDialog(
     if (destroyed || getState().busy) {
       return false;
     }
-    previousFocus = openOptions.sourceElement || (
-      options.documentObj.activeElement instanceof HTMLElement
-        ? options.documentObj.activeElement
-        : null
-    );
+    if (!modalActive) {
+      previousFocus = openOptions.sourceElement || (
+        options.documentObj.activeElement instanceof HTMLElement
+          ? options.documentObj.activeElement
+          : null
+      );
+    }
     if (closeTimer) {
       clearTimer(closeTimer);
       closeTimer = 0;
@@ -921,6 +979,9 @@ export function createShortcutDialog(
     host.setAttribute('data-open', 'false');
     host.hidden = false;
     host.setAttribute('data-preparing', 'true');
+    modalActive = true;
+    isolateBackground();
+    keepFocusInDialog();
     const dialog = getView()?.getDialogElement() || null;
     setEnterDirection(openOptions.sourceElement, dialog, options);
     if (dialog) {
@@ -937,7 +998,6 @@ export function createShortcutDialog(
         void currentDialog.offsetWidth;
       }
       host.setAttribute('data-open', 'true');
-      getView()?.focusName();
     });
     return true;
   }
@@ -950,6 +1010,10 @@ export function createShortcutDialog(
       parentNode.insertBefore(host, beforeNode);
     } else {
       parentNode.appendChild(host);
+    }
+    if (modalActive) {
+      isolateBackground();
+      keepFocusInDialog();
     }
     return host;
   }
@@ -980,6 +1044,13 @@ export function createShortcutDialog(
     if (event.target === host) {
       close({ restoreFocus: true });
     }
+  }
+
+  function handleDocumentFocusIn(event: FocusEvent): void {
+    if (!modalActive || host.contains(event.target as Node)) {
+      return;
+    }
+    keepFocusInDialog();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -1022,6 +1093,7 @@ export function createShortcutDialog(
     destroyed = true;
     host.removeEventListener('pointerdown', handleBackdropPointerDown);
     host.removeEventListener('keydown', handleKeydown);
+    options.documentObj.removeEventListener('focusin', handleDocumentFocusIn, true);
     flushSync(() => {
       reactRoot.unmount();
     });
@@ -1030,6 +1102,7 @@ export function createShortcutDialog(
 
   host.addEventListener('pointerdown', handleBackdropPointerDown);
   host.addEventListener('keydown', handleKeydown);
+  options.documentObj.addEventListener('focusin', handleDocumentFocusIn, true);
 
   return Object.freeze({
     element: host,
