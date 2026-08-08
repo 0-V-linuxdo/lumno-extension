@@ -4,10 +4,11 @@ const vm = require('vm');
 
 const WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_';
 const LOCAL_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_local_wallpaper_2026_unique_';
+const WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
 const NEWTAB_FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
 const NEWTAB_FAVICON_PRELOAD_STORAGE_KEY = '_x_extension_newtab_favicon_preload_2026_unique_';
 const WALLPAPER_PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
-const WALLPAPER_PRELOAD_STORAGE_VERSION = 3;
+const WALLPAPER_PRELOAD_STORAGE_VERSION = 4;
 const DEFAULT_WALLPAPER_ID = 'monet-coastal-white';
 const WALLPAPER_PREFS_STORAGE_VERSION = 2;
 const CUSTOM_WALLPAPER_ID_PREFIX = 'custom-wallpaper-';
@@ -1052,7 +1053,7 @@ function testNewtabFaviconPreloadAppliesCachedAlternateBeforeMainRuntime() {
     'cached alternate favicon should use the theme-aware monochrome SVG asset before the colorful default can flash'
   );
 
-  ['src/newtab/newtab.html', 'src/newtab/lumno-newtab.html'].forEach((filePath) => {
+  ['src/newtab/newtab.html'].forEach((filePath) => {
     const html = fs.readFileSync(filePath, 'utf8');
     const staticFaviconIndex = html.indexOf('data-lumno-newtab-favicon="true"');
     const firstStylesheetIndex = html.indexOf('<link rel="stylesheet"');
@@ -1079,6 +1080,11 @@ function testNewtabFaviconPreloadAppliesCachedAlternateBeforeMainRuntime() {
     fallbackHtml,
     /<script src="lumno-newtab\.js"><\/script>/,
     'lumno-newtab fallback should load the redirect through an external script allowed by extension CSP'
+  );
+  assert.doesNotMatch(
+    fallbackHtml,
+    /wallpaper-preload\.js/,
+    'lumno-newtab fallback should not paint a wallpaper before redirecting to the primary page'
   );
   assert.doesNotMatch(
     fallbackHtml,
@@ -1117,6 +1123,10 @@ function testWallpaperPreloadUsesTheCachedResolvedMode() {
     version: WALLPAPER_PRELOAD_STORAGE_VERSION,
     mode: 'dark',
     themeMode: 'dark',
+    overlayStops: {
+      light: { top: 0, mid: 0, bottom: 0 },
+      dark: { top: 4.4, mid: 2, bottom: 5 }
+    },
     wallpapers: {
       light: {
         id: 'monet-coastal-white',
@@ -1145,6 +1155,11 @@ function testWallpaperPreloadUsesTheCachedResolvedMode() {
     'dark',
     'the preload should expose a dark placeholder before the runtime resolves the theme'
   );
+  assert.strictEqual(
+    documentObj.documentElement.style.getPropertyValue('--x-nt-wallpaper-overlay-dark-top'),
+    '4.4%',
+    'the first wallpaper frame should use the cached mask strength instead of the default overlay'
+  );
 
   const localDocument = createFakeDocument();
   const localWindow = createFakeWindow();
@@ -1152,6 +1167,10 @@ function testWallpaperPreloadUsesTheCachedResolvedMode() {
     version: WALLPAPER_PRELOAD_STORAGE_VERSION,
     mode: 'dark',
     themeMode: 'dark',
+    overlayStops: {
+      light: { top: 0, mid: 0, bottom: 0 },
+      dark: { top: 4.4, mid: 2, bottom: 5 }
+    },
     wallpapers: {
       light: {
         id: 'monet-coastal-white',
@@ -1823,6 +1842,49 @@ async function testSplitBuiltInWallpaperSelectionFollowsResolvedTheme() {
   );
 }
 
+async function testWallpaperPreloadCacheRetainsMinimumLightOverlay() {
+  const syncStorage = createMemoryStorage({
+    [WALLPAPER_STORAGE_KEY]: {
+      version: WALLPAPER_PREFS_STORAGE_VERSION,
+      sameForModes: true,
+      light: 'dark-shanshui-moonlit',
+      dark: 'dark-shanshui-moonlit'
+    },
+    [WALLPAPER_OVERLAY_STORAGE_KEY]: {
+      version: 2,
+      light: 0,
+      dark: 50
+    }
+  });
+  const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } =
+    createWallpaperSandbox();
+  testDocument.body.setAttribute('data-theme', 'light');
+  const testRuntime = testSandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: testDocument,
+    windowObj: testWindow,
+    storageArea: syncStorage,
+    storageKeys: {
+      wallpaper: WALLPAPER_STORAGE_KEY,
+      localWallpaper: LOCAL_WALLPAPER_STORAGE_KEY,
+      overlay: WALLPAPER_OVERLAY_STORAGE_KEY
+    },
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+
+  await testRuntime.bootstrapInitialWallpaperOverlay();
+  await testRuntime.bootstrapInitialWallpaper();
+
+  const preloadCache = JSON.parse(
+    testWindow.localStorage.getItem(WALLPAPER_PRELOAD_STORAGE_KEY)
+  );
+  assert.deepStrictEqual(
+    clonePlain(preloadCache.overlayStops.light),
+    { top: 0, mid: 0, bottom: 0 },
+    'a minimum light-mode mask should stay at zero in the next new-tab first frame'
+  );
+}
+
 async function testSplitLocalWallpaperSelectionStaysLocalOnly() {
   const customWallpaperId = `${CUSTOM_WALLPAPER_ID_PREFIX}dark-local`;
   const syncStorage = createMemoryStorage({
@@ -2086,6 +2148,7 @@ Promise.resolve()
   .then(testWallpaperModeConsistencyDefaultsOnAndCopiesLegacySelectionWhenDisabled)
   .then(testDisablingWallpaperModeConsistencyIgnoresStaleLocalDisabledOverride)
   .then(testSplitBuiltInWallpaperSelectionFollowsResolvedTheme)
+  .then(testWallpaperPreloadCacheRetainsMinimumLightOverlay)
   .then(testSplitLocalWallpaperSelectionStaysLocalOnly)
   .then(testNewtabFaviconOptionsRenderBelowLogoAndPersistSelection)
   .then(testNewtabFaviconThemeBroadcastRefreshesBackgroundTabs)

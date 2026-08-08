@@ -350,7 +350,6 @@ async function runSurfaceBridgeTests() {
 function runWiringTests() {
   const pagePaths = [
     'src/newtab/newtab.html',
-    'src/newtab/lumno-newtab.html',
     'src/options/options.html',
     'src/onboarding/onboarding.html'
   ];
@@ -361,6 +360,15 @@ function runWiringTests() {
       `${relativePath} should load the shared Codex debug surface`
     );
   });
+
+  const redirectShellSource = fs.readFileSync(
+    path.join(repoRoot, 'src/newtab/lumno-newtab.html'),
+    'utf8'
+  );
+  assert(
+    !redirectShellSource.includes('../shared/codex-debug-surface.js'),
+    'the redirect-only newtab shell should not bootstrap a debug surface before navigation'
+  );
 
   const backgroundSource = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
   assert(backgroundSource.includes("importScripts(chrome.runtime.getURL('src/background/codex-debug-bridge.js'))"));

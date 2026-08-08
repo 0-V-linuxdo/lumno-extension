@@ -1318,7 +1318,7 @@
     if (parsed === 4 || parsed === 6 || parsed === 8) {
       return parsed;
     }
-    return 4;
+    return 6;
   }
 
   function normalizeNewtabWidthMode(value) {

@@ -397,7 +397,7 @@
   let currentRecentMode = 'most';
   let currentRecentCount = 4;
   let currentBookmarkCount = 8;
-  let currentBookmarkColumns = 4;
+  let currentBookmarkColumns = 6;
   let currentBookmarkViewMode = 'folder';
   let bookmarkViewModeRevision = 0;
   let bookmarkTopbarSurfaceMode = 'adaptive';
@@ -1254,7 +1254,7 @@
     if (parsed === 4 || parsed === 6 || parsed === 8) {
       return parsed;
     }
-    return 4;
+    return 6;
   }
 
   function normalizeTabRankScoreDebugMode(value) {
@@ -4014,10 +4014,11 @@
   window.addEventListener('blur', hideToast);
   window.addEventListener('pagehide', hideToast);
 
+  const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay();
   const initialAppearanceReadyTask = Promise.all([
     bootstrapInitialThemeMode(),
-    bootstrapInitialWallpaper(),
-    bootstrapInitialWallpaperOverlay(),
+    initialWallpaperOverlayReadyTask.then(() => bootstrapInitialWallpaper()),
+    initialWallpaperOverlayReadyTask,
     bootstrapInitialWallpaperEffect(),
     bootstrapInitialNewtabFavicon()
   ]).catch((error) => {

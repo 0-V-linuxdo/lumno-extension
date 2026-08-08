@@ -395,32 +395,9 @@
           transition: none;
         }
       }
-      body:not([data-nt-ready="1"]) .x-nt-wallpaper-effect-canvas,
-      body:not([data-nt-ready="1"])::after {
+      body:not([data-nt-enter="done"]) .x-nt-wallpaper-effect-canvas,
+      body:not([data-nt-enter="done"])::after {
         transition: none;
-      }
-      .x-nt-initial-background-veil {
-        position: fixed;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-        background: var(--x-nt-bg);
-        opacity: 0;
-        visibility: hidden;
-        transform: translateZ(0);
-        contain: strict;
-      }
-      body[data-nt-enter="run"] .x-nt-initial-background-veil {
-        visibility: visible;
-        animation: _x_nt_background_reveal_2026_unique_ 260ms ease-out both;
-      }
-      @keyframes _x_nt_background_reveal_2026_unique_ {
-        0% {
-          opacity: 0.1;
-        }
-        100% {
-          opacity: 0;
-        }
       }
       #_x_extension_newtab_root_2024_unique_ {
         width: 90vw;
@@ -1030,7 +1007,7 @@
         position: relative;
         width: 100%;
         display: grid;
-        grid-template-columns: repeat(var(--x-nt-bookmark-columns, 4), minmax(0, 1fr));
+        grid-template-columns: repeat(var(--x-nt-bookmark-columns, 6), minmax(0, 1fr));
         column-gap: 12px;
         row-gap: var(--x-nt-grid-row-gap, 16px);
         align-content: start;
@@ -1065,11 +1042,9 @@
       body[data-nt-enter="run"] .x-nt-shortcut-tile:nth-child(n + 8) {
         --x-nt-shortcut-enter-index: 7;
       }
-      body[data-nt-enter="run"] #_x_extension_newtab_bookmarks_2024_unique_[data-visible="true"] {
-        animation: _x_nt_content_section_entry_2026_unique_ 240ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
-      }
+      body[data-nt-enter="run"] #_x_extension_newtab_bookmarks_2024_unique_[data-visible="true"],
       body[data-nt-enter="run"] #_x_extension_newtab_recent_sites_2024_unique_[data-visible="true"] {
-        animation: _x_nt_content_section_entry_2026_unique_ 240ms cubic-bezier(0.16, 1, 0.3, 1) 190ms both;
+        animation: _x_nt_content_section_entry_2026_unique_ 240ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
       }
       body[data-nt-enter="run"] .x-nt-wallpaper-control,
       body[data-nt-enter="run"] .x-nt-feedback-control,
@@ -1109,10 +1084,6 @@
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .x-nt-initial-background-veil {
-          display: none;
-          animation: none;
-        }
         body[data-nt-enter="run"][data-nt-ready="1"] .x-nt-bookmarks-topbar[data-visible="true"] {
           animation: none !important;
           opacity: 1;
@@ -6522,7 +6493,6 @@
     </style>
   </head>
   <body class="notranslate" translate="no" notranslate data-no-translate="true" data-lumno-page="newtab">
-    <div class="x-nt-initial-background-veil" aria-hidden="true"></div>
     <div id="_x_extension_newtab_root_2024_unique_" class="x-lumno-search-entry"></div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_ x-lumno-toast" data-show="false" role="status" aria-live="polite"></div>
     <script src="../shared/codex-debug-surface.js"></script>

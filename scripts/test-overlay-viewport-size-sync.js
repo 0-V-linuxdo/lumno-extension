@@ -127,8 +127,8 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const OVERLAY_ENTER_MOTION = Object\.freeze\(\{[\s\S]*?elastic:[\s\S]*?panelDelayMs: 40,[\s\S]*?panelDurationMs: 270,[\s\S]*?panelEasing: 'cubic-bezier\(0\.16, 1, 0\.3, 1\)'[\s\S]*?fade:[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 340,[\s\S]*?panelEasing: 'cubic-bezier\(0\.2, 1, 0\.36, 1\)'[\s\S]*?function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?--x-lumno-search-entry-scale-start', '0\.92'[\s\S]*?motion\.panelDurationMs[\s\S]*?motion\.panelDelayMs/,
-  'one semantic timing table should drive the whole overlay panel entry'
+  /const OVERLAY_ENTER_MOTION = Object\.freeze\(\{[\s\S]*?elastic:[\s\S]*?opacityDurationMs: 130,[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 210,[\s\S]*?panelEasing: 'cubic-bezier\(0\.18, 1\.32, 0\.32, 1\)'[\s\S]*?fade:[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 340,[\s\S]*?panelEasing: 'cubic-bezier\(0\.2, 1, 0\.36, 1\)'[\s\S]*?function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?--x-lumno-search-entry-scale-start', '0\.88'[\s\S]*?motion\.panelDurationMs[\s\S]*?motion\.panelDelayMs/,
+  'elastic entry should stay short and overshooting while fade keeps its softer timing'
 );
 assert.match(
   searchPanelSource,
@@ -142,7 +142,7 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialLanguageReady,[\s\S]*?initialOverlayThemeReady,[\s\S]*?initialOverlayContentReady,[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*applyOverlayInputEnterAnimationInitialState\(inputContainer\);\s*revealOverlay\(\);/,
+  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialLanguageReady,[\s\S]*?initialOverlayThemeReady,[\s\S]*?initialOverlayContentReady,[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*revealOverlay\(\);/,
   'overlay reveal should wait for styles, language, theme, initial content, and animation preference'
 );
 assert.doesNotMatch(
@@ -197,7 +197,7 @@ assert.doesNotMatch(
 );
 assert.match(
   searchPanelSource,
-  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(10px\) scale\(0\.985\)[\s\S]*?translateY\(4px\) scaleX\(0\.92\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
+  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(10px\) scale\(0\.985\)[\s\S]*?translateY\(6px\) scaleX\(0\.88\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
   'WAAPI should replay an additive motion delta without replacing the panel centering transform when the hidden host becomes visible'
 );
 assert.match(
@@ -215,30 +215,20 @@ assert.match(
   /function finishOverlayPanelEnterAnimation\(overlayElement, animationRevision\)[\s\S]*?setProperty\('opacity', '1', 'important'\)[\s\S]*?getOverlayEnterAnimationRevealTransform\(\)[\s\S]*?setProperty\('will-change', 'auto'/,
   'the protected important rest state should be restored after the keyframe transaction'
 );
-assert.match(
+assert.doesNotMatch(
   searchPanelSource,
-  /function applyOverlayInputEnterAnimationInitialState\(inputElement\)[\s\S]*?getOverlayEnterMotion\(\)[\s\S]*?motion\.inputBlurPx[\s\S]*?motion\.inputDurationMs[\s\S]*?setProperty\('will-change', 'filter'/,
-  'the small input surface should retain a short bounded blur entry instead of blurring the full backdrop-filtered panel'
+  /OverlayInputEnterAnimation|overlayInputEnterCleanup|inputBlurPx|inputDurationMs/,
+  'overlay entry should not add a paint-bound filter animation to the input surface'
 );
 assert.match(
   searchPanelSource,
-  /function revealOverlayInputEnterAnimation\(inputElement, reduceMotion\)[\s\S]*?finishOverlayInputEnterAnimation\(inputElement\)[\s\S]*?setProperty\('filter', 'blur\(0px\)'[\s\S]*?removeProperty\('will-change'\)/,
-  'input blur should clear immediately for reduced motion and release its temporary compositor hint after entry'
-);
-assert.match(
-  searchPanelSource,
-  /function createOverlayEntryBlurProxy\(overlayElement\)[\s\S]*?getBoundingClientRect\(\)[\s\S]*?setProperty\('backdrop-filter', 'none'[\s\S]*?setProperty\('filter', 'blur\(5px\)'[\s\S]*?OVERLAY_ENTRY_PROXY_FADE_DURATION_MS[\s\S]*?setProperty\('will-change', 'opacity'/,
-  'the full-layer blur impression should come from a measured proxy with static blur and compositor-only opacity motion'
+  /const overlayThemeTokens = \{[\s\S]*?light:[\s\S]*?blur: '14px'[\s\S]*?dark:[\s\S]*?blur: '28px'/,
+  'the translucent dark panel should cap its expensive backdrop blur radius'
 );
 assert.doesNotMatch(
-  searchPanelSource.match(/function createOverlayEntryBlurProxy\(overlayElement\)[\s\S]*?\n  \}\n\n  function fadeOverlayEntryBlurProxy/)[0],
-  /transition[^\n]*filter|filter[^\n]*transition/,
-  'the full-layer proxy should never animate its large blur radius'
-);
-assert.match(
   searchPanelSource,
-  /const blurProxy = reduceMotion \? null : createOverlayEntryBlurProxy\(overlay\)[\s\S]*?revealOverlayInputEnterAnimation\(inputContainer, false\);\s*fadeOverlayEntryBlurProxy\(blurProxy\)/,
-  'the proxy should be skipped for reduced motion and fade with the real overlay reveal'
+  /OverlayEntryBlurProxy|overlayEntryBlurProxy|entry-blur-proxy|OVERLAY_ENTRY_PROXY/,
+  'overlay entry should not crossfade a separate blur proxy into the backdrop-filtered panel'
 );
 assert.match(
   sharedSearchInputSource,
@@ -390,6 +380,74 @@ assert.doesNotMatch(
   /function animateSuggestionsGrowth\(/,
   'overlay should not keep the append-only growth animation that caused repeated flashes while typing'
 );
+
+for (const tabZoomFactor of [0.8, 1.25, 1.5]) {
+  const win = createFakeWindow({
+    innerWidth: 1200,
+    innerHeight: 800,
+    visualWidth: 1200,
+    visualHeight: 800,
+    visualScale: 1
+  });
+  const overlay = createOverlayElement();
+  const sync = lifecycle.createViewportSizeSync(win, {
+    getSizePreset: () => ({ width: 760, maxHeightVh: 75, uiScale: 1 }),
+    getRequestedTabZoomFactor: () => tabZoomFactor
+  });
+
+  sync.start(overlay);
+
+  assert.strictEqual(
+    overlay.style.getPropertyValue('left'),
+    '600px',
+    `overlay should remain horizontally centered at ${tabZoomFactor * 100}% tab zoom`
+  );
+  assert.strictEqual(
+    overlay.style.getPropertyValue('top'),
+    '160px',
+    `overlay should retain its 20vh anchor at ${tabZoomFactor * 100}% tab zoom`
+  );
+  assert.strictEqual(
+    Number(overlay.style.getPropertyValue('--x-ov-visible-scale')),
+    1 / tabZoomFactor,
+    `overlay should compensate its visual size at ${tabZoomFactor * 100}% tab zoom`
+  );
+}
+
+{
+  const win = createFakeWindow({
+    innerWidth: 1200,
+    innerHeight: 800,
+    visualWidth: 600,
+    visualHeight: 400,
+    visualScale: 2,
+    visualOffsetLeft: 120,
+    visualOffsetTop: 40
+  });
+  const overlay = createOverlayElement();
+  const sync = lifecycle.createViewportSizeSync(win, {
+    getSizePreset: () => ({ width: 760, maxHeightVh: 75, uiScale: 1 }),
+    getRequestedTabZoomFactor: () => 1.25
+  });
+
+  sync.start(overlay);
+
+  assert.strictEqual(
+    overlay.style.getPropertyValue('--x-ov-visible-scale'),
+    '0.4',
+    'overlay should combine tab zoom and pinch zoom for visual size compensation'
+  );
+  assert.strictEqual(
+    overlay.style.getPropertyValue('left'),
+    '420px',
+    'tab zoom should not move the centered anchor inside a shifted visual viewport'
+  );
+  assert.strictEqual(
+    overlay.style.getPropertyValue('top'),
+    '120px',
+    'tab zoom should not move the vertical anchor inside a shifted visual viewport'
+  );
+}
 
 {
   const win = createFakeWindow({

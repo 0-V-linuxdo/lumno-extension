@@ -87,6 +87,11 @@ assert.match(
   /<script src="lumno-newtab\.js"><\/script>/,
   'standalone Lumno newtab fallback should load the redirect through an external script'
 );
+assert.doesNotMatch(
+  lumnoNewtabHtml,
+  /wallpaper-preload\.js|codex-debug-surface\.js/,
+  'standalone Lumno newtab fallback should redirect without painting or bootstrapping an intermediate page'
+);
 assert.ok(
   getScriptTags(lumnoNewtabHtml).every((match) => /\bsrc=/.test(match[1])),
   'standalone Lumno newtab fallback should not use inline scripts because extension pages disallow them by CSP'

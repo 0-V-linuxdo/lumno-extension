@@ -106,14 +106,6 @@ function createWindow(hostname) {
   };
 }
 
-async function runCommittedPaintFrames(win) {
-  await Promise.resolve();
-  assert.strictEqual(win.runNextAnimationFrame(), true, 'the first commit frame should be queued');
-  await Promise.resolve();
-  assert.strictEqual(win.runNextAnimationFrame(), true, 'the reveal frame should be queued');
-  await Promise.resolve();
-}
-
 async function testOrdinarySitesWaitForCriticalOverlayStyles() {
   const inputStyle = createStylesheet(
     overlaySiteFixes.OVERLAY_STYLE_IDS.input,
@@ -160,19 +152,17 @@ async function testOrdinarySitesWaitForCriticalOverlayStyles() {
 
   suggestionsStyle.sheet = {};
   suggestionsStyle.dispatch('load');
-  await Promise.resolve();
-  assert.strictEqual(
-    settled,
-    false,
-    'stylesheet load events alone must not reveal before the browser commits their styles'
-  );
-  await runCommittedPaintFrames(win);
   const result = await ready;
   assert.deepStrictEqual(result, {
     ok: true,
     reason: 'loaded',
     fixId: overlaySiteFixes.OVERLAY_STYLE_REVEAL_POLICY.id
   });
+  assert.strictEqual(
+    win.runNextAnimationFrame(),
+    false,
+    'the style gate should not add frames before the entry animation'
+  );
 
   gate.release();
   assert.strictEqual(overlay.style.getPropertyValue('visibility'), '');
@@ -198,23 +188,16 @@ async function testAlreadyLoadedStylesDoNotDelayReveal() {
     }
   );
 
-  let settled = false;
-  const ready = gate.waitUntilReady().then((result) => {
-    settled = true;
-    return result;
-  });
-  await Promise.resolve();
+  const result = await gate.waitUntilReady();
   assert.strictEqual(
-    settled,
+    win.runNextAnimationFrame(),
     false,
-    'cached styles still need a hidden committed frame before reveal'
+    'cached styles should not add frames before the entry animation'
   );
   assert.strictEqual(
     overlay.style.getPropertyValue('visibility'),
     'hidden !important'
   );
-  await runCommittedPaintFrames(win);
-  const result = await ready;
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.reason, 'already-loaded');
 }

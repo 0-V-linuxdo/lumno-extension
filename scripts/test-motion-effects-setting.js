@@ -142,7 +142,7 @@ assert.strictEqual(
 );
 assert.match(
   overlaySource,
-  /const reduceMotion = shouldSkipOverlayEntryMotion\(\);[\s\S]*?const blurProxy = reduceMotion \? null : createOverlayEntryBlurProxy/,
+  /const reduceMotion = shouldSkipOverlayEntryMotion\(\);[\s\S]*?if \(reduceMotion\) \{[\s\S]*?finishOverlayPanelEnterAnimation\(overlay\);[\s\S]*?\} else \{[\s\S]*?overlayFrameTracker\.runEnterAnimation/,
   'turning motion effects off should skip only the Overlay entrance path'
 );
 assert.match(

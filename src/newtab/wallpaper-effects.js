@@ -121,6 +121,9 @@
     const getWallpaperImageUrl = getFunction(options, 'getWallpaperImageUrl', function() {
       return '';
     });
+    const shouldAnimateTransition = getFunction(options, 'shouldAnimateTransition', function() {
+      return true;
+    });
     const onRender = getFunction(options, 'onRender');
     const EFFECT_CROSSFADE_MS = 150;
     const RESIZE_RENDER_SETTLE_MS = 140;
@@ -164,6 +167,10 @@
       return Boolean(windowObj &&
         typeof windowObj.matchMedia === 'function' &&
         windowObj.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function canAnimateTransition() {
+      return shouldAnimateTransition() && !shouldReduceMotion();
     }
 
     function getViewportSize() {
@@ -941,7 +948,7 @@
       }
       if (canvas &&
           context &&
-          !shouldReduceMotion() &&
+          canAnimateTransition() &&
           previousType !== prefs.type &&
           previousType !== 'none' &&
           prefs.type !== 'none' &&
@@ -961,7 +968,7 @@
       const normalized = normalizePrefs(prefs);
       if (canvas &&
           context &&
-          !shouldReduceMotion() &&
+          canAnimateTransition() &&
           normalized.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
@@ -977,7 +984,7 @@
         shouldCrossfadeResize = Boolean(
           canvas &&
           context &&
-          !shouldReduceMotion() &&
+          canAnimateTransition() &&
           (normalized.type === 'halftone' || normalized.type === 'ascii') &&
           getCanvasOpacity() > 0.01
         );

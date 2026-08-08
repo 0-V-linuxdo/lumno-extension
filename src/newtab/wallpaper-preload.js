@@ -1,6 +1,6 @@
 (function() {
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
-  const PRELOAD_STORAGE_VERSION = 3;
+  const PRELOAD_STORAGE_VERSION = 4;
   const FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
   const FAVICON_PRELOAD_STORAGE_KEY = '_x_extension_newtab_favicon_preload_2026_unique_';
   const providerStorageRuntime = globalThis.LumnoSettings &&
@@ -49,19 +49,48 @@
         return null;
       }
       const data = JSON.parse(raw);
-      if (!data || Number(data.version) !== PRELOAD_STORAGE_VERSION || !data.wallpapers) {
+      if (!data ||
+          Number(data.version) !== PRELOAD_STORAGE_VERSION ||
+          !data.wallpapers ||
+          !data.overlayStops) {
         return null;
       }
       const mode = resolveCachedWallpaperMode(data);
       const entry = data.wallpapers[mode];
       const path = entry && typeof entry.path === 'string' ? entry.path.trim() : '';
+      const overlayStops = normalizeCachedOverlayStops(data.overlayStops);
+      if (!overlayStops) {
+        return null;
+      }
       return {
         mode,
-        path: WALLPAPER_PATH_PATTERN.test(path) ? path : ''
+        path: WALLPAPER_PATH_PATTERN.test(path) ? path : '',
+        overlayStops
       };
     } catch (e) {
       return null;
     }
+  }
+
+  function normalizeCachedOverlayStops(value) {
+    const result = {};
+    const modes = ['light', 'dark'];
+    const positions = ['top', 'mid', 'bottom'];
+    for (const mode of modes) {
+      const entry = value && value[mode];
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+      result[mode] = {};
+      for (const position of positions) {
+        const stop = Number(entry[position]);
+        if (!Number.isFinite(stop) || stop < 0 || stop > 100) {
+          return null;
+        }
+        result[mode][position] = stop;
+      }
+    }
+    return result;
   }
 
   function getRuntimeUrl(path) {
@@ -199,6 +228,14 @@
   const root = document.documentElement;
   if (root) {
     root.setAttribute('data-wallpaper-preload-theme', cachedWallpaper.mode);
+    ['light', 'dark'].forEach((mode) => {
+      ['top', 'mid', 'bottom'].forEach((position) => {
+        root.style.setProperty(
+          `--x-nt-wallpaper-overlay-${mode}-${position}`,
+          `${cachedWallpaper.overlayStops[mode][position]}%`
+        );
+      });
+    });
   }
   if (!cachedWallpaper.path) {
     return;

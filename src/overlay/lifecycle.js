@@ -125,7 +125,6 @@
       const layoutZoomScale = tabZoomFactor * dprScaleDelta;
       const zoomScale = layoutZoomScale * visualViewportScale;
       const safeZoomScale = Math.max(0.5, Math.min(3, zoomScale));
-      const safeLayoutZoomScale = Math.max(0.5, Math.min(3, layoutZoomScale));
       const safeVisualViewportScale = Math.max(0.5, Math.min(3, visualViewportScale));
       const presetUiScale = Number.isFinite(sizePreset.uiScale) && sizePreset.uiScale > 0
         ? sizePreset.uiScale
@@ -133,14 +132,16 @@
       const finalOverlayZoom = (1 / safeZoomScale) * presetUiScale;
       const safeFinalOverlayZoom = Math.max(0.35, Math.min(4, finalOverlayZoom));
       const maxWidth = Math.max(280, viewport.viewportWidth - 24);
+      // Fixed-position anchors already use zoom-adjusted CSS viewport coordinates.
+      // Tab zoom only belongs in the visual scale compensation above.
       const baseLeft = viewport.viewportWidth * 0.5;
       const compensatedLeft = viewport.visualViewportOffsetLeft +
-        ((baseLeft * safeLayoutZoomScale) / safeVisualViewportScale);
+        (baseLeft / safeVisualViewportScale);
       const baseTop = Number.isFinite(baseTopPx) && baseTopPx > 0
         ? baseTopPx
         : (viewport.viewportHeight * 0.2);
       const compensatedTop = viewport.visualViewportOffsetTop +
-        ((baseTop * safeLayoutZoomScale) / safeVisualViewportScale);
+        (baseTop / safeVisualViewportScale);
       const topPx = Math.max(16, Math.min(compensatedTop, Math.max(16, viewport.viewportHeight - 120)));
       const leftPx = Math.max(16, Math.min(compensatedLeft, Math.max(16, viewport.viewportWidth - 16)));
       overlayElement.style.setProperty('width', `${sizePreset.width}px`, 'important');

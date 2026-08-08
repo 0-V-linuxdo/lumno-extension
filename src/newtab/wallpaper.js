@@ -13,7 +13,7 @@
     favicon: '_x_extension_newtab_favicon_2026_unique_'
   };
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
-  const PRELOAD_STORAGE_VERSION = 3;
+  const PRELOAD_STORAGE_VERSION = 4;
   const WALLPAPER_EFFECT_MODE_STORAGE_VERSION = 4;
   const FALLBACK_WALLPAPER_EFFECT_PREFS = {
     version: 3,
@@ -1163,6 +1163,10 @@
         windowObj,
         getCurrentWallpaper: () => getWallpaperById(currentWallpaperId),
         getWallpaperImageUrl,
+        shouldAnimateTransition: () => Boolean(
+          documentObj.body &&
+          documentObj.body.getAttribute('data-nt-enter') === 'done'
+        ),
         onRender: scheduleWallpaperAdaptiveToneUpdate
       })
       : null;
@@ -1246,7 +1250,9 @@
     }
 
     function createWallpaperTransitionLayer() {
-      if (!document.body || shouldReduceMotion()) {
+      if (!document.body ||
+          document.body.getAttribute('data-nt-enter') !== 'done' ||
+          shouldReduceMotion()) {
         return null;
       }
       const computedStyle = window.getComputedStyle(document.body);
@@ -1715,6 +1721,20 @@
       return path ? { id: wallpaper.id, path } : null;
     }
 
+    function getWallpaperPreloadOverlayStops() {
+      const result = {};
+      NEWTAB_WALLPAPER_MODES.forEach((mode) => {
+        const stops = NEWTAB_WALLPAPER_OVERLAY_STOPS[mode];
+        const opacity = currentWallpaperOverlayOpacity[mode];
+        result[mode] = {
+          top: Number(getWallpaperOverlayStopPercent(stops.top, opacity).toFixed(1)),
+          mid: Number(getWallpaperOverlayStopPercent(stops.mid, opacity).toFixed(1)),
+          bottom: Number(getWallpaperOverlayStopPercent(stops.bottom, opacity).toFixed(1))
+        };
+      });
+      return result;
+    }
+
     function writeWallpaperPreloadCache() {
       try {
         if (!window.localStorage) {
@@ -1729,6 +1749,7 @@
           mode: getResolvedWallpaperMode(),
           themeMode: getEffectiveThemeMode(),
           wallpapers,
+          overlayStops: getWallpaperPreloadOverlayStops(),
           updatedAt: Date.now()
         }));
       } catch (e) {
@@ -1853,6 +1874,9 @@
       }
       updateWallpaperOverlayControlUi();
       scheduleWallpaperAdaptiveToneUpdate();
+      if (hasStoredWallpaperStateLoaded) {
+        writeWallpaperPreloadCache();
+      }
     }
 
     function updateWallpaperSliderElement(slider, config) {

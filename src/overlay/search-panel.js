@@ -39,12 +39,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlayEnterTransitionEndHandler = null;
   let overlayEnterAnimations = [];
   let overlayEnterAnimationRevision = 0;
-  let overlayInputEnterCleanupElement = null;
-  let overlayInputEnterTransitionEndHandler = null;
-  let overlayInputEnterCleanupTimer = null;
-  let overlayEntryBlurProxy = null;
-  let overlayEntryBlurProxyCleanupTimer = null;
-  let overlayEntryBlurProxyTransitionEndHandler = null;
   let overlaySuggestionsView = null;
   let overlaySuggestionRequestSeq = 0;
   let overlayRemoteSuggestionDebounceTimer = null;
@@ -284,16 +278,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let motionEffectsEnabled = true;
   const OVERLAY_ENTER_MOTION = Object.freeze({
     elastic: Object.freeze({
-      inputBlurPx: 6,
-      inputDurationMs: 200,
-      opacityDurationMs: 180,
-      panelDelayMs: 40,
-      panelDurationMs: 270,
-      panelEasing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+      opacityDurationMs: 130,
+      panelDelayMs: 0,
+      panelDurationMs: 210,
+      panelEasing: 'cubic-bezier(0.18, 1.32, 0.32, 1)'
     }),
     fade: Object.freeze({
-      inputBlurPx: 4,
-      inputDurationMs: 180,
       opacityDurationMs: 220,
       panelDelayMs: 0,
       panelDurationMs: 340,
@@ -301,9 +291,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     })
   });
   const OVERLAY_ENTER_CLEANUP_BUFFER_MS = 80;
-  const OVERLAY_INPUT_ENTER_CLEANUP_BUFFER_MS = 40;
-  const OVERLAY_ENTRY_PROXY_FADE_DURATION_MS = 170;
-  const OVERLAY_ENTRY_PROXY_CLEANUP_BUFFER_MS = 50;
   let overlaySearchBlacklistItems = [];
   let overlayFaviconRequestBlacklistItems = [];
   let faviconEnhancedFetchEnabled = false;
@@ -678,14 +665,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (overlayEnterAnimation === 'fade') {
       return 'translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)';
     }
-    return 'translateX(-50%) translateY(4px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.92))';
+    return 'translateX(-50%) translateY(6px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.88))';
   }
 
   function getOverlayEnterAnimationDeltaTransform() {
     if (overlayEnterAnimation === 'fade') {
       return 'translateY(10px) scale(0.985)';
     }
-    return 'translateY(4px) scaleX(0.92)';
+    return 'translateY(6px) scaleX(0.88)';
   }
 
   function getOverlayEnterMotion() {
@@ -781,7 +768,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     overlayElement.style.setProperty('transition', 'none', 'important');
     overlayElement.style.setProperty('will-change', 'transform, opacity', 'important');
     if (overlayEnterAnimation !== 'fade') {
-      overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.92');
+      overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.88');
     }
     overlayElement.style.setProperty('--x-lumno-search-entry-duration', `${motion.panelDurationMs}ms`);
     overlayElement.style.setProperty('--x-lumno-search-entry-delay', `${motion.panelDelayMs}ms`);
@@ -860,180 +847,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       overlayElement.style.setProperty('transform', revealTransform, 'important');
     });
     return true;
-  }
-
-  function clearOverlayInputEnterCleanupTimer() {
-    if (overlayInputEnterCleanupTimer !== null) {
-      clearTimeout(overlayInputEnterCleanupTimer);
-      overlayInputEnterCleanupTimer = null;
-    }
-    if (overlayInputEnterCleanupElement && overlayInputEnterTransitionEndHandler) {
-      overlayInputEnterCleanupElement.removeEventListener(
-        'transitionend',
-        overlayInputEnterTransitionEndHandler
-      );
-    }
-    overlayInputEnterCleanupElement = null;
-    overlayInputEnterTransitionEndHandler = null;
-  }
-
-  function finishOverlayInputEnterAnimation(inputElement) {
-    clearOverlayInputEnterCleanupTimer();
-    if (!inputElement || !inputElement.style) {
-      return;
-    }
-    inputElement.style.setProperty('filter', 'none', 'important');
-    inputElement.style.removeProperty('transition');
-    inputElement.style.removeProperty('will-change');
-  }
-
-  function applyOverlayInputEnterAnimationInitialState(inputElement) {
-    if (!inputElement || !inputElement.style) {
-      return;
-    }
-    clearOverlayInputEnterCleanupTimer();
-    const motion = getOverlayEnterMotion();
-    inputElement.style.setProperty('filter', `blur(${motion.inputBlurPx}px)`, 'important');
-    inputElement.style.setProperty(
-      'transition',
-      `filter ${motion.inputDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
-      'important'
-    );
-    inputElement.style.setProperty('will-change', 'filter', 'important');
-  }
-
-  function revealOverlayInputEnterAnimation(inputElement, reduceMotion) {
-    if (!inputElement || !inputElement.style) {
-      return;
-    }
-    if (reduceMotion) {
-      finishOverlayInputEnterAnimation(inputElement);
-      return;
-    }
-    clearOverlayInputEnterCleanupTimer();
-    overlayInputEnterCleanupElement = inputElement;
-    overlayInputEnterTransitionEndHandler = (event) => {
-      if (!event || event.target !== inputElement || event.propertyName !== 'filter') {
-        return;
-      }
-      finishOverlayInputEnterAnimation(inputElement);
-    };
-    inputElement.addEventListener('transitionend', overlayInputEnterTransitionEndHandler);
-    inputElement.style.setProperty('filter', 'blur(0px)', 'important');
-    const cleanupDelayMs = getOverlayEnterMotion().inputDurationMs +
-      OVERLAY_INPUT_ENTER_CLEANUP_BUFFER_MS;
-    overlayInputEnterCleanupTimer = setTimeout(() => {
-      if (!inputElement.isConnected) {
-        clearOverlayInputEnterCleanupTimer();
-        return;
-      }
-      finishOverlayInputEnterAnimation(inputElement);
-    }, cleanupDelayMs);
-  }
-
-  function removeOverlayEntryBlurProxy() {
-    if (overlayEntryBlurProxyCleanupTimer !== null) {
-      clearTimeout(overlayEntryBlurProxyCleanupTimer);
-      overlayEntryBlurProxyCleanupTimer = null;
-    }
-    if (overlayEntryBlurProxy && overlayEntryBlurProxyTransitionEndHandler) {
-      overlayEntryBlurProxy.removeEventListener(
-        'transitionend',
-        overlayEntryBlurProxyTransitionEndHandler
-      );
-    }
-    overlayEntryBlurProxyTransitionEndHandler = null;
-    if (overlayEntryBlurProxy && overlayEntryBlurProxy.parentNode) {
-      overlayEntryBlurProxy.parentNode.removeChild(overlayEntryBlurProxy);
-    }
-    overlayEntryBlurProxy = null;
-  }
-
-  function createOverlayEntryBlurProxy(overlayElement) {
-    removeOverlayEntryBlurProxy();
-    if (!overlayElement || !overlayElement.parentNode) {
-      return null;
-    }
-    const rect = overlayElement.getBoundingClientRect();
-    if (!(rect.width > 0) || !(rect.height > 0)) {
-      return null;
-    }
-    const theme = overlayElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-    const background = overlayElement.style.getPropertyValue('--x-ov-bg') ||
-      (theme === 'dark' ? 'rgba(20, 20, 20, 0.62)' : 'rgba(255, 255, 255, 0.96)');
-    const border = overlayElement.style.getPropertyValue('--x-ov-border') ||
-      (theme === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.14)');
-    const proxy = document.createElement('div');
-    proxy.setAttribute('aria-hidden', 'true');
-    proxy.setAttribute('data-lumno-overlay-entry-blur-proxy', 'true');
-    proxy.style.setProperty('all', 'initial', 'important');
-    proxy.style.setProperty('position', 'fixed', 'important');
-    proxy.style.setProperty('top', `${rect.top}px`, 'important');
-    proxy.style.setProperty('left', `${rect.left}px`, 'important');
-    proxy.style.setProperty('width', `${rect.width}px`, 'important');
-    proxy.style.setProperty('height', `${rect.height}px`, 'important');
-    proxy.style.setProperty('box-sizing', 'border-box', 'important');
-    proxy.style.setProperty('border', `1px solid ${border}`, 'important');
-    proxy.style.setProperty('border-radius', 'var(--x-ov-panel-radius, 28px)', 'important');
-    proxy.style.setProperty('background', background, 'important');
-    proxy.style.setProperty(
-      'box-shadow',
-      theme === 'dark'
-        ? '0 16px 50px rgba(0, 0, 0, 0.34)'
-        : '0 14px 42px rgba(15, 23, 42, 0.14)',
-      'important'
-    );
-    proxy.style.setProperty('backdrop-filter', 'none', 'important');
-    proxy.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
-    proxy.style.setProperty('filter', 'blur(5px)', 'important');
-    proxy.style.setProperty('opacity', theme === 'dark' ? '0.42' : '0.26', 'important');
-    proxy.style.setProperty(
-      'transition',
-      `opacity ${OVERLAY_ENTRY_PROXY_FADE_DURATION_MS}ms ease-out`,
-      'important'
-    );
-    proxy.style.setProperty('will-change', 'opacity', 'important');
-    proxy.style.setProperty('contain', 'paint', 'important');
-    proxy.style.setProperty('pointer-events', 'none', 'important');
-    proxy.style.setProperty('z-index', '2147483646', 'important');
-    overlayElement.parentNode.insertBefore(proxy, overlayElement);
-    overlayEntryBlurProxy = proxy;
-    return proxy;
-  }
-
-  function fadeOverlayEntryBlurProxy(proxy) {
-    if (!proxy || proxy !== overlayEntryBlurProxy) {
-      return;
-    }
-    const finish = () => {
-      if (proxy === overlayEntryBlurProxy && overlayEntryBlurProxyTransitionEndHandler) {
-        proxy.removeEventListener('transitionend', overlayEntryBlurProxyTransitionEndHandler);
-      }
-      overlayEntryBlurProxyTransitionEndHandler = null;
-      if (overlayEntryBlurProxyCleanupTimer !== null) {
-        clearTimeout(overlayEntryBlurProxyCleanupTimer);
-        overlayEntryBlurProxyCleanupTimer = null;
-      }
-      if (proxy.parentNode) {
-        proxy.parentNode.removeChild(proxy);
-      }
-      if (overlayEntryBlurProxy === proxy) {
-        overlayEntryBlurProxy = null;
-      }
-    };
-    overlayEntryBlurProxyTransitionEndHandler = (event) => {
-      if (!event || event.target !== proxy || event.propertyName !== 'opacity') {
-        return;
-      }
-      finish();
-    };
-    proxy.addEventListener('transitionend', overlayEntryBlurProxyTransitionEndHandler);
-    proxy.style.setProperty('opacity', '0', 'important');
-    overlayEntryBlurProxyCleanupTimer = setTimeout(
-      finish,
-      OVERLAY_ENTRY_PROXY_FADE_DURATION_MS +
-        OVERLAY_ENTRY_PROXY_CLEANUP_BUFFER_MS
-    );
   }
 
   function getOverlaySizePreset(mode) {
@@ -1528,8 +1341,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   function removeOverlay(overlayElement) {
     clearOverlayEnterAnimationFrames();
     clearOverlayPanelEnterCleanup();
-    clearOverlayInputEnterCleanupTimer();
-    removeOverlayEntryBlurProxy();
     cancelPendingOverlaySuggestionRequests();
     const suggestionsHeightSettleTimer = overlayElement &&
       overlayElement._lumnoSuggestionsHeightSettleTimer;
@@ -3199,7 +3010,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         underline: 'rgba(255, 255, 255, 0.18)',
         dividerOpacity: '0.35',
         dividerInset: '24px',
-        blur: '40px',
+        blur: '28px',
         saturate: '145%'
       }
     };
@@ -8624,12 +8435,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       const reduceMotion = shouldSkipOverlayEntryMotion();
       const revealTransform = getOverlayEnterAnimationRevealTransform();
-      const blurProxy = reduceMotion ? null : createOverlayEntryBlurProxy(overlay);
       if (reduceMotion) {
         overlay.style.setProperty('transition', 'none', 'important');
         overlay.style.setProperty('opacity', '1', 'important');
         overlay.style.setProperty('transform', revealTransform, 'important');
-        revealOverlayInputEnterAnimation(inputContainer, true);
         finishOverlayPanelEnterAnimation(overlay);
         focusOverlayInputForReveal();
         scheduleOverlayUpdateNoticeMount(0);
@@ -8637,8 +8446,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         clearOverlayEnterAnimationFrames();
         overlayFrameTracker.runEnterAnimation(overlay, () => {
           playOverlayPanelEnterAnimation(overlay, revealTransform);
-          revealOverlayInputEnterAnimation(inputContainer, false);
-          fadeOverlayEntryBlurProxy(blurProxy);
           focusOverlayInputForReveal();
           scheduleOverlayUpdateNoticeMount(360);
         });
@@ -8663,7 +8470,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       applyOverlayEnterAnimationInitialState(overlay);
-      applyOverlayInputEnterAnimationInitialState(inputContainer);
       revealOverlay();
     });
     overlayScrollPauseHandler = () => {

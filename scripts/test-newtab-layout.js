@@ -8,6 +8,7 @@ const layoutRuntime = globalThis.LumnoNewtabLayout;
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const wallpaperSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper.js'), 'utf8');
 const newtabRedirectSource = fs.readFileSync(
   path.join(repoRoot, 'src/newtab/lumno-newtab.js'),
   'utf8'
@@ -1123,28 +1124,33 @@ function testContinuousResizeKeepsDockDensityStableUntilSettle() {
 function testInitialEntryMotionIsStaggeredAndTransient() {
   assert.match(
     newtabSource,
-    /const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*bootstrapInitialWallpaper\(\),\s*bootstrapInitialWallpaperOverlay\(\),\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
+    /const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay\(\);\s*const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*initialWallpaperOverlayReadyTask\.then\(\(\) => bootstrapInitialWallpaper\(\)\),\s*initialWallpaperOverlayReadyTask,\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
     'critical appearance and motion preference state should settle before the mode-specific entry path'
   );
   assert.match(
     newtabHtml,
-    /body:not\(\[data-nt-ready="1"\]\) \.x-nt-wallpaper-effect-canvas,\s*body:not\(\[data-nt-ready="1"\]\)::after\s*\{\s*transition:\s*none;/,
-    'wallpaper effect layers should not transition while the initial appearance is settling'
+    /body:not\(\[data-nt-enter="done"\]\) \.x-nt-wallpaper-effect-canvas,\s*body:not\(\[data-nt-enter="done"\]\)::after\s*\{\s*transition:\s*none;/,
+    'wallpaper effect layers should stay transition-free throughout the initial entry sequence'
   );
   assert.match(
     newtabHtml,
     /body:not\(\[data-nt-ready="1"\]\) \.x-nt-wallpaper-control,\s*body:not\(\[data-nt-ready="1"\]\) \.x-nt-feedback-control,\s*body:not\(\[data-nt-ready="1"\]\) \.x-nt-bookmark-cascade-debug-control\s*\{\s*visibility:\s*hidden;\s*\}/,
     'corner controls should stay hidden until their entrance animation state is installed'
   );
-  assert.match(
+  assert.doesNotMatch(
     newtabHtml,
-    /body\[data-nt-enter="run"\] \.x-nt-initial-background-veil\s*\{[\s\S]*?_x_nt_background_reveal_2026_unique_ 260ms ease-out both;[\s\S]*?@keyframes _x_nt_background_reveal_2026_unique_[\s\S]*?opacity:\s*0\.1;[\s\S]*?opacity:\s*0;/,
-    'the wallpaper should enter through a subtle non-blocking background veil'
+    /x-nt-initial-background-veil|_x_nt_background_reveal_2026_unique_/,
+    'the initial page should not overlay an extra wallpaper reveal that can flash during entry'
   );
   assert.match(
-    newtabHtml,
-    /<div class="x-nt-initial-background-veil" aria-hidden="true"><\/div>/,
-    'the new-tab page should mount a dedicated background entrance veil'
+    wallpaperSource,
+    /function createWallpaperTransitionLayer\(\)\s*\{\s*if \(!document\.body \|\|\s*document\.body\.getAttribute\('data-nt-enter'\) !== 'done' \|\|\s*shouldReduceMotion\(\)\)/,
+    'wallpaper crossfades should be disabled until the initial entry sequence is complete'
+  );
+  assert.match(
+    wallpaperSource,
+    /shouldAnimateTransition:\s*\(\) => Boolean\(\s*documentObj\.body &&\s*documentObj\.body\.getAttribute\('data-nt-enter'\) === 'done'\s*\)/,
+    'wallpaper effect rerenders should not fade the background during the initial entry sequence'
   );
   assert.match(
     newtabHtml,
@@ -1207,8 +1213,8 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
   );
   assert.match(
     newtabHtml,
-    /#_x_extension_newtab_bookmarks_2024_unique_\[data-visible="true"\][\s\S]*?150ms both;[\s\S]*?#_x_extension_newtab_recent_sites_2024_unique_\[data-visible="true"\][\s\S]*?190ms both;/,
-    'bottom content sections should follow the search and shortcut sequence'
+    /#_x_extension_newtab_bookmarks_2024_unique_\[data-visible="true"\],\s*body\[data-nt-enter="run"\] #_x_extension_newtab_recent_sites_2024_unique_\[data-visible="true"\]\s*\{[\s\S]*?80ms both;/,
+    'bottom content sections should enter together with the shortcut sequence'
   );
   assert.match(
     newtabSource,
@@ -1458,6 +1464,33 @@ function testNewtabUsesDistinctMobileGridColumns() {
 }
 
 testNewtabUsesDistinctMobileGridColumns();
+
+function testBookmarkGridDefaultsToSixColumns() {
+  const optionsJs = fs.readFileSync(path.join(repoRoot, 'src/options/options.js'), 'utf8');
+  const optionsHtml = fs.readFileSync(path.join(repoRoot, 'src/options/options.html'), 'utf8');
+  const onboardingHtml = fs.readFileSync(path.join(repoRoot, 'src/onboarding/onboarding.html'), 'utf8');
+
+  assert.match(newtabSource, /let currentBookmarkColumns = 6;/);
+  assert.match(
+    newtabSource,
+    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?return 6;\s*\}/
+  );
+  assert.match(
+    newtabHtml,
+    /--x-nt-bookmark-columns, 6\)/
+  );
+  assert.match(
+    optionsJs,
+    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?return 6;\s*\}/
+  );
+  assert.match(
+    optionsHtml,
+    /<option value="6" data-i18n="bookmark_columns_6" selected>/
+  );
+  assert.match(onboardingHtml, /--x-nt-bookmark-columns: 6;/);
+}
+
+testBookmarkGridDefaultsToSixColumns();
 
 function testRecentResizeReusesLoadedDataWithoutReloadFlash() {
   const resizeHandlerSource = newtabSource.slice(
