@@ -65,18 +65,68 @@
     return host._lumnoTabSwitcherUpdateThumbnail(request) || { ok: true };
   }
 
-  if (chromeApi &&
-      chromeApi.runtime &&
-      chromeApi.runtime.onMessage &&
-      window._x_extension_tab_switcher_thumbnail_update_listener_2026_unique_ !== true) {
-    window._x_extension_tab_switcher_thumbnail_update_listener_2026_unique_ = true;
-    chromeApi.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-      if (!request || request.action !== 'updateTabSwitcherThumbnail') {
+  function advanceOpenSwitcherFromMessage(request) {
+    const host = document.getElementById(HOST_ID);
+    if (!host || typeof host._lumnoTabSwitcherAdvance !== 'function') {
+      return {
+        ok: true,
+        open: false,
+        advanced: false,
+        suppressed: false
+      };
+    }
+    const didAdvance = host._lumnoTabSwitcherAdvance(request && request.offset);
+    return {
+      ok: true,
+      open: true,
+      advanced: didAdvance === true,
+      suppressed: didAdvance === false
+    };
+  }
+
+  function openSwitcherFromMessage(request) {
+    const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
+    if (typeof toggle !== 'function') {
+      return { ok: false, reason: 'tab_switcher_missing' };
+    }
+    const result = toggle(request && request.context);
+    return result && typeof result === 'object'
+      ? result
+      : { ok: true };
+  }
+
+  if (chromeApi && chromeApi.runtime && chromeApi.runtime.onMessage) {
+    const previousRuntimeMessageListener =
+      window._x_extension_tab_switcher_runtime_message_listener_2026_unique_;
+    if (typeof previousRuntimeMessageListener === 'function' &&
+        typeof chromeApi.runtime.onMessage.removeListener === 'function') {
+      try {
+        chromeApi.runtime.onMessage.removeListener(previousRuntimeMessageListener);
+      } catch (error) {
+        // The previous extension context may have been invalidated after a reload.
+      }
+    }
+    const runtimeMessageListener = (request, _sender, sendResponse) => {
+      if (!request) {
         return;
       }
-      sendResponse(updateOpenSwitcherThumbnailFromMessage(request));
+      if (request.action === 'updateTabSwitcherThumbnail') {
+        sendResponse(updateOpenSwitcherThumbnailFromMessage(request));
+        return true;
+      }
+      if (request.action === 'advanceOpenTabSwitcherFromCommand') {
+        sendResponse(advanceOpenSwitcherFromMessage(request));
+        return true;
+      }
+      if (request.action !== 'openTabSwitcherFromCommand') {
+        return;
+      }
+      sendResponse(openSwitcherFromMessage(request));
       return true;
-    });
+    };
+    window._x_extension_tab_switcher_runtime_message_listener_2026_unique_ =
+      runtimeMessageListener;
+    chromeApi.runtime.onMessage.addListener(runtimeMessageListener);
   }
 
   function clampSelectedIndex(index, length) {

@@ -137,7 +137,7 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function getOverlayEnterAnimationStartTransform\(\)[\s\S]*?if \(overlayEnterAnimation === 'fade'\)[\s\S]*?translateY\(10px\)[\s\S]*?scale\(0\.985\)[\s\S]*?function playOverlayPanelEnterAnimation[\s\S]*?duration: motion\.panelDurationMs,[\s\S]*?duration: motion\.opacityDurationMs,/,
+  /function getOverlayEnterAnimationStartTransform\(\)[\s\S]*?if \(overlayEnterAnimation === 'fade'\)[\s\S]*?translateY\(16px\)[\s\S]*?scale\(0\.985\)[\s\S]*?function playOverlayPanelEnterAnimation[\s\S]*?duration: motion\.panelDurationMs,[\s\S]*?duration: motion\.opacityDurationMs,/,
   'fade mode should retain its position and opacity entrance motion through explicit keyframes'
 );
 assert.match(
@@ -197,7 +197,7 @@ assert.doesNotMatch(
 );
 assert.match(
   searchPanelSource,
-  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(10px\) scale\(0\.985\)[\s\S]*?translateY\(6px\) scaleX\(0\.88\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
+  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(16px\) scale\(0\.985\)[\s\S]*?translateY\(12px\) scaleX\(0\.88\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
   'WAAPI should replay an additive motion delta without replacing the panel centering transform when the hidden host becomes visible'
 );
 assert.match(

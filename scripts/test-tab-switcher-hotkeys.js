@@ -80,6 +80,21 @@ assert.match(
   /openTabSwitcherFromCommand[\s\S]*_x_extension_toggleTabSwitcher_2026_unique_[\s\S]*toggle\(context\)/,
   'shared tab switcher bridge should open the extension-page tab switcher runtime from a background message'
 );
+assert.match(
+  switcherSource,
+  /function advanceOpenSwitcherFromMessage\(request\)[\s\S]*_lumnoTabSwitcherAdvance\(request && request\.offset\)[\s\S]*advanced:\s*didAdvance === true/,
+  'normal-page runtime messages should advance an already-open switcher without executeScript'
+);
+assert.match(
+  switcherSource,
+  /function openSwitcherFromMessage\(request\)[\s\S]*_x_extension_toggleTabSwitcher_2026_unique_[\s\S]*toggle\(request && request\.context\)/,
+  'normal-page runtime messages should reuse an injected switcher runtime on later opens'
+);
+assert.match(
+  switcherSource,
+  /previousRuntimeMessageListener[\s\S]*removeListener\(previousRuntimeMessageListener\)[\s\S]*addListener\(runtimeMessageListener\)/,
+  'reinjection should replace an invalidated runtime listener after an extension reload'
+);
 assert.strictEqual(
   /TAB_SWITCHER_RUNTIME_VERSION|_x_extension_tab_switcher_runtime_version_2026_unique_|_lumnoTabSwitcherRuntimeVersion/.test(switcherSource),
   false,
@@ -1107,7 +1122,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function advanceExistingTabSwitcherOnTab\(tab,\s*source,\s*callback\)[\s\S]*_lumnoTabSwitcherAdvance/,
+  /function advanceExistingTabSwitcherOnTab\(tab,\s*source,\s*callback\)[\s\S]*advanceOpenTabSwitcherFromCommand/,
   'Alt+Q command re-entry should have a lightweight advance path for an already-open switcher'
 );
 const advanceExistingBlock = getFunctionBlock(
@@ -1127,18 +1142,18 @@ assert.match(
 );
 assert.match(
   advanceExistingBlock,
-  /chrome\.scripting\.executeScript\(\{[\s\S]*_lumnoTabSwitcherAdvance\(1\)/,
-  'Alt+Q command re-entry should advance normal pages through the in-page host executeScript path'
+  /chrome\.tabs\.sendMessage\(tab\.id,[\s\S]*action:\s*'advanceOpenTabSwitcherFromCommand'[\s\S]*offset:\s*1/,
+  'Alt+Q command re-entry should advance normal pages through the installed runtime message path'
 );
 assert.match(
   advanceExistingBlock,
-  /const result = Array\.isArray\(results\)[\s\S]*results\[0\]\.result[\s\S]*const didAdvance =[\s\S]*result\.ok === true[\s\S]*result\.advanced === true/,
+  /const didAdvance =[\s\S]*response\.ok === true[\s\S]*response\.advanced === true/,
   'Alt+Q command re-entry should not treat an initial suppressed shortcut as an advance on normal pages'
 );
 assert.strictEqual(
-  /getTabSwitcherRuntimeVersionOnTab|TAB_SWITCHER_RUNTIME_VERSION|tab_switcher_runtime_stale|chrome\.tabs\.sendMessage\(tab\.id/.test(advanceExistingBlock),
+  /getTabSwitcherRuntimeVersionOnTab|TAB_SWITCHER_RUNTIME_VERSION|tab_switcher_runtime_stale|chrome\.scripting\.executeScript/.test(advanceExistingBlock),
   false,
-  'Alt+Q command re-entry should not keep the reload-time version/message fast path'
+  'Alt+Q command re-entry should not wait on executeScript or runtime-version probes'
 );
 const injectSwitcherBlock = getFunctionBlock(
   backgroundSource,
@@ -1172,13 +1187,13 @@ assert.notStrictEqual(runSwitcherScriptEnd, -1, 'Alt+Q switcher opener should fi
 const runSwitcherScriptBlock = injectSwitcherBlock.slice(runSwitcherScriptStart, runSwitcherScriptEnd);
 assert.match(
   runSwitcherScriptBlock,
-  /const switcherContext = buildSwitcherContext\(tabZoomFactor\);[\s\S]*runDynamicSwitcherScript\(switcherContext\);/,
-  'Alt+Q normal-page opener should directly inject instead of using the reload-time message fast path'
+  /const switcherContext = buildSwitcherContext\(tabZoomFactor\);[\s\S]*chrome\.tabs\.sendMessage\(hostTab\.id,[\s\S]*action:\s*'openTabSwitcherFromCommand'[\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
+  'Alt+Q normal-page opener should reuse an installed runtime before falling back to dynamic injection'
 );
 assert.strictEqual(
-  /chrome\.tabs\.sendMessage\(hostTab\.id|getTabSwitcherRuntimeVersionOnTab|TAB_SWITCHER_RUNTIME_VERSION/.test(runSwitcherScriptBlock),
+  /getTabSwitcherRuntimeVersionOnTab|TAB_SWITCHER_RUNTIME_VERSION/.test(runSwitcherScriptBlock),
   false,
-  'Alt+Q normal-page opener should not keep the reload-time runtime version path'
+  'Alt+Q normal-page opener should not add a runtime-version round trip'
 );
 assert.match(
   backgroundSource,
@@ -1412,13 +1427,13 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function shouldPreCaptureActiveSwitcherThumbnailBeforePayload\(tab\)[\s\S]*tab\.active === true[\s\S]*getSwitcherThumbnailStateForPayload\(tab,[\s\S]*isSwitcherThumbnailRefreshNeeded\(state\)/,
-  'Alt+Q should pre-capture any active tab whose cached thumbnail is missing, stale, or failed'
+  /function shouldPreCaptureActiveSwitcherThumbnailBeforePayload\(tab\)[\s\S]*tab\.active === true[\s\S]*tab\.status === 'loading'[\s\S]*getSwitcherThumbnailStateForPayload\(tab,[\s\S]*isSwitcherThumbnailRefreshNeeded\(state\)/,
+  'Alt+Q should refresh a missing active thumbnail only after the page has stopped loading'
 );
-assert.match(
-  backgroundSource,
-  /const TAB_SWITCHER_COMMAND_PRECAPTURE_BUDGET_MS = \d+;[\s\S]*function waitForSwitcherCommandPreCaptureBudget\(capturePromise\)[\s\S]*setTimeout/,
-  'Alt+Q active-tab pre-capture should be budgeted so opening the switcher stays immediate'
+assert.strictEqual(
+  /TAB_SWITCHER_COMMAND_PRECAPTURE_BUDGET_MS|waitForSwitcherCommandPreCaptureBudget/.test(backgroundSource),
+  false,
+  'Alt+Q startup should not wait for active-tab thumbnail capture'
 );
 assert.match(
   backgroundSource,
@@ -1482,8 +1497,8 @@ assert.match(
 );
 assert.match(
   triggerSwitcherBlock,
-  /Promise\.all\(\[\s*ensureTabSwitcherStateLoaded\(\),\s*loadFaviconRequestBlacklistItems\(\),\s*loadFaviconEnhancedFetchEnabled\(\)\s*\]\)[\s\S]*getRecentTabsForSwitcher/,
-  'Alt+Q should load favicon policy state before building synchronous switcher favicon payloads'
+  /const startupStateReady = Promise\.all\(\[\s*ensureTabSwitcherStateLoaded\(\),\s*loadFaviconRequestBlacklistItems\(\),\s*loadFaviconEnhancedFetchEnabled\(\)\s*\]\)[\s\S]*const tabQueryReady = new Promise[\s\S]*Promise\.all\(\[startupStateReady,\s*tabQueryReady\]\)[\s\S]*getRecentTabsForSwitcher/,
+  'Alt+Q should query tabs in parallel with local state and favicon policy loading'
 );
 assert.match(
   triggerSwitcherBlock,
@@ -1492,18 +1507,18 @@ assert.match(
 );
 assert.match(
   triggerSwitcherBlock,
-  /const activeTab = tabList\.find[\s\S]*clearScheduledSwitcherThumbnailCapture\(activeTab\.id\)[\s\S]*let activeThumbnailReady/,
+  /const activeTab = tabList\.find[\s\S]*clearScheduledSwitcherThumbnailCapture\(activeTab\.id\)[\s\S]*shouldTrackSwitcherTab\(activeTab\)/,
   'Alt+Q should cancel any resolved active-tab pending thumbnail timer before payload construction'
 );
 assert.match(
   triggerSwitcherBlock,
-  /shouldPreCaptureActiveSwitcherThumbnailBeforePayload\(activeTab\)[\s\S]*waitForSwitcherCommandPreCaptureBudget\([\s\S]*captureSwitcherThumbnailForTab\([\s\S]*activeTab,[\s\S]*TAB_SWITCHER_CAPTURE_REASON_COMMAND_IMMEDIATE[\s\S]*activeThumbnailReady\.catch\(\(\) => false\)\.finally\(\(\) => \{[\s\S]*getRecentTabsForSwitcher\(tabList,\s*activeTab\.id\)/,
-  'Alt+Q should give the active tab a budgeted pre-capture chance before payload construction'
+  /shouldPreCaptureActiveSwitcherThumbnailBeforePayload\(activeTab\)[\s\S]*captureSwitcherThumbnailForTab\([\s\S]*activeTab,[\s\S]*TAB_SWITCHER_CAPTURE_REASON_COMMAND_IMMEDIATE[\s\S]*\.catch\(\(\) => false\);[\s\S]*const items = getRecentTabsForSwitcher\(tabList,\s*activeTab\.id\)/,
+  'Alt+Q should refresh eligible active thumbnails asynchronously without blocking payload construction'
 );
-assert.match(
-  triggerSwitcherBlock,
-  /let activeThumbnailReady = Promise\.resolve\(false\);/,
-  'Alt+Q normal command path should keep immediate rendering unless the active-tab pre-capture guard opts in'
+assert.strictEqual(
+  triggerSwitcherBlock.includes('activeThumbnailReady'),
+  false,
+  'Alt+Q startup should not keep a thumbnail readiness gate'
 );
 assert.match(
   triggerSwitcherBlock,

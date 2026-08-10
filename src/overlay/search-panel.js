@@ -663,16 +663,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
   function getOverlayEnterAnimationStartTransform() {
     if (overlayEnterAnimation === 'fade') {
-      return 'translateX(-50%) translateY(10px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)';
+      return 'translateX(-50%) translateY(16px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)';
     }
-    return 'translateX(-50%) translateY(6px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.88))';
+    return 'translateX(-50%) translateY(12px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.88))';
   }
 
   function getOverlayEnterAnimationDeltaTransform() {
     if (overlayEnterAnimation === 'fade') {
-      return 'translateY(10px) scale(0.985)';
+      return 'translateY(16px) scale(0.985)';
     }
-    return 'translateY(6px) scaleX(0.88)';
+    return 'translateY(12px) scaleX(0.88)';
   }
 
   function getOverlayEnterMotion() {
