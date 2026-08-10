@@ -49,6 +49,24 @@ function testNewtabRedirectFocusHintIsConsumedOnce() {
     /initialNewtabInputAutoFocusReadyTask\.then\(\(\) => \{\s*scheduleAutoFocusRecovery\(\);/,
     'New Tab should load the persisted auto-focus preference before scheduling focus recovery'
   );
+  const preferenceLoadSource = newtabSource.slice(
+    newtabSource.indexOf('function loadNewtabInputAutoFocusEnabled()'),
+    newtabSource.indexOf('const initialNewtabInputAutoFocusReadyTask')
+  );
+  assert.doesNotMatch(
+    preferenceLoadSource,
+    /storageArea\.set/,
+    'loading a missing auto-focus preference should not persist the new default over existing users'
+  );
+  const preferenceChangeSource = newtabSource.slice(
+    newtabSource.indexOf('if (changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY])'),
+    newtabSource.indexOf('if (changes[RECENT_COUNT_STORAGE_KEY])')
+  );
+  assert.doesNotMatch(
+    preferenceChangeSource,
+    /storageArea\.set/,
+    'removing the auto-focus preference should restore the default without writing it back'
+  );
 }
 
 testNewtabRedirectFocusHintIsConsumedOnce();

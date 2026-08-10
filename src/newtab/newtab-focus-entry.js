@@ -14,7 +14,7 @@
     '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const normalizeEnabled = typeof settings.normalizeNewtabInputAutoFocusEnabled === 'function'
     ? settings.normalizeNewtabInputAutoFocusEnabled
-    : function(value) { return value !== false; };
+    : function(value) { return value === true; };
 
   function settle(enabled) {
     if (!normalizeEnabled(enabled)) {
@@ -32,7 +32,7 @@
     ? (chromeApi.storage.sync || chromeApi.storage.local)
     : null;
   if (!storage || typeof storage.get !== 'function') {
-    settle(true);
+    settle(false);
     return;
   }
 
@@ -41,6 +41,6 @@
       settle(result && result[storageKey]);
     });
   } catch (_error) {
-    settle(true);
+    settle(false);
   }
 })();

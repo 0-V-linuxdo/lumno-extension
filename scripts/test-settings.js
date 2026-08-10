@@ -24,7 +24,7 @@ assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_selection_quick_actions_icon_set_2026_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_messages_2024_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_local_wallpaper_2026_unique_'));
-assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(undefined), true);
+assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(undefined), false);
 assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(true), true);
 assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(false), false);
 

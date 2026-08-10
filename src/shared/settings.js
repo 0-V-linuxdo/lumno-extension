@@ -172,7 +172,7 @@
   }
 
   function normalizeNewtabInputAutoFocusEnabled(value) {
-    return value !== false;
+    return value === true;
   }
 
   function normalizeBookmarkFolderIconsVisible(value) {

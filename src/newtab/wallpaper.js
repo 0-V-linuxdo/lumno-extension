@@ -128,7 +128,7 @@
     const featureHints = options.featureHints || globalThis.LumnoFeatureHints || {};
     const getInputAutoFocusEnabled = typeof options.getInputAutoFocusEnabled === 'function'
       ? options.getInputAutoFocusEnabled
-      : function() { return true; };
+      : function() { return false; };
     const setInputAutoFocusEnabled = typeof options.setInputAutoFocusEnabled === 'function'
       ? options.setInputAutoFocusEnabled
       : function() {};

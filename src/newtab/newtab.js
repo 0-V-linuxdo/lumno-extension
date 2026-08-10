@@ -435,7 +435,7 @@
   let engagementNoticeController = null;
   let pageNoticeController = null;
   let newtabTopContentMode = 'brand';
-  let newtabInputAutoFocusEnabled = true;
+  let newtabInputAutoFocusEnabled = false;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1214,7 +1214,7 @@
   function normalizeNewtabInputAutoFocusEnabled(value) {
     return typeof SETTINGS.normalizeNewtabInputAutoFocusEnabled === 'function'
       ? SETTINGS.normalizeNewtabInputAutoFocusEnabled(value)
-      : value !== false;
+      : value === true;
   }
 
   function updateNewtabInputAutoFocusUi() {
@@ -1235,18 +1235,13 @@
 
   function loadNewtabInputAutoFocusEnabled() {
     if (!storageArea) {
-      newtabInputAutoFocusEnabled = true;
+      newtabInputAutoFocusEnabled = false;
       return Promise.resolve(newtabInputAutoFocusEnabled);
     }
     return new Promise((resolve) => {
       storageArea.get([NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY], (result) => {
         const rawValue = result && result[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY];
         newtabInputAutoFocusEnabled = normalizeNewtabInputAutoFocusEnabled(rawValue);
-        if (rawValue !== newtabInputAutoFocusEnabled) {
-          storageArea.set({
-            [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: newtabInputAutoFocusEnabled
-          });
-        }
         updateNewtabInputAutoFocusUi();
         resolve(newtabInputAutoFocusEnabled);
       });
@@ -4166,11 +4161,6 @@
     if (changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]) {
       const rawValue = changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY].newValue;
       newtabInputAutoFocusEnabled = normalizeNewtabInputAutoFocusEnabled(rawValue);
-      if (storageArea && rawValue !== newtabInputAutoFocusEnabled) {
-        storageArea.set({
-          [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: newtabInputAutoFocusEnabled
-        });
-      }
       updateNewtabInputAutoFocusUi();
     }
     if (changes[RECENT_COUNT_STORAGE_KEY]) {

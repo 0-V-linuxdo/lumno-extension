@@ -1376,7 +1376,7 @@ vm.runInNewContext(fs.readFileSync('src/newtab/wallpaper.js', 'utf8'), sandbox, 
   filename: 'src/newtab/wallpaper.js'
 });
 
-let inputAutoFocusEnabled = true;
+let inputAutoFocusEnabled = false;
 const inputAutoFocusWrites = [];
 const runtime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
   documentObj,
@@ -1447,13 +1447,13 @@ assert.ok(appearanceScrollBody, 'appearance panel content should use one dedicat
 assert.strictEqual(searchWidthControl.getAttribute('data-visible'), 'true');
 assert.strictEqual(searchWidthSlider.disabled, false, 'global scope should still show the search width slider');
 assert.strictEqual(searchWidthSlider.tabIndex, 0, 'global scope search width slider should be tabbable');
-assert.strictEqual(inputAutoFocusToggle.checked, true, 'input auto-focus should default to enabled');
+assert.strictEqual(inputAutoFocusToggle.checked, false, 'input auto-focus should default to disabled');
 assert.strictEqual(inputAutoFocusToggle.getAttribute('role'), 'switch');
-assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'true');
-inputAutoFocusToggle.checked = false;
-inputAutoFocusToggle._listeners.change.forEach((listener) => listener({ target: inputAutoFocusToggle }));
-assert.deepStrictEqual(inputAutoFocusWrites, [false]);
 assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'false');
+inputAutoFocusToggle.checked = true;
+inputAutoFocusToggle._listeners.change.forEach((listener) => listener({ target: inputAutoFocusToggle }));
+assert.deepStrictEqual(inputAutoFocusWrites, [true]);
+assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'true');
 assert.strictEqual(moreSettingsLink.tabIndex, 0, 'global scope search width settings link should be tabbable');
 
 async function testInputAutoFocusHintWaitsForFinalFocusRoute() {

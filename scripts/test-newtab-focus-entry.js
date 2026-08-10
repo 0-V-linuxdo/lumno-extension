@@ -75,7 +75,7 @@ function runEntry({ storedValue, search = '', storageAvailable = true }) {
     LumnoSettings: {
       NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY: storageKey,
       normalizeNewtabInputAutoFocusEnabled(value) {
-        return value !== false;
+        return value === true;
       }
     },
     window: {
@@ -96,10 +96,17 @@ function runEntry({ storedValue, search = '', storageAvailable = true }) {
 
 {
   const result = runEntry({ storedValue: undefined });
+  assert.deepStrictEqual(result.replacedUrls, [], 'the missing preference should default to disabled');
+  assert.strictEqual(result.storageReads, 1);
+  assert.strictEqual(result.attributes.has('data-nt-focus-route-pending'), false);
+}
+
+{
+  const result = runEntry({ storedValue: true });
   assert.deepStrictEqual(
     result.replacedUrls,
     ['chrome-extension://abc/src/newtab/newtab.html?focus=1'],
-    'the default-enabled preference should retain the renderer-navigation focus handoff'
+    'an existing enabled preference should retain the renderer-navigation focus handoff'
   );
   assert.strictEqual(result.storageReads, 1);
 }
@@ -112,11 +119,8 @@ function runEntry({ storedValue, search = '', storageAvailable = true }) {
 
 {
   const result = runEntry({ storageAvailable: false });
-  assert.deepStrictEqual(
-    result.replacedUrls,
-    ['chrome-extension://abc/src/newtab/newtab.html?focus=1'],
-    'storage failures should preserve the default-enabled behavior'
-  );
+  assert.deepStrictEqual(result.replacedUrls, [], 'storage failures should preserve the disabled default');
+  assert.strictEqual(result.attributes.has('data-nt-focus-route-pending'), false);
 }
 
 const openNewTabBlock = backgroundSource.match(/case 'openNewTab': \{([\s\S]*?)\n    \}/);
