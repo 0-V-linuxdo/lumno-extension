@@ -239,8 +239,8 @@ assert(
       fs.statSync(sharedBundlePath).size +
       fs.statSync(tabSwitcherSharedBundlePath).size +
       fs.statSync(newtabBundlePath).size <=
-    363 * 1024,
-  'the New Tab React route should stay within its 363 KiB uncompressed budget'
+    364 * 1024,
+  'the New Tab React route should stay within its 364 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
@@ -276,8 +276,8 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    705 * 1024,
-  'all shared React artifacts and four page entries should stay within their 705 KiB package budget'
+    706 * 1024,
+  'all shared React artifacts and four page entries should stay within their 706 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=

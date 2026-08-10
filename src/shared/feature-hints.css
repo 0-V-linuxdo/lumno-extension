@@ -141,6 +141,27 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--newtab-tab-switcher
   transform: translateY(-4px) scale(0.98);
 }
 
+.x-lumno-feature-hint--newtab-input-auto-focus {
+  right: 0;
+  bottom: calc(100% + 14px);
+  top: auto;
+  width: min(280px, calc(100vw - 28px));
+  max-width: min(280px, calc(100vw - 28px));
+  transform: translateY(6px) scale(0.98);
+  transform-origin: right bottom;
+}
+
+.x-lumno-feature-hint--newtab-input-auto-focus[data-visible="true"] {
+  transform: translateY(0) scale(1);
+}
+
+body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--newtab-input-auto-focus {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px) scale(0.98);
+}
+
 .x-lumno-feature-hint--update-notice {
   position: relative;
   left: auto;

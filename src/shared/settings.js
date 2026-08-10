@@ -11,6 +11,7 @@
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
+  const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = '_x_extension_motion_effects_enabled_2026_unique_';
@@ -36,6 +37,7 @@
     '_x_extension_recent_count_2024_unique_',
     '_x_extension_newtab_width_mode_2026_unique_',
     '_x_extension_newtab_search_width_2026_unique_',
+    '_x_extension_newtab_input_auto_focus_enabled_2026_unique_',
     '_x_extension_newtab_theme_mode_2026_unique_',
     '_x_extension_newtab_theme_scope_2026_unique_',
     '_x_extension_newtab_zen_mode_2026_unique_',
@@ -166,6 +168,10 @@
   }
 
   function normalizeNewtabShortcutDockMagnificationEnabled(value) {
+    return value !== false;
+  }
+
+  function normalizeNewtabInputAutoFocusEnabled(value) {
     return value !== false;
   }
 
@@ -365,6 +371,7 @@
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
+    NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
@@ -390,6 +397,7 @@
     normalizeNewtabShortcutsVisible,
     normalizeNewtabShortcutAddVisible,
     normalizeNewtabShortcutDockMagnificationEnabled,
+    normalizeNewtabInputAutoFocusEnabled,
     normalizeBookmarkFolderIconsVisible,
     normalizeUpdateNoticeEnabled,
     normalizeMotionEffectsEnabled,

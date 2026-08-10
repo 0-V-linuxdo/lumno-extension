@@ -633,6 +633,18 @@
   "newtab_tab_switcher_feature_hint_close": {
     "message": "タブ切り替えヒントを閉じる"
   },
+  "newtab_input_auto_focus_title": {
+    "message": "入力欄を自動フォーカス"
+  },
+  "newtab_input_auto_focus_feature_hint_badge": {
+    "message": "新機能"
+  },
+  "newtab_input_auto_focus_feature_hint_text": {
+    "message": "入力欄の自動フォーカスが不要な場合は、ここでオフにできます。"
+  },
+  "newtab_input_auto_focus_feature_hint_close": {
+    "message": "入力欄の自動フォーカスのヒントを閉じる"
+  },
   "update_notice_badge": {
     "message": "{version} に更新済み"
   },

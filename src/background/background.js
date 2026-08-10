@@ -5707,11 +5707,7 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
       return true;
     }
     case 'openNewTab': {
-      const newtabUrl = typeof EXTENSION_ROUTES.buildLumnoNewtabUrl === 'function'
-        ? EXTENSION_ROUTES.buildLumnoNewtabUrl(chrome, { focus: true })
-        : chrome.runtime.getURL('src/newtab/lumno-newtab.html?focus=1');
       createTabWithSourceGroup({
-        url: newtabUrl,
         active: request.disposition !== 'backgroundTab'
       }, sender && sender.tab ? sender.tab : null, (_tab, info) => {
         sendResponse({ ok: Boolean(info && info.ok) });

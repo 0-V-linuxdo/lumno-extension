@@ -39,6 +39,16 @@ function testNewtabRedirectFocusHintIsConsumedOnce() {
     /tryFocusSearchInput\(hasExplicitFocusHint\)/,
     'New Tab retries and lifecycle events should not permanently force focus back to the input'
   );
+  assert.match(
+    recoverySource,
+    /if \(!newtabInputAutoFocusEnabled\) \{\s*return;/,
+    'New Tab focus recovery should respect the user-controlled auto-focus preference'
+  );
+  assert.match(
+    newtabSource,
+    /initialNewtabInputAutoFocusReadyTask\.then\(\(\) => \{\s*scheduleAutoFocusRecovery\(\);/,
+    'New Tab should load the persisted auto-focus preference before scheduling focus recovery'
+  );
 }
 
 testNewtabRedirectFocusHintIsConsumedOnce();

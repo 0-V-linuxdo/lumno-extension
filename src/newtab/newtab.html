@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" sizes="any" href="../../assets/images/lumno-newtab-favicon.svg" data-lumno-newtab-favicon="true" data-newtab-favicon-id="alternate" />
     <title>New Tab</title>
     <script src="../shared/settings.js"></script>
+    <script src="newtab-focus-entry.js"></script>
     <script src="../shared/motion-preload.js"></script>
     <script src="wallpaper-preload.js"></script>
     <link rel="stylesheet" href="../../assets/fonts/open-sans/open-sans.css" />
@@ -21,6 +22,9 @@
     <link rel="stylesheet" href="shortcut-dialog.css" />
     <!-- Thanks to the Remix Icon project; this extension uses its icon set: https://remixicon.com/ -->
     <style>
+      html[data-nt-focus-route-pending="true"] {
+        visibility: hidden;
+      }
       html,
       body {
         height: 100%;
@@ -4162,6 +4166,10 @@
       .x-nt-wallpaper-switch input:checked + .x-nt-wallpaper-switch-slider::after {
         opacity: 1;
       }
+      .x-nt-wallpaper-switch input:focus-visible + .x-nt-wallpaper-switch-slider {
+        outline: 2px solid var(--x-nt-bookmark-focus, rgba(0, 0, 0, 0.22));
+        outline-offset: 2px;
+      }
       .x-nt-appearance-header {
         min-width: 0;
         flex: 0 0 auto;
@@ -4503,6 +4511,24 @@
       }
       .x-nt-overlay-scale.x-nt-search-width-scale {
         display: block;
+      }
+      .x-nt-appearance-setting-row {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--x-nt-panel-header-gap);
+        padding: 0 2px;
+        box-sizing: border-box;
+      }
+      .x-nt-appearance-setting-title {
+        min-width: 0;
+        color: var(--x-nt-text, #111827);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.25;
+        font-family: "Open Sans", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "Helvetica Neue", Arial, sans-serif;
       }
       .x-nt-appearance-more-settings {
         align-self: flex-start;

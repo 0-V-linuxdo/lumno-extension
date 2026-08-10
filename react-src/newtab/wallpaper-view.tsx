@@ -21,10 +21,21 @@ type TopContentItem = {
 
 const ref = (name: string) => ({ 'data-wallpaper-ref': name });
 
-function Switch({ name }: { name: string }) {
+function Switch({
+  ariaLabel,
+  name
+}: {
+  ariaLabel?: string;
+  name: string;
+}) {
   return (
     <label className="x-nt-wallpaper-switch">
-      <input {...ref(name)} role="switch" type="checkbox" />
+      <input
+        {...ref(name)}
+        aria-label={ariaLabel}
+        role="switch"
+        type="checkbox"
+      />
       <span
         aria-hidden="true"
         className="x-nt-wallpaper-switch-slider"
@@ -311,6 +322,16 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                 <Scale
                   className="x-nt-search-width-scale"
                   ticks={model.searchWidth.ticks}
+                />
+              </div>
+              <div className="x-nt-appearance-setting-row">
+                <span
+                  {...ref('inputAutoFocusTitle')}
+                  className="x-nt-appearance-setting-title"
+                />
+                <Switch
+                  ariaLabel="Automatically focus the search input"
+                  name="inputAutoFocusToggle"
                 />
               </div>
               <a

@@ -485,6 +485,8 @@
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
+  const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = SETTINGS.NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY ||
+    '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
   const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -550,6 +552,7 @@
     RECENT_COUNT_STORAGE_KEY,
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
+    NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
     NEWTAB_ZEN_MODE_STORAGE_KEY,

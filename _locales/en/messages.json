@@ -633,6 +633,18 @@
   "newtab_tab_switcher_feature_hint_close": {
     "message": "Dismiss tab switcher tip"
   },
+  "newtab_input_auto_focus_title": {
+    "message": "Automatically focus input"
+  },
+  "newtab_input_auto_focus_feature_hint_badge": {
+    "message": "New"
+  },
+  "newtab_input_auto_focus_feature_hint_text": {
+    "message": "Don't want the search input focused automatically? Turn it off here."
+  },
+  "newtab_input_auto_focus_feature_hint_close": {
+    "message": "Dismiss input auto-focus tip"
+  },
   "update_notice_badge": {
     "message": "Updated to {version}"
   },

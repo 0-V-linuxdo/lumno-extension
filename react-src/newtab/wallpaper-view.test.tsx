@@ -68,6 +68,11 @@ describe('New Tab React wallpaper view', () => {
     const topContentButtons = topContentGroup?.querySelectorAll('button');
     expect(topContentButtons).toHaveLength(3);
     expect(topContentButtons?.[0]?.getAttribute('aria-pressed')).toBe('true');
+    const inputAutoFocusToggle = controller.getRefs().inputAutoFocusToggle;
+    expect(inputAutoFocusToggle?.getAttribute('role')).toBe('switch');
+    expect(inputAutoFocusToggle?.getAttribute('aria-label')).toBe(
+      'Automatically focus the search input'
+    );
   });
 
   it('updates custom wallpaper tiles without replacing the panel', () => {

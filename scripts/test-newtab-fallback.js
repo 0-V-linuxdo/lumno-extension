@@ -160,7 +160,7 @@ assert.match(
   assert.deepStrictEqual(
     replacedUrls,
     ['chrome-extension://abc/src/newtab/newtab.html?focus=1'],
-    'browser-created Lumno newtabs should request focus while retaining the maintained page entrance animation'
+    'standalone Lumno fallbacks should request focus while retaining the maintained page entrance animation'
   );
 }
 assert.doesNotMatch(

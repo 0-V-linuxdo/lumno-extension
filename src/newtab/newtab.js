@@ -116,6 +116,8 @@
   const RECENT_COUNT_STORAGE_KEY = '_x_extension_recent_count_2024_unique_';
   const NEWTAB_WIDTH_MODE_STORAGE_KEY = '_x_extension_newtab_width_mode_2026_unique_';
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
+  const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = SETTINGS.NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY ||
+    '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -433,6 +435,7 @@
   let engagementNoticeController = null;
   let pageNoticeController = null;
   let newtabTopContentMode = 'brand';
+  let newtabInputAutoFocusEnabled = true;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1207,6 +1210,50 @@
       ? SETTINGS.normalizeNewtabShortcutDockMagnificationEnabled(value)
       : value !== false;
   }
+
+  function normalizeNewtabInputAutoFocusEnabled(value) {
+    return typeof SETTINGS.normalizeNewtabInputAutoFocusEnabled === 'function'
+      ? SETTINGS.normalizeNewtabInputAutoFocusEnabled(value)
+      : value !== false;
+  }
+
+  function updateNewtabInputAutoFocusUi() {
+    if (wallpaperRuntime && typeof wallpaperRuntime.updateInputAutoFocusUi === 'function') {
+      wallpaperRuntime.updateInputAutoFocusUi();
+    }
+  }
+
+  function setNewtabInputAutoFocusEnabled(enabled) {
+    const nextValue = normalizeNewtabInputAutoFocusEnabled(enabled);
+    newtabInputAutoFocusEnabled = nextValue;
+    updateNewtabInputAutoFocusUi();
+    if (storageArea) {
+      storageArea.set({ [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function loadNewtabInputAutoFocusEnabled() {
+    if (!storageArea) {
+      newtabInputAutoFocusEnabled = true;
+      return Promise.resolve(newtabInputAutoFocusEnabled);
+    }
+    return new Promise((resolve) => {
+      storageArea.get([NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY], (result) => {
+        const rawValue = result && result[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY];
+        newtabInputAutoFocusEnabled = normalizeNewtabInputAutoFocusEnabled(rawValue);
+        if (rawValue !== newtabInputAutoFocusEnabled) {
+          storageArea.set({
+            [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: newtabInputAutoFocusEnabled
+          });
+        }
+        updateNewtabInputAutoFocusUi();
+        resolve(newtabInputAutoFocusEnabled);
+      });
+    });
+  }
+
+  const initialNewtabInputAutoFocusReadyTask = loadNewtabInputAutoFocusEnabled();
 
   function normalizeBookmarkFolderIconsVisible(value) {
     return typeof SETTINGS.normalizeBookmarkFolderIconsVisible === 'function'
@@ -2507,6 +2554,10 @@
     setSearchWidth: (value, options) => {
       setNewtabSearchWidth(value, options);
     },
+    featureHints: FEATURE_HINTS,
+    inputAutoFocusReady: initialNewtabInputAutoFocusReadyTask,
+    getInputAutoFocusEnabled: () => newtabInputAutoFocusEnabled,
+    setInputAutoFocusEnabled: setNewtabInputAutoFocusEnabled,
     getAdaptiveToneTargets: createWallpaperAdaptiveToneTargets,
     view: NEWTAB_WALLPAPER_VIEW
   });
@@ -4112,6 +4163,16 @@
     if (changes[LANGUAGE_STORAGE_KEY]) {
       applyLanguageMode(changes[LANGUAGE_STORAGE_KEY].newValue || 'system');
     }
+    if (changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]) {
+      const rawValue = changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY].newValue;
+      newtabInputAutoFocusEnabled = normalizeNewtabInputAutoFocusEnabled(rawValue);
+      if (storageArea && rawValue !== newtabInputAutoFocusEnabled) {
+        storageArea.set({
+          [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: newtabInputAutoFocusEnabled
+        });
+      }
+      updateNewtabInputAutoFocusUi();
+    }
     if (changes[RECENT_COUNT_STORAGE_KEY]) {
       const nextCount = normalizeRecentCount(changes[RECENT_COUNT_STORAGE_KEY].newValue);
       currentRecentCount = nextCount;
@@ -4913,6 +4974,7 @@
     RECENT_COUNT_STORAGE_KEY,
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
+    NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
@@ -14971,6 +15033,9 @@
 
     const retryDelays = [0, 60, 140, 280, 520, 900, 1400];
     const attemptFocusIfVisible = () => {
+      if (!newtabInputAutoFocusEnabled) {
+        return;
+      }
       if (document.visibilityState !== 'visible') {
         return;
       }
@@ -15003,7 +15068,9 @@
     }, true);
   }
 
-  scheduleAutoFocusRecovery();
+  initialNewtabInputAutoFocusReadyTask.then(() => {
+    scheduleAutoFocusRecovery();
+  });
   refreshFallbackShortcut(true);
 
   function handleGlobalTypingFocus(event) {

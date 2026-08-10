@@ -210,6 +210,29 @@ function flushMicrotasks() {
     'newtab tab switcher feature hint fallback should use a platform shortcut placeholder'
   );
 
+  const inputAutoFocusHint = featureHints.getFeatureHint('newtab-input-auto-focus');
+  assert(inputAutoFocusHint, 'newtab input auto-focus feature hint should be registered');
+  assert.strictEqual(
+    inputAutoFocusHint.introducedIn,
+    '0.9.41',
+    'newtab input auto-focus feature hint should be keyed to the release version'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.placement,
+    'above newtab appearance button',
+    'newtab input auto-focus feature hint should point to the appearance button'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.className,
+    'x-lumno-feature-hint--newtab-input-auto-focus',
+    'newtab input auto-focus feature hint should expose a dedicated placement class'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.rememberOnFirstShow,
+    false,
+    'input auto-focus hint should wait for user acknowledgement before remembering dismissal'
+  );
+
   const macHintController = featureHints.createFeatureHint({
     documentObj: createFakeDocument(),
     definition: 'newtab-tab-switcher',
@@ -326,6 +349,72 @@ function flushMicrotasks() {
     secondController.element.getAttribute('data-dismissed'),
     'true',
     'second feature hint should load the sync dismissed state'
+  );
+
+  const inputAutoFocusSyncKey = featureHints.getFeatureHintSyncDismissKey(
+    'newtab-input-auto-focus'
+  );
+  const previousInputAutoFocusSyncKey = featureHints.getFeatureHintSyncDismissKey({
+    id: 'newtab-input-auto-focus',
+    introducedIn: '0.9.40'
+  });
+  const inputAutoFocusSyncStore = {
+    [previousInputAutoFocusSyncKey]: true
+  };
+  const inputAutoFocusController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-input-auto-focus',
+    chromeApi: createStorageBackedChrome({}, inputAutoFocusSyncStore),
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  assert(inputAutoFocusController, 'input auto-focus feature hint should be created');
+  assert.strictEqual(
+    await inputAutoFocusController.ready,
+    true,
+    'an upgrade from 0.9.40 should expose the new 0.9.41 input auto-focus hint'
+  );
+  await flushMicrotasks();
+  assert.strictEqual(
+    inputAutoFocusController.element.getAttribute('data-visible'),
+    'true',
+    'the 0.9.41 input auto-focus hint should become visible without a current dismissal'
+  );
+  assert.strictEqual(
+    inputAutoFocusSyncStore[inputAutoFocusSyncKey],
+    undefined,
+    'becoming visible should not remember the input auto-focus hint before acknowledgement'
+  );
+  inputAutoFocusController.setVisible(false);
+  inputAutoFocusController.setVisible(true);
+  assert.strictEqual(
+    inputAutoFocusSyncStore[inputAutoFocusSyncKey],
+    undefined,
+    'an interrupted visible state should not remember the input auto-focus hint'
+  );
+  inputAutoFocusController.dismiss();
+  assert.strictEqual(
+    inputAutoFocusSyncStore[inputAutoFocusSyncKey],
+    true,
+    'actively dismissing the input auto-focus hint should persist acknowledgement'
+  );
+
+  const acknowledgedInputAutoFocusController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-input-auto-focus',
+    chromeApi: createStorageBackedChrome({}, inputAutoFocusSyncStore),
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  assert.strictEqual(
+    await acknowledgedInputAutoFocusController.ready,
+    false,
+    'an acknowledged input auto-focus hint should stay hidden on later New Tabs'
+  );
+  assert.strictEqual(
+    acknowledgedInputAutoFocusController.element.getAttribute('data-dismissed'),
+    'true',
+    'a later New Tab should load the acknowledged input auto-focus hint state'
   );
 
   const legacyLocalStore = { [localKey]: true };

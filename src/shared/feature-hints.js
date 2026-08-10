@@ -72,6 +72,27 @@
       textFallback: 'Press {shortcut} to open the tab switcher and jump through recent tabs without reaching for the mouse.',
       closeLabelKey: 'newtab_tab_switcher_feature_hint_close',
       closeLabelFallback: 'Dismiss tab switcher tip'
+    }),
+    NEWTAB_INPUT_AUTO_FOCUS: Object.freeze({
+      id: 'newtab-input-auto-focus',
+      introducedIn: '0.9.41',
+      surface: 'newtab',
+      placement: 'above newtab appearance button',
+      className: 'x-lumno-feature-hint--newtab-input-auto-focus',
+      arrowSide: 'bottom',
+      arrowAlign: 'end',
+      widthMode: 'fixed',
+      alignMode: 'auto',
+      dismissStorage: 'sync',
+      rememberOnFirstShow: false,
+      roundedArrowTip: true,
+      badgeIcon: 'ri-asterisk',
+      badgeKey: 'newtab_input_auto_focus_feature_hint_badge',
+      badgeFallback: 'New',
+      textKey: 'newtab_input_auto_focus_feature_hint_text',
+      textFallback: "Don't want the search input focused automatically? Turn it off here.",
+      closeLabelKey: 'newtab_input_auto_focus_feature_hint_close',
+      closeLabelFallback: 'Dismiss input auto-focus tip'
     })
   });
 

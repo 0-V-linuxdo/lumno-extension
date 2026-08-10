@@ -359,6 +359,19 @@ function createFakeWallpaperViewController(config) {
       'data-search-width-tick': tick.searchKey || ''
     });
   });
+  const inputAutoFocusRow = add(
+    widthControl,
+    'div',
+    'x-nt-appearance-setting-row'
+  );
+  add(
+    inputAutoFocusRow,
+    'span',
+    'x-nt-appearance-setting-title',
+    {},
+    'inputAutoFocusTitle'
+  );
+  addSwitch(inputAutoFocusRow, 'inputAutoFocusToggle');
   const moreSettings = add(
     widthControl,
     'a',
@@ -1363,10 +1376,17 @@ vm.runInNewContext(fs.readFileSync('src/newtab/wallpaper.js', 'utf8'), sandbox, 
   filename: 'src/newtab/wallpaper.js'
 });
 
+let inputAutoFocusEnabled = true;
+const inputAutoFocusWrites = [];
 const runtime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
   documentObj,
   windowObj,
   storageArea: null,
+  getInputAutoFocusEnabled: () => inputAutoFocusEnabled,
+  setInputAutoFocusEnabled(value) {
+    inputAutoFocusEnabled = Boolean(value);
+    inputAutoFocusWrites.push(inputAutoFocusEnabled);
+  },
   t: (_key, fallback) => fallback || '',
   getRiSvg: () => ''
 });
@@ -1418,14 +1438,110 @@ const appearanceScrollBody = getChildByClassName(renderedPanel, 'x-nt-wallpaper-
 const appearanceSection = getChildByClassName(appearanceScrollBody, 'x-nt-appearance-section');
 const searchWidthControl = getChildByClassName(appearanceSection, 'x-nt-search-width-control');
 const searchWidthSlider = searchWidthControl.children[1].children[0];
-const moreSettingsLink = searchWidthControl.children[2];
+const inputAutoFocusRow = getChildByClassName(searchWidthControl, 'x-nt-appearance-setting-row');
+const inputAutoFocusToggle = inputAutoFocusRow.children[1].children[0];
+const moreSettingsLink = getChildByClassName(searchWidthControl, 'x-nt-appearance-more-settings');
 
 assert.ok(appearanceHeader, 'appearance header should be a direct panel child above the scrollable content');
 assert.ok(appearanceScrollBody, 'appearance panel content should use one dedicated internal scroll container');
 assert.strictEqual(searchWidthControl.getAttribute('data-visible'), 'true');
 assert.strictEqual(searchWidthSlider.disabled, false, 'global scope should still show the search width slider');
 assert.strictEqual(searchWidthSlider.tabIndex, 0, 'global scope search width slider should be tabbable');
+assert.strictEqual(inputAutoFocusToggle.checked, true, 'input auto-focus should default to enabled');
+assert.strictEqual(inputAutoFocusToggle.getAttribute('role'), 'switch');
+assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'true');
+inputAutoFocusToggle.checked = false;
+inputAutoFocusToggle._listeners.change.forEach((listener) => listener({ target: inputAutoFocusToggle }));
+assert.deepStrictEqual(inputAutoFocusWrites, [false]);
+assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'false');
 assert.strictEqual(moreSettingsLink.tabIndex, 0, 'global scope search width settings link should be tabbable');
+
+async function testInputAutoFocusHintWaitsForFinalFocusRoute() {
+  const pendingRoute = createWallpaperSandbox();
+  pendingRoute.documentObj.documentElement.setAttribute(
+    'data-nt-focus-route-pending',
+    'true'
+  );
+  let pendingRouteCreates = 0;
+  const pendingRuntime = pendingRoute.sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: pendingRoute.documentObj,
+    windowObj: pendingRoute.windowObj,
+    storageArea: null,
+    featureHints: {
+      createFeatureHint() {
+        pendingRouteCreates += 1;
+        return null;
+      }
+    },
+    inputAutoFocusReady: Promise.resolve(true),
+    getInputAutoFocusEnabled: () => true,
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+  pendingRuntime.createControls();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.strictEqual(
+    pendingRouteCreates,
+    0,
+    'the pre-redirect New Tab must not create or remember the feature hint while focus routing is pending'
+  );
+
+  const settledRoute = createWallpaperSandbox();
+  let settledRouteCreates = 0;
+  let settledRouteDismissals = 0;
+  let createdHintOptions = null;
+  const hintElement = settledRoute.documentObj.createElement('span');
+  hintElement.setAttribute('data-feature-hint-id', 'newtab-input-auto-focus');
+  hintElement.setAttribute('data-visible', 'true');
+  const settledRuntime = settledRoute.sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: settledRoute.documentObj,
+    windowObj: settledRoute.windowObj,
+    storageArea: null,
+    featureHints: {
+      createFeatureHint(options) {
+        settledRouteCreates += 1;
+        createdHintOptions = options;
+        return {
+          element: hintElement,
+          dismiss() {
+            settledRouteDismissals += 1;
+            hintElement.setAttribute('data-dismissed', 'true');
+            hintElement.setAttribute('data-visible', 'false');
+          },
+          setVisible(visible) {
+            hintElement.setAttribute('data-visible', visible ? 'true' : 'false');
+          },
+          updateLanguage() {}
+        };
+      }
+    },
+    inputAutoFocusReady: Promise.resolve(true),
+    getInputAutoFocusEnabled: () => true,
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+  settledRuntime.createControls();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.strictEqual(
+    settledRouteCreates,
+    1,
+    'the final focus=1 New Tab route should create the input auto-focus feature hint once'
+  );
+  assert.strictEqual(createdHintOptions.definition, 'newtab-input-auto-focus');
+  assert.strictEqual(
+    hintElement.parentNode,
+    settledRuntime.getControlElement(),
+    'the feature hint should mount above the appearance button in its corner control'
+  );
+  settledRuntime.getControlElement().children[1].click();
+  assert.strictEqual(
+    settledRouteDismissals,
+    1,
+    'opening the appearance panel should acknowledge and dismiss the visible feature hint'
+  );
+}
 
 const scopedRuntime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
   documentObj,
@@ -1442,7 +1558,10 @@ const scopedScrollBody = getChildByClassName(scopedControl.children[0], 'x-nt-wa
 const scopedAppearanceSection = getChildByClassName(scopedScrollBody, 'x-nt-appearance-section');
 const scopedSearchWidthControl = getChildByClassName(scopedAppearanceSection, 'x-nt-search-width-control');
 const scopedSearchWidthSlider = scopedSearchWidthControl.children[1].children[0];
-const scopedMoreSettingsLink = scopedSearchWidthControl.children[2];
+const scopedMoreSettingsLink = getChildByClassName(
+  scopedSearchWidthControl,
+  'x-nt-appearance-more-settings'
+);
 
 assert.strictEqual(scopedSearchWidthControl.getAttribute('data-visible'), 'true');
 assert.strictEqual(scopedSearchWidthSlider.disabled, false, 'visible search width slider should be interactive');
@@ -2140,6 +2259,7 @@ Promise.resolve()
     assertWallpaperBootstrapWaitsForTheme();
     assertInitialWallpaperToneStartsBeforeDeferredRefresh();
   })
+  .then(testInputAutoFocusHintWaitsForFinalFocusRoute)
   .then(testNewtabFaviconPreloadAppliesCachedAlternateBeforeMainRuntime)
   .then(testWallpaperPreloadUsesTheCachedResolvedMode)
   .then(testSyncedCustomWallpaperWithoutLocalRecordFallsBackToDefault)
