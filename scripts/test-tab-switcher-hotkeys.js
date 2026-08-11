@@ -411,8 +411,8 @@ assert.match(
 );
 assert.match(
   switcherSource,
-  /function handleKeyup[\s\S]*event\.key === 'Alt'[\s\S]*switchToSelected\(\)/,
-  'tab switcher should switch to the selected tab when Alt is released'
+  /function handleKeyup[\s\S]*event\.key === 'Alt' \|\| event\.key === 'Meta'[\s\S]*switchToSelected\(\)/,
+  'tab switcher should switch to the selected tab when Alt or Command is released'
 );
 assert.match(
   switcherSource,

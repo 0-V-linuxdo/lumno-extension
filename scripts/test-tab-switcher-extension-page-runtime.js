@@ -16,6 +16,22 @@ const { window } = dom;
 let createViewCalls = 0;
 let latestViewOptions = null;
 const runtimeMessages = [];
+const keyupListeners = new Set();
+const addWindowEventListener = window.addEventListener.bind(window);
+const removeWindowEventListener = window.removeEventListener.bind(window);
+
+window.addEventListener = (type, listener, options) => {
+  if (type === 'keyup') {
+    keyupListeners.add(listener);
+  }
+  return addWindowEventListener(type, listener, options);
+};
+window.removeEventListener = (type, listener, options) => {
+  if (type === 'keyup') {
+    keyupListeners.delete(listener);
+  }
+  return removeWindowEventListener(type, listener, options);
+};
 
 window.matchMedia = () => ({
   matches: false,
@@ -150,6 +166,42 @@ assert.deepStrictEqual(
   runtimeMessages.map((message) => ({ ...message })),
   [{ action: 'switchToTab', tabId: 1, windowId: null }],
   'a trusted activation must preserve the normal privileged switch path'
+);
+
+const commandShortcutResult =
+  window._x_extension_toggleTabSwitcher_2026_unique_({
+    tabs: [{ id: 2, title: 'Command shortcut' }],
+    suppressInitialShortcutAdvance: true
+  });
+assert.deepStrictEqual(
+  { ...commandShortcutResult },
+  { ok: true },
+  'the switcher should reopen for a Command shortcut'
+);
+const commandShortcutHost = window.document.getElementById(
+  '_x_extension_tab_switcher_host_2026_unique_'
+);
+const commandKeyupListener = Array.from(keyupListeners).at(-1);
+assert.strictEqual(typeof commandKeyupListener, 'function');
+commandKeyupListener({
+  isTrusted: true,
+  key: 'Meta',
+  preventDefault() {},
+  stopImmediatePropagation() {},
+  stopPropagation() {}
+});
+assert.deepStrictEqual(
+  runtimeMessages.map((message) => ({ ...message })),
+  [
+    { action: 'switchToTab', tabId: 1, windowId: null },
+    { action: 'switchToTab', tabId: 2, windowId: null }
+  ],
+  'releasing Command should activate the selected tab for a Command-based shortcut'
+);
+assert.strictEqual(
+  commandShortcutHost.isConnected,
+  false,
+  'the switcher should close after the Command shortcut commits the selection'
 );
 
 dom.window.close();

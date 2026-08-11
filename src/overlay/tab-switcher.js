@@ -1172,7 +1172,7 @@
         }
         return;
       }
-      if (event.key === 'Alt') {
+      if (event.key === 'Alt' || event.key === 'Meta') {
         suppressInitialShortcutAdvanceUntilQKeyup = false;
         stopHandledKeyEvent(event);
         switchToSelected();
