@@ -22,6 +22,7 @@
     overlaySizeMode: '_x_extension_overlay_size_mode_2026_unique_',
     overlayEnterAnimation: '_x_extension_overlay_enter_animation_2026_unique_',
     motionEffectsEnabled: '_x_extension_motion_effects_enabled_2026_unique_',
+    numberShortcutInstantEnabled: '_x_extension_number_shortcut_instant_enabled_2026_unique_',
     overlayTabPriority: '_x_extension_overlay_tab_priority_2024_unique_',
     tabRankScoreDebug: '_x_extension_tab_rank_score_debug_2026_unique_'
   });

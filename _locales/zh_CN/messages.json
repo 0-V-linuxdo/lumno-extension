@@ -234,6 +234,12 @@
   "settings_pinned_tab_recovery_desc": {
     "message": "记录可恢复的置顶网页标签页，在浏览器重启后自动补回"
   },
+  "settings_number_shortcut_instant_title": {
+    "message": "单按 Command 显示数字跳转"
+  },
+  "settings_number_shortcut_instant_desc": {
+    "message": "开启后，命令栏与搜索建议中单按 Command/Ctrl 即显示数字跳转标记；「在后台新开」不再占用 Command（鼠标中键仍可后台打开）"
+  },
   "document_pip_picker_hint": {
     "message": "移动鼠标选择元素，点击打开悬浮窗，滚轮切换父级，Esc 取消。"
   },

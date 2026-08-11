@@ -47,6 +47,13 @@
       : NUMBER_SHORTCUT_HOLD_DURATION_MS;
   }
 
+  function isNumberShortcutInstantActive(options) {
+    const value = options && options.instantActive;
+    return typeof value === 'function'
+      ? Boolean(value())
+      : Boolean(value);
+  }
+
   function getPrimaryModifier(options) {
     const configured = String(options && options.primaryModifier || '').toLowerCase();
     if (configured === 'meta' || configured === 'ctrl') {
@@ -143,13 +150,17 @@
     state.options = options || state.options || {};
     container.setAttribute('data-number-shortcuts-scroll-locked', 'true');
     container.setAttribute('data-number-shortcuts-active', 'true');
-    state.activeTimer = setTimeout(function() {
-      if (numberShortcutStates.get(container) !== state) {
-        return;
-      }
-      numberShortcutStates.delete(container);
-      removeNumberShortcutAttributes(container);
-    }, getNumberShortcutTimeoutMs(state.options));
+    // In instant mode the numbers stay until the user acts (digit / any other
+    // key / Escape / blur), so no auto-dismiss timer is scheduled.
+    if (!isNumberShortcutInstantActive(state.options)) {
+      state.activeTimer = setTimeout(function() {
+        if (numberShortcutStates.get(container) !== state) {
+          return;
+        }
+        numberShortcutStates.delete(container);
+        removeNumberShortcutAttributes(container);
+      }, getNumberShortcutTimeoutMs(state.options));
+    }
     numberShortcutStates.set(container, state);
   }
 
@@ -220,6 +231,11 @@
         clearNumberShortcutState(container, { notifyHoldEnd: false });
         return false;
       }
+      if (state.phase === 'active' && isNumberShortcutInstantActive(state.options)) {
+        // Instant mode: releasing the primary modifier dismisses the numbers.
+        clearNumberShortcutState(container);
+        return false;
+      }
       if (state.phase !== 'armed') {
         return false;
       }
@@ -242,12 +258,16 @@
         clearNumberShortcutState(container);
         return false;
       }
-      if (state && (state.phase === 'holding' || state.phase === 'armed')) {
+      if (state && (state.phase === 'holding' || state.phase === 'armed' || state.phase === 'active')) {
         return false;
       }
       clearNumberShortcutState(container);
       if (!event.repeat) {
-        beginNumberShortcutHold(container, options, primaryModifier);
+        if (isNumberShortcutInstantActive(options)) {
+          enterNumberShortcutsActive(container, options);
+        } else {
+          beginNumberShortcutHold(container, options, primaryModifier);
+        }
       }
       return false;
     }
@@ -266,8 +286,12 @@
       consumeNumberShortcutEvent(event);
       return true;
     }
-    const plainNumber = !event.metaKey && !event.ctrlKey &&
-      !event.altKey && !event.shiftKey && /^[0-9]$/.test(key);
+    // In instant mode the digit is pressed while the primary modifier is still
+    // held, so the modifier keys are allowed there; otherwise digits must be plain.
+    const instantActive = isNumberShortcutInstantActive(state.options);
+    const plainNumber = /^[0-9]$/.test(key) && (instantActive
+      ? !event.altKey && !event.shiftKey
+      : !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey);
     if (!plainNumber) {
       cancelNumberShortcuts(container);
       return false;

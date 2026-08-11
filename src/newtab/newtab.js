@@ -118,6 +118,8 @@
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
   const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = SETTINGS.NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY ||
     '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
+  const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
+    '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -436,6 +438,7 @@
   let pageNoticeController = null;
   let newtabTopContentMode = 'brand';
   let newtabInputAutoFocusEnabled = false;
+  let numberShortcutInstantEnabled = false;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1249,6 +1252,28 @@
   }
 
   const initialNewtabInputAutoFocusReadyTask = loadNewtabInputAutoFocusEnabled();
+
+  function loadNumberShortcutInstantEnabled() {
+    if (!storageArea) {
+      numberShortcutInstantEnabled = false;
+      return Promise.resolve(numberShortcutInstantEnabled);
+    }
+    return new Promise((resolve) => {
+      storageArea.get([NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY], (result) => {
+        const rawValue = result && result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY];
+        numberShortcutInstantEnabled = normalizeNumberShortcutInstantEnabled(rawValue);
+        resolve(numberShortcutInstantEnabled);
+      });
+    });
+  }
+
+  const initialNumberShortcutInstantReadyTask = loadNumberShortcutInstantEnabled();
+
+  function normalizeNumberShortcutInstantEnabled(value) {
+    return typeof SETTINGS.normalizeNumberShortcutInstantEnabled === 'function'
+      ? SETTINGS.normalizeNumberShortcutInstantEnabled(value)
+      : value === true;
+  }
 
   function normalizeBookmarkFolderIconsVisible(value) {
     return typeof SETTINGS.normalizeBookmarkFolderIconsVisible === 'function'
@@ -6214,6 +6239,9 @@
   }
 
   function isBackgroundOpenEvent(event) {
+    if (numberShortcutInstantEnabled) {
+      return isMiddleClick(event);
+    }
     if (typeof NAVIGATION_DISPOSITION.isBackgroundOpenEvent === 'function') {
       return NAVIGATION_DISPOSITION.isBackgroundOpenEvent(event);
     }
@@ -11375,7 +11403,8 @@
         'Release to show numbers'
       ), false, { duration: 0 });
     },
-    onHoldEnd: hideToast
+    onHoldEnd: hideToast,
+    instantActive: () => numberShortcutInstantEnabled
   };
 
   function fallbackCopyText(text) {
@@ -13755,7 +13784,7 @@
     setSuggestionActionModifiersActive(
       Boolean(event && event.altKey),
       Boolean(event && event.shiftKey),
-      Boolean(event && (event.metaKey || event.ctrlKey))
+      Boolean(event && (event.metaKey || event.ctrlKey) && !numberShortcutInstantEnabled)
     );
   }
 

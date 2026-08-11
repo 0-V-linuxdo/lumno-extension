@@ -15,6 +15,7 @@
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = '_x_extension_motion_effects_enabled_2026_unique_';
+  const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
@@ -193,6 +194,10 @@
 
   function normalizeMotionEffectsEnabled(value) {
     return value !== false;
+  }
+
+  function normalizeNumberShortcutInstantEnabled(value) {
+    return value === true;
   }
 
   function shouldSkipEntryMotion(windowRef, motionEffectsEnabled) {
@@ -383,6 +388,7 @@
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+    NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
@@ -410,6 +416,7 @@
     normalizeBookmarkFolderIconsVisible,
     normalizeUpdateNoticeEnabled,
     normalizeMotionEffectsEnabled,
+    normalizeNumberShortcutInstantEnabled,
     shouldSkipEntryMotion,
     normalizeFaviconEnhancedFetchEnabled,
     normalizeOverlayOpenTabsDefaultVisible,

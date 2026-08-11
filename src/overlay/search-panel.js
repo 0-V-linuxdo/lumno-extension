@@ -249,6 +249,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     '_x_extension_overlay_enter_animation_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = overlayStorageKeys.motionEffectsEnabled ||
     '_x_extension_motion_effects_enabled_2026_unique_';
+  const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = overlayStorageKeys.numberShortcutInstantEnabled ||
+    '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = overlayStorageKeys.overlayTabPriority;
   const TAB_RANK_SCORE_DEBUG_STORAGE_KEY = overlayStorageKeys.tabRankScoreDebug;
   const storageRuntime = overlayRuntime.getStorageArea(chrome);
@@ -300,6 +302,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let initialOverlayOpenTabsDefaultVisibleReady = Promise.resolve();
   let documentPipEnabled = Boolean(normalizedOverlayContext.documentPipEnabled);
   let overlayThemeListenerAttached = false;
+  let numberShortcutInstantEnabled = false;
+  let initialNumberShortcutInstantReady = Promise.resolve();
   const initialOverlayEnterAnimationReady = overlayRuntime.getStorageValues(
     storageArea,
     [OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
@@ -317,6 +321,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       ? SETTINGS.normalizeMotionEffectsEnabled(result[MOTION_EFFECTS_ENABLED_STORAGE_KEY])
       : result[MOTION_EFFECTS_ENABLED_STORAGE_KEY] !== false;
     return motionEffectsEnabled;
+  });
+  initialNumberShortcutInstantReady = overlayRuntime.getStorageValues(
+    storageArea,
+    [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]
+  ).then((result) => {
+    numberShortcutInstantEnabled = typeof SETTINGS.normalizeNumberShortcutInstantEnabled === 'function'
+      ? SETTINGS.normalizeNumberShortcutInstantEnabled(result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY])
+      : result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY] === true;
+    return numberShortcutInstantEnabled;
   });
 
   function normalizeOverlaySearchBlacklistItems(items) {
@@ -1769,7 +1782,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           'Release to show numbers'
         ), false, { duration: 0 });
       },
-      onHoldEnd: hideOverlayToast
+      onHoldEnd: hideOverlayToast,
+      instantActive: () => numberShortcutInstantEnabled
     };
 
     function fallbackCopyText(text) {
@@ -4411,7 +4425,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       setSuggestionActionModifiersActive(
         Boolean(event && event.altKey),
         Boolean(event && event.shiftKey),
-        Boolean(event && (event.metaKey || event.ctrlKey))
+        Boolean(event && (event.metaKey || event.ctrlKey) && !numberShortcutInstantEnabled)
       );
     }
 
@@ -4447,7 +4461,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function shouldOpenSearchResultInBackgroundTab(event) {
       const config = {
-        openInBackgroundTab: Boolean(event && (event.metaKey || event.ctrlKey || isMiddleClick(event))),
+        openInBackgroundTab: Boolean(event && (
+          ((event.metaKey || event.ctrlKey) && !numberShortcutInstantEnabled) ||
+          isMiddleClick(event)
+        )),
         openInCurrentTab: Boolean(event && event.altKey)
       };
       if (SUGGESTION_ACTION_MODEL &&
@@ -4475,12 +4492,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getOpenDisposition(event, fallback) {
-      if (typeof NAVIGATION_DISPOSITION.getDisposition === 'function') {
-        return NAVIGATION_DISPOSITION.getDisposition(event, fallback);
+      if (numberShortcutInstantEnabled || typeof NAVIGATION_DISPOSITION.getDisposition !== 'function') {
+        return (isMiddleClick(event) || Boolean(event && (event.metaKey || event.ctrlKey) && !numberShortcutInstantEnabled))
+          ? 'backgroundTab'
+          : (fallback || 'newTab');
       }
-      return isMiddleClick(event) || Boolean(event && (event.metaKey || event.ctrlKey))
-        ? 'backgroundTab'
-        : (fallback || 'newTab');
+      return NAVIGATION_DISPOSITION.getDisposition(event, fallback);
     }
 
     function getSearchResultNewTabDisposition(event) {

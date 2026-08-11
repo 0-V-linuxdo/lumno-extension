@@ -234,6 +234,12 @@
   "settings_pinned_tab_recovery_desc": {
     "message": "記錄可恢復的置頂網頁分頁，瀏覽器重啟後自動補回"
   },
+  "settings_number_shortcut_instant_title": {
+    "message": "單按 Command 顯示數字跳轉"
+  },
+  "settings_number_shortcut_instant_desc": {
+    "message": "開啟後，指令列與搜尋建議中單按 Command/Ctrl 即顯示數字跳轉標記；「在背景新開」不再占用 Command（滑鼠中鍵仍可背景開啟）"
+  },
   "document_pip_picker_hint": {
     "message": "移動滑鼠選擇元素，點擊開啟懸浮窗，滾輪切換父層，Esc 取消。"
   },
