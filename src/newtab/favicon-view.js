@@ -18,6 +18,9 @@
     const shouldAvoidDirectFaviconForHost = typeof config.shouldAvoidDirectFaviconForHost === 'function'
       ? config.shouldAvoidDirectFaviconForHost
       : (() => false);
+    const shouldSkipPersistedFaviconForHost = typeof config.shouldSkipPersistedFaviconForHost === 'function'
+      ? config.shouldSkipPersistedFaviconForHost
+      : (() => false);
     const isEnhancedFaviconFetchEnabled = typeof config.isEnhancedFaviconFetchEnabled === 'function'
       ? config.isEnhancedFaviconFetchEnabled
       : (() => true);
@@ -399,7 +402,10 @@
       const session = img._xThemeFaviconSession;
       const hostKey = host || getHostFromUrl(url);
       const cacheKey = String(hostKey || url || '').trim();
-      const skipPersisted = Boolean(optionsArg && optionsArg.skipPersisted === true);
+      const skipPersisted = Boolean(
+        (optionsArg && optionsArg.skipPersisted === true) ||
+        shouldSkipPersistedFaviconForHost(hostKey)
+      );
       const persistedDataEntry = !skipPersisted && cacheKey
         ? getPersistedFaviconDataEntry(cacheKey)
         : null;
