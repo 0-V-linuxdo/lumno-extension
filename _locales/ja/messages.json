@@ -193,7 +193,7 @@
     "message": "新しいタブの内容幅"
   },
   "settings_bookmarks_title": {
-    "message": "ブックマーク"
+    "message": "ブックマークの行数"
   },
   "settings_bookmark_folder_icons_visible_title": {
     "message": "ブックマークフォルダ内のアイコンを表示"
@@ -410,6 +410,9 @@
   },
   "settings_bookmark_columns_title": {
     "message": "1行あたりのブックマーク数"
+  },
+  "settings_bookmark_columns_desc": {
+    "message": "1行の最大数を設定し、狭い画面では自動調整します"
   },
   "bookmark_columns_4": {
     "message": "1行に4個"

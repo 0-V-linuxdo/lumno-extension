@@ -182,6 +182,18 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--newtab-input-auto-f
   transform-origin: center top;
 }
 
+.x-lumno-feature-hint--update-notice[data-width-mode="container"] {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.x-lumno-feature-hint--update-notice .x-lumno-feature-hint__text {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .x-lumno-feature-hint--update-notice-newtab {
   margin-top: 10px;
 }

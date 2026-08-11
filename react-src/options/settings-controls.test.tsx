@@ -1,14 +1,20 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createRangeSliderControlController,
   createRequiredCheckboxGroupController,
   createSettingsControlsApi,
   createToggleControlController,
+  type RangeSliderControlController,
   type RequiredCheckboxGroupController,
   type ToggleControlController
 } from './settings-controls';
 
-let controllers: Array<RequiredCheckboxGroupController | ToggleControlController> = [];
+let controllers: Array<
+  RangeSliderControlController |
+  RequiredCheckboxGroupController |
+  ToggleControlController
+> = [];
 
 afterEach(() => {
   act(() => controllers.forEach((controller) => controller.destroy()));
@@ -91,6 +97,45 @@ describe('Options settings controls React islands', () => {
     act(() => controller.render({ checked: false, id: 'updates' }));
 
     expect(host.querySelector<HTMLInputElement>('input')?.checked).toBe(false);
+  });
+
+  it('renders the shared range slider and reports every integer step', () => {
+    const host = document.createElement('div');
+    const onInput = vi.fn();
+    document.body.appendChild(host);
+    const controller = createRangeSliderControlController(host, {
+      kind: 'bookmark-columns',
+      onInput
+    });
+    controllers.push(controller);
+
+    act(() => controller.render({
+      ariaLabel: '书签每行最多显示',
+      id: 'bookmark-columns',
+      max: 8,
+      min: 4,
+      step: 1,
+      ticks: [
+        { align: 'start', label: '4' },
+        { label: '6' },
+        { align: 'end', label: '8' }
+      ],
+      value: 6
+    }));
+
+    const input = host.querySelector<HTMLInputElement>('input[type="range"]');
+    expect(host.dataset.reactIsland).toBe('options-range-slider-control');
+    expect(input?.classList.contains('x-lumno-range-slider-input')).toBe(true);
+    expect(input?.value).toBe('6');
+    expect(host.querySelector('output')?.textContent).toBe('6');
+
+    act(() => {
+      if (!input) return;
+      input.value = '7';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(onInput).toHaveBeenCalledWith(7);
+    expect(host.querySelector('output')?.textContent).toBe('7');
   });
 
   it('keeps adapter-provided localized labels after an interaction rerender', () => {

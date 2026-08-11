@@ -1,6 +1,7 @@
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CSSProperties } from 'react';
+import { RangeSlider } from '../shared/range-slider';
 
 type WallpaperItem = {
   id: string;
@@ -44,18 +45,20 @@ function Switch({
   );
 }
 
+type RangeSliderTick = {
+  align?: string;
+  key?: string;
+  label: string;
+  percent?: number;
+  searchKey?: string;
+};
+
 function Scale({
   className = '',
   ticks
 }: {
   className?: string;
-  ticks: Array<{
-    align?: string;
-    key?: string;
-    label: string;
-    percent?: number;
-    searchKey?: string;
-  }>;
+  ticks: RangeSliderTick[];
 }) {
   return (
     <div
@@ -70,7 +73,7 @@ function Scale({
           data-align={tick.align || 'center'}
           data-overlay-tick={tick.key}
           data-search-width-tick={tick.searchKey}
-          key={`${tick.key || tick.searchKey || index}-${index}`}
+          key={tick.key || tick.searchKey || index}
           style={
             typeof tick.percent === 'number'
               ? ({
@@ -103,7 +106,7 @@ function SliderControl({
   labelRef: string;
   sliderClass?: string;
   sliderRef: string;
-  ticks: Array<{ align?: string; key?: string; label: string }>;
+  ticks: RangeSliderTick[];
   visible?: boolean;
   wrapClass?: string;
 }) {
@@ -117,17 +120,16 @@ function SliderControl({
       <div className="x-nt-overlay-control-header">
         <span {...ref(labelRef)} className={labelClass} />
       </div>
-      <div className={wrapClass}>
-        <input
-          {...ref(sliderRef)}
-          className={sliderClass}
-          max="100"
-          min="0"
-          step="1"
-          type="range"
-        />
+      <RangeSlider
+        {...ref(sliderRef)}
+        className={wrapClass}
+        inputClass={sliderClass}
+        max="100"
+        min="0"
+        step="1"
+      >
         <Scale ticks={ticks} />
-      </div>
+      </RangeSlider>
     </div>
   );
 }
@@ -207,7 +209,7 @@ function FaviconTile({
 }
 
 function WallpaperPanel({ model }: { model: Record<string, any> }) {
-  const defaultTicks = [
+  const defaultTicks: RangeSliderTick[] = [
     { align: 'start', label: '0' },
     { key: 'default', label: 'Default' },
     { align: 'end', label: '100%' }
@@ -309,21 +311,20 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                   className="x-nt-overlay-value"
                 />
               </div>
-              <div className="x-nt-overlay-slider-wrap x-nt-search-width-slider-wrap">
-                <input
-                  {...ref('searchWidthSlider')}
-                  className="x-nt-overlay-slider x-nt-search-width-slider"
-                  data-value-suffix=" px"
-                  max={String(model.searchWidth.max)}
-                  min={String(model.searchWidth.min)}
-                  step="1"
-                  type="range"
-                />
+              <RangeSlider
+                {...ref('searchWidthSlider')}
+                className="x-nt-overlay-slider-wrap x-nt-search-width-slider-wrap"
+                data-value-suffix=" px"
+                inputClass="x-nt-overlay-slider x-nt-search-width-slider"
+                max={String(model.searchWidth.max)}
+                min={String(model.searchWidth.min)}
+                step="1"
+              >
                 <Scale
                   className="x-nt-search-width-scale"
                   ticks={model.searchWidth.ticks}
                 />
-              </div>
+              </RangeSlider>
               <div className="x-nt-appearance-setting-row">
                 <span
                   {...ref('inputAutoFocusTitle')}

@@ -1,8 +1,16 @@
-import { useEffect, useState } from 'react';
+import {
+  type CSSProperties,
+  useEffect,
+  useRef,
+  useState
+} from 'react';
 import {
   createReactRootController,
   type ReactRootController
 } from './root-controller';
+import {
+  RangeSlider
+} from '../shared/range-slider';
 
 export interface ToggleControlRenderModel {
   ariaLabel?: string;
@@ -19,6 +27,28 @@ export interface ToggleControlControllerOptions {
 
 export type ToggleControlController =
   ReactRootController<ToggleControlRenderModel>;
+
+export interface RangeSliderControlRenderModel {
+  ariaLabel: string;
+  disabled?: boolean;
+  id: string;
+  max: number;
+  min: number;
+  step: number;
+  ticks: Array<{
+    align?: 'start' | 'center' | 'end';
+    label: string;
+  }>;
+  value: number;
+}
+
+export interface RangeSliderControlControllerOptions {
+  kind: string;
+  onInput(value: number): void;
+}
+
+export type RangeSliderControlController =
+  ReactRootController<RangeSliderControlRenderModel>;
 
 export interface RequiredCheckboxItemModel {
   checked: boolean;
@@ -131,6 +161,78 @@ function RequiredCheckboxGroup({
   );
 }
 
+function RangeSliderControl({
+  model,
+  onInput
+}: {
+  model: RangeSliderControlRenderModel;
+  onInput(value: number): void;
+}) {
+  const [value, setValue] = useState(model.value);
+  const valueRef = useRef(model.value);
+
+  useEffect(() => {
+    valueRef.current = model.value;
+    setValue(model.value);
+  }, [model.value]);
+
+  const handleValueChange = (next: number) => {
+    if (next === valueRef.current) {
+      return;
+    }
+    valueRef.current = next;
+    setValue(next);
+    onInput(next);
+  };
+
+  return (
+    <div className="_x_extension_range_slider_control_2026_unique_">
+      <RangeSlider
+        aria-label={model.ariaLabel}
+        aria-valuetext={String(value)}
+        className="x-lumno-range-slider"
+        disabled={model.disabled}
+        id={model.id}
+        inputClass="x-lumno-range-slider-input"
+        max={model.max}
+        min={model.min}
+        onChange={(event) => {
+          handleValueChange(Number(event.currentTarget.value));
+        }}
+        onInput={(event) => {
+          handleValueChange(Number(event.currentTarget.value));
+        }}
+        step={model.step}
+        style={{
+          '--x-lumno-range-slider-percent': `${
+            ((value - model.min) / (model.max - model.min)) * 100
+          }%`
+        } as CSSProperties}
+        value={value}
+      >
+        <div aria-hidden="true" className="x-lumno-range-slider-scale">
+          {model.ticks.map((tick) => (
+            <span
+              className="x-lumno-range-slider-tick"
+              data-align={tick.align || 'center'}
+              key={`${tick.align || 'center'}-${tick.label}`}
+            >
+              {tick.label}
+            </span>
+          ))}
+        </div>
+      </RangeSlider>
+      <output
+        aria-hidden="true"
+        className="_x_extension_range_slider_value_2026_unique_"
+        htmlFor={model.id}
+      >
+        {value}
+      </output>
+    </div>
+  );
+}
+
 export function createToggleControlController(
   host: HTMLElement | null,
   options: ToggleControlControllerOptions
@@ -163,9 +265,26 @@ export function createRequiredCheckboxGroupController(
   );
 }
 
+export function createRangeSliderControlController(
+  host: HTMLElement | null,
+  options: RangeSliderControlControllerOptions
+): RangeSliderControlController {
+  if (host) {
+    host.dataset.reactIsland = 'options-range-slider-control';
+    host.dataset.rangeSliderKind = options.kind;
+  }
+  return createReactRootController(
+    host,
+    (model: RangeSliderControlRenderModel) => (
+      <RangeSliderControl model={model} onInput={options.onInput} />
+    )
+  );
+}
+
 export function createSettingsControlsApi() {
   return Object.freeze({
     implementation: 'react',
+    createRangeSliderControlController,
     createRequiredCheckboxGroupController,
     createToggleControlController
   });

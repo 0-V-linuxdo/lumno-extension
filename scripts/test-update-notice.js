@@ -428,6 +428,23 @@ function flushMicrotasks() {
       updateNoticeCss.includes('pointer-events: none;'),
     'overlay update notice should blur in when it is mounted'
   );
+  const updateNoticeSingleRowRuleMatch = updateNoticeCss.match(
+    /\.x-lumno-feature-hint--update-notice\[data-width-mode="container"\] \{([\s\S]*?)\n\}/
+  );
+  const updateNoticeTitleRuleMatch = updateNoticeCss.match(
+    /\.x-lumno-feature-hint--update-notice \.x-lumno-feature-hint__text \{([\s\S]*?)\n\}/
+  );
+  assert(
+    updateNoticeSingleRowRuleMatch &&
+      updateNoticeSingleRowRuleMatch[1].includes('flex-wrap: nowrap;') &&
+      updateNoticeSingleRowRuleMatch[1].includes('white-space: nowrap;') &&
+      updateNoticeTitleRuleMatch &&
+      updateNoticeTitleRuleMatch[1].includes('overflow: hidden;') &&
+      updateNoticeTitleRuleMatch[1].includes('overflow-wrap: normal;') &&
+      updateNoticeTitleRuleMatch[1].includes('text-overflow: ellipsis;') &&
+      updateNoticeTitleRuleMatch[1].includes('white-space: nowrap;'),
+    'update notice title should stay on one row and truncate with an ellipsis'
+  );
   assert(
     updateNoticeCss.includes('gap: 3px;') &&
       updateNoticeCss.includes('padding: 2px 10px 2px 2px;'),

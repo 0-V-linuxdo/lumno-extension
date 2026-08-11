@@ -1493,15 +1493,48 @@ function testNewtabUsesDistinctMobileGridColumns() {
 
 testNewtabUsesDistinctMobileGridColumns();
 
+function testBookmarkColumnPreferenceRemainsAnAdaptiveMaximum() {
+  const config = {
+    mobileBreakpointPx: 640,
+    mobileColumns: 2,
+    compactBreakpointPx: 860,
+    compactColumns: 2,
+    contentMaxWidth: 1548,
+    targetColumnWidth: 154,
+    gap: 12,
+    minColumns: 2,
+    maxColumns: 7
+  };
+
+  assert.strictEqual(
+    layoutRuntime.getAdaptiveGridColumnCount({ ...config, viewportWidth: 1600 }),
+    7,
+    'wide screens should use the selected maximum when it fits'
+  );
+  assert.strictEqual(
+    layoutRuntime.getAdaptiveGridColumnCount({ ...config, viewportWidth: 1000 }),
+    5,
+    'medium screens should reduce the selected maximum to the available width'
+  );
+  assert.strictEqual(
+    layoutRuntime.getAdaptiveGridColumnCount({ ...config, viewportWidth: 390 }),
+    2,
+    'phone screens should keep the mobile adaptive tier'
+  );
+}
+
+testBookmarkColumnPreferenceRemainsAnAdaptiveMaximum();
+
 function testBookmarkGridDefaultsToSixColumns() {
   const optionsJs = fs.readFileSync(path.join(repoRoot, 'src/options/options.js'), 'utf8');
   const optionsHtml = fs.readFileSync(path.join(repoRoot, 'src/options/options.html'), 'utf8');
+  const settingsSource = fs.readFileSync(path.join(repoRoot, 'src/shared/settings.js'), 'utf8');
   const onboardingHtml = fs.readFileSync(path.join(repoRoot, 'src/onboarding/onboarding.html'), 'utf8');
 
   assert.match(newtabSource, /let currentBookmarkColumns = 6;/);
   assert.match(
     newtabSource,
-    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?return 6;\s*\}/
+    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?SETTINGS\.normalizeBookmarkColumns/
   );
   assert.match(
     newtabHtml,
@@ -1509,12 +1542,23 @@ function testBookmarkGridDefaultsToSixColumns() {
   );
   assert.match(
     optionsJs,
-    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?return 6;\s*\}/
+    /function normalizeBookmarkColumns\(value\) \{[\s\S]*?SETTINGS\.normalizeBookmarkColumns/
   );
   assert.match(
     optionsHtml,
-    /<option value="6" data-i18n="bookmark_columns_6" selected>/
+    /id="_x_extension_bookmark_columns_control_2026_unique_"/
   );
+  assert.match(
+    optionsHtml,
+    /id="_x_extension_bookmark_rows_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmarks_title">书签行数<[\s\S]*?id="_x_extension_bookmark_count_select_2024_unique_"/
+  );
+  assert.match(
+    optionsHtml,
+    /id="_x_extension_bookmark_columns_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmark_columns_title">书签每行数量<[\s\S]*?id="_x_extension_bookmark_columns_control_2026_unique_"/
+  );
+  assert.doesNotMatch(optionsHtml, /data-i18n="settings_bookmark_columns_desc"/);
+  assert.match(settingsSource, /parsed >= 4 && parsed <= 8/);
+  assert.match(optionsJs, /min:\s*4,[\s\S]*?max:\s*8,[\s\S]*?step:\s*1/);
   assert.match(onboardingHtml, /--x-nt-bookmark-columns: 6;/);
 }
 

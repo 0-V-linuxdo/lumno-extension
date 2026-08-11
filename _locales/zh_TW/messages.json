@@ -193,7 +193,7 @@
     "message": "新分頁內容寬度"
   },
   "settings_bookmarks_title": {
-    "message": "書籤"
+    "message": "書籤行數"
   },
   "settings_bookmark_folder_icons_visible_title": {
     "message": "顯示書籤資料夾內圖示"
@@ -409,7 +409,10 @@
     "message": "顯示 8 行"
   },
   "settings_bookmark_columns_title": {
-    "message": "書籤每行顯示"
+    "message": "書籤每行數量"
+  },
+  "settings_bookmark_columns_desc": {
+    "message": "設定每行最多顯示數量，窄螢幕會自動適配"
   },
   "bookmark_columns_4": {
     "message": "每行 4 個"

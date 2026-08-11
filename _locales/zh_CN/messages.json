@@ -193,7 +193,7 @@
     "message": "新标签页内容宽度"
   },
   "settings_bookmarks_title": {
-    "message": "书签"
+    "message": "书签行数"
   },
   "settings_bookmark_folder_icons_visible_title": {
     "message": "展示书签文件夹内图标"
@@ -409,7 +409,10 @@
     "message": "显示 8 行"
   },
   "settings_bookmark_columns_title": {
-    "message": "书签每行显示"
+    "message": "书签每行数量"
+  },
+  "settings_bookmark_columns_desc": {
+    "message": "设置每行最多显示数量，窄屏会自动适配"
   },
   "bookmark_columns_4": {
     "message": "每行 4 个"

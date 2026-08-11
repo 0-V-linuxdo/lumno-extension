@@ -27,7 +27,7 @@ const expectedMessages = {
   settings_restricted_title: '制限ページでの動作',
   shortcut_reference_title: 'キー一覧',
   newtab_file_access_notice_title: 'ローカルのPDF/HTMLでLumnoを使うには、「ファイルのURLへのアクセスを許可する」をオンにしてください',
-  settings_bookmarks_title: 'ブックマーク',
+  settings_bookmarks_title: 'ブックマークの行数',
   settings_bookmark_columns_title: '1行あたりのブックマーク数',
   bookmarks_heading: 'ブックマーク',
   bookmarks_open_manager: 'ブックマークマネージャーを開く',

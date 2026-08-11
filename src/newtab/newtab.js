@@ -1292,8 +1292,11 @@
   }
 
   function normalizeBookmarkColumns(value) {
-    const parsed = Number.parseInt(value, 10);
-    if (parsed === 4 || parsed === 6 || parsed === 8) {
+    if (typeof SETTINGS.normalizeBookmarkColumns === 'function') {
+      return SETTINGS.normalizeBookmarkColumns(value);
+    }
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 4 && parsed <= 8) {
       return parsed;
     }
     return 6;

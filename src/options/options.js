@@ -43,10 +43,7 @@
     ? overlayEnterAnimationTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
   const bookmarkCountSelect = document.getElementById('_x_extension_bookmark_count_select_2024_unique_');
-  const bookmarkColumnsSelect = document.getElementById('_x_extension_bookmark_columns_select_2024_unique_');
-  const bookmarkColumnsSelectWrap = bookmarkColumnsSelect
-    ? bookmarkColumnsSelect.closest('._x_extension_select_wrap_2024_unique_')
-    : null;
+  const bookmarkColumnsControlHost = document.getElementById('_x_extension_bookmark_columns_control_2026_unique_');
   const bookmarkFolderIconsVisibleToggle = document.getElementById('_x_extension_bookmark_folder_icons_visible_toggle_2026_unique_');
   const autoPipToggle = document.getElementById('_x_extension_auto_pip_toggle_2024_unique_');
   const tabSwitcherToggle = document.getElementById('_x_extension_tab_switcher_toggle_2026_unique_');
@@ -652,6 +649,7 @@
   let currentOverlayEnterAnimation = 'elastic';
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
+  let currentBookmarkColumns = 6;
   let currentNewtabTopContentMode = 'brand';
   let currentActiveSettingsTab = 'appearance';
   const optionsSelectControlRecords = new Map();
@@ -714,7 +712,6 @@
     [languageSelect, 'language'],
     [recentCountSelect, 'recent-count'],
     [bookmarkCountSelect, 'bookmark-count'],
-    [bookmarkColumnsSelect, 'bookmark-columns'],
     [selectionQuickActionsProviderSelect, 'selection-quick-actions-provider']
   ].forEach(([select, kind]) => {
     const record = registerOptionsSelectControl(select, kind);
@@ -722,6 +719,43 @@
       renderOptionsSelectControl(select);
     }
   });
+  const bookmarkColumnsController =
+    typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
+      ? optionsSettingsControlsApi.createRangeSliderControlController(
+          bookmarkColumnsControlHost,
+          {
+            kind: 'bookmark-columns',
+            onInput(value) {
+              const nextColumns = normalizeBookmarkColumns(value);
+              if (!storageArea) {
+                return;
+              }
+              storageArea.set({ [BOOKMARK_COLUMNS_STORAGE_KEY]: nextColumns });
+              notifyNewtabSectionsRefresh('bookmarks');
+            }
+          }
+        )
+      : null;
+  function renderBookmarkColumnsControl(value) {
+    if (!bookmarkColumnsController) {
+      return;
+    }
+    currentBookmarkColumns = normalizeBookmarkColumns(value);
+    bookmarkColumnsController.render({
+      ariaLabel: getMessage('settings_bookmark_columns_title', 'Bookmarks per row'),
+      id: '_x_extension_bookmark_columns_slider_2026_unique_',
+      min: 4,
+      max: 8,
+      step: 1,
+      ticks: [
+        { align: 'start', label: '4' },
+        { label: '6' },
+        { align: 'end', label: '8' }
+      ],
+      value: currentBookmarkColumns
+    });
+  }
+  renderBookmarkColumnsControl(6);
   syncSelectionQuickActionsProviderAvailability();
   const SETTINGS_TAB_KEYS = Object.freeze([
     'general',
@@ -1317,8 +1351,11 @@
   }
 
   function normalizeBookmarkColumns(value) {
-    const parsed = Number.parseInt(value, 10);
-    if (parsed === 4 || parsed === 6 || parsed === 8) {
+    if (typeof SETTINGS.normalizeBookmarkColumns === 'function') {
+      return SETTINGS.normalizeBookmarkColumns(value);
+    }
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 4 && parsed <= 8) {
       return parsed;
     }
     return 6;
@@ -1342,14 +1379,14 @@
       : (value === 'fade' ? 'fade' : 'elastic');
   }
 
-  function updateBookmarkColumnsSelectVisibility(countValue) {
-    if (!bookmarkColumnsSelectWrap) {
+  function updateBookmarkColumnsControlVisibility(countValue) {
+    if (!bookmarkColumnsControlHost) {
       return;
     }
     const parsed = Number.parseInt(countValue, 10);
     const shouldHide = Number.isFinite(parsed) ? parsed <= 0 : false;
-    bookmarkColumnsSelectWrap.style.setProperty('display', shouldHide ? 'none' : 'inline-flex');
-    bookmarkColumnsSelectWrap.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+    bookmarkColumnsControlHost.style.setProperty('display', shouldHide ? 'none' : 'block');
+    bookmarkColumnsControlHost.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
   }
 
   function normalizeOverlayTabQuickSwitch(value) {
@@ -2729,6 +2766,7 @@
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
       setNewtabTopContentTabState(currentNewtabTopContentMode);
+      renderBookmarkColumnsControl(currentBookmarkColumns);
       renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
       if (confirmOk) confirmOk.textContent = getMessage('confirm_ok', '确认');
@@ -4069,21 +4107,11 @@
   if (bookmarkCountSelect) {
     bookmarkCountSelect.addEventListener('change', () => {
       const nextCount = normalizeBookmarkCount(bookmarkCountSelect.value);
-      updateBookmarkColumnsSelectVisibility(nextCount);
+      updateBookmarkColumnsControlVisibility(nextCount);
       if (!storageArea) {
         return;
       }
       storageArea.set({ [BOOKMARK_COUNT_STORAGE_KEY]: nextCount });
-      notifyNewtabSectionsRefresh('bookmarks');
-    });
-  }
-  if (bookmarkColumnsSelect) {
-    bookmarkColumnsSelect.addEventListener('change', () => {
-      const nextColumns = normalizeBookmarkColumns(bookmarkColumnsSelect.value);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [BOOKMARK_COLUMNS_STORAGE_KEY]: nextColumns });
       notifyNewtabSectionsRefresh('bookmarks');
     });
   }
@@ -4670,7 +4698,7 @@
       if (bookmarkCountSelect) {
         setOptionsSelectState(bookmarkCountSelect, String(count));
       }
-      updateBookmarkColumnsSelectVisibility(count);
+      updateBookmarkColumnsControlVisibility(count);
       if (stored !== count) {
         storageArea.set({ [BOOKMARK_COUNT_STORAGE_KEY]: count });
       }
@@ -4679,9 +4707,7 @@
     storageArea.get([BOOKMARK_COLUMNS_STORAGE_KEY], (result) => {
       const stored = result[BOOKMARK_COLUMNS_STORAGE_KEY];
       const columns = normalizeBookmarkColumns(stored);
-      if (bookmarkColumnsSelect) {
-        setOptionsSelectState(bookmarkColumnsSelect, String(columns));
-      }
+      renderBookmarkColumnsControl(columns);
       if (stored !== columns) {
         storageArea.set({ [BOOKMARK_COLUMNS_STORAGE_KEY]: columns });
       }
@@ -5906,13 +5932,12 @@
     if (changes[BOOKMARK_COUNT_STORAGE_KEY] && bookmarkCountSelect) {
       const stored = normalizeBookmarkCount(changes[BOOKMARK_COUNT_STORAGE_KEY].newValue);
       setOptionsSelectState(bookmarkCountSelect, String(stored));
-      updateBookmarkColumnsSelectVisibility(stored);
+      updateBookmarkColumnsControlVisibility(stored);
       refreshCustomSelects();
     }
-    if (changes[BOOKMARK_COLUMNS_STORAGE_KEY] && bookmarkColumnsSelect) {
+    if (changes[BOOKMARK_COLUMNS_STORAGE_KEY]) {
       const stored = normalizeBookmarkColumns(changes[BOOKMARK_COLUMNS_STORAGE_KEY].newValue);
-      setOptionsSelectState(bookmarkColumnsSelect, String(stored));
-      refreshCustomSelects();
+      renderBookmarkColumnsControl(stored);
     }
     if (changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY] && bookmarkFolderIconsVisibleToggle) {
       const raw = changes[BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY].newValue;

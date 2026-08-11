@@ -255,8 +255,8 @@ assert(
       fs.statSync(sharedBundlePath).size +
       fs.statSync(tabSwitcherSharedBundlePath).size +
       fs.statSync(optionsBundlePath).size <=
-    250 * 1024,
-  'the Options React route should stay within its 250 KiB uncompressed budget'
+    252 * 1024,
+  'the Options React route should stay within its 252 KiB uncompressed budget'
 );
 assert(
   zlib.gzipSync(runtimeBundle).length +
@@ -276,8 +276,8 @@ assert(
 );
 assert(
   bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    706 * 1024,
-  'all shared React artifacts and four page entries should stay within their 706 KiB package budget'
+    708 * 1024,
+  'all shared React artifacts and four page entries should stay within their 708 KiB package budget'
 );
 assert(
   bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=

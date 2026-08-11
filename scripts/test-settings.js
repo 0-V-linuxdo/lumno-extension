@@ -94,6 +94,14 @@ assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(false), false);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(true), true);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(undefined), true);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible('false'), true);
+assert.strictEqual(settings.normalizeBookmarkColumns(4), 4);
+assert.strictEqual(settings.normalizeBookmarkColumns('5'), 5);
+assert.strictEqual(settings.normalizeBookmarkColumns(6), 6);
+assert.strictEqual(settings.normalizeBookmarkColumns(7), 7);
+assert.strictEqual(settings.normalizeBookmarkColumns(8), 8);
+assert.strictEqual(settings.normalizeBookmarkColumns(3), 6);
+assert.strictEqual(settings.normalizeBookmarkColumns(9), 6);
+assert.strictEqual(settings.normalizeBookmarkColumns(5.5), 6);
 assert.strictEqual(
   settings.BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
   '_x_extension_bookmark_folder_icons_visible_2026_unique_'

@@ -1085,6 +1085,154 @@
         gap: 10px;
         flex-wrap: wrap;
       }
+      #_x_extension_bookmark_columns_control_2026_unique_ {
+        width: 210px;
+        min-width: 170px;
+      }
+      ._x_extension_range_slider_control_2026_unique_ {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%;
+      }
+      .x-lumno-range-slider {
+        --x-lumno-range-slider-thumb-size: 16px;
+        position: relative;
+        flex: 1 1 auto;
+        height: 38px;
+        min-width: 0;
+      }
+      .x-lumno-range-slider-input {
+        appearance: none;
+        -webkit-appearance: none;
+        position: absolute;
+        z-index: 2;
+        top: 8px;
+        left: 0;
+        width: 100%;
+        height: 22px;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      .x-lumno-range-slider-input::-webkit-slider-runnable-track {
+        height: 5px;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          var(--panel-text) 0%,
+          var(--panel-text) var(--x-lumno-range-slider-percent, 50%),
+          var(--tab-border) var(--x-lumno-range-slider-percent, 50%),
+          var(--tab-border) 100%
+        );
+      }
+      .x-lumno-range-slider-input::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: var(--x-lumno-range-slider-thumb-size);
+        height: var(--x-lumno-range-slider-thumb-size);
+        margin-top: -5.5px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #3d4657 0%, #111827 100%);
+        border: 1px solid rgba(10, 15, 26, 0.92);
+        box-shadow: inset 0 1px 1.4px rgba(255, 255, 255, 0.28),
+          inset 0 -1px 1.6px rgba(0, 0, 0, 0.28),
+          0 4px 10px rgba(15, 23, 42, 0.24);
+        filter: brightness(1);
+        transition: filter 150ms ease, box-shadow 150ms ease;
+      }
+      .x-lumno-range-slider-input:not(:disabled):hover::-webkit-slider-thumb,
+      .x-lumno-range-slider-input:not(:disabled):focus-visible::-webkit-slider-thumb {
+        filter: brightness(1.16) saturate(1.04);
+        box-shadow: inset 0 1px 1.4px rgba(255, 255, 255, 0.36),
+          inset 0 -1px 1.6px rgba(0, 0, 0, 0.24),
+          0 5px 12px rgba(15, 23, 42, 0.28);
+      }
+      .x-lumno-range-slider-input:not(:disabled):active::-webkit-slider-thumb {
+        filter: brightness(0.96) saturate(1.02);
+      }
+      .x-lumno-range-slider-input:focus-visible {
+        outline: 2px solid var(--input-focus-color);
+        outline-offset: 3px;
+        border-radius: 999px;
+      }
+      .x-lumno-range-slider-scale {
+        position: absolute;
+        z-index: 1;
+        inset: 0 calc(var(--x-lumno-range-slider-thumb-size) / 2);
+        display: grid;
+        grid-template-columns: repeat(var(--x-lumno-range-slider-tick-count, 3), 1fr);
+        align-items: start;
+        margin: 0;
+        color: var(--panel-subtext);
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 500;
+        pointer-events: none;
+        user-select: none;
+      }
+      .x-lumno-range-slider-tick {
+        position: relative;
+        height: 38px;
+        padding-top: 28px;
+        white-space: nowrap;
+      }
+      .x-lumno-range-slider-tick::before {
+        content: "";
+        position: absolute;
+        top: 19px;
+        width: 1px;
+        height: 13px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--panel-text) 34%, transparent);
+        transform: translateY(-50%);
+      }
+      .x-lumno-range-slider-tick[data-align="start"] {
+        text-align: left;
+      }
+      .x-lumno-range-slider-tick[data-align="start"]::before {
+        left: 0;
+      }
+      .x-lumno-range-slider-tick[data-align="center"] {
+        text-align: center;
+      }
+      .x-lumno-range-slider-tick[data-align="center"]::before {
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      .x-lumno-range-slider-tick[data-align="end"] {
+        text-align: right;
+      }
+      .x-lumno-range-slider-tick[data-align="end"]::before {
+        right: 0;
+      }
+      ._x_extension_range_slider_value_2026_unique_ {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 24px;
+        margin-top: 7px;
+        padding: 0 7px;
+        border: 1px solid var(--tab-border);
+        border-radius: 8px;
+        background: var(--control-bg);
+        color: var(--panel-text);
+        box-sizing: border-box;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      #_x_extension_settings_panel_2024_unique_[data-theme="dark"]
+        .x-lumno-range-slider-input::-webkit-slider-thumb {
+        background: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%);
+        border-color: rgba(255, 255, 255, 0.78);
+        box-shadow: inset 0 1px 1.4px rgba(255, 255, 255, 0.85),
+          inset 0 -1px 1.6px rgba(15, 23, 42, 0.18),
+          0 4px 10px rgba(0, 0, 0, 0.36);
+      }
       ._x_extension_sync_status_2024_unique_ {
         display: inline-flex;
         align-items: center;
@@ -2316,6 +2464,16 @@
           margin-left: 12px;
         }
       }
+      @media (max-width: 480px) {
+        #_x_extension_bookmark_columns_setting_row_2026_unique_ {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        #_x_extension_bookmark_columns_control_2026_unique_ {
+          min-width: 0;
+          width: 100%;
+        }
+      }
       .ri-icon {
         width: var(--ri-size, 16px);
         height: var(--ri-size, 16px);
@@ -2815,36 +2973,29 @@
               <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
             </label>
           </div>
-          <div class="_x_extension_setting_row_2024_unique_">
+          <div id="_x_extension_bookmark_rows_setting_row_2026_unique_" class="_x_extension_setting_row_2024_unique_">
             <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_bookmarks_title">书签</p>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_bookmarks_title">书签行数</p>
             </div>
-            <div class="_x_extension_recent_select_group_2024_unique_">
-              <div class="_x_extension_select_wrap_2024_unique_ _x_extension_custom_select_2024_unique_ _x_extension_select_wrap_auto_2024_unique_ _x_extension_select_align_right_2024_unique_" data-select="_x_extension_bookmark_columns_select_2024_unique_">
-                <select id="_x_extension_bookmark_columns_select_2024_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true">
-                  <option value="4" data-i18n="bookmark_columns_4">每行 4 个</option>
-                  <option value="6" data-i18n="bookmark_columns_6" selected>每行 6 个</option>
-                  <option value="8" data-i18n="bookmark_columns_8">每行 8 个</option>
-                </select>
-                <button class="_x_extension_select_trigger_2024_unique_" type="button" aria-haspopup="listbox" aria-expanded="false">
-                  <i class="_x_extension_select_icon_2024_unique_ ri-icon ri-size-16 ri-arrow-down-s-line" aria-hidden="true"></i>
-                </button>
-                <div class="_x_extension_select_menu_2024_unique_" role="listbox"></div>
-              </div>
-              <div class="_x_extension_select_wrap_2024_unique_ _x_extension_custom_select_2024_unique_ _x_extension_select_wrap_auto_2024_unique_ _x_extension_select_align_right_2024_unique_" data-select="_x_extension_bookmark_count_select_2024_unique_">
-                <select id="_x_extension_bookmark_count_select_2024_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true">
-                  <option value="0" data-i18n="bookmark_count_off">不显示</option>
-                  <option value="4" data-i18n="bookmark_count_4">显示 1 行</option>
-                  <option value="8" data-i18n="bookmark_count_8" selected>显示 2 行</option>
-                  <option value="16" data-i18n="bookmark_count_16">显示 4 行</option>
-                  <option value="32" data-i18n="bookmark_count_32">显示 8 行</option>
-                </select>
-                <button class="_x_extension_select_trigger_2024_unique_" type="button" aria-haspopup="listbox" aria-expanded="false">
-                  <i class="_x_extension_select_icon_2024_unique_ ri-icon ri-size-16 ri-arrow-down-s-line" aria-hidden="true"></i>
-                </button>
-                <div class="_x_extension_select_menu_2024_unique_" role="listbox"></div>
-              </div>
+            <div class="_x_extension_select_wrap_2024_unique_ _x_extension_custom_select_2024_unique_ _x_extension_select_wrap_auto_2024_unique_ _x_extension_select_align_right_2024_unique_" data-select="_x_extension_bookmark_count_select_2024_unique_">
+              <select id="_x_extension_bookmark_count_select_2024_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true">
+                <option value="0" data-i18n="bookmark_count_off">不显示</option>
+                <option value="4" data-i18n="bookmark_count_4">显示 1 行</option>
+                <option value="8" data-i18n="bookmark_count_8" selected>显示 2 行</option>
+                <option value="16" data-i18n="bookmark_count_16">显示 4 行</option>
+                <option value="32" data-i18n="bookmark_count_32">显示 8 行</option>
+              </select>
+              <button class="_x_extension_select_trigger_2024_unique_" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <i class="_x_extension_select_icon_2024_unique_ ri-icon ri-size-16 ri-arrow-down-s-line" aria-hidden="true"></i>
+              </button>
+              <div class="_x_extension_select_menu_2024_unique_" role="listbox"></div>
             </div>
+          </div>
+          <div id="_x_extension_bookmark_columns_setting_row_2026_unique_" class="_x_extension_setting_row_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_bookmark_columns_title">书签每行数量</p>
+            </div>
+            <div id="_x_extension_bookmark_columns_control_2026_unique_"></div>
           </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
             <div>
