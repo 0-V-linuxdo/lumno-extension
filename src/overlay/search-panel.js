@@ -247,6 +247,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const OVERLAY_SIZE_MODE_STORAGE_KEY = overlayStorageKeys.overlaySizeMode;
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = overlayStorageKeys.overlayEnterAnimation ||
     '_x_extension_overlay_enter_animation_2026_unique_';
+  const OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY =
+    overlayStorageKeys.overlayPageThemeAdaptationEnabled ||
+    '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = overlayStorageKeys.motionEffectsEnabled ||
     '_x_extension_motion_effects_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = overlayStorageKeys.overlayTabPriority;
@@ -276,6 +279,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySizeMode = 'standard';
   let overlayEnterAnimation = 'elastic';
   let motionEffectsEnabled = true;
+  let overlayPageThemeAdaptationEnabled = true;
   const OVERLAY_ENTER_MOTION = Object.freeze({
     elastic: Object.freeze({
       opacityDurationMs: 130,
@@ -437,6 +441,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   function normalizeOverlayOpenTabsDefaultVisible(value) {
     return typeof SETTINGS.normalizeOverlayOpenTabsDefaultVisible === 'function'
       ? SETTINGS.normalizeOverlayOpenTabsDefaultVisible(value)
+      : value !== false;
+  }
+
+  function normalizeOverlayPageThemeAdaptationEnabled(value) {
+    return typeof SETTINGS.normalizeOverlayPageThemeAdaptationEnabled === 'function'
+      ? SETTINGS.normalizeOverlayPageThemeAdaptationEnabled(value)
       : value !== false;
   }
 
@@ -1681,7 +1691,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayToastElement.setAttribute('data-theme', nextResolvedTheme || 'light');
       }
       if (mode === 'system') {
-        startOverlayPageThemeObserver();
+        if (overlayPageThemeAdaptationEnabled) {
+          startOverlayPageThemeObserver();
+        } else {
+          stopOverlayPageThemeObserver();
+        }
         if (!overlayThemeListenerAttached) {
           overlayThemeMediaListener = function() {
             if (overlayThemeMode === 'system') {
@@ -3015,17 +3029,22 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     };
     function resolveOverlayTheme(mode) {
-      if (mode === 'dark') {
-        return 'dark';
+      const pageTheme = mode === 'system' && overlayPageThemeAdaptationEnabled
+        ? detectPageTheme()
+        : null;
+      const systemTheme = overlayMediaQuery.matches ? 'dark' : 'light';
+      if (overlayPageTheme && typeof overlayPageTheme.resolveOverlayTheme === 'function') {
+        return overlayPageTheme.resolveOverlayTheme({
+          mode,
+          pageTheme,
+          pageThemeAdaptationEnabled: overlayPageThemeAdaptationEnabled,
+          systemTheme
+        });
       }
-      if (mode === 'light') {
-        return 'light';
+      if (mode === 'dark' || mode === 'light') {
+        return mode;
       }
-      const pageTheme = detectPageTheme();
-      if (pageTheme) {
-        return pageTheme;
-      }
-      return overlayMediaQuery.matches ? 'dark' : 'light';
+      return pageTheme || systemTheme;
     }
 
     function pushThemeCandidate(candidates, element) {
@@ -3353,7 +3372,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       overlayPageThemeSyncRaf = requestAnimationFrame(() => {
         overlayPageThemeSyncRaf = null;
-        if (!overlay || !overlay.isConnected || overlayThemeMode !== 'system') {
+        if (!overlay || !overlay.isConnected || overlayThemeMode !== 'system' ||
+            !overlayPageThemeAdaptationEnabled) {
           return;
         }
         applyOverlayTheme('system');
@@ -3361,7 +3381,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function startOverlayPageThemeObserver() {
-      if (overlayPageThemeObserver || overlayThemeMode !== 'system') {
+      if (overlayPageThemeObserver || overlayThemeMode !== 'system' ||
+          !overlayPageThemeAdaptationEnabled) {
         return;
       }
       const themeAttrFilter = [
@@ -3451,17 +3472,40 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         resolve('system');
         return;
       }
-      storageArea.get([THEME_STORAGE_KEY], (result) => {
+      storageArea.get([
+        THEME_STORAGE_KEY,
+        OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY
+      ], (result) => {
         const initialThemeMode = result[THEME_STORAGE_KEY] || 'system';
+        const rawAdaptationEnabled = result[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY];
+        overlayPageThemeAdaptationEnabled = normalizeOverlayPageThemeAdaptationEnabled(
+          rawAdaptationEnabled
+        );
+        if (rawAdaptationEnabled !== overlayPageThemeAdaptationEnabled) {
+          storageArea.set({
+            [OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]: overlayPageThemeAdaptationEnabled
+          });
+        }
         applyOverlayTheme(initialThemeMode);
         resolve(initialThemeMode);
       });
     });
     overlayThemeStorageListener = (changes, areaName) => {
-      if (!isPrimaryStorageAreaName(areaName) || !changes[THEME_STORAGE_KEY]) {
+      if (!isPrimaryStorageAreaName(areaName) || (
+        !changes[THEME_STORAGE_KEY] &&
+        !changes[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]
+      )) {
         return;
       }
-      applyOverlayTheme(changes[THEME_STORAGE_KEY].newValue || 'system');
+      if (changes[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]) {
+        overlayPageThemeAdaptationEnabled = normalizeOverlayPageThemeAdaptationEnabled(
+          changes[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY].newValue
+        );
+      }
+      const nextMode = changes[THEME_STORAGE_KEY]
+        ? changes[THEME_STORAGE_KEY].newValue || 'system'
+        : overlayThemeMode;
+      applyOverlayTheme(nextMode);
     };
     chrome.storage.onChanged.addListener(overlayThemeStorageListener);
 

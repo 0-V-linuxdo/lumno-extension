@@ -450,6 +450,12 @@
   "overlay_enter_animation_fade": {
     "message": "フェード"
   },
+  "settings_overlay_page_theme_adaptation_title": {
+    "message": "Web ページの色に合わせてテーマを自動変更"
+  },
+  "settings_overlay_page_theme_adaptation_tooltip": {
+    "message": "オフの場合：\n• 自動：システムの外観だけに従います\n• ライト：常にライトを使用します\n• ダーク：常にダークを使用します"
+  },
   "recent_mode_latest": {
     "message": "最近のアクセス"
   },

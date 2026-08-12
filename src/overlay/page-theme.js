@@ -405,11 +405,29 @@
     return signal && signal.theme ? signal.theme : null;
   }
 
+  function resolveOverlayTheme(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    const mode = settings.mode === 'dark' || settings.mode === 'light'
+      ? settings.mode
+      : 'system';
+    if (mode !== 'system') {
+      return mode;
+    }
+    const pageTheme = settings.pageTheme === 'dark' || settings.pageTheme === 'light'
+      ? settings.pageTheme
+      : null;
+    if (settings.pageThemeAdaptationEnabled !== false && pageTheme) {
+      return pageTheme;
+    }
+    return settings.systemTheme === 'dark' ? 'dark' : 'light';
+  }
+
   return Object.freeze({
     parseCssColor,
     getRelativeLuminance,
     getPerceptualTone,
     detectPageVisualThemeSignal,
-    detectPageVisualTheme
+    detectPageVisualTheme,
+    resolveOverlayTheme
   });
 });

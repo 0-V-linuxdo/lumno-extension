@@ -21,6 +21,7 @@
     overlayOpenTabsDefaultVisible: '_x_extension_overlay_open_tabs_default_visible_2026_unique_',
     overlaySizeMode: '_x_extension_overlay_size_mode_2026_unique_',
     overlayEnterAnimation: '_x_extension_overlay_enter_animation_2026_unique_',
+    overlayPageThemeAdaptationEnabled: '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_',
     motionEffectsEnabled: '_x_extension_motion_effects_enabled_2026_unique_',
     overlayTabPriority: '_x_extension_overlay_tab_priority_2024_unique_',
     tabRankScoreDebug: '_x_extension_tab_rank_score_debug_2026_unique_'

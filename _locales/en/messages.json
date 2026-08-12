@@ -450,6 +450,12 @@
   "overlay_enter_animation_fade": {
     "message": "Fade"
   },
+  "settings_overlay_page_theme_adaptation_title": {
+    "message": "Adapt theme colors to each webpage"
+  },
+  "settings_overlay_page_theme_adaptation_tooltip": {
+    "message": "When turned off:\n• Auto follows only your system appearance\n• Light always stays light\n• Dark always stays dark"
+  },
   "recent_mode_latest": {
     "message": "Show Recent"
   },

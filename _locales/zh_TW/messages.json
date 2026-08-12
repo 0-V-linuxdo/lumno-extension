@@ -450,6 +450,12 @@
   "overlay_enter_animation_fade": {
     "message": "淡入"
   },
+  "settings_overlay_page_theme_adaptation_title": {
+    "message": "依網頁色彩自動變更主題色"
+  },
+  "settings_overlay_page_theme_adaptation_tooltip": {
+    "message": "關閉後：\n• 跟隨系統/網站：僅跟隨系統深淺色\n• 淺色：一律使用淺色\n• 深色：一律使用深色"
+  },
   "recent_mode_latest": {
     "message": "最近瀏覽"
   },

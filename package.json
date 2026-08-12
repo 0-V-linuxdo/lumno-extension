@@ -23,6 +23,7 @@
     "test:settings": "node scripts/test-settings.js",
     "test:theme-sync": "node scripts/test-theme-sync-sources.js",
     "test:overlay-page-theme": "node scripts/test-overlay-page-theme.js",
+    "test:overlay-page-theme-adaptation": "node scripts/test-overlay-page-theme-adaptation-setting.js",
     "test:suggestion-action-model": "node scripts/test-suggestion-action-model.js",
     "test:newtab-fallback": "node scripts/test-newtab-fallback.js",
     "test:newtab-stores": "node scripts/test-newtab-stores.js",

@@ -18,6 +18,7 @@
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
+  const OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY = '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
   const SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_group_enabled_2026_unique_';
@@ -47,6 +48,7 @@
     '_x_extension_newtab_favicon_2026_unique_',
     '_x_extension_overlay_size_mode_2026_unique_',
     '_x_extension_overlay_enter_animation_2026_unique_',
+    '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_',
     '_x_extension_bookmark_count_2024_unique_',
     '_x_extension_bookmark_columns_2024_unique_',
     '_x_extension_bookmark_view_mode_2026_unique_',
@@ -211,6 +213,10 @@
   }
 
   function normalizeOverlayOpenTabsDefaultVisible(value) {
+    return value !== false;
+  }
+
+  function normalizeOverlayPageThemeAdaptationEnabled(value) {
     return value !== false;
   }
 
@@ -386,6 +392,7 @@
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
+    OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
@@ -413,6 +420,7 @@
     shouldSkipEntryMotion,
     normalizeFaviconEnhancedFetchEnabled,
     normalizeOverlayOpenTabsDefaultVisible,
+    normalizeOverlayPageThemeAdaptationEnabled,
     normalizeOverlaySizeMode,
     normalizeOverlayEnterAnimation,
     normalizeOverlayTabPriorityMode,
