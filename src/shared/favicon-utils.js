@@ -237,6 +237,20 @@
     return current;
   }
 
+  function getFaviconPersistCacheKey(pageUrl, fallbackKey) {
+    const canonicalPageUrl = getCanonicalPageUrlForFavicon(pageUrl);
+    try {
+      const parsed = new URL(canonicalPageUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        parsed.hash = '';
+        return `page:${parsed.href}`;
+      }
+    } catch (e) {
+      // Non-web pages keep the existing host or URL fallback below.
+    }
+    return String(fallbackKey || canonicalPageUrl || '').trim();
+  }
+
   function getCanonicalFaviconHost(url) {
     const pageUrl = getCanonicalPageUrlForFavicon(url);
     if (!pageUrl) {
@@ -995,19 +1009,6 @@
     return isLocalNetworkHost(hostname) || isSuspiciousLocalFaviconHost(hostname);
   }
 
-  // Hosts whose pages serve per-page dynamic favicons (e.g. X serves the
-  // author avatar on tweet/profile pages). Persisting a per-host favicon for
-  // them would leak one page's icon onto every other page of the same host.
-  const DYNAMIC_PAGE_FAVICON_HOSTS = new Set([
-    'x.com',
-    'twitter.com'
-  ]);
-
-  function shouldSkipPersistedFaviconForHost(hostname) {
-    const host = normalizeFaviconHost(hostname);
-    return Boolean(host && DYNAMIC_PAGE_FAVICON_HOSTS.has(host));
-  }
-
   function getFaviconHostPolicy(hostname, options) {
     const config = options || {};
     const shouldBlockHost = typeof config.shouldBlockFaviconForHost === 'function'
@@ -1489,6 +1490,7 @@
     getChromeFaviconUrl,
     getCanonicalFaviconHost,
     getCanonicalPageUrlForFavicon,
+    getFaviconPersistCacheKey,
     getHtmlAttributeValue,
     getKnownThemedFaviconCandidateScores,
     getKnownThemedFaviconCandidateUrls,
@@ -1522,7 +1524,6 @@
     shouldSkipThemeUpgradeCandidate,
     shouldBlockFaviconForHost,
     shouldBlockDirectFaviconHost,
-    shouldAvoidDirectFaviconForHost,
-    shouldSkipPersistedFaviconForHost
+    shouldAvoidDirectFaviconForHost
   });
 });

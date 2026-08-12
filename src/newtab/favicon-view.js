@@ -18,9 +18,6 @@
     const shouldAvoidDirectFaviconForHost = typeof config.shouldAvoidDirectFaviconForHost === 'function'
       ? config.shouldAvoidDirectFaviconForHost
       : (() => false);
-    const shouldSkipPersistedFaviconForHost = typeof config.shouldSkipPersistedFaviconForHost === 'function'
-      ? config.shouldSkipPersistedFaviconForHost
-      : (() => false);
     const isEnhancedFaviconFetchEnabled = typeof config.isEnhancedFaviconFetchEnabled === 'function'
       ? config.isEnhancedFaviconFetchEnabled
       : (() => true);
@@ -401,11 +398,10 @@
       img._xThemeFaviconSession = (img._xThemeFaviconSession || 0) + 1;
       const session = img._xThemeFaviconSession;
       const hostKey = host || getHostFromUrl(url);
-      const cacheKey = String(hostKey || url || '').trim();
-      const skipPersisted = Boolean(
-        (optionsArg && optionsArg.skipPersisted === true) ||
-        shouldSkipPersistedFaviconForHost(hostKey)
-      );
+      const cacheKey = typeof faviconUtils.getFaviconPersistCacheKey === 'function'
+        ? faviconUtils.getFaviconPersistCacheKey(url, hostKey)
+        : String(hostKey || url || '').trim();
+      const skipPersisted = Boolean(optionsArg && optionsArg.skipPersisted === true);
       const persistedDataEntry = !skipPersisted && cacheKey
         ? getPersistedFaviconDataEntry(cacheKey)
         : null;

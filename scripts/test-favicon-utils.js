@@ -303,6 +303,16 @@ assert.strictEqual(
   'HTTP pages should prefer the extension _favicon candidate'
 );
 assert.strictEqual(
+  utils.getFaviconPersistCacheKey('https://Example.com/docs?mode=compact#section', 'example.com'),
+  'page:https://example.com/docs?mode=compact',
+  'persisted favicon caches should isolate HTTP pages while ignoring fragments'
+);
+assert.strictEqual(
+  utils.getFaviconPersistCacheKey('chrome://extensions/', 'extensions'),
+  'extensions',
+  'non-web pages should retain the existing fallback cache key'
+);
+assert.strictEqual(
   resolver.getPageFaviconCandidateUrl('chrome://extensions/'),
   'chrome-extension://abc/_favicon/?pageUrl=chrome%3A%2F%2Fextensions%2F&size=128',
   'browser-internal pages should use the browser-page _favicon candidate'

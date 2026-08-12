@@ -6050,7 +6050,6 @@
     isBlockedLocalFaviconUrl,
     shouldBlockFaviconForHost,
     shouldAvoidDirectFaviconForHost,
-    shouldSkipPersistedFaviconForHost,
     isEnhancedFaviconFetchEnabled: isNewtabEnhancedFaviconFetchEnabled,
     getStrictFaviconReason: getNewtabStrictFaviconReason,
     logFaviconDecision: logNewtabFaviconDecision,
@@ -11776,12 +11775,6 @@
     return typeof FAVICON_UTILS.shouldAvoidDirectFaviconForHost === 'function'
       ? FAVICON_UTILS.shouldAvoidDirectFaviconForHost(hostname)
       : (isLocalNetworkHost(hostname) || isSuspiciousLocalFaviconHost(hostname));
-  }
-
-  function shouldSkipPersistedFaviconForHost(hostname) {
-    return typeof FAVICON_UTILS.shouldSkipPersistedFaviconForHost === 'function'
-      ? FAVICON_UTILS.shouldSkipPersistedFaviconForHost(hostname)
-      : false;
   }
 
   function normalizeSearchBlacklistMatchModes(value) {
