@@ -1,5 +1,8 @@
 'use strict';
 
+window._x_extension_search_overlay_runtime_version_2026_unique_ =
+  '2026-08-12-fast-open-v1';
+
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
   let captureTabHandler = null;
   let overlayThemeStorageListener = null;
@@ -7,6 +10,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySearchEngineStorageListener = null;
   let overlaySearchResultPriorityStorageListener = null;
   let overlaySearchResultSourceTypesStorageListener = null;
+  let overlaySearchResultDisplayLimitStorageListener = null;
   let overlaySearchBlacklistStorageListener = null;
   let overlayFaviconEnhancedFetchStorageListener = null;
   let overlayOpenTabsDefaultVisibleStorageListener = null;
@@ -240,6 +244,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = overlayStorageKeys.documentPipEnabled;
   const SEARCH_RESULT_PRIORITY_STORAGE_KEY = overlayStorageKeys.searchResultPriority;
   const SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY = overlayStorageKeys.searchResultSourceTypes;
+  const SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY = overlayStorageKeys.searchResultDisplayLimit ||
+    '_x_extension_search_result_display_limit_2026_unique_';
   const SEARCH_BLACKLIST_STORAGE_KEY = overlayStorageKeys.searchBlacklist;
   const FAVICON_REQUEST_BLACKLIST_STORAGE_KEY = overlayStorageKeys.faviconRequestBlacklist;
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = overlayStorageKeys.faviconEnhancedFetchEnabled;
@@ -276,6 +282,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const overlayMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   let overlayThemeMode = 'system';
   let overlaySearchResultPriorityMode = 'autocomplete';
+  let overlaySearchResultDisplayLimit = 10;
   let overlaySizeMode = 'standard';
   let overlayEnterAnimation = 'elastic';
   let motionEffectsEnabled = true;
@@ -306,23 +313,42 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let initialOverlayOpenTabsDefaultVisibleReady = Promise.resolve();
   let documentPipEnabled = Boolean(normalizedOverlayContext.documentPipEnabled);
   let overlayThemeListenerAttached = false;
-  const initialOverlayEnterAnimationReady = overlayRuntime.getStorageValues(
+  const initialOverlaySettingsReady = overlayRuntime.getStorageValues(
     storageArea,
-    [OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
-  ).then((result) => {
+    [
+      LANGUAGE_STORAGE_KEY,
+      THEME_STORAGE_KEY,
+      OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY,
+      OVERLAY_SIZE_MODE_STORAGE_KEY,
+      OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
+      MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+      FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
+      FAVICON_REQUEST_BLACKLIST_STORAGE_KEY,
+      SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
+      OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY
+    ]
+  ).catch(() => ({}));
+  const initialOverlayEnterAnimationReady = initialOverlaySettingsReady.then((result) => {
     overlayEnterAnimation = normalizeOverlayEnterAnimation(
       result[OVERLAY_ENTER_ANIMATION_STORAGE_KEY]
     );
     return overlayEnterAnimation;
   });
-  const initialMotionEffectsReady = overlayRuntime.getStorageValues(
-    storageArea,
-    [MOTION_EFFECTS_ENABLED_STORAGE_KEY]
-  ).then((result) => {
+  const initialMotionEffectsReady = initialOverlaySettingsReady.then((result) => {
     motionEffectsEnabled = typeof SETTINGS.normalizeMotionEffectsEnabled === 'function'
       ? SETTINGS.normalizeMotionEffectsEnabled(result[MOTION_EFFECTS_ENABLED_STORAGE_KEY])
       : result[MOTION_EFFECTS_ENABLED_STORAGE_KEY] !== false;
     return motionEffectsEnabled;
+  });
+  const initialSearchResultDisplayLimitReady = initialOverlaySettingsReady.then((result) => {
+    const rawValue = result[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY];
+    overlaySearchResultDisplayLimit = normalizeSearchResultDisplayLimit(rawValue);
+    if (storageArea && rawValue !== overlaySearchResultDisplayLimit) {
+      storageArea.set({
+        [SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY]: overlaySearchResultDisplayLimit
+      });
+    }
+    return overlaySearchResultDisplayLimit;
   });
 
   function normalizeOverlaySearchBlacklistItems(items) {
@@ -403,14 +429,31 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     return list.filter((suggestion) => !isOverlaySuggestionBlockedBySearchBlacklist(suggestion, queryForProvider));
   }
 
-  function limitOverlaySuggestionsForDisplay(list) {
+  function normalizeSearchResultDisplayLimit(value) {
+    if (typeof SETTINGS.normalizeSearchResultDisplayLimit === 'function') {
+      return SETTINGS.normalizeSearchResultDisplayLimit(value);
+    }
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 5 && parsed <= 10 ? parsed : 10;
+  }
+
+  function limitOverlaySuggestionsForDisplay(list, options) {
+    const config = options && typeof options === 'object' ? options : {};
+    if (config.uncapped === true) {
+      return Array.isArray(list) ? list : [];
+    }
     if (typeof SEARCH_UTILS.limitSearchSuggestionsForDisplay === 'function') {
-      return SEARCH_UTILS.limitSearchSuggestionsForDisplay(list);
+      return SEARCH_UTILS.limitSearchSuggestionsForDisplay(list, {
+        limit: overlaySearchResultDisplayLimit
+      });
     }
     const suggestions = Array.isArray(list) ? list : [];
-    const policy = SEARCH_UTILS.SEARCH_POLICY || {};
-    const limit = Number(policy.displaySuggestionLimit) || 10;
-    return suggestions.slice(0, limit);
+    return suggestions.slice(0, normalizeSearchResultDisplayLimit(overlaySearchResultDisplayLimit));
+  }
+
+  function limitOverlayTabsForDisplay(list) {
+    const tabList = Array.isArray(list) ? list : [];
+    return tabList.slice(0, normalizeSearchResultDisplayLimit(overlaySearchResultDisplayLimit));
   }
 
   function loadOverlaySearchBlacklistItems(onReload) {
@@ -613,8 +656,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }).catch(() => fallbackMessages || {});
   }
 
-  async function bootstrapOverlayLanguageForInitialRender() {
-    const result = await getStorageValuesAsync([LANGUAGE_STORAGE_KEY]);
+  async function bootstrapOverlayLanguageForInitialRender(settingsReady) {
+    const result = await Promise.resolve(settingsReady ||
+      getStorageValuesAsync([LANGUAGE_STORAGE_KEY]));
     overlayLanguageMode = result[LANGUAGE_STORAGE_KEY] || 'system';
     const targetLocale = overlayLanguageMode === 'system'
       ? getSystemLocale()
@@ -1468,6 +1512,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       chrome.storage.onChanged.removeListener(overlaySearchResultSourceTypesStorageListener);
       overlaySearchResultSourceTypesStorageListener = null;
     }
+    if (overlaySearchResultDisplayLimitStorageListener) {
+      chrome.storage.onChanged.removeListener(overlaySearchResultDisplayLimitStorageListener);
+      overlaySearchResultDisplayLimitStorageListener = null;
+    }
     if (overlaySearchBlacklistStorageListener) {
       chrome.storage.onChanged.removeListener(overlaySearchBlacklistStorageListener);
       overlaySearchBlacklistStorageListener = null;
@@ -1875,7 +1923,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return;
     }
 
-    const initialLanguageReady = bootstrapOverlayLanguageForInitialRender().catch(() => {});
+    const initialLanguageReady = bootstrapOverlayLanguageForInitialRender(
+      initialOverlaySettingsReady
+    ).catch(() => {});
 
     const inputUsesIsolatedStyles = Boolean(overlayStyleRoot);
     const inputParts = window._x_extension_createSearchInput_2024_unique_({
@@ -3478,29 +3528,23 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     }
 
-    const initialOverlayThemeReady = new Promise((resolve) => {
+    const initialOverlayThemeReady = initialOverlaySettingsReady.then((result) => {
       if (!storageArea) {
         applyOverlayTheme('system');
-        resolve('system');
-        return;
+        return 'system';
       }
-      storageArea.get([
-        THEME_STORAGE_KEY,
-        OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY
-      ], (result) => {
-        const initialThemeMode = result[THEME_STORAGE_KEY] || 'system';
-        const rawAdaptationEnabled = result[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY];
-        overlayPageThemeAdaptationEnabled = normalizeOverlayPageThemeAdaptationEnabled(
-          rawAdaptationEnabled
-        );
-        if (rawAdaptationEnabled !== overlayPageThemeAdaptationEnabled) {
-          storageArea.set({
-            [OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]: overlayPageThemeAdaptationEnabled
-          });
-        }
-        applyOverlayTheme(initialThemeMode);
-        resolve(initialThemeMode);
-      });
+      const initialThemeMode = result[THEME_STORAGE_KEY] || 'system';
+      const rawAdaptationEnabled = result[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY];
+      overlayPageThemeAdaptationEnabled = normalizeOverlayPageThemeAdaptationEnabled(
+        rawAdaptationEnabled
+      );
+      if (rawAdaptationEnabled !== overlayPageThemeAdaptationEnabled) {
+        storageArea.set({
+          [OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]: overlayPageThemeAdaptationEnabled
+        });
+      }
+      applyOverlayTheme(initialThemeMode);
+      return initialThemeMode;
     });
     overlayThemeStorageListener = (changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || (
@@ -3763,6 +3807,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     };
     chrome.storage.onChanged.addListener(overlaySearchResultSourceTypesStorageListener);
+    overlaySearchResultDisplayLimitStorageListener = (changes, areaName) => {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY]) {
+        return;
+      }
+      overlaySearchResultDisplayLimit = normalizeSearchResultDisplayLimit(
+        changes[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY].newValue
+      );
+      if (openTabsSearchModeActive || (!latestOverlayQuery && shouldShowOpenTabsForEmptyQuery())) {
+        renderTabSuggestions(filterTabsForOverlay(tabs, latestOverlayQuery));
+        return;
+      }
+      refreshOverlaySuggestionsFromLastResponse();
+    };
+    chrome.storage.onChanged.addListener(overlaySearchResultDisplayLimitStorageListener);
     overlaySearchBlacklistStorageListener = (changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
         return;
@@ -3776,19 +3834,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     chrome.storage.onChanged.addListener(overlaySearchBlacklistStorageListener);
     if (storageArea) {
-      initialFaviconEnhancedFetchReady = new Promise((resolve) => {
-        storageArea.get([
-          FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
-          FAVICON_REQUEST_BLACKLIST_STORAGE_KEY
-        ], (result) => {
-          faviconEnhancedFetchEnabled = normalizeFaviconEnhancedFetchEnabled(
-            result ? result[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] : true
-          );
-          overlayFaviconRequestBlacklistItems = normalizeOverlayFaviconRequestBlacklistItems(
-            result ? result[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY] : null
-          );
-          resolve();
-        });
+      initialFaviconEnhancedFetchReady = initialOverlaySettingsReady.then((result) => {
+        faviconEnhancedFetchEnabled = normalizeFaviconEnhancedFetchEnabled(
+          result ? result[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] : true
+        );
+        overlayFaviconRequestBlacklistItems = normalizeOverlayFaviconRequestBlacklistItems(
+          result ? result[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY] : null
+        );
       });
     }
     overlayFaviconEnhancedFetchStorageListener = (changes, areaName) => {
@@ -3812,17 +3864,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     };
     chrome.storage.onChanged.addListener(overlayFaviconEnhancedFetchStorageListener);
     if (storageArea) {
-      initialOverlayOpenTabsDefaultVisibleReady = new Promise((resolve) => {
-        storageArea.get([OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY], (result) => {
-          const rawValue = result ? result[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY] : undefined;
-          const normalized = normalizeOverlayOpenTabsDefaultVisible(rawValue);
-          overlayOpenTabsDefaultVisible = normalized;
-          overlayOpenTabsDefaultVisibleLoaded = true;
-          if (rawValue !== normalized) {
-            storageArea.set({ [OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]: normalized });
-          }
-          resolve();
-        });
+      initialOverlayOpenTabsDefaultVisibleReady = initialOverlaySettingsReady.then((result) => {
+        const rawValue = result ? result[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY] : undefined;
+        const normalized = normalizeOverlayOpenTabsDefaultVisible(rawValue);
+        overlayOpenTabsDefaultVisible = normalized;
+        overlayOpenTabsDefaultVisibleLoaded = true;
+        if (rawValue !== normalized) {
+          storageArea.set({ [OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]: normalized });
+        }
       });
     }
     overlayOpenTabsDefaultVisibleStorageListener = (changes, areaName) => {
@@ -3880,12 +3929,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
     };
     chrome.storage.onChanged.addListener(overlayTabPriorityStorageListener);
-    if (storageArea) {
-      storageArea.get([OVERLAY_SIZE_MODE_STORAGE_KEY], (result) => {
-        overlaySizeMode = normalizeOverlaySizeMode(result[OVERLAY_SIZE_MODE_STORAGE_KEY]);
-        applyOverlaySizeForPageZoom(overlay);
-      });
-    }
+    const initialOverlaySizeReady = initialOverlaySettingsReady.then((result) => {
+      overlaySizeMode = normalizeOverlaySizeMode(result[OVERLAY_SIZE_MODE_STORAGE_KEY]);
+      applyOverlaySizeForPageZoom(overlay);
+      return overlaySizeMode;
+    });
     overlaySizeStorageListener = (changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_SIZE_MODE_STORAGE_KEY]) {
         return;
@@ -7680,7 +7728,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       currentSuggestions = [];
       lastRenderedQuery = '';
       lastRenderedActionContextKey = '';
-      const list = Array.isArray(tabList) ? tabList : [];
+      const list = limitOverlayTabsForDisplay(tabList);
       if (list.length === 0) {
         const emptyText = openTabsSearchModeActive
           ? t('overlay_empty_open_tabs', '未找到匹配的已打开标签页')
@@ -8337,7 +8385,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         if (hasCommand) {
           applyAutocomplete(allSuggestions, primarySuggestion, primaryHighlightReason);
         }
-        allSuggestions = limitOverlaySuggestionsForDisplay(allSuggestions);
+        allSuggestions = limitOverlaySuggestionsForDisplay(allSuggestions, {
+          uncapped: slashCommandModeActive
+        });
         const actionContextKey = getSuggestionActionContextKey({
           primaryHighlightIndex,
           primaryHighlightReason,
@@ -8488,7 +8538,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const initialOverlayContentReady = Promise.all([
       initialOverlayOpenTabsDefaultVisibleReady,
       initialFaviconEnhancedFetchReady
-    ]).then(() => {
+    ]).then(() => initialSearchResultDisplayLimitReady).then(() => {
       if (!overlay || !overlay.isConnected) {
         return false;
       }
@@ -8541,9 +8591,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       : Promise.resolve({ ok: true, reason: 'no-site-fix' });
     Promise.all([
       Promise.resolve(revealReady).catch(() => null),
-      initialLanguageReady,
       initialOverlayThemeReady,
-      initialOverlayContentReady,
+      initialOverlaySizeReady,
       initialOverlayEnterAnimationReady.catch(() => {
         overlayEnterAnimation = 'elastic';
       }),

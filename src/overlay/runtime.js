@@ -15,6 +15,7 @@
     documentPipEnabled: '_x_extension_document_pip_enabled_2026_unique_',
     searchResultPriority: '_x_extension_search_result_priority_2026_unique_',
     searchResultSourceTypes: '_x_extension_search_result_source_types_2026_unique_',
+    searchResultDisplayLimit: '_x_extension_search_result_display_limit_2026_unique_',
     searchBlacklist: '_x_extension_search_blacklist_2026_unique_',
     faviconRequestBlacklist: '_x_extension_favicon_request_blacklist_2026_unique_',
     faviconEnhancedFetchEnabled: '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_',

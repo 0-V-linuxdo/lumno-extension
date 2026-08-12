@@ -96,8 +96,8 @@ assert.match(
 
 assert.match(
   backgroundSource,
-  /scheduleSiteSearchProviderIconWarmup\(siteSearchProviders, ''\);\s*chrome\.scripting\.executeScript/,
-  'provider icon warming should start without being awaited on the overlay reveal path'
+  /const siteSearchProviders = Array\.isArray\(siteSearchCache\) \? siteSearchCache : \[\];[\s\S]*?loadSiteSearchProviders\(\)[\s\S]*?scheduleSiteSearchProviderIconWarmup\(providers, ''\);[\s\S]*?chrome\.scripting\.executeScript/,
+  'provider icon warming should run in parallel while the overlay opens from cached provider data'
 );
 
 assert.match(

@@ -2,7 +2,9 @@ const assert = require('assert');
 const fs = require('fs');
 
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
+const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const onboardingHtml = fs.readFileSync('src/onboarding/onboarding.html', 'utf8');
+const infoButtonSource = fs.readFileSync('react-src/options/info-button.tsx', 'utf8');
 const optionReactSources = [
   'react-src/options/blacklist-list.tsx',
   'react-src/options/settings-forms.tsx',
@@ -28,17 +30,13 @@ assertCircularInfoButton(
   'onboarding info button'
 );
 assertCircularInfoButton(
-  cssRule(optionsHtml, '._x_extension_shortcut_hint_2024_unique_'),
-  'options form info button'
-);
-assertCircularInfoButton(
-  cssRule(optionsHtml, '._x_extension_bookmark_count_hint_2026_unique_'),
-  'options bookmark info button'
+  cssRule(optionsHtml, '._x_extension_info_button_2026_unique_'),
+  'options shared info button'
 );
 
 for (const [source, selector, label] of [
   [onboardingHtml, '.interaction-info-button:hover', 'onboarding info hover'],
-  [optionsHtml, '._x_extension_shortcut_hint_2024_unique_:hover', 'options form info hover']
+  [optionsHtml, '._x_extension_info_button_2026_unique_:hover', 'options info hover']
 ]) {
   assert.match(
     cssRule(source, selector),
@@ -47,19 +45,39 @@ for (const [source, selector, label] of [
   );
 }
 
+assert.match(infoButtonSource, /ri-information-line/, 'the shared component should use the information icon');
+assert.doesNotMatch(infoButtonSource, /ri-question-line/, 'the shared component should not use the question icon');
+assert.match(infoButtonSource, /tabIndex=\{0\}/, 'the shared component should support keyboard focus');
+assert.match(infoButtonSource, /role="img"/, 'the shared component should expose an image role');
+
+const staticHosts = [
+  '_x_extension_restricted_action_info_2026_unique_',
+  '_x_extension_bookmark_rows_info_2026_unique_',
+  '_x_extension_bookmark_columns_info_2026_unique_',
+  '_x_extension_overlay_page_theme_adaptation_info_2026_unique_'
+];
+staticHosts.forEach((id) => {
+  assert.match(optionsHtml, new RegExp(`id="${id}"`), `${id} should exist as a component host`);
+  assert.match(optionsSource, new RegExp(`getElementById\\('${id}'\\)`), `${id} should be mounted by the Options runtime`);
+});
 assert.match(
-  optionsHtml,
-  /_x_extension_bookmark_count_hint_2026_unique_:hover,[\s\S]*?background:\s*rgba\(37,\s*99,\s*235,\s*0\.1\);/,
-  'options bookmark info hover should use the shared blue background'
+  optionsSource,
+  /createInfoButtonController/,
+  'static Options info affordances should share the InfoButton controller'
 );
 
 for (const source of optionReactSources) {
-  const hintBlocks = source.match(/className="[^"]*_x_extension_shortcut_hint_2024_unique_[^"]*"[\s\S]*?<\/span>/g) || [];
-  assert.ok(hintBlocks.length > 0, 'expected an options info hint in each React source');
-  hintBlocks.forEach((block) => {
-    assert.match(block, /ri-information-line/, 'options info hints should use the information icon');
-    assert.doesNotMatch(block, /ri-question-line/, 'options info hints should not use the question icon');
-  });
+  assert.match(source, /import \{ InfoButton \} from '\.\/info-button';/);
+  assert.match(source, /<InfoButton[\s\S]*?tooltip=/, 'dynamic Options info affordances should reuse InfoButton');
 }
+
+const adaptationHostStart = optionsHtml.indexOf('_x_extension_overlay_page_theme_adaptation_info_2026_unique_');
+const adaptationToggleStart = optionsHtml.indexOf('_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_');
+assert(adaptationHostStart >= 0 && adaptationHostStart < adaptationToggleStart);
+assert.doesNotMatch(
+  optionsHtml.slice(adaptationHostStart, adaptationToggleStart),
+  /ri-question-line/,
+  'the webpage theme adaptation info should not retain the old question icon'
+);
 
 console.log('info affordance consistency tests passed');

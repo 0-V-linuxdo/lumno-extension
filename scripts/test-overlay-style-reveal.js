@@ -203,6 +203,10 @@ async function testAlreadyLoadedStylesDoNotDelayReveal() {
 }
 
 function testBootstrapDisablesRightButtonTransitions() {
+  const overlayShellSource = fs.readFileSync(
+    path.join(repoRoot, 'react-src/overlay/shell.tsx'),
+    'utf8'
+  );
   const searchInputCss = fs.readFileSync(
     path.join(repoRoot, 'src/shared/search-input.css'),
     'utf8'
@@ -221,6 +225,16 @@ function testBootstrapDisablesRightButtonTransitions() {
     suggestionsCss,
     /#_x_extension_overlay_2024_unique_\[data-lumno-site-fix-reveal\]\s+\.x-ov-close-other-tabs\s*\{\s*transition:\s*none\s*!important;/,
     'the close-tabs button must not transition from the native ButtonFace during reveal'
+  );
+  assert.match(
+    overlayShellSource,
+    /:where\(#_x_extension_overlay_2024_unique_\)\s+:where\(\.x-ov-suggestion-switch-button\)\s*\{[\s\S]*?background:\s*var\(--x-ov-suggestion-action-button-bg,\s*transparent\);[\s\S]*?border-radius:\s*6px;[\s\S]*?font:\s*inherit;[\s\S]*?font-size:\s*12px;[\s\S]*?height:\s*var\(--x-ov-suggestion-action-height,\s*26px\);/,
+    'switch actions must keep their themed pill shape and 12px type before their deferred stylesheet loads'
+  );
+  assert.doesNotMatch(
+    overlayShellSource,
+    /#_x_extension_overlay_2024_unique_\s+\.x-ov-suggestion-switch-button/,
+    'the bootstrap fallback must stay lower-specificity than the complete suggestion stylesheet'
   );
 }
 

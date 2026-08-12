@@ -132,10 +132,17 @@
     const setInputAutoFocusEnabled = typeof options.setInputAutoFocusEnabled === 'function'
       ? options.setInputAutoFocusEnabled
       : function() {};
+    const getInputAutoFocusHintAnchor = typeof options.getInputAutoFocusHintAnchor === 'function'
+      ? options.getInputAutoFocusHintAnchor
+      : function() { return null; };
     const inputAutoFocusReady = options.inputAutoFocusReady &&
       typeof options.inputAutoFocusReady.then === 'function'
       ? options.inputAutoFocusReady
       : Promise.resolve();
+    const inputAutoFocusVisibilityGate = options.inputAutoFocusVisibilityGate &&
+      typeof options.inputAutoFocusVisibilityGate.then === 'function'
+      ? options.inputAutoFocusVisibilityGate
+      : null;
     const getRiSvg = typeof options.getRiSvg === 'function'
       ? options.getRiSvg
       : function(id, sizeClass) {
@@ -3682,11 +3689,12 @@
     }
 
     function createInputAutoFocusFeatureHint() {
+      const inputAutoFocusHintAnchor = getInputAutoFocusHintAnchor();
       if (wallpaperInputAutoFocusHintController ||
           !inputAutoFocusReadyResolved ||
           !getInputAutoFocusEnabled() ||
           isInputAutoFocusRoutePending() ||
-          !wallpaperControl ||
+          !inputAutoFocusHintAnchor ||
           !featureHints ||
           typeof featureHints.createFeatureHint !== 'function') {
         return wallpaperInputAutoFocusHintController;
@@ -3696,6 +3704,7 @@
         windowObj: window,
         chromeApi: chrome,
         definition: 'newtab-input-auto-focus',
+        visibilityGate: inputAutoFocusVisibilityGate,
         t,
         getRiSvg
       });
@@ -3703,7 +3712,7 @@
         return null;
       }
       wallpaperInputAutoFocusHintController = controller;
-      wallpaperControl.appendChild(controller.element);
+      inputAutoFocusHintAnchor.appendChild(controller.element);
       return controller;
     }
 

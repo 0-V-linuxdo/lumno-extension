@@ -16,6 +16,7 @@
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = '_x_extension_motion_effects_enabled_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
+  const SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY = '_x_extension_search_result_display_limit_2026_unique_';
   const OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY = '_x_extension_overlay_open_tabs_default_visible_2026_unique_';
   const OVERLAY_ENTER_ANIMATION_STORAGE_KEY = '_x_extension_overlay_enter_animation_2026_unique_';
   const OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY = '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_';
@@ -73,6 +74,7 @@
     '_x_extension_restricted_action_2024_unique_',
     '_x_extension_search_result_priority_2026_unique_',
     '_x_extension_search_result_source_types_2026_unique_',
+    '_x_extension_search_result_display_limit_2026_unique_',
     '_x_extension_overlay_open_tabs_default_visible_2026_unique_',
     '_x_extension_fallback_hotkey_2024_unique_',
     '_x_extension_site_search_custom_2024_unique_',
@@ -256,6 +258,11 @@
     return value === 'search' ? 'search' : 'autocomplete';
   }
 
+  function normalizeSearchResultDisplayLimit(value) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 5 && parsed <= 10 ? parsed : 10;
+  }
+
   const SEARCH_RESULT_SOURCE_TYPES = Object.freeze(['topSite', 'bookmark', 'history']);
 
   function normalizeSearchResultSourceType(value) {
@@ -398,6 +405,7 @@
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
+    SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
     OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
     OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
     OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY,
@@ -434,6 +442,7 @@
     normalizeOverlayEnterAnimation,
     normalizeOverlayTabPriorityMode,
     normalizeSearchResultPriority,
+    normalizeSearchResultDisplayLimit,
     normalizeSearchResultSourceTypes,
     normalizeTabRankScoreDebugMode,
     normalizeTabSwitcherEnabled,

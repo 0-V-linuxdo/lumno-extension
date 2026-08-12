@@ -8,6 +8,7 @@ import {
   useExclusiveAsyncAction
 } from '../shared/use-exclusive-async-action';
 import { InlinePopconfirm } from './inline-popconfirm';
+import { InfoButton } from './info-button';
 
 export type BlacklistMatchMode = 'exact' | 'prefix' | 'suffix';
 
@@ -168,13 +169,7 @@ function BlacklistEditor({
                 type="checkbox"
               />
               <span>{option.label}</span>
-              <span
-                aria-label={option.tooltip}
-                className="_x_extension_shortcut_hint_2024_unique_ _x_extension_tooltip_host_2024_unique_"
-                data-tooltip={option.tooltip}
-              >
-                <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
-              </span>
+              <InfoButton tooltip={option.tooltip} />
             </label>
           ))}
         </div>

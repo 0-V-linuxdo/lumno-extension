@@ -209,7 +209,7 @@ assert.doesNotMatch(
 );
 
 assert.match(
-  getRule(optionsHtml, '._x_extension_shortcut_hint_2024_unique_'),
+  getRule(optionsHtml, '._x_extension_info_button_2026_unique_'),
   /cursor:\s*help;/,
   'hover-only help affordances should use the help cursor'
 );

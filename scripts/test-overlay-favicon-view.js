@@ -333,13 +333,18 @@ function testOverlayRendererLoadsFaviconPolicyBeforeInitialTabs() {
   );
   assert.match(
     overlayJs,
-    /initialFaviconEnhancedFetchReady = new Promise[\s\S]*?FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,[\s\S]*?FAVICON_REQUEST_BLACKLIST_STORAGE_KEY[\s\S]*?overlayFaviconRequestBlacklistItems[\s\S]*?resolve\(\)/,
-    'overlay should load the global setting and path-specific exclusions before first render'
+    /initialFaviconEnhancedFetchReady = initialOverlaySettingsReady\.then[\s\S]*?FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY[\s\S]*?FAVICON_REQUEST_BLACKLIST_STORAGE_KEY[\s\S]*?overlayFaviconRequestBlacklistItems/,
+    'overlay should hydrate the global setting and path-specific exclusions from the shared settings read'
   );
   assert.match(
     overlayJs,
     /const initialOverlayContentReady = Promise\.all\(\[\s*initialOverlayOpenTabsDefaultVisibleReady,\s*initialFaviconEnhancedFetchReady\s*\]\)[\s\S]*?requestTabsAndRender\(\)/,
-    'first open-tab rendering should wait for the favicon policy setting'
+    'first open-tab rendering should wait for the favicon policy setting without blocking the input shell'
+  );
+  assert.doesNotMatch(
+    overlayJs.slice(overlayJs.lastIndexOf('const revealReady =')),
+    /initialOverlayContentReady|initialFaviconEnhancedFetchReady/,
+    'favicon policy and first open-tab rows should not block overlay reveal'
   );
   assert.match(
     overlayJs,

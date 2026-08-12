@@ -46,6 +46,7 @@
   ];
   const WORDMARK_MIN_CONTRAST = 3.25;
   const WORDMARK_TEXTURED_MIN_CONTRAST = 4.5;
+  const TOPBAR_MASK_POLARITY_MIN_ALPHA = 0.36;
 
   function mixNumber(start, end, amount) {
     return start + ((end - start) * clampNumber(amount, 0, 1));
@@ -240,6 +241,17 @@
 
   function isWallpaperOverlayCovered(overlayAlpha) {
     return clampNumber(overlayAlpha, 0, 1) >= 0.995;
+  }
+
+  function chooseSurfaceInk(overlayAlpha, overlayLuminance, fallbackInk) {
+    // Once the mask is visually strong enough to establish the top edge, keep
+    // the material in the same light/dark family as that mask. Otherwise a
+    // bright wallpaper under a black mask can land exactly on the generic ink
+    // threshold and produce a pale surface with dark text (and vice versa).
+    if (clampNumber(overlayAlpha, 0, 1) >= TOPBAR_MASK_POLARITY_MIN_ALPHA) {
+      return clampNumber(overlayLuminance, 0, 1) < 0.5 ? 'light' : 'dark';
+    }
+    return fallbackInk;
   }
 
   function shouldUseIconSolidBackground(luminance, overlayAlpha, textureContrast, effectType) {
@@ -904,7 +916,13 @@
         const currentInk = config.resetInk === true
           ? null
           : target.element.getAttribute('data-wallpaper-ink');
-        const nextInk = chooseInk(luminance, currentInk);
+        const nextInk = target.surface === 'topbar' && target.preferOverlayPolarity === true
+          ? chooseSurfaceInk(
+              sample.overlayAlpha,
+              overlayLuminance,
+              chooseInk(luminance, currentInk)
+            )
+          : chooseInk(luminance, currentInk);
         const overlayCovered = isWallpaperOverlayCovered(sample.overlayAlpha);
         target.element.setAttribute('data-wallpaper-ink', nextInk);
         target.element.setAttribute('data-wallpaper-overlay-cover', overlayCovered ? 'true' : 'false');

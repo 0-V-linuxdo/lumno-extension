@@ -77,6 +77,11 @@ function flushAsyncWork() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function getCssRgbChannels(value) {
+  const channels = String(value || '').match(/[\d.]+/g);
+  return channels ? channels.slice(0, 3).map(Number) : [];
+}
+
 (async () => {
   const target = createElement();
   const body = createElement();
@@ -89,6 +94,9 @@ function flushAsyncWork() {
     id: 'dark-wallpaper',
     url: 'test://dark-wallpaper'
   };
+  let overlayAlpha = 0;
+  let overlayLuminance = 1;
+  let preferOverlayPolarity = true;
 
   class FakeImage {
     constructor() {
@@ -181,7 +189,8 @@ function flushAsyncWork() {
         minWidth: 42,
         minHeight: 42,
         iconButton: true,
-        surface: 'topbar'
+        surface: 'topbar',
+        preferOverlayPolarity
       }];
     },
     getCurrentWallpaper() {
@@ -191,10 +200,10 @@ function flushAsyncWork() {
       return wallpaper.url;
     },
     getOverlayAlphaAtViewportY() {
-      return 0;
+      return overlayAlpha;
     },
     getOverlayLuminance() {
-      return 1;
+      return overlayLuminance;
     },
     getEffectLuminanceAtViewport() {
       return null;
@@ -328,6 +337,86 @@ function flushAsyncWork() {
     target.style.getPropertyValue('--x-nt-wallpaper-surface-mist'),
     '',
     'a current wallpaper load failure should clear the sampled topbar material'
+  );
+
+  body.setAttribute('data-theme', 'dark');
+  overlayAlpha = 0.44;
+  overlayLuminance = 0;
+  currentWallpaper = {
+    id: 'bright-wallpaper-with-dark-mask',
+    url: 'test://bright-wallpaper-with-dark-mask'
+  };
+  runtime.refresh();
+  getPendingImage('test://bright-wallpaper-with-dark-mask').resolve({
+    red: 255,
+    green: 255,
+    blue: 255
+  });
+  await flushAsyncWork();
+
+  assert.strictEqual(
+    target.getAttribute('data-wallpaper-ink'),
+    'light',
+    'a meaningful black mask should keep the default topbar in the dark-material family'
+  );
+  const maskedDarkSurfaceChannels = getCssRgbChannels(
+    target.style.getPropertyValue('--x-nt-wallpaper-surface-mist')
+  );
+  assert.strictEqual(maskedDarkSurfaceChannels.length, 3);
+  assert.ok(
+    Math.max(...maskedDarkSurfaceChannels) < 80,
+    'a black mask over a bright wallpaper should produce a dark topbar surface for light text'
+  );
+
+  body.setAttribute('data-theme', 'light');
+  overlayAlpha = 0.54;
+  overlayLuminance = 1;
+  currentWallpaper = {
+    id: 'dark-wallpaper-with-light-mask',
+    url: 'test://dark-wallpaper-with-light-mask'
+  };
+  runtime.refresh();
+  getPendingImage('test://dark-wallpaper-with-light-mask').resolve({
+    red: 0,
+    green: 0,
+    blue: 0
+  });
+  await flushAsyncWork();
+
+  assert.strictEqual(
+    target.getAttribute('data-wallpaper-ink'),
+    'dark',
+    'a meaningful white mask should keep the default topbar in the light-material family'
+  );
+  const maskedLightSurfaceChannels = getCssRgbChannels(
+    target.style.getPropertyValue('--x-nt-wallpaper-surface-mist')
+  );
+  assert.strictEqual(maskedLightSurfaceChannels.length, 3);
+  assert.ok(
+    Math.min(...maskedLightSurfaceChannels) > 200,
+    'a white mask over a dark wallpaper should produce a light topbar surface for dark text'
+  );
+
+  preferOverlayPolarity = false;
+  body.setAttribute('data-theme', 'dark');
+  overlayAlpha = 0.44;
+  overlayLuminance = 0;
+  currentWallpaper = {
+    id: 'bright-wallpaper-under-transparent-topbar',
+    url: 'test://bright-wallpaper-under-transparent-topbar'
+  };
+  runtime.refresh();
+  getPendingImage('test://bright-wallpaper-under-transparent-topbar').resolve({
+    red: 255,
+    green: 255,
+    blue: 255
+  });
+  await flushAsyncWork();
+
+  assert.strictEqual(
+    target.getAttribute('data-wallpaper-ink'),
+    'dark',
+    'a transparent topbar should keep choosing ink from the actually composited background'
   );
 
   console.log('new tab wallpaper adaptive tone transition tests passed');

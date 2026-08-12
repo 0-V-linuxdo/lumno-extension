@@ -127,6 +127,8 @@ describe('Options settings controls React islands', () => {
     expect(host.dataset.reactIsland).toBe('options-range-slider-control');
     expect(input?.classList.contains('x-lumno-range-slider-input')).toBe(true);
     expect(input?.value).toBe('6');
+    expect(host.querySelector<HTMLElement>('.x-lumno-range-slider-scale')
+      ?.style.getPropertyValue('--x-lumno-range-slider-tick-count')).toBe('3');
     expect(host.querySelector('output')?.textContent).toBe('6');
 
     act(() => {
@@ -136,6 +138,35 @@ describe('Options settings controls React islands', () => {
     });
     expect(onInput).toHaveBeenCalledWith(7);
     expect(host.querySelector('output')?.textContent).toBe('7');
+  });
+
+  it('aligns a two-tick range to both slider endpoints', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const controller = createRangeSliderControlController(host, {
+      kind: 'search-result-display-limit',
+      onInput: vi.fn()
+    });
+    controllers.push(controller);
+
+    act(() => controller.render({
+      ariaLabel: '最多显示结果',
+      id: 'search-result-display-limit',
+      max: 10,
+      min: 5,
+      step: 1,
+      ticks: [
+        { align: 'start', label: '5' },
+        { align: 'end', label: '10' }
+      ],
+      value: 10
+    }));
+
+    const scale = host.querySelector<HTMLElement>('.x-lumno-range-slider-scale');
+    const ticks = host.querySelectorAll<HTMLElement>('.x-lumno-range-slider-tick');
+    expect(scale?.style.getPropertyValue('--x-lumno-range-slider-tick-count')).toBe('2');
+    expect(Array.from(ticks).map((tick) => [tick.dataset.align, tick.textContent]))
+      .toEqual([['start', '5'], ['end', '10']]);
   });
 
   it('keeps adapter-provided localized labels after an interaction rerender', () => {

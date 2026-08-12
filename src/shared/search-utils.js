@@ -1943,8 +1943,8 @@
     const settings = options && typeof options === 'object' ? options : {};
     const rawLimit = Number(settings.limit);
     const fallbackLimit = Number(SEARCH_POLICY.displaySuggestionLimit) || 10;
-    const limit = Number.isFinite(rawLimit) && rawLimit > 0
-      ? Math.floor(rawLimit)
+    const limit = Number.isInteger(rawLimit) && rawLimit >= 5 && rawLimit <= 10
+      ? rawLimit
       : fallbackLimit;
     return suggestions.slice(0, limit);
   }

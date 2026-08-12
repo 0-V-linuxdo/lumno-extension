@@ -870,6 +870,11 @@ testNewtabContainsRootOverscroll();
 
 function testTopbarBookmarkTitlesStayReadableUntilWallpaperToneIsReady() {
   assert.match(
+    newtabSource,
+    /surface:\s*'topbar',[\s\S]*?preferOverlayPolarity:\s*getEffectiveBookmarkTopbarSurfaceMode\(\) === 'adaptive',[\s\S]*?disabled:/,
+    'only the default adaptive topbar material should let a meaningful mask define its material polarity'
+  );
+  assert.match(
     newtabHtml,
     /body\[data-wallpaper-active="true"\] \.x-nt-bookmarks-topbar\[data-surface-mode="adaptive"\],[\s\S]*?--x-nt-bookmarks-topbar-ink:\s*var\(--x-nt-bookmark-title,\s*#111827\);/,
     'topbar bookmark titles should use the theme foreground before wallpaper sampling finishes'
@@ -1189,6 +1194,11 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
     newtabSource,
     /function finishNewtabEntryAnimation\(\)[\s\S]*?setAttribute\('data-nt-enter', 'done'\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', 'done'\)[\s\S]*?function startNewtabEntryAnimation\(\)[\s\S]*?const reduceMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?const entryState = reduceMotion \? 'done' : 'run';[\s\S]*?setAttribute\('data-nt-enter', entryState\)[\s\S]*?root\.setAttribute\('data-lumno-search-entry', entryState\)[\s\S]*?window\.setTimeout\(\s*finishNewtabEntryAnimation,[\s\S]*?NEWTAB_ENTRY_ANIMATION_TOTAL_MS/,
     'new-tab entrance motion should drive the shared search-entry state and release it after the sequence'
+  );
+  assert.match(
+    newtabSource,
+    /const newtabEntryAnimationReadyPromise = new Promise[\s\S]*?function finishNewtabEntryAnimation\(\)[\s\S]*?resolveNewtabEntryAnimationReady\(\)[\s\S]*?function startNewtabEntryAnimation\(\)[\s\S]*?if \(reduceMotion\)[\s\S]*?resolveNewtabEntryAnimationReady\(\)[\s\S]*?inputAutoFocusVisibilityGate:\s*newtabEntryAnimationReadyPromise/,
+    'the input auto-focus hint component gate should release after normal, interrupted, or reduced-motion entry completion'
   );
   assert.match(
     newtabSource,
@@ -1550,22 +1560,17 @@ function testBookmarkGridDefaultsToSixColumns() {
   );
   assert.match(
     optionsHtml,
-    /id="_x_extension_bookmark_rows_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmarks_title">书签行数<[\s\S]*?data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"[\s\S]*?ri-information-line[\s\S]*?id="_x_extension_bookmark_rows_control_2026_unique_"/
+    /id="_x_extension_bookmark_rows_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmarks_title">书签行数<[\s\S]*?id="_x_extension_bookmark_rows_info_2026_unique_"[\s\S]*?id="_x_extension_bookmark_rows_control_2026_unique_"/
   );
   assert.doesNotMatch(optionsHtml, /id="_x_extension_bookmark_count_select_2024_unique_"/);
   assert.match(
     optionsHtml,
-    /id="_x_extension_bookmark_columns_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmark_columns_title">书签每行数量<[\s\S]*?data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"[\s\S]*?ri-information-line[\s\S]*?id="_x_extension_bookmark_columns_control_2026_unique_"/
+    /id="_x_extension_bookmark_columns_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmark_columns_title">书签每行数量<[\s\S]*?id="_x_extension_bookmark_columns_info_2026_unique_"[\s\S]*?id="_x_extension_bookmark_columns_control_2026_unique_"/
   );
   assert.strictEqual(
-    (optionsHtml.match(/data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"/g) || []).length,
+    (optionsHtml.match(/id="_x_extension_bookmark_(?:rows|columns)_info_2026_unique_"/g) || []).length,
     2,
-    'both bookmark count settings should expose the shared adaptive-count tooltip'
-  );
-  assert.strictEqual(
-    (optionsHtml.match(/class="_x_extension_bookmark_count_hint_2026_unique_[^"]*"[\s\S]*?role="img"[\s\S]*?tabindex="0"/g) || []).length,
-    2,
-    'both bookmark count tooltip icons should be keyboard focusable'
+    'both bookmark count settings should mount the shared info component'
   );
   assert.doesNotMatch(optionsHtml, /data-i18n="settings_bookmark_columns_desc"/);
   assert.match(settingsSource, /parsed >= 4 && parsed <= 8/);

@@ -14,6 +14,7 @@ import {
   getAsyncErrorMessage,
   useExclusiveAsyncAction
 } from '../shared/use-exclusive-async-action';
+import { InfoButton } from './info-button';
 
 export interface SiteSearchFormCopyModel
   extends SiteSearchProviderCategoryCopyModel {
@@ -150,14 +151,7 @@ function SiteSearchForm({
                 <span data-i18n="shortcuts_label_template">{model.copy.templateLabel}</span>
                 <span className="_x_extension_shortcut_required_2024_unique_">*</span>
               </label>
-              <span
-                aria-label={model.copy.templateHelp}
-                className="_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_"
-                data-tooltip={model.copy.templateHelp}
-                role="img"
-              >
-                <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
-              </span>
+              <InfoButton tooltip={model.copy.templateHelp} />
             </div>
             <button
               aria-label={model.copy.queryInsertLabel}
@@ -421,12 +415,7 @@ function BlacklistForm({
                   type="checkbox"
                 />
                 <span data-i18n={item.labelKey}>{item.label}</span>
-                <span
-                  className="_x_extension_shortcut_hint_2024_unique_ _x_extension_tooltip_host_2024_unique_"
-                  data-tooltip={item.tooltip}
-                >
-                  <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
-                </span>
+                <InfoButton tooltip={item.tooltip} />
               </label>
             ))}
           </div>

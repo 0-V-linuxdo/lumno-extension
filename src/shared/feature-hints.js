@@ -77,20 +77,20 @@
       id: 'newtab-input-auto-focus',
       introducedIn: '0.9.41',
       surface: 'newtab',
-      placement: 'above newtab appearance button',
+      placement: 'above newtab settings button',
       className: 'x-lumno-feature-hint--newtab-input-auto-focus',
       arrowSide: 'bottom',
       arrowAlign: 'end',
-      widthMode: 'fixed',
+      widthMode: 'content',
       alignMode: 'auto',
       dismissStorage: 'sync',
       rememberOnFirstShow: false,
       roundedArrowTip: true,
       badgeIcon: 'ri-asterisk',
       badgeKey: 'newtab_input_auto_focus_feature_hint_badge',
-      badgeFallback: 'New',
+      badgeFallback: 'Tip',
       textKey: 'newtab_input_auto_focus_feature_hint_text',
-      textFallback: "Don't want the search input focused automatically? Turn it off here.",
+      textFallback: 'Turn off auto-focus under Appearance / New Tab.',
       closeLabelKey: 'newtab_input_auto_focus_feature_hint_close',
       closeLabelFallback: 'Dismiss input auto-focus tip'
     })
@@ -367,6 +367,11 @@
     let dismissed = Boolean(config.initiallyDismissed);
     let requestedVisible = config.initiallyVisible !== false;
     let dismissStateLoaded = dismissStorage === 'none';
+    const visibilityGate = config.visibilityGate &&
+      typeof config.visibilityGate.then === 'function'
+      ? config.visibilityGate
+      : null;
+    let visibilityGateSettled = !visibilityGate;
     let firstShowRemembered = false;
     let destroyed = false;
     let readySettled = false;
@@ -615,7 +620,10 @@
     }
 
     function syncVisibility() {
-      const nextVisible = Boolean(requestedVisible) && !dismissed && dismissStateLoaded;
+      const nextVisible = Boolean(requestedVisible) &&
+        !dismissed &&
+        dismissStateLoaded &&
+        visibilityGateSettled;
       element.setAttribute('data-visible', nextVisible ? 'true' : 'false');
       element.setAttribute('aria-hidden', nextVisible ? 'false' : 'true');
       setElementInert(!nextVisible);
@@ -633,8 +641,8 @@
       }
     }
 
-    function settleReady() {
-      if (readySettled) {
+    function settleReady(force) {
+      if (readySettled || (!force && (!dismissStateLoaded || !visibilityGateSettled))) {
         return;
       }
       readySettled = true;
@@ -652,7 +660,7 @@
           return;
         }
         destroyed = true;
-        settleReady();
+        settleReady(true);
         disconnectAlignmentObserver();
         if (alignUpdateFrame && windowObj && typeof windowObj.cancelAnimationFrame === 'function') {
           windowObj.cancelAnimationFrame(alignUpdateFrame);
@@ -739,6 +747,17 @@
 
     controller.updateLanguage();
     syncVisibility();
+    if (visibilityGate) {
+      const releaseVisibilityGate = () => {
+        if (destroyed || visibilityGateSettled) {
+          return;
+        }
+        visibilityGateSettled = true;
+        syncVisibility();
+        settleReady();
+      };
+      visibilityGate.then(releaseVisibilityGate, releaseVisibilityGate);
+    }
     if (dismissStorage !== 'none') {
       getStoredDismissed(chromeApi, dismissKey, dismissStorage).then((isDismissed) => {
         if (destroyed) {

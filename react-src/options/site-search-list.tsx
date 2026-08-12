@@ -8,6 +8,7 @@ import {
   useExclusiveAsyncAction
 } from '../shared/use-exclusive-async-action';
 import { InlinePopconfirm } from './inline-popconfirm';
+import { InfoButton } from './info-button';
 
 export type SiteSearchProviderCategory = 'site' | 'searchEngine';
 
@@ -184,13 +185,7 @@ function ProviderEditor({
       <div className="_x_extension_shortcut_field_2024_unique_">
         <div className="_x_extension_shortcut_label_row_2024_unique_">
           <RequiredLabel>{copy.templateLabel}</RequiredLabel>
-          <span
-            aria-label={copy.templateHelp}
-            className="_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_"
-            data-tooltip={copy.templateHelp}
-          >
-            <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
-          </span>
+          <InfoButton tooltip={copy.templateHelp} />
         </div>
         <input
           className="_x_extension_shortcut_input_2024_unique_"

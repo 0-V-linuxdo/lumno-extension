@@ -156,6 +156,9 @@
   "settings_search_result_sources_title": {
     "message": "表示する結果タイプ"
   },
+  "settings_search_result_display_limit_title": {
+    "message": "検索結果の最大表示数"
+  },
   "settings_overlay_open_tabs_default_visible_title": {
     "message": "Web ページで Lumno を開いたとき、開いているすべてのタブを既定で表示"
   },
@@ -649,10 +652,10 @@
     "message": "入力欄を自動フォーカス"
   },
   "newtab_input_auto_focus_feature_hint_badge": {
-    "message": "新機能"
+    "message": "ヒント"
   },
   "newtab_input_auto_focus_feature_hint_text": {
-    "message": "入力欄の自動フォーカスが不要な場合は、ここでオフにできます。"
+    "message": "自動フォーカスは「外観 / 新しいタブ」でオフにできます"
   },
   "newtab_input_auto_focus_feature_hint_close": {
     "message": "入力欄の自動フォーカスのヒントを閉じる"

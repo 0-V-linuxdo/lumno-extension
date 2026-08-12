@@ -36,8 +36,13 @@ assert.match(
 );
 assert.match(
   overlaySection,
-  /data-i18n-tooltip="settings_overlay_page_theme_adaptation_tooltip"/,
-  'the setting should explain its disabled behavior with the shared tooltip runtime'
+  /id="_x_extension_overlay_page_theme_adaptation_info_2026_unique_"/,
+  'the setting should expose a shared InfoButton host'
+);
+assert.match(
+  optionsSource,
+  /overlayPageThemeAdaptationInfoController\.render\([\s\S]*?settings_overlay_page_theme_adaptation_tooltip/,
+  'the shared InfoButton should receive the localized disabled-behavior tooltip'
 );
 assert(
   !overlaySection.includes('title="'),

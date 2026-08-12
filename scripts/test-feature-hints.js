@@ -1,4 +1,37 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const featureHintsCss = fs.readFileSync(
+  path.join(__dirname, '..', 'src/shared/feature-hints.css'),
+  'utf8'
+);
+
+assert.match(
+  featureHintsCss,
+  /--x-lumno-feature-hint-arrow-border:\s*#d8dde4;/,
+  'feature hints should define an opaque arrow border color for the light surface'
+);
+assert.strictEqual(
+  (featureHintsCss.match(/solid var\(--x-lumno-feature-hint-arrow-border\)/g) || []).length,
+  4,
+  'every arrow side should use the shared arrow border color'
+);
+assert.match(
+  featureHintsCss,
+  /\.x-lumno-feature-hint__arrow-tip\s*\{[^}]*background:\s*var\(--x-lumno-feature-hint-arrow-border\);/s,
+  'the rounded arrow tip should use the same shared border color as the triangle'
+);
+assert.strictEqual(
+  (featureHintsCss.match(/--x-lumno-feature-hint-arrow-border:\s*#3a4150;/g) || []).length,
+  2,
+  'both dark feature-hint theme entry points should use the opaque composited arrow border color'
+);
+assert.doesNotMatch(
+  featureHintsCss,
+  /x-lumno-feature-hint--newtab-input-auto-focus[^{}]*\{[^}]*--x-lumno-feature-hint-arrow-border:/s,
+  'the dark arrow fix should stay at the shared component level'
+);
 
 class FakeElement {
   constructor(tagName) {
@@ -219,8 +252,23 @@ function flushMicrotasks() {
   );
   assert.strictEqual(
     inputAutoFocusHint.placement,
-    'above newtab appearance button',
-    'newtab input auto-focus feature hint should point to the appearance button'
+    'above newtab settings button',
+    'newtab input auto-focus feature hint should point to the settings button'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.arrowAlign,
+    'end',
+    'newtab input auto-focus feature hint should point to the right-side settings button'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.widthMode,
+    'content',
+    'newtab input auto-focus feature hint should prefer a single content-width row'
+  );
+  assert.strictEqual(
+    inputAutoFocusHint.badgeFallback,
+    'Tip',
+    'newtab input auto-focus feature hint should use the tip badge fallback'
   );
   assert.strictEqual(
     inputAutoFocusHint.className,
@@ -415,6 +463,45 @@ function flushMicrotasks() {
     acknowledgedInputAutoFocusController.element.getAttribute('data-dismissed'),
     'true',
     'a later New Tab should load the acknowledged input auto-focus hint state'
+  );
+
+  let releaseVisibilityGate = null;
+  const gatedInputAutoFocusController = featureHints.createFeatureHint({
+    documentObj: createFakeDocument(),
+    definition: 'newtab-input-auto-focus',
+    dismissStorage: 'none',
+    visibilityGate: new Promise((resolve) => {
+      releaseVisibilityGate = resolve;
+    }),
+    t: (key, fallback) => fallback,
+    getRiSvg: () => ''
+  });
+  assert(gatedInputAutoFocusController, 'gated input auto-focus feature hint should be created');
+  assert.strictEqual(
+    gatedInputAutoFocusController.element.getAttribute('data-visible'),
+    'false',
+    'a feature hint should stay hidden while its component visibility gate is pending'
+  );
+  let gatedReadySettled = false;
+  gatedInputAutoFocusController.ready.then(() => {
+    gatedReadySettled = true;
+  });
+  await flushMicrotasks();
+  assert.strictEqual(
+    gatedReadySettled,
+    false,
+    'feature hint readiness should wait for the component visibility gate'
+  );
+  releaseVisibilityGate();
+  assert.strictEqual(
+    await gatedInputAutoFocusController.ready,
+    true,
+    'the feature hint should become visible only after its visibility gate resolves'
+  );
+  assert.strictEqual(
+    gatedInputAutoFocusController.element.getAttribute('data-visible'),
+    'true',
+    'the feature hint should run its own entrance after the anchor entrance gate settles'
   );
 
   const legacyLocalStore = { [localKey]: true };

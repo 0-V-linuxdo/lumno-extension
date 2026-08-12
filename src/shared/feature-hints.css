@@ -2,6 +2,7 @@
   --x-lumno-feature-hint-bg-top: #ffffff;
   --x-lumno-feature-hint-bg-bottom: #f7f9fc;
   --x-lumno-feature-hint-border: rgba(214, 219, 227, 0.95);
+  --x-lumno-feature-hint-arrow-border: #d8dde4;
   --x-lumno-feature-hint-text: #556070;
   --x-lumno-feature-hint-strong: #3c4455;
   --x-lumno-feature-hint-arrow-border-size: 9px;
@@ -142,11 +143,12 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--newtab-tab-switcher
 }
 
 .x-lumno-feature-hint--newtab-input-auto-focus {
+  left: auto;
   right: 0;
   bottom: calc(100% + 14px);
   top: auto;
-  width: min(280px, calc(100vw - 28px));
-  max-width: min(280px, calc(100vw - 28px));
+  width: max-content;
+  max-width: calc(100vw - 28px);
   transform: translateY(6px) scale(0.98);
   transform-origin: right bottom;
 }
@@ -302,7 +304,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   top: calc(0px - var(--x-lumno-feature-hint-arrow-border-size));
   border-left-width: var(--x-lumno-feature-hint-arrow-border-size);
   border-right-width: var(--x-lumno-feature-hint-arrow-border-size);
-  border-bottom: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-border);
+  border-bottom: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-arrow-border);
 }
 
 .x-lumno-feature-hint[data-arrow-side="top"]::after {
@@ -316,7 +318,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   right: calc(0px - var(--x-lumno-feature-hint-arrow-border-size));
   border-top-width: var(--x-lumno-feature-hint-arrow-border-size);
   border-bottom-width: var(--x-lumno-feature-hint-arrow-border-size);
-  border-left: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-border);
+  border-left: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-arrow-border);
 }
 
 .x-lumno-feature-hint[data-arrow-side="right"]::after {
@@ -330,7 +332,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   bottom: calc(0px - var(--x-lumno-feature-hint-arrow-border-size));
   border-left-width: var(--x-lumno-feature-hint-arrow-border-size);
   border-right-width: var(--x-lumno-feature-hint-arrow-border-size);
-  border-top: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-border);
+  border-top: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-arrow-border);
 }
 
 .x-lumno-feature-hint[data-arrow-side="bottom"]::after {
@@ -344,7 +346,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   left: calc(0px - var(--x-lumno-feature-hint-arrow-border-size));
   border-top-width: var(--x-lumno-feature-hint-arrow-border-size);
   border-bottom-width: var(--x-lumno-feature-hint-arrow-border-size);
-  border-right: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-border);
+  border-right: var(--x-lumno-feature-hint-arrow-border-size) solid var(--x-lumno-feature-hint-arrow-border);
 }
 
 .x-lumno-feature-hint[data-arrow-side="left"]::after {
@@ -418,7 +420,7 @@ body[data-nt-suggestions-open="true"] .x-lumno-feature-hint--update-notice {
   width: 3px;
   height: 3px;
   border-radius: 999px;
-  background: var(--x-lumno-feature-hint-border);
+  background: var(--x-lumno-feature-hint-arrow-border);
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -918,6 +920,7 @@ body[data-theme="dark"] .x-lumno-feature-hint {
   --x-lumno-feature-hint-bg-top: #111827;
   --x-lumno-feature-hint-bg-bottom: #0f172a;
   --x-lumno-feature-hint-border: rgba(255, 255, 255, 0.18);
+  --x-lumno-feature-hint-arrow-border: #3a4150;
   --x-lumno-feature-hint-text: rgba(248, 250, 252, 0.78);
   --x-lumno-feature-hint-strong: #f8fafc;
   --x-lumno-feature-hint-badge-bg: rgba(255, 255, 255, 0.075);
@@ -941,6 +944,7 @@ body[data-theme="dark"] .x-lumno-feature-hint {
   --x-lumno-feature-hint-bg-top: #111827;
   --x-lumno-feature-hint-bg-bottom: #0f172a;
   --x-lumno-feature-hint-border: rgba(255, 255, 255, 0.18);
+  --x-lumno-feature-hint-arrow-border: #3a4150;
   --x-lumno-feature-hint-text: rgba(248, 250, 252, 0.78);
   --x-lumno-feature-hint-strong: #f8fafc;
   --x-lumno-feature-hint-badge-bg: rgba(255, 255, 255, 0.075);

@@ -157,6 +157,23 @@ function appendOverlayStyleNodes(
     #_x_extension_overlay_2024_unique_ [role="option"]:not([aria-disabled="true"]) {
       cursor: pointer;
     }
+    :where(#_x_extension_overlay_2024_unique_) :where(.x-ov-suggestion-switch-button) {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--x-ov-suggestion-action-button-bg, transparent);
+      border: 0;
+      border-radius: 6px;
+      box-sizing: border-box;
+      color: var(--x-ov-suggestion-action-button-text, var(--x-ov-subtext, #9CA3AF));
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1;
+      height: var(--x-ov-suggestion-action-height, 26px);
+      padding: 0 var(--x-ov-suggestion-action-icon-end, 7px) 0 var(--x-ov-suggestion-action-button-start, 10px);
+    }
     #_x_extension_overlay_2024_unique_ button *,
     #_x_extension_overlay_2024_unique_ a[href] *,
     #_x_extension_overlay_2024_unique_ [role="button"] *,

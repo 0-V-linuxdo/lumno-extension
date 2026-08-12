@@ -154,6 +154,8 @@
   const SEARCH_RESULT_PRIORITY_STORAGE_KEY = '_x_extension_search_result_priority_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
   const SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY = '_x_extension_search_result_source_types_2026_unique_';
+  const SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY = SETTINGS.SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY ||
+    '_x_extension_search_result_display_limit_2026_unique_';
   const SEARCH_BLACKLIST_STORAGE_KEY = '_x_extension_search_blacklist_2026_unique_';
   const FAVICON_REQUEST_BLACKLIST_STORAGE_KEY = '_x_extension_favicon_request_blacklist_2026_unique_';
   const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
@@ -395,6 +397,10 @@
   let newtabReadySettleTimer = 0;
   let newtabReadyViewportRevision = 0;
   let newtabEntryAnimationTimer = 0;
+  let resolveNewtabEntryAnimationReady = null;
+  const newtabEntryAnimationReadyPromise = new Promise((resolve) => {
+    resolveNewtabEntryAnimationReady = resolve;
+  });
   let searchEntryLastVisibleViewportWidth = Math.max(0, window.innerWidth || 0);
   let searchEntryLastVisibleViewportHeight = Math.max(0, window.innerHeight || 0);
   let currentRecentMode = 'most';
@@ -2079,6 +2085,10 @@
     if (document.body && document.body.getAttribute('data-nt-enter') === 'run') {
       document.body.setAttribute('data-nt-enter', 'done');
       root.setAttribute('data-lumno-search-entry', 'done');
+      if (resolveNewtabEntryAnimationReady) {
+        resolveNewtabEntryAnimationReady();
+        resolveNewtabEntryAnimationReady = null;
+      }
     }
   }
 
@@ -2095,6 +2105,10 @@
     document.body.setAttribute('data-nt-enter', entryState);
     root.setAttribute('data-lumno-search-entry', entryState);
     if (reduceMotion) {
+      if (resolveNewtabEntryAnimationReady) {
+        resolveNewtabEntryAnimationReady();
+        resolveNewtabEntryAnimationReady = null;
+      }
       return;
     }
     newtabEntryAnimationTimer = window.setTimeout(
@@ -2116,6 +2130,10 @@
     root.setAttribute('data-lumno-search-entry', 'done');
     finishWordmarkEntryAnimation();
     document.body.setAttribute('data-nt-ready', '1');
+    if (resolveNewtabEntryAnimationReady) {
+      resolveNewtabEntryAnimationReady();
+      resolveNewtabEntryAnimationReady = null;
+    }
     rememberSearchEntryViewport();
   }
 
@@ -2459,6 +2477,7 @@
         minWidth: 280,
         minHeight: 64,
         surface: 'topbar',
+        preferOverlayPolarity: getEffectiveBookmarkTopbarSurfaceMode() === 'adaptive',
         disabled: !isBookmarkTopbarMode() ||
           getEffectiveBookmarkTopbarSurfaceMode() === 'custom'
       },
@@ -2559,8 +2578,10 @@
     },
     featureHints: FEATURE_HINTS,
     inputAutoFocusReady: initialNewtabInputAutoFocusReadyTask,
+    inputAutoFocusVisibilityGate: newtabEntryAnimationReadyPromise,
     getInputAutoFocusEnabled: () => newtabInputAutoFocusEnabled,
     setInputAutoFocusEnabled: setNewtabInputAutoFocusEnabled,
+    getInputAutoFocusHintAnchor: () => inputParts && inputParts.container,
     getAdaptiveToneTargets: createWallpaperAdaptiveToneTargets,
     view: NEWTAB_WALLPAPER_VIEW
   });
@@ -4890,6 +4911,7 @@
   let suggestionRequestWatchdogTimer = null;
   let searchResultPriorityMode = 'autocomplete';
   let enabledSearchResultSourceTypes = ['topSite', 'bookmark', 'history'];
+  let searchResultDisplayLimit = 10;
   let openTabQuickSwitchEnabled = true;
   let searchInputRef = null;
   let faviconRequestBlacklistItems = [];
@@ -4918,6 +4940,14 @@
         if (localSearchScopeState &&
             !enabledSearchResultSourceTypes.includes(localSearchScopeState.sourceType)) {
           clearLocalSearchScope();
+        }
+      }
+      if (changes[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY]) {
+        searchResultDisplayLimit = normalizeSearchResultDisplayLimit(
+          changes[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY].newValue
+        );
+        if (latestQuery) {
+          renderSuggestions(lastSuggestionResponse, latestQuery);
         }
       }
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
@@ -4990,6 +5020,7 @@
     DEFAULT_SEARCH_ENGINE_STORAGE_KEY,
     SEARCH_RESULT_PRIORITY_STORAGE_KEY,
     SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
+    SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
     SITE_SEARCH_STORAGE_KEY,
     SITE_SEARCH_DISABLED_STORAGE_KEY,
     SEARCH_BLACKLIST_STORAGE_KEY,
@@ -12013,14 +12044,18 @@
     return list.filter((suggestion) => !isSuggestionBlockedBySearchBlacklist(suggestion));
   }
 
-  function limitSuggestionsForDisplay(list) {
+  function limitSuggestionsForDisplay(list, options) {
+    const config = options && typeof options === 'object' ? options : {};
+    if (config.uncapped === true) {
+      return Array.isArray(list) ? list : [];
+    }
     if (typeof SEARCH_UTILS.limitSearchSuggestionsForDisplay === 'function') {
-      return SEARCH_UTILS.limitSearchSuggestionsForDisplay(list);
+      return SEARCH_UTILS.limitSearchSuggestionsForDisplay(list, {
+        limit: searchResultDisplayLimit
+      });
     }
     const suggestions = Array.isArray(list) ? list : [];
-    const policy = SEARCH_UTILS.SEARCH_POLICY || {};
-    const limit = Number(policy.displaySuggestionLimit) || 10;
-    return suggestions.slice(0, limit);
+    return suggestions.slice(0, normalizeSearchResultDisplayLimit(searchResultDisplayLimit));
   }
 
   function shouldExcludeFromRecentSites(url) {
@@ -13090,6 +13125,14 @@
       return SETTINGS.normalizeSearchResultSourceTypes(value);
     }
     return ['topSite', 'bookmark', 'history'];
+  }
+
+  function normalizeSearchResultDisplayLimit(value) {
+    if (SETTINGS && typeof SETTINGS.normalizeSearchResultDisplayLimit === 'function') {
+      return SETTINGS.normalizeSearchResultDisplayLimit(value);
+    }
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 5 && parsed <= 10 ? parsed : 10;
   }
 
   function getLocalSearchScopeCandidate(input, rules) {
@@ -14321,7 +14364,9 @@
       if (hasCommand) {
         applyAutocomplete(allSuggestions, primarySuggestion, primaryHighlightReason);
       }
-      allSuggestions = limitSuggestionsForDisplay(allSuggestions);
+      allSuggestions = limitSuggestionsForDisplay(allSuggestions, {
+        uncapped: slashCommandModeActive
+      });
       const emptyMessage = slashCommandModeActive && allSuggestions.length === 0
         ? t('slash_command_empty', '无匹配命令')
         : (localSearchQueryModeActive && allSuggestions.length === 0
@@ -14579,6 +14624,8 @@
     },
     rightIconStyleOverrides: {
       '--x-ext-input-right-icon-inset': '7px',
+      '--x-ext-input-icon-hover-bg': 'var(--x-nt-settings-action-hover-bg, rgba(148, 163, 184, 0.16))',
+      '--x-ext-input-icon-hover': 'var(--x-nt-settings-action-hover-color, #4B5563)',
       cursor: 'pointer'
     },
     onInput: function(event) {
@@ -15489,6 +15536,7 @@
     storageArea.get([
       SEARCH_RESULT_PRIORITY_STORAGE_KEY,
       SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
+      SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
       OVERLAY_TAB_PRIORITY_STORAGE_KEY
     ], (result) => {
       const raw = result ? result[SEARCH_RESULT_PRIORITY_STORAGE_KEY] : null;
@@ -15497,11 +15545,19 @@
       enabledSearchResultSourceTypes = normalizeEnabledSearchResultSourceTypes(
         result ? result[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY] : null
       );
+      const rawDisplayLimit = result ? result[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY] : null;
+      searchResultDisplayLimit = normalizeSearchResultDisplayLimit(rawDisplayLimit);
       openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(
         result ? result[OVERLAY_TAB_PRIORITY_STORAGE_KEY] : null
       );
       if (raw !== nextMode) {
         storageArea.set({ [SEARCH_RESULT_PRIORITY_STORAGE_KEY]: nextMode });
+      }
+      if (rawDisplayLimit !== searchResultDisplayLimit) {
+        storageArea.set({ [SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY]: searchResultDisplayLimit });
+      }
+      if (latestQuery) {
+        renderSuggestions(lastSuggestionResponse, latestQuery);
       }
     });
   }

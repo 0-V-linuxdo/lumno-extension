@@ -1491,6 +1491,8 @@ async function testInputAutoFocusHintWaitsForFinalFocusRoute() {
   let settledRouteCreates = 0;
   let settledRouteDismissals = 0;
   let createdHintOptions = null;
+  const inputAutoFocusVisibilityGate = Promise.resolve();
+  const inputAutoFocusHintAnchor = settledRoute.documentObj.createElement('div');
   const hintElement = settledRoute.documentObj.createElement('span');
   hintElement.setAttribute('data-feature-hint-id', 'newtab-input-auto-focus');
   hintElement.setAttribute('data-visible', 'true');
@@ -1517,7 +1519,9 @@ async function testInputAutoFocusHintWaitsForFinalFocusRoute() {
       }
     },
     inputAutoFocusReady: Promise.resolve(true),
+    inputAutoFocusVisibilityGate,
     getInputAutoFocusEnabled: () => true,
+    getInputAutoFocusHintAnchor: () => inputAutoFocusHintAnchor,
     t: (_key, fallback) => fallback || '',
     getRiSvg: () => ''
   });
@@ -1531,9 +1535,19 @@ async function testInputAutoFocusHintWaitsForFinalFocusRoute() {
   );
   assert.strictEqual(createdHintOptions.definition, 'newtab-input-auto-focus');
   assert.strictEqual(
+    createdHintOptions.dismissStorage,
+    undefined,
+    'the input auto-focus feature hint should use its normal Sync dismissal state'
+  );
+  assert.strictEqual(
+    createdHintOptions.visibilityGate,
+    inputAutoFocusVisibilityGate,
+    'the input auto-focus feature hint should receive the page entrance completion gate'
+  );
+  assert.strictEqual(
     hintElement.parentNode,
-    settledRuntime.getControlElement(),
-    'the feature hint should mount above the appearance button in its corner control'
+    inputAutoFocusHintAnchor,
+    'the feature hint should mount in the New Tab input container above its settings button'
   );
   settledRuntime.getControlElement().children[1].click();
   assert.strictEqual(

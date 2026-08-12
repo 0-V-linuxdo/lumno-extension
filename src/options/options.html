@@ -1068,15 +1068,12 @@
       #_x_extension_overlay_tab_priority_row_2024_unique_ {
         display: none;
       }
-      ._x_extension_setting_icon_hint_2024_unique_ {
-        color: var(--panel-subtext);
-        opacity: 0.55;
-      }
-      ._x_extension_bookmark_count_hint_2026_unique_ {
+      ._x_extension_info_button_2026_unique_ {
         box-sizing: border-box;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        flex: 0 0 20px;
         width: 20px;
         height: 20px;
         border-radius: 999px;
@@ -1087,14 +1084,19 @@
         line-height: 1;
         transition: background-color 140ms ease, color 140ms ease;
       }
-      ._x_extension_bookmark_count_hint_2026_unique_:hover,
-      ._x_extension_bookmark_count_hint_2026_unique_:focus-visible {
+      ._x_extension_info_button_2026_unique_:hover {
         background: rgba(37, 99, 235, 0.1);
         color: var(--panel-text);
       }
-      ._x_extension_bookmark_count_hint_2026_unique_:focus-visible {
+      ._x_extension_info_button_2026_unique_:focus-visible {
+        background: rgba(37, 99, 235, 0.1);
+        color: var(--panel-text);
         outline: 2px solid rgba(37, 99, 235, 0.46);
         outline-offset: 3px;
+      }
+      ._x_extension_info_button_2026_unique_ .ri-icon {
+        font-size: 14px;
+        line-height: 1;
       }
       ._x_extension_sync_actions_2024_unique_ {
         display: flex;
@@ -1110,7 +1112,8 @@
         flex-wrap: wrap;
       }
       #_x_extension_bookmark_rows_control_2026_unique_,
-      #_x_extension_bookmark_columns_control_2026_unique_ {
+      #_x_extension_bookmark_columns_control_2026_unique_,
+      #_x_extension_search_result_display_limit_control_2026_unique_ {
         width: 210px;
         min-width: 170px;
       }
@@ -2007,44 +2010,11 @@
         align-items: center;
         gap: 4px;
       }
-      ._x_extension_shortcut_hint_2024_unique_ {
-        box-sizing: border-box;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        border-radius: 999px;
-        color: rgba(107, 114, 128, 0.74);
-        background: transparent;
-        cursor: help;
-        font-size: 14px;
-        line-height: 1;
-        transition: background-color 140ms ease, color 140ms ease;
-      }
-      ._x_extension_shortcut_hint_2024_unique_:hover {
-        background: rgba(37, 99, 235, 0.1);
-        color: var(--panel-text);
-      }
-      ._x_extension_shortcut_hint_2024_unique_:focus-visible {
-        outline: 2px solid rgba(37, 99, 235, 0.46);
-        outline-offset: 3px;
-        background: rgba(37, 99, 235, 0.1);
-        color: var(--panel-text);
-      }
-      ._x_extension_shortcut_hint_2024_unique_ svg {
-        width: 14px;
-        height: 14px;
-      }
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_shortcut_hint_2024_unique_,
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_bookmark_count_hint_2026_unique_ {
+      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_info_button_2026_unique_ {
         color: rgba(156, 163, 175, 0.82);
       }
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_shortcut_hint_2024_unique_:hover,
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_shortcut_hint_2024_unique_:focus-visible,
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_bookmark_count_hint_2026_unique_:hover,
-      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_bookmark_count_hint_2026_unique_:focus-visible {
+      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_info_button_2026_unique_:hover,
+      #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_info_button_2026_unique_:focus-visible {
         background: rgba(147, 197, 253, 0.14);
       }
       ._x_extension_shortcut_input_2024_unique_ {
@@ -2509,12 +2479,14 @@
       }
       @media (max-width: 480px) {
         #_x_extension_bookmark_rows_setting_row_2026_unique_,
-        #_x_extension_bookmark_columns_setting_row_2026_unique_ {
+        #_x_extension_bookmark_columns_setting_row_2026_unique_,
+        #_x_extension_search_result_display_limit_setting_row_2026_unique_ {
           align-items: flex-start;
           flex-direction: column;
         }
         #_x_extension_bookmark_rows_control_2026_unique_,
-        #_x_extension_bookmark_columns_control_2026_unique_ {
+        #_x_extension_bookmark_columns_control_2026_unique_,
+        #_x_extension_search_result_display_limit_control_2026_unique_ {
           min-width: 0;
           width: 100%;
         }
@@ -2790,6 +2762,14 @@
               </label>
             </div>
           </div>
+          <div id="_x_extension_search_result_display_limit_setting_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_">
+                <span data-i18n="settings_search_result_display_limit_title">最多显示结果</span>
+              </p>
+            </div>
+            <div id="_x_extension_search_result_display_limit_control_2026_unique_"></div>
+          </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
             <div>
               <p class="_x_extension_setting_title_2024_unique_">
@@ -2847,14 +2827,7 @@
             <div>
               <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
                 <span data-i18n="settings_restricted_title">在受限页行为</span>
-                <span
-                  class="_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_"
-                  data-i18n-tooltip="settings_restricted_tooltip"
-                  data-tooltip="受限页（如 chrome://、扩展商店、部分 file:// 页面）无法开启聚焦搜索；按下快捷键将按此处规则处理"
-                  aria-label="受限页（如 chrome://、扩展商店、部分 file:// 页面）无法开启聚焦搜索；按下快捷键将按此处规则处理"
-                  role="img">
-                  <i class="ri-icon ri-size-14 ri-information-line" aria-hidden="true"></i>
-                </span>
+                <span id="_x_extension_restricted_action_info_2026_unique_"></span>
               </p>
             </div>
             <div id="_x_extension_restricted_action_tabs_wrap_2024_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="restricted action" data-i18n-aria-label="settings_restricted_title">
@@ -3031,15 +3004,7 @@
             <div>
               <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
                 <span data-i18n="settings_bookmarks_title">书签行数</span>
-                <span
-                  class="_x_extension_bookmark_count_hint_2026_unique_ _x_extension_tooltip_host_2026_unique_"
-                  data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"
-                  data-tooltip="该值为宽度充足时的最大数量，实际显示数量会根据可用空间自适应。"
-                  aria-label="该值为宽度充足时的最大数量，实际显示数量会根据可用空间自适应。"
-                  role="img"
-                  tabindex="0">
-                  <i class="ri-icon ri-size-14 ri-information-line" aria-hidden="true"></i>
-                </span>
+                <span id="_x_extension_bookmark_rows_info_2026_unique_"></span>
               </p>
             </div>
             <div id="_x_extension_bookmark_rows_control_2026_unique_"></div>
@@ -3048,15 +3013,7 @@
             <div>
               <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
                 <span data-i18n="settings_bookmark_columns_title">书签每行数量</span>
-                <span
-                  class="_x_extension_bookmark_count_hint_2026_unique_ _x_extension_tooltip_host_2026_unique_"
-                  data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"
-                  data-tooltip="该值为宽度充足时的最大数量，实际显示数量会根据可用空间自适应。"
-                  aria-label="该值为宽度充足时的最大数量，实际显示数量会根据可用空间自适应。"
-                  role="img"
-                  tabindex="0">
-                  <i class="ri-icon ri-size-14 ri-information-line" aria-hidden="true"></i>
-                </span>
+                <span id="_x_extension_bookmark_columns_info_2026_unique_"></span>
               </p>
             </div>
             <div id="_x_extension_bookmark_columns_control_2026_unique_"></div>
@@ -3166,14 +3123,7 @@
             <div>
               <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
                 <span data-i18n="settings_overlay_page_theme_adaptation_title">基于网页色彩自动变更主题色</span>
-                <span
-                  class="_x_extension_setting_icon_hint_2024_unique_"
-                  data-i18n-tooltip="settings_overlay_page_theme_adaptation_tooltip"
-                  data-tooltip="关闭后：&#10;• 跟随系统/网站：仅跟随系统深浅色&#10;• 浅色：始终使用浅色&#10;• 深色：始终使用深色"
-                  aria-label="关闭后：跟随系统/网站仅跟随系统深浅色；浅色始终使用浅色；深色始终使用深色"
-                  role="img">
-                  <i class="ri-icon ri-size-14 ri-question-line" aria-hidden="true"></i>
-                </span>
+                <span id="_x_extension_overlay_page_theme_adaptation_info_2026_unique_"></span>
               </p>
             </div>
             <label class="_x_extension_switch_2024_unique_" for="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_">
@@ -3207,7 +3157,13 @@
                       <label class="_x_extension_shortcut_label_2024_unique_" for="_x_extension_site_search_template_2024_unique_">
                         <span data-i18n="shortcuts_label_template">搜索模板</span><span class="_x_extension_shortcut_required_2024_unique_">*</span>
                       </label>
-                      <span class="_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_" data-i18n-tooltip="shortcuts_template_help" data-tooltip="1.打开你想添加的网站&#10;2.输入任一搜索词，触发搜索&#10;3.将搜索结果页面 url 粘贴在此处&#10;4.将关键词替换为{query}" aria-label="模板说明" role="img">
+                      <span
+                        class="_x_extension_info_button_2026_unique_ _x_extension_tooltip_host_2026_unique_"
+                        data-i18n-tooltip="shortcuts_template_help"
+                        data-tooltip="1.打开你想添加的网站&#10;2.输入任一搜索词，触发搜索&#10;3.将搜索结果页面 url 粘贴在此处&#10;4.将关键词替换为{query}"
+                        aria-label="模板说明"
+                        role="img"
+                        tabindex="0">
                         <i class="ri-icon ri-size-14 ri-information-line" aria-hidden="true"></i>
                       </span>
                     </div>

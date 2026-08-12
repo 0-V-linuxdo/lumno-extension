@@ -156,6 +156,9 @@
   "settings_search_result_sources_title": {
     "message": "Visible Result Types"
   },
+  "settings_search_result_display_limit_title": {
+    "message": "Maximum Visible Results"
+  },
   "settings_overlay_open_tabs_default_visible_title": {
     "message": "Show all open tabs by default when Lumno opens on a webpage"
   },
@@ -649,10 +652,10 @@
     "message": "Automatically focus input"
   },
   "newtab_input_auto_focus_feature_hint_badge": {
-    "message": "New"
+    "message": "Tip"
   },
   "newtab_input_auto_focus_feature_hint_text": {
-    "message": "Don't want the search input focused automatically? Turn it off here."
+    "message": "Turn off auto-focus under Appearance / New Tab."
   },
   "newtab_input_auto_focus_feature_hint_close": {
     "message": "Dismiss input auto-focus tip"

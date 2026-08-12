@@ -184,7 +184,6 @@ function RangeSliderControl({
     setValue(next);
     onInput(next);
   };
-
   return (
     <div className="_x_extension_range_slider_control_2026_unique_">
       <RangeSlider
@@ -210,7 +209,13 @@ function RangeSliderControl({
         } as CSSProperties}
         value={value}
       >
-        <div aria-hidden="true" className="x-lumno-range-slider-scale">
+        <div
+          aria-hidden="true"
+          className="x-lumno-range-slider-scale"
+          style={{
+            '--x-lumno-range-slider-tick-count': String(model.ticks.length)
+          } as CSSProperties}
+        >
           {model.ticks.map((tick) => (
             <span
               className="x-lumno-range-slider-tick"

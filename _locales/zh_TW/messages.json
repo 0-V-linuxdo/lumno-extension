@@ -156,6 +156,9 @@
   "settings_search_result_sources_title": {
     "message": "顯示結果類型"
   },
+  "settings_search_result_display_limit_title": {
+    "message": "最多顯示結果"
+  },
   "settings_overlay_open_tabs_default_visible_title": {
     "message": "在網頁喚起時，預設展示所有已開啟分頁"
   },
@@ -649,10 +652,10 @@
     "message": "輸入框自動聚焦"
   },
   "newtab_input_auto_focus_feature_hint_badge": {
-    "message": "新功能"
+    "message": "提示"
   },
   "newtab_input_auto_focus_feature_hint_text": {
-    "message": "如果不喜歡輸入框自動聚焦，可以在這裡關閉。"
+    "message": "自動聚焦可在「外觀/新分頁」處關閉"
   },
   "newtab_input_auto_focus_feature_hint_close": {
     "message": "關閉輸入框自動聚焦提示"

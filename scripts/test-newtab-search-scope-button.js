@@ -3,7 +3,9 @@ const fs = require('fs');
 const shortcutFavicon = require('../src/shared/shortcut-favicon.js');
 
 const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
+const newtabHtml = fs.readFileSync('src/newtab/newtab.html', 'utf8');
 const searchInputCss = fs.readFileSync('src/shared/search-input.css', 'utf8');
+const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 
 assert.match(
   newtabSource,
@@ -73,6 +75,31 @@ assert.match(
   newtabSource,
   /const settingsTooltipText = \(\) => formatMessage\([\s\S]*?rightIcon\.setAttribute\('data-tooltip', settingsTooltipText\(\)\)[\s\S]*?bindSearchInputCursorTooltip\(rightIcon, settingsTooltipText\)/,
   'the settings icon should restore the same cursor-following bubble as overlay'
+);
+assert.match(
+  newtabHtml,
+  /:root\s*\{[\s\S]*?--x-nt-settings-action-hover-bg:\s*rgba\(148, 163, 184, 0\.16\);[\s\S]*?--x-nt-settings-action-hover-color:\s*#4b5563;/,
+  'the New Tab settings action should preserve its light-theme hover colors'
+);
+assert.match(
+  newtabHtml,
+  /body\[data-theme="dark"\]\s*\{[\s\S]*?--x-nt-settings-action-hover-bg:\s*rgba\(255, 255, 255, 0\.08\);[\s\S]*?--x-nt-settings-action-hover-color:\s*#e5e7eb;/,
+  'the New Tab settings action should use a restrained dark-theme hover surface with a light icon'
+);
+assert.match(
+  newtabSource,
+  /rightIconStyleOverrides:\s*\{[\s\S]*?'--x-ext-input-icon-hover-bg':\s*'var\(--x-nt-settings-action-hover-bg,[^']+\)'[\s\S]*?'--x-ext-input-icon-hover':\s*'var\(--x-nt-settings-action-hover-color,[^']+\)'/,
+  'only the New Tab settings action should bridge the New Tab theme colors into the shared hover tokens'
+);
+assert.doesNotMatch(
+  overlaySource,
+  /--x-nt-settings-action-hover-(?:bg|color)/,
+  'the New Tab settings-action hover tokens should not leak into Overlay'
+);
+assert.match(
+  overlaySource,
+  /target\.style\.setProperty\('--x-ext-input-icon-hover-bg', tokens\.hoverBg\);\s*target\.style\.setProperty\('--x-ext-input-icon-hover', tokens\.text\);/,
+  'Overlay should keep its own hover token mapping'
 );
 assert.match(
   newtabSource,

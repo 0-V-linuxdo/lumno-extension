@@ -1,7 +1,7 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 49);
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 50);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
@@ -10,6 +10,7 @@ assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_2024_un
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_motion_effects_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_input_auto_focus_enabled_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_search_result_display_limit_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_view_mode_2026_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_mode_2026_unique_'));
 assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_topbar_surface_color_light_2026_unique_'));
@@ -169,6 +170,13 @@ assert.strictEqual(settings.normalizeOverlayTabPriorityMode(undefined), true);
 assert.strictEqual(settings.normalizeSearchResultPriority('search'), 'search');
 assert.strictEqual(settings.normalizeSearchResultPriority('autocomplete'), 'autocomplete');
 assert.strictEqual(settings.normalizeSearchResultPriority('other'), 'autocomplete');
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(5), 5);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit('8'), 8);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(10), 10);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(4), 10);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(11), 10);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(7.5), 10);
+assert.strictEqual(settings.normalizeSearchResultDisplayLimit(undefined), 10);
 assert.deepStrictEqual(
   settings.normalizeSearchResultSourceTypes(['topSite', 'bookmark']),
   ['topSite', 'bookmark']

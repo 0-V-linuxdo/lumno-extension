@@ -1,6 +1,7 @@
 import { createToastApi } from '../shared/toast';
 import { createBlacklistListApi } from './blacklist-list';
 import { createFeedbackSupportApi } from './feedback-support';
+import { createInfoButtonApi } from './info-button';
 import { createPopconfirmApi } from './popconfirm';
 import { createSegmentedControlApi } from './segmented-control';
 import { createSelectControlApi } from './select-control';
@@ -21,6 +22,7 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsReactIslands?: {
     blacklistList: ReturnType<typeof createBlacklistListApi>;
     feedbackSupport: ReturnType<typeof createFeedbackSupportApi>;
+    infoButton: ReturnType<typeof createInfoButtonApi>;
     popconfirm: ReturnType<typeof createPopconfirmApi>;
     segmentedControl: ReturnType<typeof createSegmentedControlApi>;
     selectControl: ReturnType<typeof createSelectControlApi>;
@@ -38,6 +40,8 @@ const runtime = globalThis as typeof globalThis & {
   LumnoOptionsBlacklistListReact?: ReturnType<typeof createBlacklistListApi>;
   LumnoOptionsFeedbackSupport?: ReturnType<typeof createFeedbackSupportApi>;
   LumnoOptionsFeedbackSupportReact?: ReturnType<typeof createFeedbackSupportApi>;
+  LumnoOptionsInfoButton?: ReturnType<typeof createInfoButtonApi>;
+  LumnoOptionsInfoButtonReact?: ReturnType<typeof createInfoButtonApi>;
   LumnoOptionsPopconfirm?: ReturnType<typeof createPopconfirmApi>;
   LumnoOptionsPopconfirmReact?: ReturnType<typeof createPopconfirmApi>;
   LumnoOptionsSegmentedControl?: ReturnType<typeof createSegmentedControlApi>;
@@ -71,6 +75,7 @@ const bootstrapState = runtime.LumnoOptionsReactBootstrap;
 if (!bootstrapState || !bootstrapState.reactReady) {
   const blacklistListApi = createBlacklistListApi();
   const feedbackSupportApi = createFeedbackSupportApi();
+  const infoButtonApi = createInfoButtonApi();
   const popconfirmApi = createPopconfirmApi();
   const segmentedControlApi = createSegmentedControlApi();
   const selectControlApi = createSelectControlApi();
@@ -90,6 +95,8 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoOptionsBlacklistList = blacklistListApi;
   runtime.LumnoOptionsFeedbackSupportReact = feedbackSupportApi;
   runtime.LumnoOptionsFeedbackSupport = feedbackSupportApi;
+  runtime.LumnoOptionsInfoButtonReact = infoButtonApi;
+  runtime.LumnoOptionsInfoButton = infoButtonApi;
   runtime.LumnoOptionsPopconfirmReact = popconfirmApi;
   runtime.LumnoOptionsPopconfirm = popconfirmApi;
   runtime.LumnoOptionsSegmentedControlReact = segmentedControlApi;
@@ -119,6 +126,7 @@ if (!bootstrapState || !bootstrapState.reactReady) {
   runtime.LumnoOptionsReactIslands = Object.freeze({
     blacklistList: blacklistListApi,
     feedbackSupport: feedbackSupportApi,
+    infoButton: infoButtonApi,
     popconfirm: popconfirmApi,
     segmentedControl: segmentedControlApi,
     selectControl: selectControlApi,

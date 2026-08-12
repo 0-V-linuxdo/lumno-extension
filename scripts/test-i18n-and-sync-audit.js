@@ -141,8 +141,8 @@ function getStorageConstantValue(source, name) {
   );
   assert(
     overlaySource.includes(animationKey) &&
-      /getStorageValues\(\s*storageArea,\s*\[OVERLAY_ENTER_ANIMATION_STORAGE_KEY\]/.test(overlaySource),
-    'overlay runtime should read the synchronized opening-animation preference'
+      /const initialOverlaySettingsReady = overlayRuntime\.getStorageValues\([\s\S]*?OVERLAY_ENTER_ANIMATION_STORAGE_KEY[\s\S]*?\)\.catch/.test(overlaySource),
+    'overlay runtime should read the synchronized opening-animation preference in its batched startup settings'
   );
   localeNames.forEach((locale) => {
     ['settings_overlay_enter_animation_title', 'overlay_enter_animation_elastic', 'overlay_enter_animation_fade']

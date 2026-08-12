@@ -14,10 +14,9 @@
     id: 'overlay-critical-style-reveal',
     waitForStyleSheets: true,
     styleIds: Object.freeze([
-      OVERLAY_STYLE_IDS.input,
-      OVERLAY_STYLE_IDS.suggestions
+      OVERLAY_STYLE_IDS.input
     ]),
-    maxWaitMs: 700
+    maxWaitMs: 160
   });
 
   const SITE_FIXES = Object.freeze([]);

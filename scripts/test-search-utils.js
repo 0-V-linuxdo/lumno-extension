@@ -233,9 +233,19 @@ assert.strictEqual(
   'display suggestions should default to the shared visible-result cap'
 );
 assert.deepStrictEqual(
-  search.limitSearchSuggestionsForDisplay(displaySuggestionItems, { limit: 3 }).map((item) => item.title),
-  ['Result 1', 'Result 2', 'Result 3'],
+  search.limitSearchSuggestionsForDisplay(displaySuggestionItems, { limit: 5 }).map((item) => item.title),
+  ['Result 1', 'Result 2', 'Result 3', 'Result 4', 'Result 5'],
   'display suggestion limiting should preserve ranking order'
+);
+assert.strictEqual(
+  search.limitSearchSuggestionsForDisplay(displaySuggestionItems, { limit: 10 }).length,
+  10,
+  'display suggestions should accept the maximum configurable visible-result cap'
+);
+assert.strictEqual(
+  search.limitSearchSuggestionsForDisplay(displaySuggestionItems, { limit: 11 }).length,
+  10,
+  'display suggestions should fall back to the shared cap for out-of-range values'
 );
 assert.deepStrictEqual(
   search.filterSearchSuggestionsBySourceTypes([

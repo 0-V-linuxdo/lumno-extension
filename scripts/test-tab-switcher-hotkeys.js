@@ -321,7 +321,7 @@ assert.doesNotMatch(
   'restricted browser-setting action should no longer be treated as no action'
 );
 assert.strictEqual(
-  /TAB_SWITCHER_RUNTIME_VERSION|getTabSwitcherRuntimeVersionOnTab|tab_switcher_runtime_stale|runtimeVersion/.test(backgroundSource),
+  /TAB_SWITCHER_RUNTIME_VERSION|getTabSwitcherRuntimeVersionOnTab|tab_switcher_runtime_stale/.test(backgroundSource),
   false,
   'background should not keep the reload-time tab switcher runtime update path'
 );

@@ -3999,31 +3999,17 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/react/overlay-islands.js',
     'src/overlay/search-panel.js'
   ];
-  logHotkeyDebug('inject-start', { tabId: activeTab.id, file: overlayInjectionFiles.join(','), source: source || '' });
-  chrome.scripting.executeScript({
-    target: {tabId: activeTab.id},
-    files: overlayInjectionFiles
-  }, function() {
-    if (chrome.runtime.lastError) {
-      logHotkeyDebug('inject-failed', {
-        step: overlayInjectionFiles.join(','),
-        tabId: activeTab.id,
-        error: chrome.runtime.lastError.message || 'unknown',
-        source: source || ''
-      });
-      openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
-      return;
-    }
-    const runOverlayScript = (tabZoomFactor) => {
+  const expectedOverlayRuntimeVersion = '2026-08-12-fast-open-v1';
+  const runOverlayScript = (tabZoomFactor) => {
       const prefillQuery = getOverlayPrefillQueryForSource(activeTab, source);
       const prioritizeCurrentPageMatch = source === 'page-hotkey-prefill';
+      const siteSearchProviders = Array.isArray(siteSearchCache) ? siteSearchCache : [];
       loadSiteSearchProviders()
-        .catch(() => [])
-        .then((siteSearchProviders) => {
-          // Keep overlay startup independent from network I/O. The persisted high-resolution
-          // provider icons are warmed in the background and picked up through local storage.
-          scheduleSiteSearchProviderIconWarmup(siteSearchProviders, '');
-          chrome.scripting.executeScript({
+        .then((providers) => {
+          scheduleSiteSearchProviderIconWarmup(providers, '');
+        })
+        .catch(() => {});
+      chrome.scripting.executeScript({
             target: {tabId: activeTab.id},
             func: (overlayTabs, overlayPanelContext) => {
               const toggleOverlay = window._x_extension_toggleSearchOverlay_2026_unique_;
@@ -4073,8 +4059,8 @@ function openOverlayOnTab(activeTab, tabs, source) {
               siteSearchProviderCount: Array.isArray(siteSearchProviders) ? siteSearchProviders.length : 0
             });
           });
-        });
-    };
+  };
+  const runOverlayWithResolvedZoom = () => {
     if (chrome.tabs && typeof chrome.tabs.getZoom === 'function') {
       chrome.tabs.getZoom(activeTab.id, (zoomFactor) => {
         const zoom = Number.isFinite(Number(zoomFactor)) && Number(zoomFactor) > 0
@@ -4085,6 +4071,49 @@ function openOverlayOnTab(activeTab, tabs, source) {
       return;
     }
     runOverlayScript(1);
+  };
+  const injectOverlayRuntime = () => {
+    logHotkeyDebug('inject-start', { tabId: activeTab.id, file: overlayInjectionFiles.join(','), source: source || '' });
+    chrome.scripting.executeScript({
+      target: {tabId: activeTab.id},
+      files: overlayInjectionFiles
+    }, function() {
+      if (chrome.runtime.lastError) {
+        logHotkeyDebug('inject-failed', {
+          step: overlayInjectionFiles.join(','),
+          tabId: activeTab.id,
+          error: chrome.runtime.lastError.message || 'unknown',
+          source: source || ''
+        });
+        openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+        return;
+      }
+      runOverlayWithResolvedZoom();
+    });
+  };
+  chrome.scripting.executeScript({
+    target: {tabId: activeTab.id},
+    func: (runtimeVersion) => {
+      return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
+        typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
+    },
+    args: [expectedOverlayRuntimeVersion]
+  }, (results) => {
+    const probeError = chrome.runtime.lastError;
+    const runtimeReady = !probeError &&
+      Array.isArray(results) &&
+      results[0] &&
+      results[0].result === true;
+    if (runtimeReady) {
+      logHotkeyDebug('runtime-reused', {
+        tabId: activeTab.id,
+        source: source || '',
+        version: expectedOverlayRuntimeVersion
+      });
+      runOverlayWithResolvedZoom();
+      return;
+    }
+    injectOverlayRuntime();
   });
 }
 

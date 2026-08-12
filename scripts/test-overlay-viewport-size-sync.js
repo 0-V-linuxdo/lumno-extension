@@ -147,8 +147,16 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialLanguageReady,[\s\S]*?initialOverlayThemeReady,[\s\S]*?initialOverlayContentReady,[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*revealOverlay\(\);/,
-  'overlay reveal should wait for styles, language, theme, initial content, and animation preference'
+  /Promise\.all\(\[[\s\S]*?revealReady[\s\S]*?initialOverlayThemeReady,[\s\S]*?initialOverlaySizeReady,[\s\S]*?initialOverlayEnterAnimationReady[\s\S]*?initialMotionEffectsReady[\s\S]*?applyOverlayEnterAnimationInitialState\(overlay\);\s*revealOverlay\(\);/,
+  'overlay reveal should wait only for critical styles and stable visual preferences'
+);
+const overlayRevealBlock = searchPanelSource.slice(
+  searchPanelSource.lastIndexOf('const revealReady =')
+);
+assert.doesNotMatch(
+  overlayRevealBlock,
+  /initialLanguageReady|initialOverlayContentReady|initialFaviconEnhancedFetchReady/,
+  'language, open-tab content, and favicon policy should hydrate without blocking the visible input shell'
 );
 assert.doesNotMatch(
   searchPanelSource,

@@ -156,6 +156,9 @@
   "settings_search_result_sources_title": {
     "message": "显示结果类型"
   },
+  "settings_search_result_display_limit_title": {
+    "message": "最多显示结果"
+  },
   "settings_overlay_open_tabs_default_visible_title": {
     "message": "在网页唤起时，默认展示所有已打开标签页"
   },
@@ -649,10 +652,10 @@
     "message": "输入框自动聚焦"
   },
   "newtab_input_auto_focus_feature_hint_badge": {
-    "message": "新功能"
+    "message": "提示"
   },
   "newtab_input_auto_focus_feature_hint_text": {
-    "message": "如果不喜欢输入框自动聚焦，可以在这里关闭。"
+    "message": "自动聚焦可在「外观/新标签页」处关闭"
   },
   "newtab_input_auto_focus_feature_hint_close": {
     "message": "关闭输入框自动聚焦提示"
