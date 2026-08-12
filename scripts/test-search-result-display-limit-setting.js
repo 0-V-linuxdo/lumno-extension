@@ -8,6 +8,8 @@ const optionsSource = read('src/options/options.js');
 const newtabSource = read('src/newtab/newtab.js');
 const overlaySource = read('src/overlay/search-panel.js');
 const overlayRuntimeSource = read('src/overlay/runtime.js');
+const overlaySuggestionsStyles = read('src/overlay/suggestions-view.css');
+const suggestionNavigation = require('../src/shared/suggestion-navigation.js');
 
 const sourcesIndex = optionsHtml.indexOf('data-i18n="settings_search_result_sources_title"');
 const displayLimitIndex = optionsHtml.indexOf('data-i18n="settings_search_result_display_limit_title"');
@@ -48,18 +50,67 @@ assert.match(newtabSource,
 assert.match(overlaySource,
   /changes\[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY\][\s\S]*?refreshOverlaySuggestionsFromLastResponse\(\)/,
   'overlay should re-render current results when the limit changes');
-assert.match(overlaySource,
+assert.doesNotMatch(overlaySource,
   /function limitOverlayTabsForDisplay\(list\)[\s\S]*?slice\(0, normalizeSearchResultDisplayLimit\(overlaySearchResultDisplayLimit\)\)/,
-  'overlay should apply the configured result limit to opened-tab results');
+  'overlay should not truncate opened-tab results before rendering');
+assert.match(overlaySource,
+  /function setOpenTabsResultsViewport\(active, itemCount\)[\s\S]*?getComputedStyle\(suggestionsContainer\)[\s\S]*?getVisibleRowsViewportHeight\([\s\S]*?--x-ov-suggestion-row-height[\s\S]*?--x-ov-suggestion-row-gap/,
+  'overlay should derive the opened-tab viewport from the rendered CSS row tokens');
+assert.match(overlaySuggestionsStyles,
+  /\.x-ov-suggestions-container\[data-open-tabs-visible-row-limit\] \{[\s\S]*?scrollbar-width:\s*thin;[\s\S]*?scrollbar-color:/,
+  'the scrollable opened-tab viewport should restore its visible scrollbar');
+assert.match(overlaySuggestionsStyles,
+  /\.x-ov-suggestions-container\[data-open-tabs-visible-row-limit\]::\-webkit-scrollbar-thumb \{[\s\S]*?border-radius:\s*999px;[\s\S]*?background-color:/,
+  'Chromium should render the opened-tab scrollbar thumb');
 assert.match(overlaySource,
   /changes\[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY\][\s\S]*?openTabsSearchModeActive[\s\S]*?shouldShowOpenTabsForEmptyQuery\(\)[\s\S]*?renderTabSuggestions\(filterTabsForOverlay\(tabs, latestOverlayQuery\)\)/,
   'overlay should immediately re-render visible opened tabs when the limit changes');
 assert.match(overlaySource,
-  /function renderTabSuggestions\(tabList\)[\s\S]*?const list = limitOverlayTabsForDisplay\(tabList\);/,
-  'both default and searched opened-tab lists should use the configured result limit');
+  /function renderTabSuggestions\(tabList\)[\s\S]*?const list = Array\.isArray\(tabList\) \? tabList\.slice\(\) : \[\];[\s\S]*?setOpenTabsResultsViewport\(true, list\.length\);[\s\S]*?reactView\.renderTabs\(list\);/,
+  'both default and searched opened-tab lists should render in full inside the capped viewport');
+assert.match(overlaySource,
+  /allSuggestions = limitOverlaySuggestionsForDisplay\(allSuggestions,[\s\S]*?setOpenTabsResultsViewport\(false\);[\s\S]*?reactView\.render\(\{/,
+  'ordinary search results should clear the opened-tab viewport override and remain data-limited');
 assert.match(overlaySource,
   /function filterTabsForOverlay\(tabList, queryText\) \{\s*const list = Array\.isArray\(tabList\) \? tabList : \[\];/,
   'opened-tab matching should search the complete tab list before display limiting');
+
+assert.strictEqual(
+  suggestionNavigation.getVisibleRowsViewportHeight({
+    visibleRowLimit: 5,
+    itemCount: 10,
+    rowHeight: 52,
+    rowGap: 4,
+    paddingTop: 12,
+    paddingBottom: 12
+  }),
+  304,
+  'a scrollable viewport should include the gap after the last visible row'
+);
+assert.strictEqual(
+  suggestionNavigation.getVisibleRowsViewportHeight({
+    visibleRowLimit: 5,
+    itemCount: 5,
+    rowHeight: 52,
+    rowGap: 4,
+    paddingTop: 12,
+    paddingBottom: 12
+  }),
+  300,
+  'a complete five-row list should not reserve a trailing row gap'
+);
+assert.strictEqual(
+  suggestionNavigation.getVisibleRowsViewportHeight({
+    visibleRowLimit: 5,
+    itemCount: 0,
+    rowHeight: 52,
+    rowGap: 4,
+    paddingTop: 12,
+    paddingBottom: 12
+  }),
+  0,
+  'an empty list should not force a viewport height'
+);
 
 ['en', 'ja', 'zh_CN', 'zh_TW'].forEach((locale) => {
   const messages = JSON.parse(read(`_locales/${locale}/messages.json`));

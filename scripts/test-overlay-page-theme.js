@@ -169,6 +169,35 @@ function testVisualThemeSamplesOverlayFootprint() {
   );
 }
 
+function testTransparentCssColorsDoNotBecomeDarkThemeSignals() {
+  assert.strictEqual(
+    pageTheme.getCssColorThemeSignal('rgba(0, 0, 0, 0)', 0.78),
+    null,
+    'a fully transparent root background should not count as a black page surface'
+  );
+  assert.strictEqual(
+    pageTheme.getCssColorThemeSignal('rgba(0, 0, 0, 0.1)', 0.78).theme,
+    'light',
+    'a faint translucent black surface should be composited over the page canvas before classification'
+  );
+}
+
+function testWappalyzerLikeLightPageSignalsResolveLight() {
+  const signals = [
+    { theme: 'light', confidence: 0.74, weight: 0.48 },
+    { theme: 'light', confidence: 0.62, weight: 0.26 },
+    pageTheme.getCssColorThemeSignal('#4608ad', 0.72),
+    pageTheme.getCssColorThemeSignal('rgba(0, 0, 0, 0)', 0.78),
+    pageTheme.getCssColorThemeSignal('rgba(0, 0, 0, 0)', 0.58),
+    { theme: 'light', confidence: 0.62, weight: 1.05 }
+  ];
+  assert.strictEqual(
+    pageTheme.resolvePageThemeSignals(signals),
+    'light',
+    'explicit light mode and a mostly light viewport should beat a dark brand theme-color'
+  );
+}
+
 function testSearchPanelFusesThemeColorAndVisualSignals() {
   const searchPanelSource = fs.readFileSync(path.join(__dirname, '../src/overlay/search-panel.js'), 'utf8');
   const themeColorSignalIndex = searchPanelSource.indexOf('getThemeSignalFromRgb(themeColorRgb');
@@ -314,6 +343,8 @@ testVisualThemeReturnsNullForAmbiguousSurfaces();
 testVisualThemeUsesLightTextWhenBackgroundIsTransparent();
 testVisualThemeIgnoresLumnoOverlayElements();
 testVisualThemeSamplesOverlayFootprint();
+testTransparentCssColorsDoNotBecomeDarkThemeSignals();
+testWappalyzerLikeLightPageSignalsResolveLight();
 testSearchPanelFusesThemeColorAndVisualSignals();
 testSearchPanelDoesNotShortCircuitExplicitThemeHints();
 testSearchPanelAvoidsBusinessClassNameThemeMatches();

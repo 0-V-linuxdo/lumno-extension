@@ -194,6 +194,7 @@
   const NEWTAB_TOAST = globalThis.LumnoNewtabToast || {};
   const NEWTAB_LAYOUT = globalThis.LumnoNewtabLayout || {};
   const NEWTAB_DOCK = globalThis.LumnoNewtabDock || {};
+  const NEWTAB_DIRECT_NAVIGATION_SETTLE = globalThis.LumnoNewtabDirectNavigationSettle || {};
   const NEWTAB_BACKGROUND_SEARCH_FOCUS = globalThis.LumnoNewtabBackgroundSearchFocus || {};
   const NEWTAB_RECENT_VIEW = globalThis.LumnoNewtabRecentSitesView || {};
   const NEWTAB_BOOKMARKS_VIEW = globalThis.LumnoNewtabBookmarksView || {};
@@ -247,6 +248,7 @@
       typeof NEWTAB_LAYOUT.getAdaptiveGridColumnCount !== 'function' ||
       typeof NEWTAB_LAYOUT.getGridContentWidthForColumns !== 'function' ||
       typeof NEWTAB_DOCK.createBottomDockRuntime !== 'function' ||
+      typeof NEWTAB_DIRECT_NAVIGATION_SETTLE.createDirectNavigationSettleController !== 'function' ||
       typeof NEWTAB_BACKGROUND_SEARCH_FOCUS.createBackgroundFocusHandler !== 'function' ||
       typeof NEWTAB_RECENT_VIEW.createRecentSitesView !== 'function' ||
       typeof NEWTAB_BOOKMARKS_VIEW.createBookmarksView !== 'function' ||
@@ -13644,11 +13646,21 @@
     if (!targetUrl) {
       return null;
     }
-    return {
+    const suggestion = {
       type: 'directUrl',
       title: formatMessage('open_url', '打开 {url}', { url: targetUrl }),
       url: targetUrl,
       favicon: getPageFaviconCandidateUrl(targetUrl)
+    };
+    const matchedTab = getMatchedOpenTabForSuggestion(suggestion);
+    if (!matchedTab) {
+      return suggestion;
+    }
+    return {
+      ...suggestion,
+      title: String(matchedTab.title || '').trim() || suggestion.title,
+      favicon: String(matchedTab.favIconUrl || '').trim() || suggestion.favicon,
+      _xMatchedTabId: matchedTab.id
     };
   }
 
@@ -13685,7 +13697,7 @@
     }
   }
 
-  function getMatchedOpenTabIdForSuggestion(suggestion) {
+  function getMatchedOpenTabForSuggestion(suggestion) {
     if (!suggestion || !suggestion.url || !Array.isArray(tabs) || tabs.length === 0) {
       return null;
     }
@@ -13700,10 +13712,15 @@
       }
       const current = normalizeTabMatchUrl(tab.url);
       if (current && current === target) {
-        return tab.id;
+        return tab;
       }
     }
     return null;
+  }
+
+  function getMatchedOpenTabIdForSuggestion(suggestion) {
+    const matchedTab = getMatchedOpenTabForSuggestion(suggestion);
+    return matchedTab ? matchedTab.id : null;
   }
 
   function shouldSwitchMatchedTabSuggestion(suggestion, index) {
@@ -13819,6 +13836,10 @@
       finish(true);
     });
   }
+
+  // Warm the tab snapshot before the first URL input so a matched page can render
+  // with its final title and switch action on the first visible frame.
+  refreshTabsForSearchContext(() => {});
 
   function resolveQuickNavigation(query) {
     const directUrlSuggestion = getDirectUrlSuggestion(query);
@@ -14068,11 +14089,13 @@
 
   function refreshTabsIfIdle() {
     if (!latestQuery || !latestQuery.trim()) {
+      refreshTabsForSearchContext(() => {});
       clearSearchSuggestions();
     }
   }
 
   function clearSearchSuggestions() {
+    directNavigationSettleController.cancel();
     searchModeResultTransitionQuery = '';
     if (layoutController &&
         typeof layoutController.finishSuggestionsInputSession === 'function') {
@@ -14488,6 +14511,18 @@
     renderSuggestions(lastSuggestionResponse, query, options);
   }
 
+  const DIRECT_NAVIGATION_SETTLE_DELAY_MS = 120;
+  const directNavigationSettleController =
+    NEWTAB_DIRECT_NAVIGATION_SETTLE.createDirectNavigationSettleController({
+      delayMs: DIRECT_NAVIGATION_SETTLE_DELAY_MS,
+      onSettle: ({ query, requestSeq }) => {
+        if (requestSeq !== suggestionRequestSeq || query !== latestQuery) {
+          return;
+        }
+        renderPendingSuggestions(query);
+      }
+    });
+
   function requestSuggestions(query, options) {
     latestQuery = query;
     const requestLocalSearchScope = localSearchScopeState;
@@ -14496,10 +14531,20 @@
       return;
     }
     const immediate = options && options.immediate;
+    const deferInitialDirectNavigationRender = Boolean(
+      options && options.deferInitialDirectNavigationRender
+    );
     const retryCount = options && Number(options.retryCount) > 0 ? Number(options.retryCount) : 0;
     const requestStartedAt = Date.now();
     const requestQuery = latestQuery;
     const requestSeq = ++suggestionRequestSeq;
+    directNavigationSettleController.cancel();
+    if (deferInitialDirectNavigationRender) {
+      directNavigationSettleController.schedule({
+        query: requestQuery,
+        requestSeq
+      });
+    }
     const waitForRemoteMixHeight = Boolean(
       !requestLocalSearchScope && !siteSearchState && layoutController &&
       typeof layoutController.beginSuggestionsInputSession === 'function'
@@ -14541,6 +14586,7 @@
       if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
         return;
       }
+      directNavigationSettleController.cancel();
       if (chrome.runtime && chrome.runtime.lastError) {
         renderPendingSuggestions(requestQuery, {
           settleHeightAfterRemoteMix: waitForRemoteMixHeight
@@ -14600,6 +14646,7 @@
         suggestionRequestWatchdogTimer = null;
       }
       if (requestSeq === suggestionRequestSeq && requestQuery === latestQuery) {
+        directNavigationSettleController.cancel();
         renderPendingSuggestions(requestQuery, {
           settleHeightAfterRemoteMix: waitForRemoteMixHeight
         });
@@ -14709,10 +14756,22 @@
         renderSuggestions([], query);
         return;
       }
-      if (isPaste || getDirectUrlSuggestion(query)) {
+      const directUrlSuggestion = getDirectUrlSuggestion(query);
+      const hasCachedOpenTabMatch = Boolean(
+        directUrlSuggestion &&
+        typeof directUrlSuggestion._xMatchedTabId === 'number'
+      );
+      if (isPaste || directUrlSuggestion) {
         latestQuery = query;
-        renderPendingSuggestions(query);
-        requestSuggestions(query, { immediate: true });
+        if (!directUrlSuggestion || hasCachedOpenTabMatch) {
+          renderPendingSuggestions(query);
+        }
+        requestSuggestions(query, {
+          immediate: true,
+          deferInitialDirectNavigationRender: Boolean(
+            directUrlSuggestion && !hasCachedOpenTabMatch
+          )
+        });
         return;
       }
       requestSuggestions(query);
@@ -15926,6 +15985,7 @@
 
   inputParts.input.addEventListener('compositionstart', function(event) {
     suggestionRequestSeq += 1;
+    directNavigationSettleController.cancel();
     if (remoteSuggestionDebounceTimer) {
       clearTimeout(remoteSuggestionDebounceTimer);
       remoteSuggestionDebounceTimer = null;
@@ -15957,9 +16017,17 @@
         typeof layoutController.beginSuggestionsInputSession === 'function') {
       layoutController.beginSuggestionsInputSession();
     }
-    if (getDirectUrlSuggestion(query)) {
-      renderPendingSuggestions(query);
-      requestSuggestions(query, { immediate: true });
+    const directUrlSuggestion = getDirectUrlSuggestion(query);
+    if (directUrlSuggestion) {
+      const hasCachedOpenTabMatch =
+        typeof directUrlSuggestion._xMatchedTabId === 'number';
+      if (hasCachedOpenTabMatch) {
+        renderPendingSuggestions(query);
+      }
+      requestSuggestions(query, {
+        immediate: true,
+        deferInitialDirectNavigationRender: !hasCachedOpenTabMatch
+      });
       return;
     }
     requestSuggestions(query);

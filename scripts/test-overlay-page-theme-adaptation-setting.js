@@ -81,6 +81,11 @@ assert.match(
 );
 assert.match(
   overlaySource,
+  /typeof overlayPageTheme\.getCssColorThemeSignal === 'function'[\s\S]*?return overlayPageTheme\.getCssColorThemeSignal\(color, weight\);/,
+  'page background signals should preserve CSS alpha instead of treating transparent black as opaque black'
+);
+assert.match(
+  overlaySource,
   /!changes\[THEME_STORAGE_KEY\][\s\S]*?!changes\[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY\][\s\S]*?applyOverlayTheme\(nextMode\)/,
   'an open overlay should update immediately when either theme preference changes'
 );
@@ -94,6 +99,58 @@ const cases = [
 ];
 cases.forEach(([input, expected]) => {
   assert.strictEqual(pageTheme.resolveOverlayTheme(input), expected);
+});
+
+const backgroundCases = [
+  [{ resolvedTheme: 'dark', pageTheme: 'light' }, true],
+  [{ resolvedTheme: 'dark', pageTheme: 'dark' }, false],
+  [{ resolvedTheme: 'dark', pageTheme: null }, false],
+  [{ resolvedTheme: 'light', pageTheme: 'dark' }, false]
+];
+backgroundCases.forEach(([input, expected]) => {
+  assert.strictEqual(pageTheme.shouldStrengthenDarkOverlayBackground(input), expected);
+});
+assert.match(
+  overlaySource,
+  /dark:\s*\{[\s\S]*?bg: 'rgba\(20, 20, 20, 0\.62\)'[\s\S]*?lightPageBg: 'rgba\(20, 20, 20, 0\.82\)'/,
+  'dark mode should expose a stronger background only for light webpages'
+);
+assert.match(
+  overlaySource,
+  /const pageTheme = detectPageTheme\(\);[\s\S]*?resolveOverlayTheme\(mode, pageTheme\)[\s\S]*?shouldStrengthenDarkOverlayBackground\([\s\S]*?resolvedTheme: resolved,[\s\S]*?pageTheme/,
+  'overlay rendering should keep detecting the webpage theme even when the user forces dark mode'
+);
+assert.match(
+  overlaySource,
+  /const applyOverlayTheme = \(mode\) => \{[\s\S]*?syncOverlayPageThemeObservation\(\);/,
+  'theme application should synchronize page-theme observation through the shared policy'
+);
+const applyOverlayThemeSource = overlaySource.slice(
+  overlaySource.indexOf('const applyOverlayTheme = (mode) => {'),
+  overlaySource.indexOf('// 使用系统字体')
+);
+assert.doesNotMatch(
+  applyOverlayThemeSource,
+  /stopOverlayPageThemeObserver\(\)/,
+  'explicit themes should not unconditionally tear down observation after policy synchronization'
+);
+
+const observationCases = [
+  [{ mode: 'dark', pageThemeAdaptationEnabled: false, systemTheme: 'light' }, true],
+  [{ mode: 'light', pageThemeAdaptationEnabled: true, systemTheme: 'dark' }, false],
+  [{ mode: 'system', pageThemeAdaptationEnabled: true, systemTheme: 'light' }, true],
+  [{ mode: 'system', pageThemeAdaptationEnabled: false, systemTheme: 'dark' }, true],
+  [{ mode: 'system', pageThemeAdaptationEnabled: false, systemTheme: 'light' }, false]
+];
+observationCases.forEach(([input, expected]) => {
+  const events = [];
+  const actual = pageTheme.syncPageThemeObservation({
+    ...input,
+    start: () => events.push('start'),
+    stop: () => events.push('stop')
+  });
+  assert.strictEqual(actual, expected);
+  assert.deepStrictEqual(events, [expected ? 'start' : 'stop']);
 });
 
 const expectedCopy = {

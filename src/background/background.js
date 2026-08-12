@@ -9219,7 +9219,8 @@ async function getSearchSuggestions(query, options) {
       upsertSuggestion(item, 'history');
     });
 
-    (Array.isArray(topSites) ? topSites : []).forEach((site) => {
+    const topSiteMatches = collectSearchMatches(topSites);
+    topSiteMatches.forEach((site) => {
       if (!site || !site.url || isUrlBlockedBySearchBlacklist(site.url, searchBlacklistItems)) {
         return;
       }

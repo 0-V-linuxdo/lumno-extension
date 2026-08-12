@@ -114,6 +114,13 @@ function createChromeStub(options) {
       visitCount: 2,
       typedCount: 0,
       lastVisitTime: now - 7000
+    },
+    {
+      title: 'Home - 0HTTP',
+      url: 'https://code.0http.com/',
+      visitCount: 2,
+      typedCount: 0,
+      lastVisitTime: now - 8000
     }
   ].concat(
     Array.from({ length: 260 }, (_, index) => ({
@@ -132,7 +139,11 @@ function createChromeStub(options) {
     }]
   );
   const topSiteItems = [
-    { title: 'GitHub', url: 'https://github.com/' }
+    { title: 'GitHub', url: 'https://github.com/' },
+    {
+      title: 'Lumno | 浏览器命令栏、聚焦搜索与极简新标签页',
+      url: 'http://127.0.0.1:4321/'
+    }
   ];
 
   const chromeApi = {
@@ -575,6 +586,18 @@ async function run() {
     Array.from(multiTermSuggestions, (item) => item && item.url),
     ['https://example.com/codex-favorite'],
     'background search should require every query term instead of backfilling history that only matches one term'
+  );
+
+  const dottedNavigationSuggestions = await context.__testGetSearchSuggestions('code.0', {
+    includeOpenTabs: false
+  });
+  assert.ok(
+    dottedNavigationSuggestions.some((item) => item && item.url === 'https://code.0http.com/'),
+    'dotted navigation queries should retain the history result whose host matches the full input'
+  );
+  assert.ok(
+    !dottedNavigationSuggestions.some((item) => item && item.url === 'http://127.0.0.1:4321/'),
+    'dotted navigation queries should exclude top sites that match only one token from the input'
   );
 
   const noMatchSuggestions = await context.__testGetSearchSuggestions('definitely-no-local-match-xyz');
