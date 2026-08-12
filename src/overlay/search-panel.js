@@ -294,6 +294,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       panelEasing: 'cubic-bezier(0.2, 1, 0.36, 1)'
     })
   });
+  const OVERLAY_ELASTIC_ENTRY_SCALE_START = 0.88;
+  const OVERLAY_ELASTIC_OPEN_TABS_ENTRY_SCALE_START = 0.94;
   const OVERLAY_ENTER_CLEANUP_BUFFER_MS = 80;
   let overlaySearchBlacklistItems = [];
   let overlayFaviconRequestBlacklistItems = [];
@@ -671,18 +673,24 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     return 'translateX(-50%) translateY(0) scale(var(--x-ov-visible-scale, 1)) scaleX(1)';
   }
 
+  function getOverlayElasticEntryScaleStart() {
+    return overlayOpenTabsDefaultVisibleLoaded && overlayOpenTabsDefaultVisible
+      ? OVERLAY_ELASTIC_OPEN_TABS_ENTRY_SCALE_START
+      : OVERLAY_ELASTIC_ENTRY_SCALE_START;
+  }
+
   function getOverlayEnterAnimationStartTransform() {
     if (overlayEnterAnimation === 'fade') {
       return 'translateX(-50%) translateY(16px) scale(var(--x-ov-visible-scale, 1)) scale(0.985)';
     }
-    return 'translateX(-50%) translateY(12px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, 0.88))';
+    return `translateX(-50%) translateY(12px) scale(var(--x-ov-visible-scale, 1)) scaleX(var(--x-lumno-search-entry-scale-start, ${getOverlayElasticEntryScaleStart()}))`;
   }
 
   function getOverlayEnterAnimationDeltaTransform() {
     if (overlayEnterAnimation === 'fade') {
       return 'translateY(16px) scale(0.985)';
     }
-    return 'translateY(12px) scaleX(0.88)';
+    return `translateY(12px) scaleX(${getOverlayElasticEntryScaleStart()})`;
   }
 
   function getOverlayEnterMotion() {
@@ -778,7 +786,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     overlayElement.style.setProperty('transition', 'none', 'important');
     overlayElement.style.setProperty('will-change', 'transform, opacity', 'important');
     if (overlayEnterAnimation !== 'fade') {
-      overlayElement.style.setProperty('--x-lumno-search-entry-scale-start', '0.88');
+      overlayElement.style.setProperty(
+        '--x-lumno-search-entry-scale-start',
+        String(getOverlayElasticEntryScaleStart())
+      );
     }
     overlayElement.style.setProperty('--x-lumno-search-entry-duration', `${motion.panelDurationMs}ms`);
     overlayElement.style.setProperty('--x-lumno-search-entry-delay', `${motion.panelDelayMs}ms`);
@@ -2261,6 +2272,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const searchPanelsLayoutTransitionEasing =
       'cubic-bezier(0.22, 1, 0.36, 1)';
     const suggestionsHeightInputSettleMs = 280;
+    const suggestionsHeightRemoteMixSettleMs = 1200;
     let suggestionsHeightInputSettleTimer = 0;
     let suggestionsHeightInputLockedHeight = 0;
     let suggestionsHeightInputLockedPadding = null;
@@ -3567,6 +3579,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         settled: false,
         hasFinalSuggestions: false
       };
+      if (!requestLocalSearchScope) {
+        extendSuggestionsHeightInputSessionForRemoteMix(requestQuery);
+      }
       if (overlayRemoteSuggestionDebounceTimer) {
         clearTimeout(overlayRemoteSuggestionDebounceTimer);
         overlayRemoteSuggestionDebounceTimer = null;
@@ -3586,7 +3601,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           return;
         }
         if (chrome.runtime && chrome.runtime.lastError) {
-          updatePendingSearchSuggestions(requestQuery);
+          updatePendingSearchSuggestions(requestQuery, {
+            settleHeightAfterRemoteMix: true
+          });
           return;
         }
         const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
@@ -3613,7 +3630,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             remoteMixState.visualSettled = true;
             updateSearchSuggestions(localSuggestions, requestQuery, {
               remoteMixState,
-              finalRemoteMix: true
+              finalRemoteMix: true,
+              settleHeightAfterRemoteMix: true
             });
           }, OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS);
         } else {
@@ -3647,10 +3665,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 remoteMixState.visualSettled = true;
                 updateSearchSuggestions(localSuggestions, requestQuery, {
                   remoteMixState,
-                  finalRemoteMix: true
+                  finalRemoteMix: true,
+                  settleHeightAfterRemoteMix: true
                 });
               } else {
-                finalizeDeferredSuggestionsHeight(requestQuery);
+                updateSearchSuggestions(localSuggestions, requestQuery, {
+                  remoteMixState,
+                  finalRemoteMix: true,
+                  settleHeightAfterRemoteMix: true
+                });
               }
               return;
             }
@@ -3665,10 +3688,15 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
                 remoteMixState.visualSettled = true;
                 updateSearchSuggestions(localSuggestions, requestQuery, {
                   remoteMixState,
-                  finalRemoteMix: true
+                  finalRemoteMix: true,
+                  settleHeightAfterRemoteMix: true
                 });
               } else {
-                finalizeDeferredSuggestionsHeight(requestQuery);
+                updateSearchSuggestions(localSuggestions, requestQuery, {
+                  remoteMixState,
+                  finalRemoteMix: true,
+                  settleHeightAfterRemoteMix: true
+                });
               }
               return;
             }
@@ -3683,11 +3711,16 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               remoteMixState.visualSettled = true;
               updateSearchSuggestions(remoteResponse.suggestions, requestQuery, {
                 remoteMixState,
-                finalRemoteMix: true
+                finalRemoteMix: true,
+                settleHeightAfterRemoteMix: true
               });
               return;
             }
-            updateSearchSuggestions(remoteResponse.suggestions, requestQuery);
+            updateSearchSuggestions(remoteResponse.suggestions, requestQuery, {
+              remoteMixState,
+              finalRemoteMix: true,
+              settleHeightAfterRemoteMix: true
+            });
           });
         }, remoteDelay);
       });
@@ -7223,16 +7256,19 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       overlay._lumnoSuggestionsHeightSettleTimer = suggestionsHeightInputSettleTimer;
     }
 
-    function finalizeDeferredSuggestionsHeight(query) {
-      if (!query || deferredSuggestionsHeightQuery !== query) {
-        return;
+    function extendSuggestionsHeightInputSessionForRemoteMix(query) {
+      if (!query || suggestionsHeightInputLockedHeight <= 0) {
+        return false;
       }
-      if (suggestionsHeightInputLockedHeight > 0) {
-        return;
-      }
-      deferredSuggestionsHeightQuery = '';
-      const previousState = captureSuggestionsHeightState(suggestionsContainer);
-      animateSuggestionsHeight(suggestionsContainer, previousState);
+      clearSuggestionsHeightInputSettleTimer();
+      deferredSuggestionsHeightQuery = query;
+      suggestionsHeightInputSettleTimer = setTimeout(() => {
+        suggestionsHeightInputSettleTimer = 0;
+        overlay._lumnoSuggestionsHeightSettleTimer = 0;
+        finishSuggestionsHeightInputSession();
+      }, suggestionsHeightRemoteMixSettleMs);
+      overlay._lumnoSuggestionsHeightSettleTimer = suggestionsHeightInputSettleTimer;
+      return true;
     }
 
     function getSuggestionsHeightTransitionProperties(
@@ -7989,6 +8025,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const forceFullRerender = renderOptions.forceFullRerender === true;
       const deferCappedShrink = renderOptions.deferCappedShrink === true;
       const finalRemoteMix = renderOptions.finalRemoteMix === true;
+      const settleHeightAfterRemoteMix =
+        renderOptions.settleHeightAfterRemoteMix === true;
       const remoteMixState = renderOptions.remoteMixState && typeof renderOptions.remoteMixState === 'object'
         ? renderOptions.remoteMixState
         : null;
@@ -8385,6 +8423,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         reconcileSuggestionsHeightAfterRender(previousHeightState, query, {
           deferCappedShrink: shouldDeferCappedShrink
         });
+        if (settleHeightAfterRemoteMix) {
+          finishSuggestionsHeightInputSession();
+        }
         if (updateKind === 'structure') {
           selectedIndex = -1;
         }

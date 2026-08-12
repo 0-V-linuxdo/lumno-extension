@@ -15,6 +15,7 @@ const bookmarkDragJs = fs.readFileSync(
 );
 const bookmarksViewJs = fs.readFileSync(path.join(repoRoot, 'react-src', 'newtab', 'bookmarks.tsx'), 'utf8');
 const cascadeJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'), 'utf8');
+const backgroundJs = fs.readFileSync(path.join(repoRoot, 'src', 'background', 'background.js'), 'utf8');
 const {
   cloneBookmarkSnapshot,
   createBookmarkMoveHistory,
@@ -106,6 +107,18 @@ assert.ok(
   'bookmark deletion should reuse the shortcut context-menu surface'
 );
 assert.ok(
+  newtabJs.includes("BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE = 'open-in-new-tab-group'") &&
+    newtabJs.includes("label: t('bookmarks_open_in_new_tab_group'") &&
+    newtabJs.includes('disabled: getBookmarkFolderOpenCount(target) <= 0') &&
+    newtabJs.includes("option.getAttribute('aria-disabled') === 'true'") &&
+    newtabJs.includes("menu.addEventListener('click', handleBookmarkContextMenuActionClick)") &&
+    newtabJs.includes('confirmationTitle: formatMessage(') &&
+    newtabJs.includes("action: 'openBookmarkFolderInNewTabGroup'") &&
+    backgroundJs.includes("case 'openBookmarkFolderInNewTabGroup'") &&
+    backgroundJs.includes("importScripts(chrome.runtime.getURL('src/background/bookmark-tab-groups.js'))"),
+  'folder actions should stay visible when empty, confirm recursively counted tabs, and route grouping through the background'
+);
+assert.ok(
   newtabJs.includes('bookmarksRuntime.remove(record.bookmarkId, {') &&
     newtabJs.includes('bookmarksRuntime.restore(record.snapshot, {') &&
     bookmarksRuntimeJs.includes('async function restore(snapshot, options)'),
@@ -150,6 +163,12 @@ assert.ok(
   ));
   [
     'bookmarks_delete',
+    'bookmarks_open_in_new_tab_group',
+    'bookmarks_open_group_confirm_title',
+    'bookmarks_open_group_confirm_description',
+    'bookmarks_open_group_confirm_button',
+    'bookmarks_open_group_partial_failed',
+    'bookmarks_open_group_failed',
     'bookmarks_context_menu_label',
     'bookmarks_delete_undone',
     'bookmarks_delete_redone',

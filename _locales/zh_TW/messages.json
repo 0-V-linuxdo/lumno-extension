@@ -414,6 +414,9 @@
   "settings_bookmark_columns_desc": {
     "message": "設定每行最多顯示數量，窄螢幕會自動適配"
   },
+  "settings_bookmark_adaptive_count_tooltip": {
+    "message": "此值為寬度充足時的最大數量，實際顯示數量會依可用空間自適應。"
+  },
   "bookmark_columns_4": {
     "message": "每行 4 個"
   },
@@ -1227,6 +1230,27 @@
   "bookmarks_open_manager": {
     "message": "開啟書籤管理頁"
   },
+  "bookmarks_open_in_new_tab_group": {
+    "message": "在新分頁群組中開啟"
+  },
+  "bookmarks_open_group_confirm_title": {
+    "message": "開啟 {count} 個分頁？"
+  },
+  "bookmarks_open_group_confirm_description": {
+    "message": "將開啟「{folder}」及其子資料夾中的所有書籤，並放入同一個分頁群組。"
+  },
+  "bookmarks_open_group_confirm_button": {
+    "message": "開啟"
+  },
+  "bookmarks_untitled_folder": {
+    "message": "未命名資料夾"
+  },
+  "bookmarks_open_group_partial_failed": {
+    "message": "已開啟 {openedCount} 個分頁，{failedCount} 個未能開啟"
+  },
+  "bookmarks_open_group_failed": {
+    "message": "無法開啟此書籤資料夾"
+  },
   "bookmarks_copy_url": {
     "message": "複製連結"
   },
@@ -1930,7 +1954,7 @@
     "message": "分頁切換器"
   },
   "settings_tab_switcher_desc": {
-    "message": "按 {shortcut} 快速切換最近分頁"
+    "message": "快速切換最近分頁，預設 {shortcut}，可自訂"
   },
   "slash_command_empty": { "message": "沒有相符的指令" },
   "command_tabs_title": { "message": "僅搜尋已開啟的分頁" },

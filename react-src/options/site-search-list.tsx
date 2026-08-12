@@ -189,7 +189,7 @@ function ProviderEditor({
             className="_x_extension_shortcut_hint_2024_unique_ _x_extension_shortcut_group_action_2024_unique_"
             data-tooltip={copy.templateHelp}
           >
-            <i aria-hidden="true" className="ri-icon ri-size-14 ri-question-line" />
+            <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
           </span>
         </div>
         <input

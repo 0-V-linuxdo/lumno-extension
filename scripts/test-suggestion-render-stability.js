@@ -122,6 +122,7 @@ function verifyClassification() {
 
 verifyClassification();
 const newtabSource = readSource('src/newtab/newtab.js');
+const newtabLayoutSource = readSource('src/newtab/layout.js');
 const overlaySource = readSource('src/overlay/search-panel.js');
 
 [newtabSource, overlaySource].forEach((source, index) => {
@@ -156,6 +157,21 @@ assert.match(
   overlaySource,
   /if \(isPaste \|\| getDirectUrlSuggestion\(query\)\) \{[\s\S]*?updatePendingSearchSuggestions\(query, \{[\s\S]*?deferCappedShrink: true[\s\S]*?\}\);/,
   'Overlay should retain the previous result rows while a direct URL request is pending'
+);
+assert.match(
+  newtabSource,
+  /function requestSuggestions\(query, options\)[\s\S]*?beginSuggestionsInputSession\(\{\s*autoSettle: false\s*\}\)[\s\S]*?settleHeightAfterRemoteMix: waitForRemoteMixHeight/,
+  'New Tab should bind its stable-height session to remote suggestion settlement instead of the typing timer'
+);
+assert.match(
+  newtabSource,
+  /function renderSuggestions\(suggestions, query, options\)[\s\S]*?const settleHeightAfterRemoteMix =[\s\S]*?suggestionsView\.render\([\s\S]*?finishSuggestionsInputSession\(\)/,
+  'New Tab should release the held height only after the final suggestion rows render'
+);
+assert.match(
+  newtabLayoutSource,
+  /function beginSuggestionsInputSession\(options\)[\s\S]*?if \(beginOptions\.autoSettle === false\) \{\s*clearSuggestionsInputSettleTimer\(\);/,
+  'the shared New Tab layout controller should support request-bound height sessions without a wall-clock settle'
 );
 
 console.log('suggestion render stability tests passed');

@@ -181,6 +181,14 @@
     return value !== false;
   }
 
+  function normalizeBookmarkCount(value) {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32 && parsed % 4 === 0) {
+      return parsed;
+    }
+    return 8;
+  }
+
   function normalizeBookmarkColumns(value) {
     const parsed = Number(value);
     if (Number.isInteger(parsed) && parsed >= 4 && parsed <= 8) {
@@ -413,6 +421,7 @@
     normalizeNewtabShortcutAddVisible,
     normalizeNewtabShortcutDockMagnificationEnabled,
     normalizeNewtabInputAutoFocusEnabled,
+    normalizeBookmarkCount,
     normalizeBookmarkColumns,
     normalizeBookmarkFolderIconsVisible,
     normalizeUpdateNoticeEnabled,

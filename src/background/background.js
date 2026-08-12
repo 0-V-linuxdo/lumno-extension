@@ -96,6 +96,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/background/bookmark-tab-groups.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load bookmark tab group helpers.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('src/background/selection-target.js'));
 } catch (error) {
   console.warn('Lumno: failed to load selection target helpers.', error);
@@ -171,6 +177,7 @@ const openBookmarkManagerPage = BACKGROUND_PAGES.openBookmarkManagerPage;
 const openExtensionShortcutsPage = BACKGROUND_PAGES.openExtensionShortcutsPage;
 const openSiteSearchOptionsPage = BACKGROUND_PAGES.openSiteSearchOptionsPage;
 const BACKGROUND_MESSAGE_ROUTER = globalThis.LumnoBackgroundMessageRouter || {};
+const BOOKMARK_TAB_GROUPS = globalThis.LumnoBookmarkTabGroups || {};
 const EXTENSION_ROUTES = globalThis.LumnoExtensionRoutes || {};
 const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
 const COMMAND_TARGET_POLICY = globalThis.LumnoCommandTargetPolicy || {};
@@ -5493,6 +5500,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'openSiteSearchOptionsPage',
       'openReleasePage',
       'openBookmarkManager',
+      'openBookmarkFolderInNewTabGroup',
       'createTab',
       'openNewTab',
       'openExtensionDetailsPage'
@@ -6077,6 +6085,31 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
         sendResponse({ ok: true, url: url });
       }).catch(() => {
         sendResponse({ ok: false });
+      });
+      return true;
+    }
+    case 'openBookmarkFolderInNewTabGroup': {
+      if (typeof BOOKMARK_TAB_GROUPS.openBookmarkFolderInNewTabGroup !== 'function') {
+        sendResponse({ ok: false, reason: 'tab-group-api-unavailable' });
+        return;
+      }
+      const sourceTab = sender && sender.tab ? sender.tab : null;
+      BOOKMARK_TAB_GROUPS.openBookmarkFolderInNewTabGroup(chrome, {
+        folderId: request.folderId,
+        title: request.title,
+        windowId: sourceTab && typeof sourceTab.windowId === 'number'
+          ? sourceTab.windowId
+          : undefined,
+        insertIndex: sourceTab && typeof sourceTab.index === 'number'
+          ? sourceTab.index + 1
+          : undefined
+      }).then(sendResponse).catch((error) => {
+        sendResponse({
+          ok: false,
+          reason: error && error.message
+            ? error.message
+            : 'bookmark-tab-group-failed'
+        });
       });
       return true;
     }

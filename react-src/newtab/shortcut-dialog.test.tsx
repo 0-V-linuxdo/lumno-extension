@@ -470,4 +470,66 @@ describe('shortcut dialog React island', () => {
     expect(controller.element.isConnected).toBe(false);
     expect(controller.open()).toBe(false);
   });
+
+  it('reuses the modal for confirmation with Cancel focused and a busy confirm action', async () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    trigger.focus();
+    let resolveConfirm: ((confirmed: boolean) => void) | undefined;
+    const onConfirm = vi.fn(
+      () => new Promise<boolean>((resolve) => {
+        resolveConfirm = resolve;
+      })
+    );
+    const controller = createController(() => false);
+
+    act(() => {
+      controller.open({
+        sourceElement: trigger,
+        confirmationTitle: 'Open 3 tabs?',
+        confirmationDescription:
+          'All bookmarks in “Research” and its subfolders will open in one tab group.',
+        confirmLabel: 'Open',
+        onConfirm
+      });
+      flushAnimationFrames();
+    });
+
+    const cancelButton = controller.element.querySelector<HTMLButtonElement>(
+      '.x-nt-shortcut-dialog-button--secondary'
+    );
+    const confirmButton = controller.element.querySelector<HTMLButtonElement>(
+      '.x-nt-shortcut-dialog-button--primary'
+    );
+    expect(controller.element.querySelectorAll('input')).toHaveLength(0);
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-dialog-title')?.textContent
+    ).toBe('Open 3 tabs?');
+    expect(
+      controller.element.querySelector('.x-nt-shortcut-dialog-description')?.textContent
+    ).toContain('Research');
+    expect(cancelButton?.textContent).toBe('Cancel');
+    expect(confirmButton?.textContent).toBe('Open');
+    expect(document.activeElement).toBe(cancelButton);
+
+    let submission: Promise<boolean> = Promise.resolve(false);
+    act(() => {
+      submission = controller.submit();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(controller.getState().busy).toBe(true);
+    expect(cancelButton?.disabled).toBe(true);
+    expect(confirmButton?.disabled).toBe(true);
+    expect(controller.close({ restoreFocus: true })).toBe(false);
+
+    await act(async () => {
+      resolveConfirm?.(true);
+      expect(await submission).toBe(true);
+    });
+    expect(controller.element.hidden).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+  });
 });

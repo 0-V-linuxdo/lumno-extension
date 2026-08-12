@@ -1878,6 +1878,34 @@ assertContains(
   'shortcut context menu padding should be driven by the named padding token'
 );
 
+assertContains(
+  shortcutContextMenuPortalRule,
+  'background: rgb(255 255 255);',
+  'shortcut context menu should use a solid light background'
+);
+
+assertNotContains(
+  shortcutContextMenuPortalRule,
+  'backdrop-filter:',
+  'shortcut context menu should not delay its first opening animation with backdrop blur'
+);
+
+assertContains(
+  newtabHtml,
+  'body[data-theme="dark"] .x-nt-shortcut-context-menu-portal',
+  'shortcut context menu should define a dark theme background instead of inheriting the light surface'
+);
+
+const shortcutContextMenuDarkPortalRule = getCssRuleBlock(
+  newtabHtml,
+  'body[data-theme="dark"] .x-nt-shortcut-context-menu-portal'
+);
+assertContains(
+  shortcutContextMenuDarkPortalRule,
+  'background: rgb(31 31 31);',
+  'shortcut context menu should use a solid dark background'
+);
+
 assertNotContains(
   newtabHtml,
   '.x-nt-shortcut-context-menu-portal ._x_extension_select_option_2024_unique_',

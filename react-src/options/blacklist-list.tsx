@@ -173,7 +173,7 @@ function BlacklistEditor({
                 className="_x_extension_shortcut_hint_2024_unique_ _x_extension_tooltip_host_2024_unique_"
                 data-tooltip={option.tooltip}
               >
-                <i aria-hidden="true" className="ri-icon ri-size-14 ri-question-line" />
+                <i aria-hidden="true" className="ri-icon ri-size-14 ri-information-line" />
               </span>
             </label>
           ))}

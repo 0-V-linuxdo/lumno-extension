@@ -414,6 +414,9 @@
   "settings_bookmark_columns_desc": {
     "message": "Sets the maximum per row; narrower screens adapt automatically"
   },
+  "settings_bookmark_adaptive_count_tooltip": {
+    "message": "This is the maximum when enough width is available. The actual number shown adapts to the available space."
+  },
   "bookmark_columns_4": {
     "message": "4 per row"
   },
@@ -1227,6 +1230,27 @@
   "bookmarks_open_manager": {
     "message": "Open bookmark manager"
   },
+  "bookmarks_open_in_new_tab_group": {
+    "message": "Open in new tab group"
+  },
+  "bookmarks_open_group_confirm_title": {
+    "message": "Open {count} tabs?"
+  },
+  "bookmarks_open_group_confirm_description": {
+    "message": "All bookmarks in “{folder}” and its subfolders will open in one tab group."
+  },
+  "bookmarks_open_group_confirm_button": {
+    "message": "Open"
+  },
+  "bookmarks_untitled_folder": {
+    "message": "Untitled folder"
+  },
+  "bookmarks_open_group_partial_failed": {
+    "message": "Opened {openedCount} tabs; {failedCount} could not be opened."
+  },
+  "bookmarks_open_group_failed": {
+    "message": "Could not open this bookmark folder"
+  },
   "bookmarks_copy_url": {
     "message": "Copy link"
   },
@@ -1930,7 +1954,7 @@
     "message": "Tab switcher"
   },
   "settings_tab_switcher_desc": {
-    "message": "Press {shortcut} to switch recent tabs."
+    "message": "Quickly switch recent tabs. Default: {shortcut}; customizable."
   },
   "slash_command_empty": { "message": "No matching commands" },
   "command_tabs_title": { "message": "Search open tabs only" },

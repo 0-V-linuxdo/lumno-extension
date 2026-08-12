@@ -13,12 +13,35 @@ import { createRoot, type Root } from 'react-dom/client';
 export interface SelectMenuOption {
   action?: string;
   checked?: boolean;
+  disabled?: boolean;
   dividerBefore?: boolean;
   iconClass?: string;
   label: string;
   radio?: boolean;
   uncheckedIconClass?: string;
   value: string;
+}
+
+function findNextEnabledOptionIndex(
+  options: SelectMenuOption[],
+  currentIndex: number,
+  delta: number
+): number {
+  if (!options.length) {
+    return currentIndex;
+  }
+  const startIndex = currentIndex < 0
+    ? (delta > 0 ? -1 : 0)
+    : currentIndex;
+  for (let step = 1; step <= options.length; step += 1) {
+    const nextIndex = (
+      startIndex + (delta * step) + options.length
+    ) % options.length;
+    if (!options[nextIndex]?.disabled) {
+      return nextIndex;
+    }
+  }
+  return currentIndex;
 }
 
 export interface SelectMenuConfig {
@@ -184,9 +207,10 @@ function SelectMenu({
     if (!open) {
       return undefined;
     }
-    const selectedIndex = Math.max(
-      0,
-      options.findIndex((option) => option.value === selectedValue)
+    const selectedIndex = options.findIndex(
+      (option) => !option.action &&
+        option.value === selectedValue &&
+        !option.disabled
     );
     setActiveIndex(selectedIndex);
     positionMenu();
@@ -239,6 +263,9 @@ function SelectMenu({
   }, [registerControls, setOpen]);
 
   const chooseOption = (option: SelectMenuOption) => {
+    if (option.disabled) {
+      return;
+    }
     if (option.action) {
       config.onAction?.({ action: option.action, option });
       setOpen(false);
@@ -307,6 +334,7 @@ function SelectMenu({
             ) : null}
             <div
               aria-checked={radioItem ? checked : undefined}
+              aria-disabled={option.disabled ? 'true' : undefined}
               aria-selected={!usesMenuSemantics ? selected : undefined}
               className={`_x_extension_select_option_2024_unique_${
                 option.radio ? ' _x_extension_select_option_radio_2026_unique_' : ''
@@ -322,6 +350,7 @@ function SelectMenu({
               data-value={option.value}
               onClick={() => chooseOption(option)}
               onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(-1)}
               role={
                 usesMenuSemantics
                   ? radioItem
@@ -374,7 +403,11 @@ function SelectMenu({
         {options
           .filter((option) => !option.action)
           .map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              disabled={option.disabled}
+              key={option.value}
+              value={option.value}
+            >
               {option.label}
             </option>
           ))}
@@ -408,7 +441,7 @@ function SelectMenu({
               }
               setActiveIndex((current) => {
                 const delta = event.key === 'ArrowDown' ? 1 : -1;
-                return (current + delta + options.length) % options.length;
+                return findNextEnabledOptionIndex(options, current, delta);
               });
               return;
             }
@@ -542,6 +575,10 @@ export function createSelectMenuController(
       if (config.id) {
         portalMenu.dataset.reactSelectOwner = config.id;
       }
+      // Context menus are created lazily and can be opened synchronously in the
+      // same pointer event. Commit the closed surface once so the browser does
+      // not coalesce the first open state and skip its transition.
+      void portalMenu.offsetWidth;
       return { menu: portalMenu, select, trigger, wrapper: host };
     },
     destroy(host: HTMLElement) {

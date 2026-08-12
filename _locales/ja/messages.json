@@ -414,6 +414,9 @@
   "settings_bookmark_columns_desc": {
     "message": "1行の最大数を設定し、狭い画面では自動調整します"
   },
+  "settings_bookmark_adaptive_count_tooltip": {
+    "message": "十分な幅がある場合の最大数です。実際の表示数は利用可能なスペースに応じて自動調整されます。"
+  },
   "bookmark_columns_4": {
     "message": "1行に4個"
   },
@@ -1227,6 +1230,27 @@
   "bookmarks_open_manager": {
     "message": "ブックマークマネージャーを開く"
   },
+  "bookmarks_open_in_new_tab_group": {
+    "message": "新しいタブグループで開く"
+  },
+  "bookmarks_open_group_confirm_title": {
+    "message": "{count} 個のタブを開きますか？"
+  },
+  "bookmarks_open_group_confirm_description": {
+    "message": "「{folder}」とそのサブフォルダー内のすべてのブックマークを、1つのタブグループで開きます。"
+  },
+  "bookmarks_open_group_confirm_button": {
+    "message": "開く"
+  },
+  "bookmarks_untitled_folder": {
+    "message": "名称未設定のフォルダー"
+  },
+  "bookmarks_open_group_partial_failed": {
+    "message": "{openedCount} 個のタブを開きました。{failedCount} 個は開けませんでした。"
+  },
+  "bookmarks_open_group_failed": {
+    "message": "このブックマークフォルダーを開けませんでした"
+  },
   "bookmarks_copy_url": {
     "message": "リンクをコピー"
   },
@@ -1930,7 +1954,7 @@
     "message": "タブ切り替え"
   },
   "settings_tab_switcher_desc": {
-    "message": "{shortcut} で最近のタブをすばやく切り替えます。"
+    "message": "最近のタブをすばやく切り替えます。デフォルトは {shortcut} で、変更できます。"
   },
   "slash_command_empty": { "message": "一致するコマンドはありません" },
   "command_tabs_title": { "message": "開いているタブのみを検索" },

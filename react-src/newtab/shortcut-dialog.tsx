@@ -39,7 +39,11 @@ export interface ShortcutDialogPayload {
 }
 
 export interface ShortcutDialogOpenOptions {
+  confirmLabel?: string;
+  confirmationDescription?: string;
+  confirmationTitle?: string;
   mode?: string;
+  onConfirm?: () => boolean | Promise<boolean>;
   itemType?: string;
   shortcut?: ShortcutRecord | null;
   sourceElement?: HTMLElement | null;
@@ -104,6 +108,7 @@ interface FormState {
   iconDataUrl: string;
   error: string;
   iconError: string;
+  confirmation: ShortcutDialogOpenOptions | null;
 }
 
 interface NormalizedOptions {
@@ -153,7 +158,8 @@ const INITIAL_FORM_STATE: FormState = {
   iconAction: 'keep',
   iconDataUrl: '',
   error: '',
-  iconError: ''
+  iconError: '',
+  confirmation: null
 };
 
 function normalizeItemType(value: unknown): ShortcutDialogItemType {
@@ -272,7 +278,9 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
             : ''
       });
       try {
-        const saved = Boolean(await options.onSubmit(payload));
+        const saved = current.confirmation
+          ? Boolean(await current.confirmation.onConfirm?.())
+          : Boolean(await options.onSubmit(payload));
         if (saved) {
           onRequestClose();
         }
@@ -305,7 +313,10 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
           iconDataUrl:
             mode === MODE_EDIT && itemType === 'shortcut'
               ? String(shortcut?.iconDataUrl || '')
-              : ''
+              : '',
+          confirmation: typeof openOptions?.onConfirm === 'function'
+            ? openOptions || {}
+            : null
         });
       },
       submit,
@@ -328,6 +339,10 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
       },
       cancelPendingIcon,
       focusName() {
+        if (stateRef.current.confirmation) {
+          focusElement(cancelButtonRef.current || dialogRef.current);
+          return;
+        }
         const nameInput = nameInputRef.current;
         if (nameInput && !nameInput.disabled) {
           focusElement(nameInput);
@@ -474,6 +489,8 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
     }
 
     const isEditMode = formState.mode === MODE_EDIT;
+    const confirmation = formState.confirmation;
+    const isConfirmVariant = Boolean(confirmation);
     const isShortcutItem = formState.itemType === 'shortcut';
     const isBookmarkItem = formState.itemType === 'bookmark';
     const isFolderItem = formState.itemType === 'folder';
@@ -495,6 +512,7 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
         tabIndex={-1}
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={isConfirmVariant ? errorId : undefined}
       >
         <form
           className="x-nt-shortcut-form"
@@ -503,7 +521,9 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
           onSubmit={handleSubmit}
         >
           <h2 id={titleId} className="x-nt-shortcut-dialog-title">
-            {isFolderItem
+            {isConfirmVariant
+              ? confirmation?.confirmationTitle
+              : isFolderItem
               ? options.t('bookmarks_edit_folder_dialog_title', 'Edit folder')
               : isBookmarkItem
                 ? options.t('bookmarks_edit_dialog_title', 'Edit bookmark')
@@ -512,6 +532,16 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
                   : options.t('newtab_shortcuts_dialog_title', 'Add shortcut')}
           </h2>
 
+          {isConfirmVariant ? (
+            <p
+              id={errorId}
+              className="x-nt-shortcut-dialog-description"
+            >
+              {confirmation?.confirmationDescription}
+            </p>
+          ) : null}
+
+          {!isConfirmVariant ? (
           <label className="x-nt-shortcut-field">
             <span>{options.t('newtab_shortcuts_name_label', 'Name')}</span>
             <div
@@ -538,8 +568,9 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
               />
             </div>
           </label>
+          ) : null}
 
-          {!isFolderItem ? (
+          {!isConfirmVariant && !isFolderItem ? (
             <label className="x-nt-shortcut-field">
               <span>{options.t('newtab_shortcuts_url_label', 'URL')}</span>
               <div
@@ -570,7 +601,7 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
             </label>
           ) : null}
 
-          {isShortcutItem ? (
+          {!isConfirmVariant && isShortcutItem ? (
             <div className="x-nt-shortcut-field x-nt-shortcut-icon-field">
               <div className="x-nt-shortcut-icon-label-row">
                 <span>
@@ -678,15 +709,17 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
             </div>
           ) : null}
 
-          <div
-            id={errorId}
-            className="x-nt-shortcut-error"
-            data-visible={formState.error ? 'true' : 'false'}
-            role="alert"
-            aria-live="polite"
-          >
-            {formState.error}
-          </div>
+          {!isConfirmVariant ? (
+            <div
+              id={errorId}
+              className="x-nt-shortcut-error"
+              data-visible={formState.error ? 'true' : 'false'}
+              role="alert"
+              aria-live="polite"
+            >
+              {formState.error}
+            </div>
+          ) : null}
 
           <div className="x-nt-shortcut-dialog-actions">
             <button
@@ -704,7 +737,9 @@ const ShortcutDialogView = forwardRef<ShortcutDialogViewHandle, ShortcutDialogVi
               className="x-lumno-action-button x-lumno-action-button--primary x-nt-shortcut-dialog-button x-nt-shortcut-dialog-button--primary"
               disabled={disabled}
             >
-              {isEditMode
+              {isConfirmVariant
+                ? confirmation?.confirmLabel
+                : isEditMode
                 ? options.t('newtab_shortcuts_save', 'Save')
                 : options.t('newtab_shortcuts_done', 'Done')}
             </button>

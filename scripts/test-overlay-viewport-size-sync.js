@@ -127,8 +127,13 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /const OVERLAY_ENTER_MOTION = Object\.freeze\(\{[\s\S]*?elastic:[\s\S]*?opacityDurationMs: 130,[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 210,[\s\S]*?panelEasing: 'cubic-bezier\(0\.18, 1\.32, 0\.32, 1\)'[\s\S]*?fade:[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 340,[\s\S]*?panelEasing: 'cubic-bezier\(0\.2, 1, 0\.36, 1\)'[\s\S]*?function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?--x-lumno-search-entry-scale-start', '0\.88'[\s\S]*?motion\.panelDurationMs[\s\S]*?motion\.panelDelayMs/,
+  /const OVERLAY_ENTER_MOTION = Object\.freeze\(\{[\s\S]*?elastic:[\s\S]*?opacityDurationMs: 130,[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 210,[\s\S]*?panelEasing: 'cubic-bezier\(0\.18, 1\.32, 0\.32, 1\)'[\s\S]*?fade:[\s\S]*?panelDelayMs: 0,[\s\S]*?panelDurationMs: 340,[\s\S]*?panelEasing: 'cubic-bezier\(0\.2, 1, 0\.36, 1\)'[\s\S]*?function applyOverlayEnterAnimationInitialState\(overlayElement\)[\s\S]*?--x-lumno-search-entry-scale-start',[\s\S]*?String\(getOverlayElasticEntryScaleStart\(\)\)[\s\S]*?motion\.panelDurationMs[\s\S]*?motion\.panelDelayMs/,
   'elastic entry should stay short and overshooting while fade keeps its softer timing'
+);
+assert.match(
+  searchPanelSource,
+  /const OVERLAY_ELASTIC_ENTRY_SCALE_START = 0\.88;[\s\S]*?const OVERLAY_ELASTIC_OPEN_TABS_ENTRY_SCALE_START = 0\.94;[\s\S]*?function getOverlayElasticEntryScaleStart\(\) \{[\s\S]*?overlayOpenTabsDefaultVisibleLoaded && overlayOpenTabsDefaultVisible[\s\S]*?OVERLAY_ELASTIC_OPEN_TABS_ENTRY_SCALE_START[\s\S]*?OVERLAY_ELASTIC_ENTRY_SCALE_START;/,
+  'showing open tabs by default should halve the elastic horizontal stretch from 12% to 6%'
 );
 assert.match(
   searchPanelSource,
@@ -197,7 +202,7 @@ assert.doesNotMatch(
 );
 assert.match(
   searchPanelSource,
-  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(16px\) scale\(0\.985\)[\s\S]*?translateY\(12px\) scaleX\(0\.88\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
+  /function getOverlayEnterAnimationDeltaTransform\(\)[\s\S]*?translateY\(16px\) scale\(0\.985\)[\s\S]*?translateY\(12px\) scaleX\(\$\{getOverlayElasticEntryScaleStart\(\)\}\)[\s\S]*?function playOverlayPanelEnterAnimation\(overlayElement, revealTransform\)[\s\S]*?style\.setProperty\('opacity', '1'\);[\s\S]*?style\.setProperty\('transform', revealTransform\);[\s\S]*?overlayElement\.animate\(\[[\s\S]*?transform: deltaTransform[\s\S]*?transform: 'none'[\s\S]*?composite: 'add'[\s\S]*?fill: 'backwards'[\s\S]*?overlayElement\.animate\(\[[\s\S]*?opacity: 0[\s\S]*?opacity: 1/,
   'WAAPI should replay an additive motion delta without replacing the panel centering transform when the hidden host becomes visible'
 );
 assert.match(
@@ -332,8 +337,8 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /updateSearchSuggestions\(localSuggestions, requestQuery, \{[\s\S]*?deferCappedShrink: true,[\s\S]*?remoteMixState[\s\S]*?remoteMixState\.settled = true;[\s\S]*?updateSearchSuggestions\(remoteResponse\.suggestions, requestQuery\);/,
-  'the overlay request pipeline should defer capped shrink only until the remote mix settles'
+  /updateSearchSuggestions\(localSuggestions, requestQuery, \{[\s\S]*?deferCappedShrink: true,[\s\S]*?remoteMixState[\s\S]*?remoteMixState\.settled = true;[\s\S]*?updateSearchSuggestions\(remoteResponse\.suggestions, requestQuery, \{[\s\S]*?finalRemoteMix: true,[\s\S]*?settleHeightAfterRemoteMix: true/,
+  'the overlay request pipeline should defer capped shrink until the final remote mix can release it in one transition'
 );
 assert.match(
   searchPanelSource,

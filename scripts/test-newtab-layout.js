@@ -1550,14 +1550,30 @@ function testBookmarkGridDefaultsToSixColumns() {
   );
   assert.match(
     optionsHtml,
-    /id="_x_extension_bookmark_rows_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmarks_title">书签行数<[\s\S]*?id="_x_extension_bookmark_count_select_2024_unique_"/
+    /id="_x_extension_bookmark_rows_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmarks_title">书签行数<[\s\S]*?data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"[\s\S]*?ri-information-line[\s\S]*?id="_x_extension_bookmark_rows_control_2026_unique_"/
   );
+  assert.doesNotMatch(optionsHtml, /id="_x_extension_bookmark_count_select_2024_unique_"/);
   assert.match(
     optionsHtml,
-    /id="_x_extension_bookmark_columns_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmark_columns_title">书签每行数量<[\s\S]*?id="_x_extension_bookmark_columns_control_2026_unique_"/
+    /id="_x_extension_bookmark_columns_setting_row_2026_unique_"[\s\S]*?data-i18n="settings_bookmark_columns_title">书签每行数量<[\s\S]*?data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"[\s\S]*?ri-information-line[\s\S]*?id="_x_extension_bookmark_columns_control_2026_unique_"/
+  );
+  assert.strictEqual(
+    (optionsHtml.match(/data-i18n-tooltip="settings_bookmark_adaptive_count_tooltip"/g) || []).length,
+    2,
+    'both bookmark count settings should expose the shared adaptive-count tooltip'
+  );
+  assert.strictEqual(
+    (optionsHtml.match(/class="_x_extension_bookmark_count_hint_2026_unique_[^"]*"[\s\S]*?role="img"[\s\S]*?tabindex="0"/g) || []).length,
+    2,
+    'both bookmark count tooltip icons should be keyboard focusable'
   );
   assert.doesNotMatch(optionsHtml, /data-i18n="settings_bookmark_columns_desc"/);
   assert.match(settingsSource, /parsed >= 4 && parsed <= 8/);
+  assert.match(
+    optionsJs,
+    /kind:\s*'bookmark-rows',[\s\S]*?id:\s*'_x_extension_bookmark_rows_slider_2026_unique_'[\s\S]*?min:\s*0,[\s\S]*?max:\s*8,[\s\S]*?step:\s*1/
+  );
+  assert.match(settingsSource, /parsed >= 0 && parsed <= 32 && parsed % 4 === 0/);
   assert.match(optionsJs, /min:\s*4,[\s\S]*?max:\s*8,[\s\S]*?step:\s*1/);
   assert.match(onboardingHtml, /--x-nt-bookmark-columns: 6;/);
 }

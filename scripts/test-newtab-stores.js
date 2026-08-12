@@ -164,6 +164,34 @@ function testBookmarkStore() {
     'https://lumno.kubai.design/'
   ]);
 
+  assert.deepStrictEqual(
+    bookmarkStore.collectFolderBookmarkUrls({
+      id: 'folder-recursive',
+      children: [
+        { id: 'a', url: 'https://first.example/' },
+        {
+          id: 'nested',
+          children: [
+            { id: 'duplicate', url: 'https://first.example/' },
+            { id: 'script', url: '  JaVaScRiPt:alert(1)  ' },
+            { id: 'b', url: 'https://second.example/' }
+          ]
+        }
+      ]
+    }),
+    [
+      'https://first.example/',
+      'https://first.example/',
+      'https://second.example/'
+    ],
+    'folder opening should recurse in tree order, preserve duplicate nodes, and ignore JavaScript bookmarks'
+  );
+  assert.deepStrictEqual(
+    bookmarkStore.collectFolderBookmarkUrls({ id: 'empty', children: [] }),
+    [],
+    'empty folders should not produce tab URLs'
+  );
+
   const path = bookmarkStore.buildBookmarkFolderPath('13', {
     nodeMap: cache.nodeMap,
     rootId: cache.rootFolderId,

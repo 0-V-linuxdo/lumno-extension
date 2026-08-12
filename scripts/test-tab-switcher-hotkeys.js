@@ -1024,8 +1024,8 @@ assert.ok(
   'settings General should expose a concise localized tab switcher toggle'
 );
 assert.ok(
-  optionsHtmlSource.includes('按 {shortcut} 快速切换最近标签页'),
-  'settings General fallback copy should use the platform-aware shortcut placeholder'
+  optionsHtmlSource.includes('快速切换最近标签页，默认 {shortcut}，可自定义'),
+  'settings General fallback copy should explain the platform-aware default and customization'
 );
 assert.match(
   optionsSource,

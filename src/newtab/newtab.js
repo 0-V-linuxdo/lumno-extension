@@ -220,6 +220,7 @@
       typeof SEARCH_INPUT_MODE.createInputModeController !== 'function' ||
       typeof NEWTAB_RECENT_STORE.normalizeRecentSiteItem !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.buildBookmarkFolderCache !== 'function' ||
+      typeof NEWTAB_BOOKMARKS_STORE.collectFolderBookmarkUrls !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.shouldApplyBookmarkCacheHydration !== 'function' ||
       typeof NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime !== 'function' ||
       typeof NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar !== 'function' ||
@@ -586,8 +587,9 @@
   const SHORTCUT_CONTEXT_MENU_PORTAL_OFFSET_PX = -6;
   const BOOKMARK_CONTEXT_MENU_EDIT_VALUE = 'edit';
   const BOOKMARK_CONTEXT_MENU_REMOVE_VALUE = 'remove';
+  const BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE = 'open-in-new-tab-group';
   const BOOKMARK_CONTEXT_MENU_MIN_WIDTH_PX = 124;
-  const BOOKMARK_CONTEXT_MENU_MAX_WIDTH_PX = 180;
+  const BOOKMARK_CONTEXT_MENU_MAX_WIDTH_PX = 240;
   const BOOKMARK_CONTEXT_MENU_PORTAL_Z_INDEX = 10060;
   const BOOKMARK_CONTEXT_MENU_PORTAL_OFFSET_PX = -6;
   const SEARCH_LAYOUT_MIN_TOP_PX = 28;
@@ -1273,8 +1275,11 @@
   }
 
   function normalizeBookmarkCount(value) {
-    const parsed = Number.parseInt(value, 10);
-    if (parsed === 0 || parsed === 4 || parsed === 8 || parsed === 16 || parsed === 32) {
+    if (typeof SETTINGS.normalizeBookmarkCount === 'function') {
+      return SETTINGS.normalizeBookmarkCount(value);
+    }
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32 && parsed % 4 === 0) {
       return parsed;
     }
     return 8;
@@ -6982,7 +6987,7 @@
     if (typeof bookmarkContextMenuSelectController.setOptions === 'function') {
       bookmarkContextMenuSelectController.setOptions(
         bookmarkContextMenu.control,
-        getBookmarkContextMenuOptions(),
+        getBookmarkContextMenuOptions(bookmarkContextMenuTarget),
         BOOKMARK_CONTEXT_MENU_EDIT_VALUE
       );
     }
@@ -7508,17 +7513,38 @@
     });
   }
 
-  function getBookmarkContextMenuOptions() {
-    return [
+  function getBookmarkFolderOpenCount(target) {
+    if (!target || !target.isFolder) {
+      return 0;
+    }
+    const node = bookmarksRuntime.getNode(target.bookmarkId);
+    return NEWTAB_BOOKMARKS_STORE.collectFolderBookmarkUrls(node).length;
+  }
+
+  function getBookmarkContextMenuOptions(target) {
+    const options = [];
+    if (target && target.isFolder) {
+      options.push({
+        action: BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE,
+        value: BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE,
+        label: t('bookmarks_open_in_new_tab_group', 'Open in new tab group'),
+        disabled: getBookmarkFolderOpenCount(target) <= 0
+      });
+    }
+    options.push(
       {
+        action: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
         value: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
-        label: t('bookmarks_edit', 'Edit')
+        label: t('bookmarks_edit', 'Edit'),
+        dividerBefore: Boolean(target && target.isFolder)
       },
       {
+        action: BOOKMARK_CONTEXT_MENU_REMOVE_VALUE,
         value: BOOKMARK_CONTEXT_MENU_REMOVE_VALUE,
         label: t('bookmarks_delete', 'Delete')
       }
-    ];
+    );
+    return options;
   }
 
   function isBookmarkContextMenuOpen() {
@@ -7592,6 +7618,10 @@
       openBookmarkEditor(target);
       return;
     }
+    if (action === BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE) {
+      openBookmarkFolderTabGroupConfirmation(target);
+      return;
+    }
     if (action === BOOKMARK_CONTEXT_MENU_REMOVE_VALUE) {
       deleteBookmarkFromContextTarget(target);
     }
@@ -7602,7 +7632,8 @@
     const option = target && typeof target.closest === 'function'
       ? target.closest('._x_extension_select_option_2024_unique_')
       : null;
-    if (!option || !bookmarkContextMenu || !bookmarkContextMenu.menu ||
+    if (!option || option.getAttribute('aria-disabled') === 'true' ||
+        !bookmarkContextMenu || !bookmarkContextMenu.menu ||
         !bookmarkContextMenu.menu.contains(option)) {
       return;
     }
@@ -7638,7 +7669,10 @@
       menuPortalOffset: BOOKMARK_CONTEXT_MENU_PORTAL_OFFSET_PX,
       value: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
       ariaLabel: t('bookmarks_context_menu_label', 'Bookmark actions'),
-      options: getBookmarkContextMenuOptions()
+      options: getBookmarkContextMenuOptions(),
+      onAction(payload) {
+        handleBookmarkContextMenuAction(payload && payload.action);
+      }
     });
     const control = created.wrapper;
     const select = created.select;
@@ -7685,12 +7719,12 @@
     if (typeof bookmarkContextMenuSelectController.setOptions === 'function') {
       bookmarkContextMenuSelectController.setOptions(
         bookmarkContextMenu.control,
-        getBookmarkContextMenuOptions(),
-        BOOKMARK_CONTEXT_MENU_EDIT_VALUE
+        getBookmarkContextMenuOptions(target),
+        target.isFolder
+          ? BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE
+          : BOOKMARK_CONTEXT_MENU_EDIT_VALUE
       );
     }
-    bookmarkContextMenu.select.value = BOOKMARK_CONTEXT_MENU_EDIT_VALUE;
-    bookmarkContextMenuSelectController.sync(bookmarkContextMenu.control);
     bookmarkContextMenuSelectController.setOpen(bookmarkContextMenu.control, true);
   }
 
@@ -7714,6 +7748,73 @@
       sourceKind: payload.sourceKind === 'cascade' ? 'cascade' : 'card',
       element
     }, event);
+  }
+
+  function requestBookmarkFolderTabGroup(folderId, title) {
+    return new Promise((resolve) => {
+      if (!chrome || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        resolve({ ok: false, reason: 'runtime-unavailable' });
+        return;
+      }
+      chrome.runtime.sendMessage({
+        action: 'openBookmarkFolderInNewTabGroup',
+        folderId,
+        title
+      }, (response) => {
+        const error = chrome.runtime && chrome.runtime.lastError
+          ? chrome.runtime.lastError.message || 'runtime-error'
+          : '';
+        resolve(error ? { ok: false, reason: error } : (response || { ok: false }));
+      });
+    });
+  }
+
+  function openBookmarkFolderTabGroupConfirmation(target) {
+    if (!target || !target.isFolder || !target.bookmarkId) {
+      return;
+    }
+    const node = bookmarksRuntime.getNode(target.bookmarkId);
+    const count = NEWTAB_BOOKMARKS_STORE.collectFolderBookmarkUrls(node).length;
+    if (count <= 0) {
+      return;
+    }
+    const folderTitle = String((node && node.title) || target.title || '').trim() ||
+      t('bookmarks_untitled_folder', 'Untitled folder');
+    openShortcutDialog({
+      sourceElement: target.element,
+      confirmationTitle: formatMessage(
+        'bookmarks_open_group_confirm_title',
+        'Open {count} tabs?',
+        { count }
+      ),
+      confirmationDescription: formatMessage(
+        'bookmarks_open_group_confirm_description',
+        'All bookmarks in “{folder}” and its subfolders will open in one tab group.',
+        { folder: folderTitle }
+      ),
+      confirmLabel: t('bookmarks_open_group_confirm_button', 'Open'),
+      async onConfirm() {
+        const response = await requestBookmarkFolderTabGroup(
+          String(target.bookmarkId),
+          folderTitle
+        );
+        const openedCount = Math.max(0, Number(response && response.openedCount) || 0);
+        const failedCount = Math.max(0, Number(response && response.failedCount) || 0);
+        if (openedCount > 0 && failedCount > 0) {
+          showToast(formatMessage(
+            'bookmarks_open_group_partial_failed',
+            'Opened {openedCount} tabs; {failedCount} could not be opened.',
+            { openedCount, failedCount }
+          ), true);
+        } else if (!response || response.ok !== true) {
+          showToast(t(
+            'bookmarks_open_group_failed',
+            'Could not open the bookmark folder'
+          ), true);
+        }
+        return true;
+      }
+    });
   }
 
   function handleShortcutNativeDragStart(event) {
@@ -13911,11 +14012,14 @@
     lastRenderedActionContextKey = '';
   }
 
-  function renderSuggestions(suggestions, query) {
+  function renderSuggestions(suggestions, query, options) {
     if (!query) {
       clearSearchSuggestions();
       return;
     }
+    const renderOptions = options && typeof options === 'object' ? options : {};
+    const settleHeightAfterRemoteMix =
+      renderOptions.settleHeightAfterRemoteMix === true;
     lastSuggestionResponse = Array.isArray(suggestions) ? suggestions : [];
 
     getShortcutRules().then((rules) => {
@@ -14293,11 +14397,15 @@
       if (previousSuggestionsResizeState) {
         layoutController.animateSuggestionsResize(previousSuggestionsResizeState);
       }
+      if (settleHeightAfterRemoteMix && layoutController &&
+          typeof layoutController.finishSuggestionsInputSession === 'function') {
+        layoutController.finishSuggestionsInputSession();
+      }
     });
   }
 
-  function renderPendingSuggestions(query) {
-    renderSuggestions(lastSuggestionResponse, query);
+  function renderPendingSuggestions(query, options) {
+    renderSuggestions(lastSuggestionResponse, query, options);
   }
 
   function requestSuggestions(query, options) {
@@ -14312,6 +14420,13 @@
     const requestStartedAt = Date.now();
     const requestQuery = latestQuery;
     const requestSeq = ++suggestionRequestSeq;
+    const waitForRemoteMixHeight = Boolean(
+      !requestLocalSearchScope && !siteSearchState && layoutController &&
+      typeof layoutController.beginSuggestionsInputSession === 'function'
+    );
+    if (waitForRemoteMixHeight) {
+      layoutController.beginSuggestionsInputSession({ autoSettle: false });
+    }
     if (remoteSuggestionDebounceTimer) {
       clearTimeout(remoteSuggestionDebounceTimer);
       remoteSuggestionDebounceTimer = null;
@@ -14328,7 +14443,9 @@
         requestSuggestions(requestQuery, { immediate: true, retryCount: retryCount + 1 });
         return;
       }
-      renderPendingSuggestions(requestQuery);
+      renderPendingSuggestions(requestQuery, {
+        settleHeightAfterRemoteMix: waitForRemoteMixHeight
+      });
     }, immediate ? 1200 : 1300);
     const localRequestSent = sendRuntimeMessage({
       action: 'getSearchSuggestions',
@@ -14345,7 +14462,9 @@
         return;
       }
       if (chrome.runtime && chrome.runtime.lastError) {
-        renderPendingSuggestions(requestQuery);
+        renderPendingSuggestions(requestQuery, {
+          settleHeightAfterRemoteMix: waitForRemoteMixHeight
+        });
         return;
       }
       const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
@@ -14360,7 +14479,7 @@
         if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
           return;
         }
-        sendRuntimeMessage({
+        const remoteRequestSent = sendRuntimeMessage({
           action: 'getSearchEngineSuggestions',
           query: requestQuery,
           context: 'newtab',
@@ -14370,16 +14489,29 @@
             return;
           }
           if (chrome.runtime && chrome.runtime.lastError) {
+            renderSuggestions(localSuggestions, requestQuery, {
+              settleHeightAfterRemoteMix: waitForRemoteMixHeight
+            });
             return;
           }
           if (!remoteResponse ||
               remoteResponse.aborted === true ||
               remoteResponse.hasRemoteSuggestions !== true ||
               !Array.isArray(remoteResponse.suggestions)) {
+            renderSuggestions(localSuggestions, requestQuery, {
+              settleHeightAfterRemoteMix: waitForRemoteMixHeight
+            });
             return;
           }
-          renderSuggestions(remoteResponse.suggestions, requestQuery);
+          renderSuggestions(remoteResponse.suggestions, requestQuery, {
+            settleHeightAfterRemoteMix: waitForRemoteMixHeight
+          });
         });
+        if (!remoteRequestSent) {
+          renderSuggestions(localSuggestions, requestQuery, {
+            settleHeightAfterRemoteMix: waitForRemoteMixHeight
+          });
+        }
       }, remoteDelay);
     });
     if (!localRequestSent) {
@@ -14388,7 +14520,9 @@
         suggestionRequestWatchdogTimer = null;
       }
       if (requestSeq === suggestionRequestSeq && requestQuery === latestQuery) {
-        renderPendingSuggestions(requestQuery);
+        renderPendingSuggestions(requestQuery, {
+          settleHeightAfterRemoteMix: waitForRemoteMixHeight
+        });
       }
     }
   }

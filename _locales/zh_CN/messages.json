@@ -414,6 +414,9 @@
   "settings_bookmark_columns_desc": {
     "message": "设置每行最多显示数量，窄屏会自动适配"
   },
+  "settings_bookmark_adaptive_count_tooltip": {
+    "message": "该值为宽度充足时的最大数量，实际显示数量会根据可用空间自适应。"
+  },
   "bookmark_columns_4": {
     "message": "每行 4 个"
   },
@@ -1227,6 +1230,27 @@
   "bookmarks_open_manager": {
     "message": "打开书签管理页"
   },
+  "bookmarks_open_in_new_tab_group": {
+    "message": "在新标签页组中打开"
+  },
+  "bookmarks_open_group_confirm_title": {
+    "message": "打开 {count} 个标签页？"
+  },
+  "bookmarks_open_group_confirm_description": {
+    "message": "将打开“{folder}”及其子文件夹中的所有书签，并放入同一标签页组。"
+  },
+  "bookmarks_open_group_confirm_button": {
+    "message": "打开"
+  },
+  "bookmarks_untitled_folder": {
+    "message": "未命名文件夹"
+  },
+  "bookmarks_open_group_partial_failed": {
+    "message": "已打开 {openedCount} 个标签页，{failedCount} 个未能打开"
+  },
+  "bookmarks_open_group_failed": {
+    "message": "无法打开此书签文件夹"
+  },
   "bookmarks_copy_url": {
     "message": "复制链接"
   },
@@ -1930,7 +1954,7 @@
     "message": "标签切换器"
   },
   "settings_tab_switcher_desc": {
-    "message": "按 {shortcut} 快速切换最近标签页"
+    "message": "快速切换最近标签页，默认 {shortcut}，可自定义"
   },
   "slash_command_empty": { "message": "无匹配命令" },
   "command_tabs_title": { "message": "仅搜索已打开的标签页" },

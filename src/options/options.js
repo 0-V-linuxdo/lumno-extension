@@ -42,7 +42,7 @@
   const overlayEnterAnimationTabsIndicator = overlayEnterAnimationTabsWrap
     ? overlayEnterAnimationTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
-  const bookmarkCountSelect = document.getElementById('_x_extension_bookmark_count_select_2024_unique_');
+  const bookmarkRowsControlHost = document.getElementById('_x_extension_bookmark_rows_control_2026_unique_');
   const bookmarkColumnsControlHost = document.getElementById('_x_extension_bookmark_columns_control_2026_unique_');
   const bookmarkFolderIconsVisibleToggle = document.getElementById('_x_extension_bookmark_folder_icons_visible_toggle_2026_unique_');
   const autoPipToggle = document.getElementById('_x_extension_auto_pip_toggle_2024_unique_');
@@ -59,6 +59,7 @@
   const newtabTopContentTabsIndicator = newtabTopContentTabsWrap
     ? newtabTopContentTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
+  const newtabInputAutoFocusToggle = document.getElementById('_x_extension_newtab_input_auto_focus_toggle_2026_unique_');
   const newtabShortcutsToggle = document.getElementById('_x_extension_newtab_shortcuts_toggle_2026_unique_');
   const newtabShortcutAddRow = document.getElementById('_x_extension_newtab_shortcut_add_row_2026_unique_');
   const newtabShortcutAddToggle = document.getElementById('_x_extension_newtab_shortcut_add_toggle_2026_unique_');
@@ -311,6 +312,7 @@
     [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
     [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
     [overlayTabQuickSwitchToggle, 'overlay-tab-quick-switch'],
+    [newtabInputAutoFocusToggle, 'newtab-input-auto-focus'],
     [newtabShortcutsToggle, 'newtab-shortcuts'],
     [newtabShortcutAddToggle, 'newtab-shortcut-add'],
     [newtabShortcutDockMagnificationToggle, 'newtab-shortcut-dock-magnification'],
@@ -653,6 +655,7 @@
   let currentOverlayEnterAnimation = 'elastic';
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
+  let currentBookmarkCount = 8;
   let currentBookmarkColumns = 6;
   let currentNewtabTopContentMode = 'brand';
   let currentActiveSettingsTab = 'appearance';
@@ -715,7 +718,6 @@
   [
     [languageSelect, 'language'],
     [recentCountSelect, 'recent-count'],
-    [bookmarkCountSelect, 'bookmark-count'],
     [selectionQuickActionsProviderSelect, 'selection-quick-actions-provider']
   ].forEach(([select, kind]) => {
     const record = registerOptionsSelectControl(select, kind);
@@ -723,6 +725,44 @@
       renderOptionsSelectControl(select);
     }
   });
+  const bookmarkRowsController =
+    typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
+      ? optionsSettingsControlsApi.createRangeSliderControlController(
+          bookmarkRowsControlHost,
+          {
+            kind: 'bookmark-rows',
+            onInput(value) {
+              const nextCount = normalizeBookmarkCount(Number(value) * 4);
+              currentBookmarkCount = nextCount;
+              updateBookmarkColumnsControlVisibility(nextCount);
+              if (!storageArea) {
+                return;
+              }
+              storageArea.set({ [BOOKMARK_COUNT_STORAGE_KEY]: nextCount });
+              notifyNewtabSectionsRefresh('bookmarks');
+            }
+          }
+        )
+      : null;
+  function renderBookmarkRowsControl(value) {
+    if (!bookmarkRowsController) {
+      return;
+    }
+    currentBookmarkCount = normalizeBookmarkCount(value);
+    bookmarkRowsController.render({
+      ariaLabel: getMessage('settings_bookmarks_title', 'Bookmark rows'),
+      id: '_x_extension_bookmark_rows_slider_2026_unique_',
+      min: 0,
+      max: 8,
+      step: 1,
+      ticks: [
+        { align: 'start', label: '0' },
+        { label: '4' },
+        { align: 'end', label: '8' }
+      ],
+      value: currentBookmarkCount / 4
+    });
+  }
   const bookmarkColumnsController =
     typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
       ? optionsSettingsControlsApi.createRangeSliderControlController(
@@ -759,6 +799,7 @@
       value: currentBookmarkColumns
     });
   }
+  renderBookmarkRowsControl(8);
   renderBookmarkColumnsControl(6);
   syncSelectionQuickActionsProviderAvailability();
   const SETTINGS_TAB_KEYS = Object.freeze([
@@ -1189,8 +1230,11 @@
   }
 
   function normalizeBookmarkCount(value) {
-    const parsed = Number.parseInt(value, 10);
-    if (parsed === 0 || parsed === 4 || parsed === 8 || parsed === 16 || parsed === 32) {
+    if (typeof SETTINGS.normalizeBookmarkCount === 'function') {
+      return SETTINGS.normalizeBookmarkCount(value);
+    }
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32 && parsed % 4 === 0) {
       return parsed;
     }
     return 8;
@@ -1416,6 +1460,12 @@
       return 'time';
     }
     return value === 'off' || value === false ? 'off' : 'brand';
+  }
+
+  function normalizeNewtabInputAutoFocusEnabled(value) {
+    return typeof SETTINGS.normalizeNewtabInputAutoFocusEnabled === 'function'
+      ? SETTINGS.normalizeNewtabInputAutoFocusEnabled(value)
+      : value === true;
   }
 
   function normalizeNewtabShortcutsVisible(value) {
@@ -2776,6 +2826,7 @@
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
       setNewtabTopContentTabState(currentNewtabTopContentMode);
+      renderBookmarkRowsControl(currentBookmarkCount);
       renderBookmarkColumnsControl(currentBookmarkColumns);
       renderSettingsNavigation(currentActiveSettingsTab);
       if (confirmCancel) confirmCancel.textContent = getMessage('confirm_cancel', '取消');
@@ -4126,17 +4177,6 @@
       });
     });
   }
-  if (bookmarkCountSelect) {
-    bookmarkCountSelect.addEventListener('change', () => {
-      const nextCount = normalizeBookmarkCount(bookmarkCountSelect.value);
-      updateBookmarkColumnsControlVisibility(nextCount);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [BOOKMARK_COUNT_STORAGE_KEY]: nextCount });
-      notifyNewtabSectionsRefresh('bookmarks');
-    });
-  }
   if (bookmarkFolderIconsVisibleToggle) {
     bookmarkFolderIconsVisibleToggle.addEventListener('change', () => {
       const next = normalizeBookmarkFolderIconsVisible(bookmarkFolderIconsVisibleToggle.checked);
@@ -4154,6 +4194,16 @@
         return;
       }
       storageArea.set({ [OVERLAY_TAB_PRIORITY_STORAGE_KEY]: next });
+    });
+  }
+  if (newtabInputAutoFocusToggle) {
+    newtabInputAutoFocusToggle.addEventListener('change', () => {
+      const next = normalizeNewtabInputAutoFocusEnabled(newtabInputAutoFocusToggle.checked);
+      setOptionsToggleState(newtabInputAutoFocusToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: next });
     });
   }
   if (newtabShortcutsToggle) {
@@ -4727,14 +4777,11 @@
     storageArea.get([BOOKMARK_COUNT_STORAGE_KEY], (result) => {
       const stored = result[BOOKMARK_COUNT_STORAGE_KEY];
       const count = normalizeBookmarkCount(stored);
-      if (bookmarkCountSelect) {
-        setOptionsSelectState(bookmarkCountSelect, String(count));
-      }
+      renderBookmarkRowsControl(count);
       updateBookmarkColumnsControlVisibility(count);
       if (stored !== count) {
         storageArea.set({ [BOOKMARK_COUNT_STORAGE_KEY]: count });
       }
-      refreshCustomSelects();
     });
     storageArea.get([BOOKMARK_COLUMNS_STORAGE_KEY], (result) => {
       const stored = result[BOOKMARK_COLUMNS_STORAGE_KEY];
@@ -4774,6 +4821,16 @@
         storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
+    });
+    storageArea.get([NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY];
+      const stored = normalizeNewtabInputAutoFocusEnabled(rawValue);
+      if (newtabInputAutoFocusToggle) {
+        setOptionsToggleState(newtabInputAutoFocusToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: stored });
+      }
     });
     storageArea.get([NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY], (result) => {
       const rawValue = result[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
@@ -5970,11 +6027,10 @@
       setRecentModeTabState(mode);
       refreshCustomSelects();
     }
-    if (changes[BOOKMARK_COUNT_STORAGE_KEY] && bookmarkCountSelect) {
+    if (changes[BOOKMARK_COUNT_STORAGE_KEY]) {
       const stored = normalizeBookmarkCount(changes[BOOKMARK_COUNT_STORAGE_KEY].newValue);
-      setOptionsSelectState(bookmarkCountSelect, String(stored));
+      renderBookmarkRowsControl(stored);
       updateBookmarkColumnsControlVisibility(stored);
-      refreshCustomSelects();
     }
     if (changes[BOOKMARK_COLUMNS_STORAGE_KEY]) {
       const stored = normalizeBookmarkColumns(changes[BOOKMARK_COLUMNS_STORAGE_KEY].newValue);
@@ -6004,6 +6060,14 @@
         storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
+    }
+    if (changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY] && newtabInputAutoFocusToggle) {
+      const raw = changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeNewtabInputAutoFocusEnabled(raw);
+      setOptionsToggleState(newtabInputAutoFocusToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: next });
+      }
     }
     if (changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] && newtabShortcutsToggle) {
       const raw = changes[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY].newValue;

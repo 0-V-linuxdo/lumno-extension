@@ -113,6 +113,21 @@ assert.match(
   /const waitForFirstResultMix =\s*suggestionsContainer\.getAttribute\('data-collapsed'\) === 'true';[\s\S]*?OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS[\s\S]*?const remoteDelay = waitForFirstResultMix\s*\? 0[\s\S]*?if \(remoteMixState\.visualSettled\) \{\s*return;/,
   'the first local and remote result stages should produce only one visible height commit'
 );
+assert.match(
+  overlaySource,
+  /function extendSuggestionsHeightInputSessionForRemoteMix\(query\)[\s\S]*?suggestionsHeightRemoteMixSettleMs[\s\S]*?finishSuggestionsHeightInputSession\(\)/,
+  'an in-flight remote mix should keep the original result height locked beyond the typing settle window'
+);
+assert.match(
+  overlaySource,
+  /const remoteMixState = \{[\s\S]*?extendSuggestionsHeightInputSessionForRemoteMix\(requestQuery\)[\s\S]*?settleHeightAfterRemoteMix: true/,
+  'remote suggestion settlement should release the input-height lock only after the final rows are rendered'
+);
+assert.match(
+  updateSearchSuggestionsSource,
+  /reconcileSuggestionsHeightAfterRender\(previousHeightState, query, \{[\s\S]*?if \(settleHeightAfterRemoteMix\) \{\s*finishSuggestionsHeightInputSession\(\);\s*\}/,
+  'the final remote mix should animate once from the held height to its final measured height'
+);
 
 const pendingUpdateStart = overlaySource.indexOf(
   'function updatePendingSearchSuggestions(query, options) {'
@@ -280,7 +295,7 @@ const beginInputSessionStart = overlaySource.indexOf(
   'function beginSuggestionsHeightInputSession(query) {'
 );
 const beginInputSessionEnd = overlaySource.indexOf(
-  'function finalizeDeferredSuggestionsHeight(query)',
+  'function getSuggestionsHeightTransitionProperties(',
   beginInputSessionStart
 );
 const beginInputSessionSource = overlaySource.slice(

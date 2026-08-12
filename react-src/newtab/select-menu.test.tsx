@@ -83,6 +83,29 @@ describe('New Tab select menu React island', () => {
     expect(controller.isOpen(instance.wrapper)).toBe(false);
   });
 
+  it('commits the closed portal surface before a synchronous first open', () => {
+    const closedSurfaceReads: HTMLElement[] = [];
+    const offsetWidthSpy = vi
+      .spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockImplementation(function readOffsetWidth(this: HTMLElement) {
+        if (
+          this instanceof HTMLElement &&
+          this.classList.contains('_x_extension_menu_surface_2024_unique_') &&
+          this.dataset.open === 'false'
+        ) {
+          closedSurfaceReads.push(this);
+        }
+        return 0;
+      });
+
+    const { controller, instance } = createMenu();
+
+    expect(closedSurfaceReads).toContain(instance.menu);
+    act(() => controller.setOpen(instance.wrapper, true));
+    expect(instance.menu.dataset.open).toBe('true');
+    offsetWidthSpy.mockRestore();
+  });
+
   it('dispatches the legacy select change event and updates selection', () => {
     const { controller, instance } = createMenu();
     const onChange = vi.fn();
@@ -233,5 +256,102 @@ describe('New Tab select menu React island', () => {
     });
 
     expect(controller.isOpen(instance.wrapper)).toBe(false);
+  });
+
+  it('prevents disabled actions and skips them during keyboard navigation', () => {
+    const onAction = vi.fn();
+    const { controller, instance } = createMenu({
+      ...baseConfig,
+      onAction,
+      value: '__disabled__',
+      options: [
+        {
+          action: 'disabled-action',
+          disabled: true,
+          label: 'Open empty folder',
+          value: '__disabled__'
+        },
+        {
+          action: 'edit-action',
+          label: 'Edit',
+          value: '__edit__'
+        },
+        {
+          action: 'delete-action',
+          label: 'Delete',
+          value: '__delete__'
+        }
+      ]
+    });
+    act(() => controller.setOpen(instance.wrapper, true));
+
+    const disabledOption = instance.menu.querySelector<HTMLElement>(
+      '[data-value="__disabled__"]'
+    );
+    const editOption = instance.menu.querySelector<HTMLElement>(
+      '[data-value="__edit__"]'
+    );
+    expect(disabledOption?.getAttribute('aria-disabled')).toBe('true');
+    expect(instance.menu.querySelector('[data-active="true"]')).toBeNull();
+
+    act(() => disabledOption?.click());
+    expect(onAction).not.toHaveBeenCalled();
+    expect(controller.isOpen(instance.wrapper)).toBe(true);
+
+    act(() => {
+      editOption?.dispatchEvent(
+        new MouseEvent('mouseover', { bubbles: true })
+      );
+    });
+    expect(editOption?.getAttribute('data-active')).toBe('true');
+    act(() => {
+      editOption?.dispatchEvent(
+        new MouseEvent('mouseout', { bubbles: true })
+      );
+    });
+    expect(instance.menu.querySelector('[data-active="true"]')).toBeNull();
+
+    act(() => {
+      instance.trigger.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    expect(
+      editOption?.getAttribute(
+        'data-active'
+      )
+    ).toBe('true');
+
+    act(() => {
+      instance.trigger.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    expect(
+      instance.menu.querySelector('[data-value="__delete__"]')?.getAttribute(
+        'data-active'
+      )
+    ).toBe('true');
+
+    act(() => {
+      instance.trigger.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'delete-action' })
+    );
   });
 });

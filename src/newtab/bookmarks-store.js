@@ -83,6 +83,22 @@
     }
   }
 
+  function collectFolderBookmarkUrls(node, collected) {
+    const urls = Array.isArray(collected) ? collected : [];
+    if (!node) {
+      return urls;
+    }
+    const nodeUrl = node && node.url ? String(node.url).trim() : '';
+    if (nodeUrl && !/^javascript:/i.test(nodeUrl)) {
+      urls.push(nodeUrl);
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let i = 0; i < children.length; i += 1) {
+      collectFolderBookmarkUrls(children[i], urls);
+    }
+    return urls;
+  }
+
   function buildBookmarkNodeMap(nodes) {
     const nodeMap = new Map();
     const walk = (node, parentId, index) => {
@@ -266,6 +282,7 @@
     findBookmarksBarNode,
     findFirstUrlInFolder,
     collectFolderUrls,
+    collectFolderBookmarkUrls,
     buildBookmarkNodeMap,
     buildBookmarkItemsFromChildren,
     buildBookmarkFolderCache,

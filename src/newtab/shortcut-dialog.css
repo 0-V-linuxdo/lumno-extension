@@ -95,6 +95,16 @@
         font-weight: 600;
         line-height: 1.25;
       }
+      .x-nt-shortcut-dialog-description {
+        margin: -4px 0 2px;
+        color: var(--panel-subtext, #64748b);
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.6;
+      }
+      body[data-theme="dark"] .x-nt-shortcut-dialog-description {
+        color: rgba(226, 232, 240, 0.72);
+      }
       .x-nt-shortcut-field {
         display: flex;
         flex-direction: column;
