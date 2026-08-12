@@ -43,6 +43,13 @@
       },
       {
          "matches": [ "\u003Call_urls>" ],
+         "js": [ "src/content/tab-switcher-shortcut-release.js" ],
+         "run_at": "document_start",
+         "all_frames": true,
+         "match_about_blank": true
+      },
+      {
+         "matches": [ "\u003Call_urls>" ],
          "js": [ "src/shared/settings.js", "src/shared/selection-action-icons.js", "src/shared/selection-intent.js", "src/content/selection-quick-actions.js" ],
          "run_at": "document_idle"
       },

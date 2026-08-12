@@ -2,6 +2,10 @@ const assert = require('assert');
 const fs = require('fs');
 
 const contentHotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
+const shortcutReleaseRelaySource = fs.readFileSync(
+  'src/content/tab-switcher-shortcut-release.js',
+  'utf8'
+);
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
 const switcherSource = fs.readFileSync('src/overlay/tab-switcher.js', 'utf8');
 const switcherViewReactSource = fs.readFileSync(
@@ -92,6 +96,11 @@ assert.match(
 );
 assert.match(
   switcherSource,
+  /function commitOpenSwitcherFromShortcutReleaseMessage\(\)[\s\S]*_lumnoTabSwitcherCommitFromShortcutRelease\(\)[\s\S]*request\.action === 'commitOpenTabSwitcherFromShortcutRelease'/,
+  'normal-page switchers should accept the configured release relayed from the tab that received the original key sequence'
+);
+assert.match(
+  switcherSource,
   /previousRuntimeMessageListener[\s\S]*removeListener\(previousRuntimeMessageListener\)[\s\S]*addListener\(runtimeMessageListener\)/,
   'reinjection should replace an invalidated runtime listener after an extension reload'
 );
@@ -134,6 +143,43 @@ assert.match(
   switcherBridgeSource,
   /respondToExtensionPageRequest[\s\S]*advanced:[\s\S]*open:[\s\S]*suppressed:/,
   'shared tab switcher bridge should pass command advance and open-state status back to extension-page ports'
+);
+assert.match(
+  switcherBridgeSource,
+  /function commitOpenTabSwitcherFromShortcutRelease\(\)[\s\S]*_lumnoTabSwitcherCommitFromShortcutRelease\(\)[\s\S]*request\.action === 'commitOpenTabSwitcherFromShortcutRelease'/,
+  'extension-page switchers should accept the same relayed configured-key release command'
+);
+assert.match(
+  shortcutReleaseRelaySource,
+  /RUNTIME_KEY[\s\S]*previousRuntime\.cleanup\(\)[\s\S]*RELEASE_REPLAY_WINDOW_MS[\s\S]*function rememberTrustedShortcutRelease\(event\)[\s\S]*function getBufferedReleasedShortcutKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)[\s\S]*removeEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased/,
+  'the document-start observer should relay live releases and replay only trusted releases from the current shortcut command'
+);
+assert.match(
+  backgroundSource,
+  /function prepareTabSwitcherShortcutReleaseObserver\(tab\)[\s\S]*allFrames:\s*true[\s\S]*files:\s*\['src\/content\/tab-switcher-shortcut-release\.js'\]/,
+  'the background should dynamically install the release observer in already-open tabs and focused frames'
+);
+assert.match(
+  backgroundSource,
+  /function prepareTabSwitcherShortcutReleaseObserversInOpenTabs\(\)[\s\S]*chrome\.tabs\.query\(\{\},[\s\S]*prepareTabSwitcherShortcutReleaseObserver\(tab\)[\s\S]*chrome\.runtime\.onInstalled\.addListener\([\s\S]*prepareTabSwitcherShortcutReleaseObserversInOpenTabs\(\)[\s\S]*chrome\.runtime\.onStartup\.addListener\([\s\S]*prepareTabSwitcherShortcutReleaseObserversInOpenTabs\(\)/,
+  'extension reload and browser startup should prepare already-open tabs before the user presses the shortcut'
+);
+const shortcutReleaseContentScript = manifest.content_scripts.find((entry) => (
+  entry &&
+  Array.isArray(entry.js) &&
+  entry.js.includes('src/content/tab-switcher-shortcut-release.js')
+));
+assert.ok(
+  shortcutReleaseContentScript &&
+    shortcutReleaseContentScript.run_at === 'document_start' &&
+    shortcutReleaseContentScript.all_frames === true &&
+    shortcutReleaseContentScript.match_about_blank === true,
+  'the release observer should be present before the command in every focused frame, including inherited about:blank editors'
+);
+assert.match(
+  switcherBridgeSource,
+  /TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS[\s\S]*function rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*function getBufferedTabSwitcherShortcutReleaseKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)/,
+  'extension pages should preserve the same current-command release replay behavior through their persistent bridge'
 );
 assert.match(
   switcherBridgeSource,
@@ -371,18 +417,18 @@ assert.strictEqual(
 );
 assert.match(
   switcherSource,
-  /keyText === 'q'[\s\S]*selectByOffset\(1\)/,
-  'tab switcher should allow Q to cycle to the next item'
+  /isTabSwitcherShortcutTriggerEvent\(shortcut,\s*event\)[\s\S]*selectByOffset\(1\)/,
+  'tab switcher should allow the configured shortcut key to cycle to the next item'
 );
 assert.match(
   switcherSource,
-  /let suppressInitialShortcutAdvanceUntilQKeyup = context\.suppressInitialShortcutAdvance === true;/,
-  'tab switcher should suppress only the initial held Q until the first Q keyup'
+  /let suppressInitialShortcutAdvanceUntilTriggerKeyup = context\.suppressInitialShortcutAdvance === true;/,
+  'tab switcher should suppress only the initial held shortcut key until its first keyup'
 );
 assert.match(
   switcherSource,
-  /function shouldSuppressInitialShortcutAdvance\(\)[\s\S]*return suppressInitialShortcutAdvanceUntilQKeyup;/,
-  'tab switcher should use key state, not a time window, for initial held-Q suppression'
+  /function shouldSuppressInitialShortcutAdvance\(\)[\s\S]*return suppressInitialShortcutAdvanceUntilTriggerKeyup;/,
+  'tab switcher should use key state, not a time window, for initial held-shortcut suppression'
 );
 assert.strictEqual(
   /INITIAL_SHORTCUT_ADVANCE_SUPPRESS_MS|Date\.now\(\)\s*\+/.test(switcherSource),
@@ -391,33 +437,38 @@ assert.strictEqual(
 );
 assert.match(
   switcherSource,
-  /function advanceSelectionFromShortcut\(offset\)[\s\S]*suppressInitialShortcutAdvanceUntilQKeyup = false;[\s\S]*selectByOffset\(offset\);[\s\S]*return true;/,
+  /function advanceSelectionFromShortcut\(offset\)[\s\S]*suppressInitialShortcutAdvanceUntilTriggerKeyup = false;[\s\S]*selectByOffset\(offset\);[\s\S]*return true;/,
   'tab switcher command re-entry should clear initial suppression and advance while Alt remains held'
 );
 assert.match(
   switcherSource,
-  /if \(keyText === 'q'\)[\s\S]*if \(shouldSuppressInitialShortcutAdvance\(\) && event\.altKey\)[\s\S]*return;[\s\S]*selectByOffset\(1\)/,
-  'tab switcher should ignore immediate held Alt+Q duplicate keydowns without preventing later Q cycling'
+  /if \(isTabSwitcherShortcutTriggerEvent\(shortcut,\s*event\)\)[\s\S]*if \(shouldSuppressInitialShortcutAdvance\(\) && isTabSwitcherCommitModifierPressed\(shortcut,\s*event\)\)[\s\S]*return;[\s\S]*selectByOffset\(1\)/,
+  'tab switcher should ignore immediate held shortcut duplicate keydowns without preventing later cycling'
 );
 assert.match(
   switcherSource,
-  /if \(keyText === 'q'\)[\s\S]*if \(shouldSuppressInitialShortcutAdvance\(\) && event\.altKey\)[\s\S]*return;[\s\S]*suppressInitialShortcutAdvanceUntilQKeyup = false;[\s\S]*selectByOffset\(1\)/,
-  'tab switcher should clear initial suppression when Q is pressed after Alt has been released'
+  /if \(isTabSwitcherShortcutTriggerEvent\(shortcut,\s*event\)\)[\s\S]*if \(shouldSuppressInitialShortcutAdvance\(\) && isTabSwitcherCommitModifierPressed\(shortcut,\s*event\)\)[\s\S]*return;[\s\S]*suppressInitialShortcutAdvanceUntilTriggerKeyup = false;[\s\S]*selectByOffset\(1\)/,
+  'tab switcher should clear initial suppression when the shortcut key is pressed after its modifier has been released'
 );
 assert.match(
   switcherSource,
-  /function handleKeyup[\s\S]*keyText === 'q'[\s\S]*suppressInitialShortcutAdvanceUntilQKeyup = false;[\s\S]*stopHandledKeyEvent\(event\);[\s\S]*if \(!event\.altKey\)[\s\S]*switchToSelected\(\)/,
-  'tab switcher should clear the initial Q suppression on Q release without committing while Alt is still held'
+  /function handleKeyup[\s\S]*isTabSwitcherShortcutTriggerEvent\(shortcut,\s*event\)[\s\S]*suppressInitialShortcutAdvanceUntilTriggerKeyup = false;[\s\S]*stopHandledKeyEvent\(event\);[\s\S]*return;/,
+  'releasing a custom shortcut trigger should clear suppression without committing while its modifier remains held'
 );
 assert.match(
   switcherSource,
-  /function handleKeyup[\s\S]*event\.key === 'Alt'[\s\S]*switchToSelected\(\)/,
-  'tab switcher should switch to the selected tab when Alt is released'
+  /function handleKeyup[\s\S]*shortcut\.commitModifierEventKey[\s\S]*event\.key === shortcut\.commitModifierEventKey[\s\S]*clickSelectedCardFromShortcutRelease\(\)/,
+  'default and custom shortcuts should commit when their configured primary modifier is released'
 );
 assert.match(
   switcherSource,
   /window\.addEventListener\('keyup',\s*handleKeyup,\s*true\)/,
   'tab switcher should listen for keyup so command-key release can commit the selection'
+);
+assert.strictEqual(
+  /focusSelectedCardForShortcutRelease|focusedElementBeforeOpen|restoreFocusAfterClose/.test(switcherSource),
+  false,
+  'shortcut release recovery should not steal or rewrite the page focus chain'
 );
 assert.match(
   switcherSource,
@@ -1492,13 +1543,137 @@ const triggerSwitcherBlock = getFunctionBlock(
 );
 assert.match(
   triggerSwitcherBlock,
-  /if \(didAdvance\)[\s\S]*return;[\s\S]*const opening = beginTabSwitcherOpening\(tab,\s*source\);[\s\S]*if \(!opening\)[\s\S]*return;[\s\S]*const finishOpening = createTabSwitcherOpeningFinisher\(opening\);[\s\S]*ensureTabSwitcherStateLoaded/,
+  /if \(didAdvance\)[\s\S]*return;[\s\S]*const opening = beginTabSwitcherOpening\(tab,\s*source\);[\s\S]*if \(!opening\)[\s\S]*return;[\s\S]*const finishOpeningGuard = createTabSwitcherOpeningFinisher\(opening\);[\s\S]*const finishOpening = \(ok\) =>[\s\S]*ensureTabSwitcherStateLoaded/,
   'Alt+Q fast cycling should return before opening guard setup, then guard the async payload build before waiting on thumbnail state loading'
 );
 assert.match(
   triggerSwitcherBlock,
-  /const startupStateReady = Promise\.all\(\[\s*ensureTabSwitcherStateLoaded\(\),\s*loadFaviconRequestBlacklistItems\(\),\s*loadFaviconEnhancedFetchEnabled\(\)\s*\]\)[\s\S]*const tabQueryReady = new Promise[\s\S]*Promise\.all\(\[startupStateReady,\s*tabQueryReady\]\)[\s\S]*getRecentTabsForSwitcher/,
-  'Alt+Q should query tabs in parallel with local state and favicon policy loading'
+  /const releaseObserverReady = prepareTabSwitcherShortcutReleaseObserver\(tab\);[\s\S]*advanceExistingTabSwitcherOnTab\(tab,[\s\S]*Promise\.all\(\[startupStateReady,\s*tabQueryReady,\s*shortcutReady,\s*releaseObserverReady\]\)/,
+  'the trusted release observer should start before asynchronous switcher opening work so quick releases can be buffered'
+);
+assert.match(
+  triggerSwitcherBlock,
+  /const startupStateReady = Promise\.all\(\[\s*ensureTabSwitcherStateLoaded\(\),\s*loadFaviconRequestBlacklistItems\(\),\s*loadFaviconEnhancedFetchEnabled\(\)\s*\]\)[\s\S]*const shortcutReady = new Promise[\s\S]*getConfiguredTabSwitcherShortcut\(resolve\)[\s\S]*const tabQueryReady = new Promise[\s\S]*Promise\.all\(\[startupStateReady,\s*tabQueryReady,\s*shortcutReady,\s*releaseObserverReady\]\)[\s\S]*getRecentTabsForSwitcher/,
+  'the tab switcher should resolve tabs, local state, favicon policy, and the configured shortcut in parallel'
+);
+assert.match(
+  backgroundSource,
+  /function getConfiguredTabSwitcherShortcut\(callback\)[\s\S]*chrome\.commands\.getAll\([\s\S]*SHOW_TAB_SWITCHER_COMMAND_NAME[\s\S]*callback\(shortcut \|\| fallbackShortcut\)/,
+  'the background should read the current browser-configured tab switcher shortcut with an Alt+Q fallback'
+);
+const shortcutReleaseHandlerBlock = getFunctionBlock(
+  backgroundSource,
+  'function handleTabSwitcherShortcutModifierReleased(senderTab, releasedKey, callback)',
+  'function waitForTabSwitcherCapturePaint()'
+);
+assert.match(
+  shortcutReleaseHandlerBlock,
+  /getConfiguredTabSwitcherShortcut[\s\S]*getShortcutReleaseEventKeys\(shortcut\)[\s\S]*expectedKeys\.includes\(key\)[\s\S]*commitOpenTabSwitcherInWindow\(senderTab\.windowId, 'keyup'\)/,
+  'the background should validate the configured release key, then locate the real open switcher in the sender window'
+);
+assert.match(
+  backgroundSource,
+  /function armTabSwitcherShortcutReleaseObservers\(tabs, windowId, shortcut, commandStartedAt\)[\s\S]*getShortcutReleaseEventKeys\(shortcut\)[\s\S]*action:\s*'armTabSwitcherShortcutRelease'[\s\S]*commandStartedAt:\s*Number\(commandStartedAt\)[\s\S]*postTabSwitcherMessageToExtensionPage[\s\S]*chrome\.tabs\.sendMessage/,
+  'every eligible release observer should receive the timestamp needed to recover a fast keyup'
+);
+assert.match(
+  triggerSwitcherBlock,
+  /const commandStartedAt = Date\.now\(\)[\s\S]*const finishOpeningAndArmShortcutRelease = \(ok\) => \{\s*finishOpening\(ok\);\s*if \(ok === true\) \{\s*armTabSwitcherShortcutReleaseObservers\([\s\S]*commandStartedAt[\s\S]*onOpenComplete:\s*finishOpeningAndArmShortcutRelease/,
+  'release replay should be armed only after the switcher host is mounted and ready to commit'
+);
+assert.match(
+  switcherSource,
+  /function clickSelectedCardFromShortcutRelease\(\)[\s\S]*allowRelayedShortcutReleaseActivation = true;[\s\S]*selectedButton\.click\(\)[\s\S]*host\._lumnoTabSwitcherCommitFromShortcutRelease = function\(\)[\s\S]*clickSelectedCardFromShortcutRelease\(\)/,
+  'custom shortcut modifier release should use a narrowly authorized click on the highlighted card'
+);
+[
+  'createShortcutInactivityCommitController',
+  'tabSwitcherShortcutInactivityCommitController',
+  'TAB_SWITCHER_CUSTOM_INITIAL_INACTIVITY_COMMIT_MS',
+  'TAB_SWITCHER_CUSTOM_REPEAT_INACTIVITY_COMMIT_MS',
+  'commitOpenTabSwitcherAfterCommandInactivity',
+  'inactivity-fired',
+  'usesInactivityFallback'
+].forEach((needle) => {
+  assert.strictEqual(
+    backgroundSource.includes(needle),
+    false,
+    `holding a custom shortcut must not retain the automatic ${needle} path`
+  );
+});
+assert.match(
+  triggerSwitcherBlock,
+  /const windowId = typeof tab\.windowId[\s\S]*if \(didAdvance\)[\s\S]*tabSwitcherHostTabIdByWindowId\.set\(tab\.windowId, tab\.id\)[\s\S]*recordTabSwitcherShortcutDebug\('command-advanced',[\s\S]*const finishOpening = \(ok\)[\s\S]*tabSwitcherHostTabIdByWindowId\.set\(windowId, openingHostTabId\)[\s\S]*shortcut-configured[\s\S]*releaseKeys[\s\S]*onOpenComplete:\s*finishOpening/,
+  'initial and repeated commands should remember the host and wait for the configured release key'
+);
+assert.match(
+  backgroundSource,
+  /function findOpenTabSwitcherHostInWindow\(windowId\)[\s\S]*TAB_SWITCHER_HOST_STATE_TIMEOUT_MS[\s\S]*getOpenTabSwitcherState\(tab\)[\s\S]*chrome\.tabs\.query\(\{ windowId \}[\s\S]*state\.open === true[\s\S]*function commitOpenTabSwitcherInWindow\(windowId, source\)[\s\S]*commitOpenTabSwitcherFromShortcutReleaseOnTab\(hostTab\)[\s\S]*commitOpenTabSwitcherInWindow\(senderTab\.windowId, 'keyup'\)/,
+  'a real release should locate the actual open host before using the guarded click commit route'
+);
+assert.match(
+  backgroundSource,
+  /tabSwitcherHostTabIdByWindowId = new Map\(\)[\s\S]*tabSwitcherHostTabIdByWindowId\.set\(windowId, openingHostTabId\)/,
+  'the switcher should remember the real host tab when opening completes'
+);
+assert.match(
+  backgroundSource,
+  /function commitOpenTabSwitcherInWindow\(windowId, source\)[\s\S]*knownHostTabId = tabSwitcherHostTabIdByWindowId\.get\(windowId\)[\s\S]*getTabForTabSwitcherCommit\(knownHostTabId\)[\s\S]*finishCommit\(hostTab, 'known-host'\)/,
+  'the normal commit path should use the remembered host instead of waiting on every tab'
+);
+assert.match(
+  backgroundSource,
+  /function normalizeTabSwitcherCommitResponse\(response\)[\s\S]*response\.ok !== true[\s\S]*typeof response\.committed !== 'boolean'[\s\S]*response\.committed === true/,
+  'the background should preserve the real committed message result instead of treating host reachability as a successful switch'
+);
+assert.match(
+  backgroundSource,
+  /function normalizeTabSwitcherCommitScriptResults\(results\)[\s\S]*typeof item\.result\.committed === 'boolean'[\s\S]*result\.result\.committed === true/,
+  'the script fallback should preserve the real committed result'
+);
+assert.match(
+  backgroundSource,
+  /function commitOpenTabSwitcherFromShortcutReleaseOnTab\(tab\)[\s\S]*normalizeResponse:\s*normalizeTabSwitcherCommitResponse[\s\S]*normalizeScriptResults:\s*normalizeTabSwitcherCommitScriptResults/,
+  'the guarded click route should use committed-aware response normalization for messages and script fallback'
+);
+assert.match(
+  shortcutReleaseHandlerBlock,
+  /commitOpenTabSwitcherInWindow\(senderTab\.windowId, 'keyup'\)[\s\S]*\.then\(\(didCommit\) => finish\(didCommit === true\)\)/,
+  'a validated real release should be the only path that commits the highlighted tab'
+);
+assert.match(
+  backgroundSource,
+  /globalThis\._lumnoTabSwitcherShortcutDebug = Object\.freeze\(\{[\s\S]*snapshot\(\)[\s\S]*clear\(\)/,
+  'the service worker should expose a bounded shortcut diagnostic trace'
+);
+[
+  'shortcut-configured',
+  'switcher-opened',
+  'commit-host-resolved',
+  'commit-finished'
+].forEach((stage) => {
+  assert.ok(
+    backgroundSource.includes(`recordTabSwitcherShortcutDebug('${stage}'`),
+    `the shortcut diagnostic trace should record ${stage}`
+  );
+});
+assert.deepStrictEqual(
+  [...backgroundSource.matchAll(/commitOpenTabSwitcherInWindow\([^\n]+/g)].map((match) => match[0]),
+  [
+    'commitOpenTabSwitcherInWindow(windowId, source) {',
+    "commitOpenTabSwitcherInWindow(senderTab.windowId, 'keyup')"
+  ],
+  'the open switcher should only be committed by a real keyup notification'
+);
+assert.match(
+  backgroundSource,
+  /shortcuts:\s*\{[\s\S]*'notifyTabSwitcherShortcutModifierReleased'[\s\S]*handler:\s*handleShortcutMessage[\s\S]*case 'notifyTabSwitcherShortcutModifierReleased':[\s\S]*handleTabSwitcherShortcutModifierReleased/,
+  'the trusted frame release notification should be routed into the tab switcher commit path'
+);
+assert.match(
+  injectSwitcherBlock,
+  /shortcut:\s*context && typeof context\.shortcut === 'string' \? context\.shortcut : 'Alt\+Q'/,
+  'the switcher open context should carry the browser-configured shortcut into the page runtime'
 );
 assert.match(
   triggerSwitcherBlock,
