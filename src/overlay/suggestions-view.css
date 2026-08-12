@@ -36,6 +36,44 @@
   overflow-y: hidden;
 }
 
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-open-tabs-visible-row-limit] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.68) transparent;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar {
+  width: 10px;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar-track {
+  margin-block: 12px;
+  background: transparent;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: rgba(148, 163, 184, 0.68);
+  background-clip: padding-box;
+}
+
+:is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.82);
+}
+
+:is(#_x_extension_overlay_2024_unique_[data-theme="dark"], #_x_extension_onboarding_overlay_demo_2026_unique_[data-theme="dark"]) .x-ov-suggestions-container[data-open-tabs-visible-row-limit] {
+  scrollbar-color: rgba(148, 163, 184, 0.58) transparent;
+}
+
+:is(#_x_extension_overlay_2024_unique_[data-theme="dark"], #_x_extension_onboarding_overlay_demo_2026_unique_[data-theme="dark"]) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.58);
+}
+
+:is(#_x_extension_overlay_2024_unique_[data-theme="dark"], #_x_extension_onboarding_overlay_demo_2026_unique_[data-theme="dark"]) .x-ov-suggestions-container[data-open-tabs-visible-row-limit]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(203, 213, 225, 0.7);
+}
+
 :is(#_x_extension_overlay_2024_unique_, #_x_extension_onboarding_overlay_demo_2026_unique_) .x-ov-close-other-tabs {
   all: unset;
   position: absolute;

@@ -9,6 +9,27 @@
   const NUMBER_SHORTCUT_TIMEOUT_MS = 2000;
   const numberShortcutStates = new WeakMap();
 
+  function getVisibleRowsViewportHeight(options) {
+    const config = options && typeof options === 'object' ? options : {};
+    const visibleRowLimit = Math.max(0, Math.floor(Number(config.visibleRowLimit) || 0));
+    const itemCount = Math.max(0, Math.floor(Number(config.itemCount) || 0));
+    const rowHeight = Math.max(0, Number(config.rowHeight) || 0);
+    const rowGap = Math.max(0, Number(config.rowGap) || 0);
+    const paddingTop = Math.max(0, Number(config.paddingTop) || 0);
+    const paddingBottom = Math.max(0, Number(config.paddingBottom) || 0);
+    const visibleRowCount = Math.min(visibleRowLimit, itemCount);
+    if (visibleRowCount <= 0 || rowHeight <= 0) {
+      return 0;
+    }
+    const hasOverflow = itemCount > visibleRowCount;
+    const visibleGapCount = hasOverflow
+      ? visibleRowCount
+      : Math.max(0, visibleRowCount - 1);
+    return paddingTop + paddingBottom +
+      (visibleRowCount * rowHeight) +
+      (visibleGapCount * rowGap);
+  }
+
   function scrollItemIntoView(container, item, options) {
     if (!container || !item || !item.isConnected) {
       return;
@@ -315,6 +336,7 @@
   }
 
   return {
+    getVisibleRowsViewportHeight,
     scrollItemIntoView,
     handleNumberShortcutKeyEvent,
     setNumberShortcutsActive,

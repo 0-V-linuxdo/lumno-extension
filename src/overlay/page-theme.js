@@ -177,6 +177,66 @@
     ) / 255;
   }
 
+  function getCssColorThemeSignal(color, weight) {
+    const parsed = parseCssColor(color);
+    if (!parsed || parsed.alpha <= 0.08) {
+      return null;
+    }
+    const rgb = parsed.alpha < 1
+      ? mixRgb(parsed.rgb, DEFAULT_CANVAS_RGB, parsed.alpha)
+      : parsed.rgb;
+    const luminance = getRelativeLuminance(rgb);
+    const normalizedWeight = Number.isFinite(Number(weight))
+      ? Math.max(0, Number(weight))
+      : 1;
+    if (luminance < 0.42) {
+      return {
+        theme: 'dark',
+        confidence: clampNumber((0.42 - luminance) / 0.42, 0, 1),
+        weight: normalizedWeight
+      };
+    }
+    if (luminance > 0.58) {
+      return {
+        theme: 'light',
+        confidence: clampNumber((luminance - 0.58) / 0.42, 0, 1),
+        weight: normalizedWeight
+      };
+    }
+    return null;
+  }
+
+  function resolvePageThemeSignals(signals) {
+    let totalScore = 0;
+    let totalWeight = 0;
+    (Array.isArray(signals) ? signals : []).forEach((signal) => {
+      if (!signal || (signal.theme !== 'dark' && signal.theme !== 'light')) {
+        return;
+      }
+      const confidence = clampNumber(signal.confidence, 0, 1);
+      const weight = Number.isFinite(Number(signal.weight))
+        ? Math.max(0, Number(signal.weight))
+        : 1;
+      if (confidence <= 0 || weight <= 0) {
+        return;
+      }
+      const contributionWeight = confidence * weight;
+      totalScore += (signal.theme === 'dark' ? -1 : 1) * contributionWeight;
+      totalWeight += contributionWeight;
+    });
+    if (totalWeight <= 0.2) {
+      return null;
+    }
+    const confidence = totalScore / totalWeight;
+    if (confidence <= -0.22) {
+      return 'dark';
+    }
+    if (confidence >= 0.22) {
+      return 'light';
+    }
+    return null;
+  }
+
   function getComputedStyleFor(win, element) {
     if (!win || typeof win.getComputedStyle !== 'function' || !element) {
       return null;
@@ -422,12 +482,46 @@
     return settings.systemTheme === 'dark' ? 'dark' : 'light';
   }
 
+  function shouldStrengthenDarkOverlayBackground(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    return settings.resolvedTheme === 'dark' && settings.pageTheme === 'light';
+  }
+
+  function shouldObservePageTheme(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    const mode = settings.mode === 'dark' || settings.mode === 'light'
+      ? settings.mode
+      : 'system';
+    if (mode === 'dark') {
+      return true;
+    }
+    if (mode !== 'system') {
+      return false;
+    }
+    return settings.pageThemeAdaptationEnabled === true || settings.systemTheme === 'dark';
+  }
+
+  function syncPageThemeObservation(options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    const shouldObserve = shouldObservePageTheme(settings);
+    const callback = shouldObserve ? settings.start : settings.stop;
+    if (typeof callback === 'function') {
+      callback();
+    }
+    return shouldObserve;
+  }
+
   return Object.freeze({
     parseCssColor,
     getRelativeLuminance,
     getPerceptualTone,
+    getCssColorThemeSignal,
+    resolvePageThemeSignals,
     detectPageVisualThemeSignal,
     detectPageVisualTheme,
-    resolveOverlayTheme
+    resolveOverlayTheme,
+    shouldStrengthenDarkOverlayBackground,
+    shouldObservePageTheme,
+    syncPageThemeObservation
   });
 });
