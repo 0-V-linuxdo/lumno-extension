@@ -398,7 +398,9 @@
       img._xThemeFaviconSession = (img._xThemeFaviconSession || 0) + 1;
       const session = img._xThemeFaviconSession;
       const hostKey = host || getHostFromUrl(url);
-      const cacheKey = String(hostKey || url || '').trim();
+      const cacheKey = typeof faviconUtils.getFaviconPersistCacheKey === 'function'
+        ? faviconUtils.getFaviconPersistCacheKey(url, hostKey)
+        : String(hostKey || url || '').trim();
       const skipPersisted = Boolean(optionsArg && optionsArg.skipPersisted === true);
       const persistedDataEntry = !skipPersisted && cacheKey
         ? getPersistedFaviconDataEntry(cacheKey)

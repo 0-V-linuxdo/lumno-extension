@@ -263,13 +263,14 @@ function createRuntime(options) {
 (async () => {
   const persistedDataUrl = 'data:image/png;base64,cGVyc2lzdGVk';
   const persistedWrites = [];
+  const pageCacheKey = 'page:https://m2.futurecomm.cn/';
   const persistedRuntime = createRuntime({
     getPersistedFaviconEntry(cacheKey) {
-      assert.strictEqual(cacheKey, 'futurecomm.cn');
+      assert.strictEqual(cacheKey, pageCacheKey);
       return { url: primaryUrl, updatedAt: Date.now() - 1 };
     },
     getPersistedFaviconDataEntry(cacheKey) {
-      assert.strictEqual(cacheKey, 'futurecomm.cn');
+      assert.strictEqual(cacheKey, pageCacheKey);
       return { dataUrl: persistedDataUrl, updatedAt: Date.now() };
     },
     setPersistedFaviconUrl(cacheKey, url) {
@@ -293,15 +294,53 @@ function createRuntime(options) {
   );
   assert.strictEqual(
     persistedImg.getAttribute('data-x-nt-favicon-cache-key'),
-    'futurecomm.cn',
-    'theme-aware shortcut favicons should keep a stable host cache key'
+    pageCacheKey,
+    'theme-aware favicons should keep a stable page cache key'
   );
   persistedImg.dispatchEvent('load');
   await wait(4);
   assert.deepStrictEqual(
     persistedWrites[0],
-    { cacheKey: 'futurecomm.cn', type: 'data', value: persistedDataUrl },
+    { cacheKey: pageCacheKey, type: 'data', value: persistedDataUrl },
     'confirmed persisted favicon data should refresh its local cache entry'
+  );
+
+  const profilePageUrl = 'https://x.com/creator';
+  const homePageUrl = 'https://x.com/home';
+  const profileCacheKey = `page:${profilePageUrl}`;
+  const homeCacheKey = `page:${homePageUrl}`;
+  const profileIcon = 'data:image/png;base64,cHJvZmlsZQ==';
+  const homeIcon = 'data:image/png;base64,aG9tZQ==';
+  const sameHostCacheReads = [];
+  const sameHostRuntime = createRuntime({
+    getPersistedFaviconEntry(cacheKey) {
+      sameHostCacheReads.push(cacheKey);
+      return null;
+    },
+    getPersistedFaviconDataEntry(cacheKey) {
+      sameHostCacheReads.push(cacheKey);
+      if (cacheKey === profileCacheKey) {
+        return { dataUrl: profileIcon, updatedAt: Date.now() };
+      }
+      if (cacheKey === homeCacheKey) {
+        return { dataUrl: homeIcon, updatedAt: Date.now() };
+      }
+      if (cacheKey === 'x.com') {
+        return { dataUrl: profileIcon, updatedAt: Date.now() };
+      }
+      return null;
+    }
+  });
+  const profileImg = createFakeImage();
+  const homeImg = createFakeImage();
+  sameHostRuntime.attachFaviconWithFallbacks(profileImg, profilePageUrl, 'x.com');
+  sameHostRuntime.attachFaviconWithFallbacks(homeImg, homePageUrl, 'x.com');
+  assert.strictEqual(profileImg.src, profileIcon);
+  assert.strictEqual(homeImg.src, homeIcon);
+  assert.deepStrictEqual(
+    sameHostCacheReads,
+    [profileCacheKey, profileCacheKey, homeCacheKey, homeCacheKey],
+    'same-host pages should never read the legacy shared host favicon entry'
   );
 
   const shortcutCachedDataUrl = 'data:image/png;base64,c2hvcnRjdXQtY2FjaGU=';

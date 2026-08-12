@@ -237,6 +237,20 @@
     return current;
   }
 
+  function getFaviconPersistCacheKey(pageUrl, fallbackKey) {
+    const canonicalPageUrl = getCanonicalPageUrlForFavicon(pageUrl);
+    try {
+      const parsed = new URL(canonicalPageUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        parsed.hash = '';
+        return `page:${parsed.href}`;
+      }
+    } catch (e) {
+      // Non-web pages keep the existing host or URL fallback below.
+    }
+    return String(fallbackKey || canonicalPageUrl || '').trim();
+  }
+
   function getCanonicalFaviconHost(url) {
     const pageUrl = getCanonicalPageUrlForFavicon(url);
     if (!pageUrl) {
@@ -1476,6 +1490,7 @@
     getChromeFaviconUrl,
     getCanonicalFaviconHost,
     getCanonicalPageUrlForFavicon,
+    getFaviconPersistCacheKey,
     getHtmlAttributeValue,
     getKnownThemedFaviconCandidateScores,
     getKnownThemedFaviconCandidateUrls,
