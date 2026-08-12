@@ -89,6 +89,7 @@
   const syncImportInput = document.getElementById('_x_extension_sync_import_input_2024_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const motionEffectsToggle = document.getElementById('_x_extension_motion_effects_toggle_2026_unique_');
+  const numberShortcutInstantToggle = document.getElementById('_x_extension_number_shortcut_instant_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
   const fallbackShortcutWrap = document.querySelector('._x_extension_shortcuts_hotkey_wrap_2024_unique_');
@@ -529,6 +530,8 @@
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = SETTINGS.MOTION_EFFECTS_ENABLED_STORAGE_KEY ||
     '_x_extension_motion_effects_enabled_2026_unique_';
+  const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
+    '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const AUTO_PIP_ENABLED_STORAGE_KEY = '_x_extension_auto_pip_enabled_2026_unique_';
   const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
@@ -596,6 +599,7 @@
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+    NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
     AUTO_PIP_ENABLED_STORAGE_KEY,
     TAB_SWITCHER_ENABLED_STORAGE_KEY,
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
@@ -1591,6 +1595,12 @@
     return typeof SETTINGS.normalizeMotionEffectsEnabled === 'function'
       ? SETTINGS.normalizeMotionEffectsEnabled(value)
       : value !== false;
+  }
+
+  function normalizeNumberShortcutInstantEnabled(value) {
+    return typeof SETTINGS.normalizeNumberShortcutInstantEnabled === 'function'
+      ? SETTINGS.normalizeNumberShortcutInstantEnabled(value)
+      : value === true;
   }
 
   function normalizeFaviconEnhancedFetchEnabled(value) {
@@ -4357,6 +4367,16 @@
       storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
     });
   }
+  if (numberShortcutInstantToggle) {
+    numberShortcutInstantToggle.addEventListener('change', () => {
+      const next = normalizeNumberShortcutInstantEnabled(numberShortcutInstantToggle.checked);
+      setOptionsToggleState(numberShortcutInstantToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: next });
+    });
+  }
   if (autoPipToggle) {
     autoPipToggle.addEventListener('change', () => {
       const next = Boolean(autoPipToggle.checked);
@@ -5000,6 +5020,17 @@
       }
       if (rawValue !== stored) {
         storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY];
+      const stored = normalizeNumberShortcutInstantEnabled(rawValue);
+      if (numberShortcutInstantToggle) {
+        setOptionsToggleState(numberShortcutInstantToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -6235,6 +6266,15 @@
       setOptionsToggleState(motionEffectsToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY] && numberShortcutInstantToggle) {
+      const raw = changes[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeNumberShortcutInstantEnabled(raw);
+      setOptionsToggleState(numberShortcutInstantToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }

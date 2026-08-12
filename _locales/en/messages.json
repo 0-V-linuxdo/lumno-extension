@@ -237,6 +237,12 @@
   "settings_pinned_tab_recovery_desc": {
     "message": "Save restorable pinned web tabs and restore missing ones after the browser restarts."
   },
+  "settings_number_shortcut_instant_title": {
+    "message": "Single-press Command to show number jump"
+  },
+  "settings_number_shortcut_instant_desc": {
+    "message": "When enabled, pressing Command/Ctrl once in the command bar or search suggestions immediately shows number jump badges; \"Open in background tab\" no longer uses Command (middle-click still opens in the background)."
+  },
   "document_pip_picker_hint": {
     "message": "Move over the page to choose an element. Click to open PiP, scroll to switch parents, Esc to cancel."
   },

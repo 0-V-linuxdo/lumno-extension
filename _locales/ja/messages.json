@@ -237,6 +237,12 @@
   "settings_pinned_tab_recovery_desc": {
     "message": "復元可能な固定タブを記録し、ブラウザ再起動後に自動で戻します。"
   },
+  "settings_number_shortcut_instant_title": {
+    "message": "Command 単押しで数字ジャンプ表示"
+  },
+  "settings_number_shortcut_instant_desc": {
+    "message": "有効にすると、コマンドバーや検索候補で Command/Ctrl を単押しした時点で数字ジャンプバッジが表示されます。「バックグラウンドで開く」は Command に割り当てられなくなります（マウス中クリックは引き続きバックグラウンドで開きます）。"
+  },
   "document_pip_picker_hint": {
     "message": "マウスを動かして要素を選択し、クリックするとWebクリップで表示します。ホイールで親要素へ切り替え、Escでキャンセルできます。"
   },

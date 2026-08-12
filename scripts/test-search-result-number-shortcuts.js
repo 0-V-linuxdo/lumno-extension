@@ -208,6 +208,82 @@ async function run() {
   assert.strictEqual(oldCommandNumberEvent.defaultPrevented, false);
   assert.deepStrictEqual(activatedIndexes, [2]);
 
+  const instantOptions = {
+    primaryModifier: 'meta',
+    timeoutMs: 5,
+    instantActive: true
+  };
+  const instantCommandDownEvent = createKeyEvent({
+    key: 'Meta',
+    code: 'MetaLeft',
+    metaKey: true
+  });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      instantCommandDownEvent,
+      shortcutItems,
+      shortcutContainer,
+      instantOptions
+    ),
+    false,
+    'instant mode should reveal number badges without consuming Command'
+  );
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    'true',
+    'instant mode should reveal badges on the trusted modifier keydown'
+  );
+  await wait(10);
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    'true',
+    'instant mode should stay active while the primary modifier remains held'
+  );
+  const instantCommandUpEvent = createKeyEvent({
+    type: 'keyup',
+    key: 'Meta',
+    code: 'MetaLeft'
+  });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      instantCommandUpEvent,
+      shortcutItems,
+      shortcutContainer,
+      instantOptions
+    ),
+    false,
+    'releasing Command in instant mode should not consume the browser event'
+  );
+  assert.strictEqual(
+    shortcutContainer.getAttribute('data-number-shortcuts-active'),
+    null,
+    'trusted modifier keyup should dismiss instant number badges'
+  );
+
+  suggestionNavigation.handleNumberShortcutKeyEvent(
+    createKeyEvent({ key: 'Meta', code: 'MetaLeft', metaKey: true }),
+    shortcutItems,
+    shortcutContainer,
+    instantOptions
+  );
+  const instantNumberEvent = createKeyEvent({
+    key: '1',
+    code: 'Digit1',
+    metaKey: true
+  });
+  assert.strictEqual(
+    suggestionNavigation.handleNumberShortcutKeyEvent(
+      instantNumberEvent,
+      shortcutItems,
+      shortcutContainer,
+      instantOptions
+    ),
+    true,
+    'instant mode should activate a digit while Command remains held'
+  );
+  assert.deepStrictEqual(activatedIndexes, [2, 1]);
+  assert.strictEqual(shortcutContainer.getAttribute('data-number-shortcuts-active'), null);
+
   const cancelSignals = [];
   const controlOptions = {
     primaryModifier: 'ctrl',
@@ -301,7 +377,7 @@ assert.match(
 
 assert.match(
   newtabSource,
-  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideToast[\s\S]*?\};/,
+  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideToast,[\s\S]*?instantActive:\s*\(\)\s*=>\s*numberShortcutInstantEnabled[\s\S]*?\};/,
   'New Tab should reuse its existing Toast while the number shortcut hold is armed'
 );
 assert.match(
@@ -312,7 +388,7 @@ assert.match(
 
 assert.match(
   overlaySource,
-  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showOverlayToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideOverlayToast[\s\S]*?\};/,
+  /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showOverlayToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideOverlayToast,[\s\S]*?instantActive:\s*\(\)\s*=>\s*numberShortcutInstantEnabled[\s\S]*?\};/,
   'Overlay should reuse its existing Toast while the number shortcut hold is armed'
 );
 assert.match(
