@@ -43,6 +43,86 @@
     }
   }
 
+  function getShortcutCommitModifierEventKey(shortcut) {
+    const shortcutText = String(shortcut || '').trim();
+    const symbolModifiers = Array.from(shortcutText).map((token) => {
+      if (token === '⌥') {
+        return 'Alt';
+      }
+      if (token === '⌃') {
+        return 'Control';
+      }
+      if (token === '⌘') {
+        return 'Meta';
+      }
+      if (token === '⇧') {
+        return 'Shift';
+      }
+      return '';
+    }).filter(Boolean);
+    if (symbolModifiers.length) {
+      return symbolModifiers.find((key) => key !== 'Shift') || symbolModifiers[0] || '';
+    }
+    const parts = shortcutText
+      .split('+')
+      .map((part) => String(part || '').trim().toLowerCase())
+      .filter(Boolean);
+    const modifiers = parts.slice(0, -1).map((token) => {
+      if (token === 'alt' || token === 'option') {
+        return 'Alt';
+      }
+      if (token === 'ctrl' || token === 'control' || token === 'macctrl') {
+        return 'Control';
+      }
+      if (token === 'command' || token === 'cmd' || token === 'meta' || token === 'super') {
+        return 'Meta';
+      }
+      if (token === 'shift') {
+        return 'Shift';
+      }
+      return '';
+    }).filter(Boolean);
+    return modifiers.find((key) => key !== 'Shift') || modifiers[0] || '';
+  }
+
+  function getShortcutTriggerEventKey(shortcut) {
+    const shortcutText = String(shortcut || '').trim();
+    const parts = shortcutText
+      .split('+')
+      .map((part) => String(part || '').trim())
+      .filter(Boolean);
+    const symbolTrigger = /[⌥⌃⌘⇧]/.test(shortcutText)
+      ? shortcutText.replace(/[⌥⌃⌘⇧]/g, '').replace(/^\++/, '').trim()
+      : '';
+    const rawToken = symbolTrigger || String(parts[parts.length - 1] || '');
+    const token = rawToken.toLowerCase();
+    const aliases = {
+      comma: ',',
+      period: '.',
+      slash: '/',
+      backslash: '\\',
+      return: 'Enter',
+      esc: 'Escape',
+      space: ' ',
+      spacebar: ' '
+    };
+    if (aliases[token]) {
+      return aliases[token];
+    }
+    if (/^f\d{1,2}$/.test(token)) {
+      return token.toUpperCase();
+    }
+    return token.length === 1 ? token : rawToken;
+  }
+
+  function getShortcutReleaseEventKeys(shortcut) {
+    const modifierKey = getShortcutCommitModifierEventKey(shortcut);
+    if (!modifierKey) {
+      return [];
+    }
+    return [modifierKey];
+  }
+
   function sanitizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
@@ -551,6 +631,9 @@
     DEFAULT_LIMIT,
     createRecentTabTracker,
     defaultShouldIncludeTab,
+    getShortcutCommitModifierEventKey,
+    getShortcutTriggerEventKey,
+    getShortcutReleaseEventKeys,
     focusWindowAndActivateTab
   });
 });

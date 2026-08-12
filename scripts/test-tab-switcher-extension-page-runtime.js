@@ -16,21 +16,23 @@ const { window } = dom;
 let createViewCalls = 0;
 let latestViewOptions = null;
 const runtimeMessages = [];
+let runtimeMessageListener = null;
+let cardClickEvents = 0;
 const keyupListeners = new Set();
-const addWindowEventListener = window.addEventListener.bind(window);
-const removeWindowEventListener = window.removeEventListener.bind(window);
+const nativeAddEventListener = window.addEventListener.bind(window);
+const nativeRemoveEventListener = window.removeEventListener.bind(window);
 
 window.addEventListener = (type, listener, options) => {
   if (type === 'keyup') {
     keyupListeners.add(listener);
   }
-  return addWindowEventListener(type, listener, options);
+  return nativeAddEventListener(type, listener, options);
 };
 window.removeEventListener = (type, listener, options) => {
   if (type === 'keyup') {
     keyupListeners.delete(listener);
   }
-  return removeWindowEventListener(type, listener, options);
+  return nativeRemoveEventListener(type, listener, options);
 };
 
 window.matchMedia = () => ({
@@ -50,6 +52,16 @@ window.chrome = {
     }
   },
   runtime: {
+    onMessage: {
+      addListener(listener) {
+        runtimeMessageListener = listener;
+      },
+      removeListener(listener) {
+        if (runtimeMessageListener === listener) {
+          runtimeMessageListener = null;
+        }
+      }
+    },
     sendMessage(message, callback) {
       runtimeMessages.push(message);
       callback?.();
@@ -91,16 +103,20 @@ window.LumnoOverlayTabSwitcherView = {
     latestViewOptions = options;
     const panel = window.document.createElement('div');
     panel.id = options.panelId;
-    const button = window.document.createElement('button');
-    button.className = 'x-tab-switcher-card';
-    button.addEventListener('click', (event) => {
-      options.onActivate(0, event);
+    const buttons = options.tabs.map((_tab, index) => {
+      const button = window.document.createElement('button');
+      button.className = 'x-tab-switcher-card';
+      button.addEventListener('click', (event) => {
+        cardClickEvents += 1;
+        options.onActivate(index, event);
+      });
+      panel.appendChild(button);
+      return button;
     });
-    panel.appendChild(button);
     options.root.appendChild(panel);
     return {
       panel,
-      buttons: [button],
+      buttons,
       destroy() {},
       updateSelection() {},
       updateThumbnail() {
@@ -112,7 +128,12 @@ window.LumnoOverlayTabSwitcherView = {
 
 const readyResult =
   window._x_extension_toggleTabSwitcher_2026_unique_({
-    tabs: [{ id: 1, title: 'After React' }]
+    tabs: [
+      { id: 1, title: 'After React' },
+      { id: 2, title: 'Custom shortcut target' }
+    ],
+    shortcut: 'Command+1',
+    suppressInitialShortcutAdvance: true
   });
 assert.deepStrictEqual(
   { ...readyResult },
@@ -156,6 +177,91 @@ assert.ok(
   'rejected synthetic events must leave the switcher available for real input'
 );
 
+switcherHost._lumnoTabSwitcherAdvance(1);
+const clickEventsBeforeRelease = cardClickEvents;
+const shortcutKeyupListener = Array.from(keyupListeners).at(-1);
+assert.strictEqual(typeof shortcutKeyupListener, 'function');
+const trustedShortcutKeyupEvent = (key, code) => ({
+  isTrusted: true,
+  key,
+  code,
+  preventDefault() {},
+  stopImmediatePropagation() {},
+  stopPropagation() {}
+});
+shortcutKeyupListener(trustedShortcutKeyupEvent('1', 'Digit1'));
+assert.strictEqual(
+  cardClickEvents,
+  clickEventsBeforeRelease,
+  'releasing the custom trigger key must not commit while Command is still the hold modifier'
+);
+assert.ok(
+  switcherHost.isConnected,
+  'the switcher should remain open until the primary modifier is released'
+);
+shortcutKeyupListener(trustedShortcutKeyupEvent('Meta', 'MetaLeft'));
+assert.strictEqual(
+  cardClickEvents,
+  clickEventsBeforeRelease + 1,
+  'releasing Command should dispatch exactly one guarded click on the highlighted card'
+);
+assert.deepStrictEqual(
+  runtimeMessages.map((message) => ({ ...message })),
+  [{ action: 'switchToTab', tabId: 2, windowId: null }],
+  'releasing Command should activate the highlighted tab'
+);
+assert.strictEqual(
+  switcherHost.isConnected,
+  false,
+  'the switcher should close after Command release commits the selection'
+);
+
+runtimeMessages.length = 0;
+window._x_extension_toggleTabSwitcher_2026_unique_({
+  tabs: [
+    { id: 1, title: 'Relay source' },
+    { id: 2, title: 'Relay target' }
+  ],
+  shortcut: 'Command+1'
+});
+const relayedSwitcherHost = window.document.getElementById(
+  '_x_extension_tab_switcher_host_2026_unique_'
+);
+relayedSwitcherHost._lumnoTabSwitcherAdvance(1);
+const clickEventsBeforeRelayedRelease = cardClickEvents;
+let releaseCommitResponse = null;
+runtimeMessageListener({
+  action: 'commitOpenTabSwitcherFromShortcutRelease'
+}, {}, (response) => {
+  releaseCommitResponse = response;
+});
+assert.deepStrictEqual(
+  { ...releaseCommitResponse },
+  { ok: true, committed: true },
+  'a relayed Command release must commit an open switcher even when the original keyup reached another tab'
+);
+assert.strictEqual(
+  cardClickEvents,
+  clickEventsBeforeRelayedRelease + 1,
+  'the relayed release should dispatch exactly one guarded click on the highlighted card'
+);
+assert.deepStrictEqual(
+  runtimeMessages.map((message) => ({ ...message })),
+  [{ action: 'switchToTab', tabId: 2, windowId: null }],
+  'the relayed Command release must activate the highlighted tab'
+);
+assert.strictEqual(
+  relayedSwitcherHost.isConnected,
+  false,
+  'a committed custom shortcut selection should close the switcher'
+);
+
+runtimeMessages.length = 0;
+window._x_extension_toggleTabSwitcher_2026_unique_({
+  tabs: [{ id: 1, title: 'Trusted pointer target' }],
+  shortcut: 'Alt+Q'
+});
+
 latestViewOptions.onActivate(0, {
   isTrusted: true,
   preventDefault() {},
@@ -166,42 +272,6 @@ assert.deepStrictEqual(
   runtimeMessages.map((message) => ({ ...message })),
   [{ action: 'switchToTab', tabId: 1, windowId: null }],
   'a trusted activation must preserve the normal privileged switch path'
-);
-
-const commandShortcutResult =
-  window._x_extension_toggleTabSwitcher_2026_unique_({
-    tabs: [{ id: 2, title: 'Command shortcut' }],
-    suppressInitialShortcutAdvance: true
-  });
-assert.deepStrictEqual(
-  { ...commandShortcutResult },
-  { ok: true },
-  'the switcher should reopen for a Command shortcut'
-);
-const commandShortcutHost = window.document.getElementById(
-  '_x_extension_tab_switcher_host_2026_unique_'
-);
-const commandKeyupListener = Array.from(keyupListeners).at(-1);
-assert.strictEqual(typeof commandKeyupListener, 'function');
-commandKeyupListener({
-  isTrusted: true,
-  key: 'Meta',
-  preventDefault() {},
-  stopImmediatePropagation() {},
-  stopPropagation() {}
-});
-assert.deepStrictEqual(
-  runtimeMessages.map((message) => ({ ...message })),
-  [
-    { action: 'switchToTab', tabId: 1, windowId: null },
-    { action: 'switchToTab', tabId: 2, windowId: null }
-  ],
-  'releasing Command should activate the selected tab for a Command-based shortcut'
-);
-assert.strictEqual(
-  commandShortcutHost.isConnected,
-  false,
-  'the switcher should close after the Command shortcut commits the selection'
 );
 
 dom.window.close();

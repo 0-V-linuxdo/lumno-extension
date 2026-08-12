@@ -42,6 +42,38 @@ function testRecentStackKeepsLatestFiveSwitchableTabs() {
   );
 }
 
+function testCustomShortcutCommitModifierNormalization() {
+  assert.strictEqual(
+    switcher.getShortcutCommitModifierEventKey('Command+1'),
+    'Meta',
+    'Chrome Command shortcuts should still expose their primary modifier for held-key suppression'
+  );
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey('Ctrl+Shift+J'), 'Control');
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey('Alt+Q'), 'Alt');
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey('Shift+F2'), 'Shift');
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey('⌘1'), 'Meta');
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey('⌃⇧/'), 'Control');
+  assert.strictEqual(switcher.getShortcutCommitModifierEventKey(''), '');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('Command+1'), '1');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('Command+Shift+J'), 'j');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('Ctrl+Shift+/'), '/');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('⌘1'), '1');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('⌃⇧/'), '/');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('Shift+F2'), 'F2');
+  assert.strictEqual(switcher.getShortcutTriggerEventKey('Ctrl+Shift+Comma'), ',');
+  assert.deepStrictEqual(
+    switcher.getShortcutReleaseEventKeys('Command+1'),
+    ['Meta'],
+    'a custom Command shortcut should commit when Command is released'
+  );
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('Command+Shift+J'), ['Meta']);
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('⌘1'), ['Meta']);
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('⌃⇧/'), ['Control']);
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('Ctrl+Shift+/'), ['Control']);
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('Alt+Shift+Q'), ['Alt']);
+  assert.deepStrictEqual(switcher.getShortcutReleaseEventKeys('Alt+Q'), ['Alt']);
+}
+
 function testThumbnailCacheMatchesUrlAndHydratesFromState() {
   const tracker = switcher.createRecentTabTracker({
     limit: 5,
@@ -259,6 +291,7 @@ async function testCrossWindowSwitchFocusesWindowBeforeActivatingTab() {
 
 (async () => {
   testRecentStackKeepsLatestFiveSwitchableTabs();
+  testCustomShortcutCommitModifierNormalization();
   testThumbnailCacheMatchesUrlAndHydratesFromState();
   testRecordingSameTabKeepsMatchingThumbnail();
   testThumbnailStatusPersistsAndReportsStaleness();

@@ -84,6 +84,17 @@
     };
   }
 
+  function commitOpenSwitcherFromShortcutReleaseMessage() {
+    const host = document.getElementById(HOST_ID);
+    if (!host || typeof host._lumnoTabSwitcherCommitFromShortcutRelease !== 'function') {
+      return { ok: false, committed: false };
+    }
+    return {
+      ok: true,
+      committed: host._lumnoTabSwitcherCommitFromShortcutRelease() === true
+    };
+  }
+
   function openSwitcherFromMessage(request) {
     const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
     if (typeof toggle !== 'function') {
@@ -118,6 +129,10 @@
         sendResponse(advanceOpenSwitcherFromMessage(request));
         return true;
       }
+      if (request.action === 'commitOpenTabSwitcherFromShortcutRelease') {
+        sendResponse(commitOpenSwitcherFromShortcutReleaseMessage());
+        return true;
+      }
       if (request.action !== 'openTabSwitcherFromCommand') {
         return;
       }
@@ -140,6 +155,110 @@
   function normalizeAdvanceOffset(value) {
     const offset = Math.trunc(Number(value));
     return Number.isFinite(offset) && offset !== 0 ? offset : 1;
+  }
+
+  function normalizeTabSwitcherShortcutKey(value) {
+    const key = String(value || '').trim().toLowerCase();
+    const aliases = {
+      comma: ',',
+      period: '.',
+      slash: '/',
+      backslash: '\\',
+      return: 'enter',
+      esc: 'escape',
+      space: ' ',
+      spacebar: ' '
+    };
+    return aliases[key] || key;
+  }
+
+  function normalizeTabSwitcherShortcutCode(value) {
+    const code = String(value || '');
+    if (/^Key[A-Z]$/.test(code)) {
+      return code.slice(3).toLowerCase();
+    }
+    if (/^Digit\d$/.test(code)) {
+      return code.slice(5);
+    }
+    const aliases = {
+      Backquote: '`',
+      Backslash: '\\',
+      BracketLeft: '[',
+      BracketRight: ']',
+      Comma: ',',
+      Equal: '=',
+      Minus: '-',
+      Period: '.',
+      Quote: "'",
+      Semicolon: ';',
+      Slash: '/'
+    };
+    return aliases[code] || '';
+  }
+
+  function getTabSwitcherShortcutModifier(value) {
+    const token = String(value || '').trim().toLowerCase();
+    if (token === 'alt' || token === 'option') {
+      return { eventKey: 'Alt', flag: 'altKey' };
+    }
+    if (token === 'ctrl' || token === 'control' || token === 'macctrl') {
+      return { eventKey: 'Control', flag: 'ctrlKey' };
+    }
+    if (token === 'command' || token === 'cmd' || token === 'meta' || token === 'super') {
+      return { eventKey: 'Meta', flag: 'metaKey' };
+    }
+    if (token === 'shift') {
+      return { eventKey: 'Shift', flag: 'shiftKey' };
+    }
+    return null;
+  }
+
+  function parseTabSwitcherShortcut(value) {
+    const shortcutText = String(value || 'Alt+Q').trim();
+    const parts = shortcutText
+      .split('+')
+      .map((part) => String(part || '').trim())
+      .filter(Boolean);
+    const hasSymbolModifiers = /[⌥⌃⌘⇧]/.test(shortcutText);
+    const symbolTrigger = hasSymbolModifiers
+      ? shortcutText.replace(/[⌥⌃⌘⇧]/g, '').replace(/^\++/, '').trim()
+      : '';
+    const triggerKey = normalizeTabSwitcherShortcutKey(symbolTrigger || parts.pop() || 'Q');
+    const modifiers = hasSymbolModifiers
+      ? Array.from(shortcutText).map((token) => {
+        if (token === '⌥') {
+          return { eventKey: 'Alt', flag: 'altKey' };
+        }
+        if (token === '⌃') {
+          return { eventKey: 'Control', flag: 'ctrlKey' };
+        }
+        if (token === '⌘') {
+          return { eventKey: 'Meta', flag: 'metaKey' };
+        }
+        if (token === '⇧') {
+          return { eventKey: 'Shift', flag: 'shiftKey' };
+        }
+        return null;
+      }).filter(Boolean)
+      : parts.map(getTabSwitcherShortcutModifier).filter(Boolean);
+    const commitModifier = modifiers.find((modifier) => modifier.eventKey !== 'Shift') || modifiers[0] || null;
+    return {
+      triggerKey,
+      commitModifierEventKey: commitModifier ? commitModifier.eventKey : '',
+      commitModifierFlag: commitModifier ? commitModifier.flag : ''
+    };
+  }
+
+  function isTabSwitcherShortcutTriggerEvent(shortcut, event) {
+    const eventKeys = [
+      normalizeTabSwitcherShortcutKey(event && event.key),
+      normalizeTabSwitcherShortcutCode(event && event.code)
+    ].filter(Boolean);
+    return eventKeys.includes(shortcut.triggerKey);
+  }
+
+  function isTabSwitcherCommitModifierPressed(shortcut, event) {
+    return Boolean(shortcut.commitModifierFlag && event && event[shortcut.commitModifierFlag] === true);
   }
 
   function normalizeSwitcherThemeMode(mode) {
@@ -989,6 +1108,7 @@
         typeof tabSwitcherReactViewApi.createTabSwitcherView !== 'function') {
       return { ok: false, reason: 'react-view-unavailable' };
     }
+    const shortcut = parseTabSwitcherShortcut(context.shortcut);
 
     const host = document.createElement('div');
     host.id = HOST_ID;
@@ -1006,6 +1126,7 @@
     shadow.appendChild(style);
 
     let selectedIndex = clampSelectedIndex(context.selectedIndex, tabs.length);
+    let allowRelayedShortcutReleaseActivation = false;
     let tabSwitcherReactView = tabSwitcherReactViewApi.createTabSwitcherView({
       document,
       root: shadow,
@@ -1023,7 +1144,7 @@
         renderSelection();
       },
       onActivate(index, event) {
-        if (!event || event.isTrusted !== true) {
+        if (!event || (event.isTrusted !== true && !allowRelayedShortcutReleaseActivation)) {
           return;
         }
         stopHandledKeyEvent(event);
@@ -1048,7 +1169,7 @@
     switcherThemeController.start();
 
     let didRequestSwitch = false;
-    let suppressInitialShortcutAdvanceUntilQKeyup = context.suppressInitialShortcutAdvance === true;
+    let suppressInitialShortcutAdvanceUntilTriggerKeyup = context.suppressInitialShortcutAdvance === true;
 
     function renderSelection() {
       tabSwitcherReactView.updateSelection(selectedIndex);
@@ -1064,12 +1185,12 @@
 
     function switchToSelected() {
       if (didRequestSwitch) {
-        return;
+        return false;
       }
       const selected = tabs[selectedIndex];
       if (!selected || typeof selected.id !== 'number') {
         close();
-        return;
+        return false;
       }
       didRequestSwitch = true;
       chrome.runtime.sendMessage({
@@ -1079,6 +1200,25 @@
       }, () => {
         close();
       });
+      return true;
+    }
+
+    function clickSelectedCardFromShortcutRelease() {
+      const buttons = tabSwitcherReactView && Array.isArray(tabSwitcherReactView.buttons)
+        ? tabSwitcherReactView.buttons
+        : [];
+      const selectedButton = buttons[selectedIndex];
+      if (!selectedButton || typeof selectedButton.click !== 'function') {
+        return switchToSelected();
+      }
+      const wasRequested = didRequestSwitch;
+      allowRelayedShortcutReleaseActivation = true;
+      try {
+        selectedButton.click();
+      } finally {
+        allowRelayedShortcutReleaseActivation = false;
+      }
+      return !wasRequested && didRequestSwitch;
     }
 
     function selectByOffset(offset) {
@@ -1087,17 +1227,20 @@
     }
 
     function shouldSuppressInitialShortcutAdvance() {
-      return suppressInitialShortcutAdvanceUntilQKeyup;
+      return suppressInitialShortcutAdvanceUntilTriggerKeyup;
     }
 
     function advanceSelectionFromShortcut(offset) {
-      suppressInitialShortcutAdvanceUntilQKeyup = false;
+      suppressInitialShortcutAdvanceUntilTriggerKeyup = false;
       selectByOffset(offset);
       return true;
     }
 
     host._lumnoTabSwitcherAdvance = function(offset) {
       return advanceSelectionFromShortcut(normalizeAdvanceOffset(offset));
+    };
+    host._lumnoTabSwitcherCommitFromShortcutRelease = function() {
+      return clickSelectedCardFromShortcutRelease();
     };
 
     function handleExternalAdvance(event) {
@@ -1123,18 +1266,17 @@
       if (!event || event.isTrusted !== true) {
         return;
       }
-      const keyText = String(event.key || '').toLowerCase();
       if (event.key === 'Tab') {
         stopHandledKeyEvent(event);
         selectByOffset(event.shiftKey ? -1 : 1);
         return;
       }
-      if (keyText === 'q') {
+      if (isTabSwitcherShortcutTriggerEvent(shortcut, event)) {
         stopHandledKeyEvent(event);
-        if (shouldSuppressInitialShortcutAdvance() && event.altKey) {
+        if (shouldSuppressInitialShortcutAdvance() && isTabSwitcherCommitModifierPressed(shortcut, event)) {
           return;
         }
-        suppressInitialShortcutAdvanceUntilQKeyup = false;
+        suppressInitialShortcutAdvanceUntilTriggerKeyup = false;
         selectByOffset(1);
         return;
       }
@@ -1163,19 +1305,16 @@
       if (!event || event.isTrusted !== true) {
         return;
       }
-      const keyText = String(event.key || '').toLowerCase();
-      if (keyText === 'q') {
-        suppressInitialShortcutAdvanceUntilQKeyup = false;
+      if (isTabSwitcherShortcutTriggerEvent(shortcut, event)) {
+        suppressInitialShortcutAdvanceUntilTriggerKeyup = false;
         stopHandledKeyEvent(event);
-        if (!event.altKey) {
-          switchToSelected();
-        }
         return;
       }
-      if (event.key === 'Alt' || event.key === 'Meta') {
-        suppressInitialShortcutAdvanceUntilQKeyup = false;
+      if (shortcut.commitModifierEventKey &&
+          event.key === shortcut.commitModifierEventKey) {
+        suppressInitialShortcutAdvanceUntilTriggerKeyup = false;
         stopHandledKeyEvent(event);
-        switchToSelected();
+        clickSelectedCardFromShortcutRelease();
       }
     }
 
@@ -1209,6 +1348,7 @@
         tabSwitcherReactView = null;
       }
       delete host._lumnoTabSwitcherUpdateThumbnail;
+      delete host._lumnoTabSwitcherCommitFromShortcutRelease;
     };
     window.addEventListener('keydown', handleKeydown, true);
     window.addEventListener('keyup', handleKeyup, true);

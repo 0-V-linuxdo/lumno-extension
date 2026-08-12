@@ -664,12 +664,30 @@ function updateTabSwitcherThumbnailInPage(update, hostId) {
   return host._lumnoTabSwitcherUpdateThumbnail(update) || { ok: true };
 }
 
+function commitOpenTabSwitcherFromShortcutReleaseInPage(hostId) {
+  const host = document.getElementById(hostId);
+  if (!host || typeof host._lumnoTabSwitcherCommitFromShortcutRelease !== 'function') {
+    return { ok: false, committed: false };
+  }
+  return {
+    ok: true,
+    committed: host._lumnoTabSwitcherCommitFromShortcutRelease() === true
+  };
+}
+
 function getFailedOpenTabSwitcherState() {
   return { ok: false, open: false };
 }
 
 function normalizeTabSwitcherHostOkResponse(response) {
   return response && response.ok === true ? true : null;
+}
+
+function normalizeTabSwitcherCommitResponse(response) {
+  if (!response || response.ok !== true || typeof response.committed !== 'boolean') {
+    return null;
+  }
+  return response.committed === true;
 }
 
 function normalizeOpenTabSwitcherStateResponse(response) {
@@ -687,6 +705,18 @@ function normalizeTabSwitcherHostOkScriptResults(results) {
     results.some((item) => item && item.result && item.result.ok === true)
     ? true
     : null;
+}
+
+function normalizeTabSwitcherCommitScriptResults(results) {
+  const result = Array.isArray(results)
+    ? results.find((item) => (
+      item &&
+      item.result &&
+      item.result.ok === true &&
+      typeof item.result.committed === 'boolean'
+    ))
+    : null;
+  return result && result.result ? result.result.committed === true : null;
 }
 
 function normalizeOpenTabSwitcherStateScriptResults(results) {
@@ -828,6 +858,248 @@ function postTabSwitcherThumbnailUpdate(tab, update) {
     scriptFunc: updateTabSwitcherThumbnailInPage,
     scriptArgs: [payload, TAB_SWITCHER_HOST_ID],
     fallbackValue: false
+  });
+}
+
+function commitOpenTabSwitcherFromShortcutReleaseOnTab(tab) {
+  return sendTabSwitcherHostMessage(tab, {
+    action: 'commitOpenTabSwitcherFromShortcutRelease'
+  }, {
+    scriptFunc: commitOpenTabSwitcherFromShortcutReleaseInPage,
+    scriptArgs: [TAB_SWITCHER_HOST_ID],
+    normalizeResponse: normalizeTabSwitcherCommitResponse,
+    normalizeScriptResults: normalizeTabSwitcherCommitScriptResults,
+    fallbackValue: false
+  });
+}
+
+function prepareTabSwitcherShortcutReleaseObserver(tab) {
+  if (!tab || typeof tab.id !== 'number') {
+    return Promise.resolve(false);
+  }
+  if (isTabSwitcherExtensionPageMessageTarget(tab)) {
+    return Promise.resolve(true);
+  }
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    try {
+      chrome.scripting.executeScript({
+        target: {
+          tabId: tab.id,
+          allFrames: true
+        },
+        files: ['src/content/tab-switcher-shortcut-release.js']
+      }, () => {
+        const error = chrome.runtime && chrome.runtime.lastError
+          ? chrome.runtime.lastError.message || 'unknown'
+          : '';
+        recordTabSwitcherShortcutDebug(
+          error ? 'release-observer-injection-failed' : 'release-observer-ready',
+          {
+            tabId: tab.id,
+            windowId: typeof tab.windowId === 'number' ? tab.windowId : null,
+            error
+          }
+        );
+        resolve(!error);
+      });
+    } catch (error) {
+      recordTabSwitcherShortcutDebug('release-observer-injection-failed', {
+        tabId: tab.id,
+        windowId: typeof tab.windowId === 'number' ? tab.windowId : null,
+        error: error && error.message ? error.message : String(error || 'unknown')
+      });
+      resolve(false);
+    }
+  });
+}
+
+function prepareTabSwitcherShortcutReleaseObserversInOpenTabs() {
+  if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
+    return;
+  }
+  chrome.tabs.query({}, (tabs) => {
+    if (chrome.runtime && chrome.runtime.lastError) {
+      return;
+    }
+    (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
+      prepareTabSwitcherShortcutReleaseObserver(tab);
+    });
+  });
+}
+
+function findOpenTabSwitcherHostInWindow(windowId) {
+  if (typeof windowId !== 'number' || !chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
+    return Promise.resolve(null);
+  }
+  const readStateWithTimeout = (tab) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (open) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve({ tab, open: open === true });
+    };
+    const timer = setTimeout(() => finish(false), TAB_SWITCHER_HOST_STATE_TIMEOUT_MS);
+    getOpenTabSwitcherState(tab)
+      .then((state) => finish(Boolean(state && state.open === true)))
+      .catch(() => finish(false));
+  });
+  return new Promise((resolve) => {
+    chrome.tabs.query({ windowId }, (tabs) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+      const knownHostTabId = tabSwitcherHostTabIdByWindowId.get(windowId);
+      const candidates = (Array.isArray(tabs) ? tabs : [])
+        .filter((tab) => tab && typeof tab.id === 'number' && canHostSwitcherSurface(tab))
+        .sort((left, right) => {
+          const leftPriority = left.id === knownHostTabId ? 2 : Number(left.active === true);
+          const rightPriority = right.id === knownHostTabId ? 2 : Number(right.active === true);
+          return rightPriority - leftPriority;
+        });
+      Promise.all(candidates.map(readStateWithTimeout)).then((states) => {
+        const openHost = states.find((state) => state.open === true);
+        resolve(openHost ? openHost.tab : null);
+      }).catch(() => resolve(null));
+    });
+  });
+}
+
+function getTabForTabSwitcherCommit(tabId) {
+  if (typeof tabId !== 'number' || !chrome || !chrome.tabs || typeof chrome.tabs.get !== 'function') {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+      resolve(tab && typeof tab.id === 'number' ? tab : null);
+    });
+  });
+}
+
+function commitOpenTabSwitcherInWindow(windowId, source) {
+  recordTabSwitcherShortcutDebug('commit-search-start', {
+    windowId,
+    source: String(source || '')
+  });
+  const finishCommit = (hostTab, path) => {
+    recordTabSwitcherShortcutDebug('commit-host-resolved', {
+      windowId,
+      source: String(source || ''),
+      hostTabId: hostTab && typeof hostTab.id === 'number' ? hostTab.id : null,
+      path
+    });
+    if (!hostTab) {
+      return false;
+    }
+    return commitOpenTabSwitcherFromShortcutReleaseOnTab(hostTab).then((didCommit) => {
+      recordTabSwitcherShortcutDebug('commit-finished', {
+        windowId,
+        source: String(source || ''),
+        hostTabId: hostTab.id,
+        committed: didCommit === true
+      });
+      if (didCommit === true && tabSwitcherHostTabIdByWindowId.get(windowId) === hostTab.id) {
+        tabSwitcherHostTabIdByWindowId.delete(windowId);
+      }
+      return didCommit === true;
+    });
+  };
+  const findAndCommit = () => findOpenTabSwitcherHostInWindow(windowId)
+    .then((hostTab) => finishCommit(hostTab, 'window-scan'));
+  const knownHostTabId = tabSwitcherHostTabIdByWindowId.get(windowId);
+  if (typeof knownHostTabId !== 'number') {
+    return findAndCommit().catch(() => false);
+  }
+  return getTabForTabSwitcherCommit(knownHostTabId)
+    .then((hostTab) => finishCommit(hostTab, 'known-host'))
+    .then((didCommit) => {
+      if (didCommit === true) {
+        return true;
+      }
+      if (tabSwitcherHostTabIdByWindowId.get(windowId) === knownHostTabId) {
+        tabSwitcherHostTabIdByWindowId.delete(windowId);
+      }
+      return findAndCommit();
+    })
+    .catch(() => findAndCommit().catch(() => false));
+}
+
+function handleTabSwitcherShortcutModifierReleased(senderTab, releasedKey, callback) {
+  const finish = typeof callback === 'function' ? callback : () => {};
+  if (!senderTab || typeof senderTab.windowId !== 'number') {
+    finish(false);
+    return;
+  }
+  const key = String(releasedKey || '');
+  getConfiguredTabSwitcherShortcut((shortcut) => {
+    const expectedKeys = typeof RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys === 'function'
+      ? RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys(shortcut)
+      : [];
+    if (!expectedKeys.includes(key)) {
+      recordTabSwitcherShortcutDebug('release-rejected', {
+        windowId: senderTab.windowId,
+        key,
+        shortcut,
+        expectedKeys
+      });
+      finish(false);
+      return;
+    }
+    recordTabSwitcherShortcutDebug('release-accepted', {
+      windowId: senderTab.windowId,
+      key,
+      shortcut,
+      expectedKeys
+    });
+    commitOpenTabSwitcherInWindow(senderTab.windowId, 'keyup')
+      .then((didCommit) => finish(didCommit === true))
+      .catch(() => finish(false));
+  });
+}
+
+function armTabSwitcherShortcutReleaseObservers(tabs, windowId, shortcut, commandStartedAt) {
+  if (typeof windowId !== 'number') {
+    return;
+  }
+  const keys = typeof RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys === 'function'
+    ? RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys(shortcut)
+    : [];
+  if (!keys.length) {
+    return;
+  }
+  const message = {
+    action: 'armTabSwitcherShortcutRelease',
+    keys,
+    commandStartedAt: Number(commandStartedAt) || 0
+  };
+  (Array.isArray(tabs) ? tabs : []).forEach((item) => {
+    if (!item || typeof item.id !== 'number' || item.windowId !== windowId) {
+      return;
+    }
+    if (isTabSwitcherExtensionPageMessageTarget(item)) {
+      postTabSwitcherMessageToExtensionPage(item, message, () => {});
+      return;
+    }
+    if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
+      return;
+    }
+    try {
+      chrome.tabs.sendMessage(item.id, message, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Restricted tabs simply cannot participate in the release relay.
+    }
   });
 }
 
@@ -1241,6 +1513,31 @@ function requestFocusVisibleNewtabInput(source, tabId) {
 }
 
 const HOTKEY_DEBUG_ENABLED = false;
+const TAB_SWITCHER_SHORTCUT_DEBUG_LIMIT = 50;
+const tabSwitcherShortcutDebugEvents = [];
+
+function recordTabSwitcherShortcutDebug(stage, payload) {
+  tabSwitcherShortcutDebugEvents.push({
+    at: new Date().toISOString(),
+    stage: String(stage || ''),
+    ...(payload && typeof payload === 'object' ? payload : {})
+  });
+  if (tabSwitcherShortcutDebugEvents.length > TAB_SWITCHER_SHORTCUT_DEBUG_LIMIT) {
+    tabSwitcherShortcutDebugEvents.splice(
+      0,
+      tabSwitcherShortcutDebugEvents.length - TAB_SWITCHER_SHORTCUT_DEBUG_LIMIT
+    );
+  }
+}
+
+globalThis._lumnoTabSwitcherShortcutDebug = Object.freeze({
+  snapshot() {
+    return tabSwitcherShortcutDebugEvents.map((event) => ({ ...event }));
+  },
+  clear() {
+    tabSwitcherShortcutDebugEvents.length = 0;
+  }
+});
 
 function logHotkeyDebug(stage, payload) {
   if (!HOTKEY_DEBUG_ENABLED) {
@@ -1342,6 +1639,8 @@ const TAB_SWITCHER_HOST_ID = '_x_extension_tab_switcher_host_2026_unique_';
 const tabSwitcherExtensionPagePortsByTabId = new Map();
 const TAB_SWITCHER_OPENING_GUARD_MS = 2000;
 const tabSwitcherOpeningByWindowKey = new Map();
+const TAB_SWITCHER_HOST_STATE_TIMEOUT_MS = 400;
+const tabSwitcherHostTabIdByWindowId = new Map();
 const HOTKEY_DUP_GUARD_MS = 180;
 const PAGE_HOTKEY_NEWTAB_RECOVER_MS = 1200;
 const BROWSER_NEWTAB_PROVIDER_DETECTION_MS = 6000;
@@ -3825,6 +4124,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     tabZoomFactor: tabZoomFactor,
     advanceOnExisting: true,
     suppressInitialShortcutAdvance: context && context.source === 'commands-tab-switcher',
+    shortcut: context && typeof context.shortcut === 'string' ? context.shortcut : 'Alt+Q',
     source: context && context.source ? context.source : ''
   });
   if (isTabSwitcherExtensionPageMessageTarget(hostTab)) {
@@ -4024,7 +4324,11 @@ function advanceExistingTabSwitcherOnTab(tab, source, callback) {
 }
 
 function triggerTabSwitcherForTab(tab, source) {
+  const commandStartedAt = Date.now();
   if (!tabSwitcherEnabledCache) {
+    if (tab && typeof tab.windowId === 'number') {
+      tabSwitcherHostTabIdByWindowId.delete(tab.windowId);
+    }
     logHotkeyDebug('tab-switcher-disabled', { source: source || '' });
     return;
   }
@@ -4033,21 +4337,62 @@ function triggerTabSwitcherForTab(tab, source) {
     openNewtabFallback();
     return;
   }
+  const windowId = typeof tab.windowId === 'number' ? tab.windowId : null;
+  recordTabSwitcherShortcutDebug('command-received', {
+    source: String(source || ''),
+    tabId: tab.id,
+    windowId
+  });
+  // A manifest content script is not retroactively installed into tabs that
+  // were already open when a development extension was reloaded. Start the
+  // trusted keyup observer before any async switcher work so a quick physical
+  // modifier release can be buffered and replayed after the panel opens.
+  const releaseObserverReady = prepareTabSwitcherShortcutReleaseObserver(tab);
   clearScheduledSwitcherThumbnailCapture(tab.id);
   advanceExistingTabSwitcherOnTab(tab, source, (didAdvance) => {
     if (didAdvance) {
+      if (typeof tab.windowId === 'number') {
+        tabSwitcherHostTabIdByWindowId.set(tab.windowId, tab.id);
+      }
+      recordTabSwitcherShortcutDebug('command-advanced', {
+        tabId: tab.id,
+        windowId
+      });
       return;
     }
     const opening = beginTabSwitcherOpening(tab, source);
     if (!opening) {
       return;
     }
-    const finishOpening = createTabSwitcherOpeningFinisher(opening);
+    let openingHostTabId = tab.id;
+    const finishOpeningGuard = createTabSwitcherOpeningFinisher(opening);
+    const finishOpening = (ok) => {
+      finishOpeningGuard();
+      if (ok === true) {
+        if (typeof windowId === 'number' && typeof openingHostTabId === 'number') {
+          tabSwitcherHostTabIdByWindowId.set(windowId, openingHostTabId);
+        }
+        recordTabSwitcherShortcutDebug('switcher-opened', {
+          windowId,
+          hostTabId: openingHostTabId
+        });
+        return;
+      }
+      if (tabSwitcherHostTabIdByWindowId.get(windowId) === openingHostTabId) {
+        tabSwitcherHostTabIdByWindowId.delete(windowId);
+      }
+      recordTabSwitcherShortcutDebug('switcher-open-failed', {
+        windowId
+      });
+    };
     const startupStateReady = Promise.all([
       ensureTabSwitcherStateLoaded(),
       loadFaviconRequestBlacklistItems(),
       loadFaviconEnhancedFetchEnabled()
     ]).catch(() => {});
+    const shortcutReady = new Promise((resolve) => {
+      getConfiguredTabSwitcherShortcut(resolve);
+    });
     const tabQueryReady = new Promise((resolve) => {
       chrome.tabs.query({}, (tabs) => {
         const error = chrome.runtime && chrome.runtime.lastError
@@ -4059,8 +4404,19 @@ function triggerTabSwitcherForTab(tab, source) {
         });
       });
     });
-    Promise.all([startupStateReady, tabQueryReady]).then((results) => {
+    Promise.all([startupStateReady, tabQueryReady, shortcutReady, releaseObserverReady]).then((results) => {
       const tabQuery = results[1] || { error: 'unknown', tabs: [] };
+      const shortcut = typeof results[2] === 'string' && results[2]
+        ? results[2]
+        : 'Alt+Q';
+      const releaseKeys = typeof RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys === 'function'
+        ? RECENT_TAB_SWITCHER.getShortcutReleaseEventKeys(shortcut)
+        : [];
+      recordTabSwitcherShortcutDebug('shortcut-configured', {
+        windowId,
+        shortcut,
+        releaseKeys
+      });
       if (tabQuery.error) {
         logHotkeyDebug('tab-switcher-query-failed', {
           source: source || '',
@@ -4071,6 +4427,17 @@ function triggerTabSwitcherForTab(tab, source) {
       }
       const tabList = tabQuery.tabs;
       const activeTab = tabList.find((item) => item && item.id === tab.id) || tab;
+      const finishOpeningAndArmShortcutRelease = (ok) => {
+        finishOpening(ok);
+        if (ok === true) {
+          armTabSwitcherShortcutReleaseObservers(
+            tabList,
+            activeTab.windowId,
+            shortcut,
+            commandStartedAt
+          );
+        }
+      };
       clearScheduledSwitcherThumbnailCapture(activeTab.id);
       if (shouldTrackSwitcherTab(activeTab)) {
         recordRecentSwitcherTab(activeTab);
@@ -4104,6 +4471,7 @@ function triggerTabSwitcherForTab(tab, source) {
         finishOpening();
         return;
       }
+      openingHostTabId = hostTab.id;
       if (hostTab.id !== activeTab.id) {
         focusWindowAndActivateTab(hostTab.id, hostTab.windowId, (result) => {
           if (!result || result.ok === false) {
@@ -4113,8 +4481,9 @@ function triggerTabSwitcherForTab(tab, source) {
           injectTabSwitcherOnTab(hostTab, items, {
             currentTabId: activeTab.id,
             selectedIndex,
+            shortcut,
             source,
-            onOpenComplete: finishOpening
+            onOpenComplete: finishOpeningAndArmShortcutRelease
           });
         });
         return;
@@ -4122,8 +4491,9 @@ function triggerTabSwitcherForTab(tab, source) {
       injectTabSwitcherOnTab(hostTab, items, {
         currentTabId: activeTab.id,
         selectedIndex,
+        shortcut,
         source,
-        onOpenComplete: finishOpening
+        onOpenComplete: finishOpeningAndArmShortcutRelease
       });
     }).catch(() => {
       finishOpening();
@@ -4328,6 +4698,26 @@ function getConfiguredFallbackShortcut(callback) {
   });
 }
 
+function getConfiguredTabSwitcherShortcut(callback) {
+  const fallbackShortcut = 'Alt+Q';
+  if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
+    callback(fallbackShortcut);
+    return;
+  }
+  chrome.commands.getAll((commands) => {
+    if (chrome.runtime && chrome.runtime.lastError) {
+      callback(fallbackShortcut);
+      return;
+    }
+    const items = Array.isArray(commands) ? commands : [];
+    const command = items.find((item) => item && item.name === SHOW_TAB_SWITCHER_COMMAND_NAME);
+    const shortcut = command && typeof command.shortcut === 'string'
+      ? String(command.shortcut).trim()
+      : '';
+    callback(shortcut || fallbackShortcut);
+  });
+}
+
 function normalizeShortcutFromCommandsValue(value) {
   const text = String(value || '').trim();
   if (!text || text.includes('%')) {
@@ -4484,6 +4874,10 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
+  // Static manifest content scripts only apply to future document loads. A
+  // development-extension reload keeps existing tabs alive, so install the
+  // release observer there now instead of waiting for the next shortcut.
+  prepareTabSwitcherShortcutReleaseObserversInOpenTabs();
   if (!details) {
     schedulePersistPinnedTabSnapshot();
     return;
@@ -4522,6 +4916,7 @@ function restoreBackgroundStateOnStartup() {
 
 if (chrome && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
+    prepareTabSwitcherShortcutReleaseObserversInOpenTabs();
     restoreBackgroundStateOnStartup();
   });
 }
@@ -4585,6 +4980,11 @@ if (chrome && chrome.tabs && chrome.tabs.onRemoved) {
     clearTabSwitchStat(tabId);
     removeRecentSwitcherTab(tabId);
     clearGlobalPipOwnerForTabId(tabId);
+    Array.from(tabSwitcherHostTabIdByWindowId.entries()).forEach(([windowId, hostTabId]) => {
+      if (hostTabId === tabId) {
+        tabSwitcherHostTabIdByWindowId.delete(windowId);
+      }
+    });
     if (removeInfo && removeInfo.isWindowClosing) {
       return;
     }
@@ -4662,7 +5062,8 @@ if (chrome && chrome.windows && chrome.windows.onCreated) {
 }
 
 if (chrome && chrome.windows && chrome.windows.onRemoved) {
-  chrome.windows.onRemoved.addListener(() => {
+  chrome.windows.onRemoved.addListener((windowId) => {
+    tabSwitcherHostTabIdByWindowId.delete(windowId);
     schedulePersistPinnedTabSnapshot({ skipEmptyWhenNoNormalWindows: true });
   });
 }
@@ -5036,6 +5437,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'getCopyCurrentUrlCommandShortcut',
       'copyCurrentPageUrl',
       'triggerShowSearchFromPageHotkey',
+      'notifyTabSwitcherShortcutModifierReleased',
       'getShortcutRules'
     ],
     handler: handleShortcutMessage
@@ -5293,6 +5695,13 @@ function handleShortcutMessage(request, sender, sendResponse) {
       triggerShowSearchForTab(senderTab, triggerSource);
       sendResponse({ ok: true });
       return;
+    }
+    case 'notifyTabSwitcherShortcutModifierReleased': {
+      const senderTab = sender && sender.tab ? sender.tab : null;
+      handleTabSwitcherShortcutModifierReleased(senderTab, request && request.key, (didCommit) => {
+        sendResponse({ ok: true, committed: didCommit === true });
+      });
+      return true;
     }
     case 'getShortcutRules': {
       loadShortcutRules().then((items) => {

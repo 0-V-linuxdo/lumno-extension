@@ -7,11 +7,100 @@
   const TAB_SWITCHER_HOST_ID = '_x_extension_tab_switcher_host_2026_unique_';
   const TAB_SWITCHER_ADVANCE_EVENT = '_x_extension_tab_switcher_advance_command_2026_unique_';
   const TAB_SWITCHER_EXTENSION_PAGE_PORT_NAME = 'lumno-tab-switcher-extension-page';
+  const TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS = 5000;
   const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
   let extensionPagePort = null;
   let extensionPagePortReconnectTimer = null;
   let extensionPagePortClosed = false;
   let extensionPageTabId = null;
+  let armedReleaseKeys = [];
+  const recentTrustedReleaseAtByKey = new Map();
+
+  function normalizeTabSwitcherReleaseKey(value) {
+    const key = String(value || '');
+    return key.length === 1 ? key.toLowerCase() : key;
+  }
+
+  function normalizeTabSwitcherReleaseCode(value) {
+    const code = String(value || '');
+    if (/^Key[A-Z]$/.test(code)) {
+      return code.slice(3).toLowerCase();
+    }
+    if (/^Digit\d$/.test(code)) {
+      return code.slice(5);
+    }
+    const aliases = {
+      Backquote: '`',
+      Backslash: '\\',
+      BracketLeft: '[',
+      BracketRight: ']',
+      Comma: ',',
+      Equal: '=',
+      Minus: '-',
+      Period: '.',
+      Quote: "'",
+      Semicolon: ';',
+      Slash: '/'
+    };
+    return aliases[code] || '';
+  }
+
+  function getTabSwitcherShortcutReleaseCandidates(event) {
+    return Array.from(new Set([
+      normalizeTabSwitcherReleaseKey(event && event.key),
+      normalizeTabSwitcherReleaseCode(event && event.code)
+    ].filter(Boolean)));
+  }
+
+  function getReleasedTabSwitcherShortcutKey(event) {
+    return getTabSwitcherShortcutReleaseCandidates(event)
+      .find((key) => armedReleaseKeys.includes(key)) || '';
+  }
+
+  function rememberTrustedTabSwitcherShortcutRelease(event) {
+    const releasedAt = Date.now();
+    recentTrustedReleaseAtByKey.forEach((observedAt, key) => {
+      if ((releasedAt - observedAt) > TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS) {
+        recentTrustedReleaseAtByKey.delete(key);
+      }
+    });
+    getTabSwitcherShortcutReleaseCandidates(event).forEach((key) => {
+      recentTrustedReleaseAtByKey.set(key, releasedAt);
+    });
+  }
+
+  function getBufferedTabSwitcherShortcutReleaseKey(keys, commandStartedAt) {
+    const startedAt = Number(commandStartedAt);
+    if (!Number.isFinite(startedAt) || startedAt <= 0) {
+      return '';
+    }
+    const now = Date.now();
+    return keys.find((key) => {
+      const observedAt = recentTrustedReleaseAtByKey.get(key);
+      return Number.isFinite(observedAt) &&
+        observedAt >= startedAt &&
+        (now - observedAt) <= TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS;
+    }) || '';
+  }
+
+  function relayTabSwitcherShortcutRelease(key) {
+    if (!key || !chromeApi || !chromeApi.runtime ||
+        typeof chromeApi.runtime.sendMessage !== 'function') {
+      return;
+    }
+    armedReleaseKeys = [];
+    recentTrustedReleaseAtByKey.delete(key);
+    try {
+      chromeApi.runtime.sendMessage({
+        action: 'notifyTabSwitcherShortcutModifierReleased',
+        key
+      }, () => {
+        void (chromeApi.runtime && chromeApi.runtime.lastError);
+      });
+    } catch (error) {
+      // Ignore stale extension page contexts during reload.
+    }
+  }
 
   function normalizeTabSwitcherAdvanceOffset(value) {
     const offset = Math.trunc(Number(value));
@@ -43,6 +132,17 @@
     }
     document.dispatchEvent(createTabSwitcherAdvanceEvent(request && request.offset));
     return { ok: true, advanced: true };
+  }
+
+  function commitOpenTabSwitcherFromShortcutRelease() {
+    const host = document.getElementById(TAB_SWITCHER_HOST_ID);
+    if (!host || typeof host._lumnoTabSwitcherCommitFromShortcutRelease !== 'function') {
+      return { ok: false, committed: false };
+    }
+    return {
+      ok: true,
+      committed: host._lumnoTabSwitcherCommitFromShortcutRelease() === true
+    };
   }
 
   function openTabSwitcherFromCommand(request) {
@@ -120,6 +220,22 @@
     if (request.action === 'advanceOpenTabSwitcherFromCommand') {
       return advanceOpenTabSwitcherFromCommand(request);
     }
+    if (request.action === 'armTabSwitcherShortcutRelease') {
+      armedReleaseKeys = (Array.isArray(request.keys) ? request.keys : [request.key])
+        .map(normalizeTabSwitcherReleaseKey)
+        .filter(Boolean);
+      const bufferedKey = getBufferedTabSwitcherShortcutReleaseKey(
+        armedReleaseKeys,
+        request.commandStartedAt
+      );
+      if (bufferedKey) {
+        relayTabSwitcherShortcutRelease(bufferedKey);
+      }
+      return { ok: armedReleaseKeys.length > 0 || Boolean(bufferedKey) };
+    }
+    if (request.action === 'commitOpenTabSwitcherFromShortcutRelease') {
+      return commitOpenTabSwitcherFromShortcutRelease();
+    }
     if (request.action === 'openTabSwitcherFromCommand') {
       return openTabSwitcherFromCommand(request);
     }
@@ -180,6 +296,7 @@
       ok: Boolean(response && response.ok),
       reason: response && response.reason ? String(response.reason) : '',
       advanced: response && typeof response.advanced === 'boolean' ? response.advanced : null,
+      committed: response && typeof response.committed === 'boolean' ? response.committed : null,
       open: response && typeof response.open === 'boolean' ? response.open : null,
       suppressed: Boolean(response && response.suppressed)
     });
@@ -237,6 +354,21 @@
       sendResponse(response);
     });
   }
+
+  function notifyTabSwitcherShortcutModifierReleased(event) {
+    if (!event || event.isTrusted !== true || !chromeApi || !chromeApi.runtime ||
+        typeof chromeApi.runtime.sendMessage !== 'function') {
+      return;
+    }
+    rememberTrustedTabSwitcherShortcutRelease(event);
+    const key = getReleasedTabSwitcherShortcutKey(event);
+    if (!key) {
+      return;
+    }
+    relayTabSwitcherShortcutRelease(key);
+  }
+
+  window.addEventListener('keyup', notifyTabSwitcherShortcutModifierReleased, true);
 
   window.addEventListener('pagehide', () => {
     extensionPagePortClosed = true;
