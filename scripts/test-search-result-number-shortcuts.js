@@ -10,6 +10,64 @@ const overlayCss = read('src/overlay/suggestions-view.css');
 const suggestionsSource = read('react-src/newtab/suggestions.tsx');
 const suggestionNavigation = require('../src/shared/suggestion-navigation.js');
 
+const macNavigator = { platform: 'MacIntel' };
+const ctrlNavigationEvent = (key, code, overrides) => ({
+  key,
+  code,
+  ctrlKey: true,
+  metaKey: false,
+  altKey: false,
+  shiftKey: false,
+  ...(overrides || {})
+});
+
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    ctrlNavigationEvent('n', 'KeyN'),
+    { macosCtrlEnabled: false, navigatorLike: macNavigator }
+  ),
+  '',
+  'the macOS navigation experiment should be disabled by default'
+);
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    ctrlNavigationEvent('n', 'KeyN'),
+    { macosCtrlEnabled: true, navigatorLike: macNavigator }
+  ),
+  'ArrowDown'
+);
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    ctrlNavigationEvent('p', 'KeyP'),
+    { macosCtrlEnabled: true, navigatorLike: macNavigator }
+  ),
+  'ArrowUp'
+);
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    ctrlNavigationEvent('n', 'KeyN'),
+    { macosCtrlEnabled: true, navigatorLike: { platform: 'Win32' } }
+  ),
+  '',
+  'Ctrl+N/P should stay untouched outside macOS'
+);
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    ctrlNavigationEvent('n', 'KeyN', { shiftKey: true }),
+    { macosCtrlEnabled: true, navigatorLike: macNavigator }
+  ),
+  '',
+  'additional modifiers should not trigger the experiment'
+);
+assert.strictEqual(
+  suggestionNavigation.getSuggestionNavigationKey(
+    { key: 'ArrowDown' },
+    { macosCtrlEnabled: false, navigatorLike: { platform: 'Win32' } }
+  ),
+  'ArrowDown',
+  'existing arrow navigation should remain platform independent'
+);
+
 function createKeyEvent(overrides) {
   return {
     type: 'keydown',
@@ -390,6 +448,16 @@ assert.match(
   overlaySource,
   /const numberShortcutOptions = \{[\s\S]*?onHoldStart:[\s\S]*?showOverlayToast\([\s\S]*?search_number_jump_release_hint[\s\S]*?duration:\s*0[\s\S]*?onHoldEnd:\s*hideOverlayToast,[\s\S]*?instantActive:\s*\(\)\s*=>\s*numberShortcutInstantEnabled[\s\S]*?\};/,
   'Overlay should reuse its existing Toast while the number shortcut hold is armed'
+);
+assert.match(
+  newtabSource,
+  /getSuggestionNavigationKey\(event,[\s\S]*?macosCtrlEnabled:\s*macosCtrlSuggestionNavigationEnabled/,
+  'New Tab should gate Ctrl+N/P through the Labs preference'
+);
+assert.match(
+  overlaySource,
+  /e\.type === 'keydown' && searchInputActive && getSuggestionNavigationKey\(e\)[\s\S]*?handleSearchInputKeydown\(e\);[\s\S]*?stopImmediatePropagation\(\)/,
+  'Overlay should consume enabled Ctrl+N/P exactly once during capture'
 );
 assert.match(
   overlaySource,

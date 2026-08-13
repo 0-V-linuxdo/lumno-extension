@@ -12,6 +12,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySearchResultSourceTypesStorageListener = null;
   let overlaySearchResultDisplayLimitStorageListener = null;
   let overlayNumberShortcutInstantStorageListener = null;
+  let overlayMacosCtrlSuggestionNavigationStorageListener = null;
   let overlaySearchBlacklistStorageListener = null;
   let overlayFaviconEnhancedFetchStorageListener = null;
   let overlayOpenTabsDefaultVisibleStorageListener = null;
@@ -262,6 +263,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     '_x_extension_motion_effects_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = overlayStorageKeys.numberShortcutInstantEnabled ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
+  const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
+    overlayStorageKeys.macosCtrlSuggestionNavigationEnabled ||
+    '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = overlayStorageKeys.overlayTabPriority;
   const TAB_RANK_SCORE_DEBUG_STORAGE_KEY = overlayStorageKeys.tabRankScoreDebug;
   const storageRuntime = overlayRuntime.getStorageArea(chrome);
@@ -318,6 +322,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let documentPipEnabled = Boolean(normalizedOverlayContext.documentPipEnabled);
   let overlayThemeListenerAttached = false;
   let numberShortcutInstantEnabled = false;
+  let macosCtrlSuggestionNavigationEnabled = false;
   const initialOverlaySettingsReady = overlayRuntime.getStorageValues(
     storageArea,
     [
@@ -331,7 +336,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       FAVICON_REQUEST_BLACKLIST_STORAGE_KEY,
       SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
       OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY,
-      NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY
+      NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
+      MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY
     ]
   ).catch(() => ({}));
   const initialOverlayEnterAnimationReady = initialOverlaySettingsReady.then((result) => {
@@ -361,6 +367,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       ? SETTINGS.normalizeNumberShortcutInstantEnabled(result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY])
       : result[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY] === true;
     return numberShortcutInstantEnabled;
+  });
+  const initialMacosCtrlSuggestionNavigationReady = initialOverlaySettingsReady.then((result) => {
+    const rawValue = result[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY];
+    macosCtrlSuggestionNavigationEnabled =
+      typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
+        ? SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled(rawValue)
+        : rawValue === true;
+    return macosCtrlSuggestionNavigationEnabled;
   });
 
   function normalizeOverlaySearchBlacklistItems(items) {
@@ -1526,6 +1540,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (overlayNumberShortcutInstantStorageListener) {
       chrome.storage.onChanged.removeListener(overlayNumberShortcutInstantStorageListener);
       overlayNumberShortcutInstantStorageListener = null;
+    }
+    if (overlayMacosCtrlSuggestionNavigationStorageListener) {
+      chrome.storage.onChanged.removeListener(overlayMacosCtrlSuggestionNavigationStorageListener);
+      overlayMacosCtrlSuggestionNavigationStorageListener = null;
     }
     if (overlaySearchBlacklistStorageListener) {
       chrome.storage.onChanged.removeListener(overlaySearchBlacklistStorageListener);
@@ -3937,6 +3955,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
     };
     chrome.storage.onChanged.addListener(overlayNumberShortcutInstantStorageListener);
+    overlayMacosCtrlSuggestionNavigationStorageListener = (changes, areaName) => {
+      if (!isPrimaryStorageAreaName(areaName) ||
+          !changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]) {
+        return;
+      }
+      const rawValue = changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY].newValue;
+      macosCtrlSuggestionNavigationEnabled =
+        typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
+          ? SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled(rawValue)
+          : rawValue === true;
+    };
+    chrome.storage.onChanged.addListener(overlayMacosCtrlSuggestionNavigationStorageListener);
     overlaySearchBlacklistStorageListener = (changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
         return;
@@ -6672,7 +6702,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         handleTabKey(e);
         return;
       }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape') {
+      const suggestionNavigationKey = getSuggestionNavigationKey(e);
+      if (suggestionNavigationKey || e.key === 'Enter' || e.key === 'Escape') {
+        if (suggestionNavigationKey) {
+          e.stopPropagation();
+        }
         keydownHandler(e);
         return;
       }
@@ -6716,6 +6750,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return index === 0;
     }
 
+    function getSuggestionNavigationKey(event) {
+      if (typeof SUGGESTION_NAVIGATION.getSuggestionNavigationKey === 'function') {
+        return SUGGESTION_NAVIGATION.getSuggestionNavigationKey(event, {
+          macosCtrlEnabled: macosCtrlSuggestionNavigationEnabled,
+          navigatorLike: window && window.navigator ? window.navigator : null
+        });
+      }
+      return event && (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+        ? event.key
+        : '';
+    }
+
     keydownHandler = function(e) {
       if (!e || e.isTrusted !== true) {
         return;
@@ -6732,11 +6778,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (isImeCompositionEvent(e)) {
         return;
       }
+      const suggestionNavigationKey = getSuggestionNavigationKey(e);
       dismissAutocompletePreviewOnNonTabKey(e);
       if (e.key === 'Escape' && overlay) {
         removeOverlay(overlay);
         document.removeEventListener('keydown', keydownHandler);
-      } else if (e.key === 'ArrowDown') {
+      } else if (suggestionNavigationKey === 'ArrowDown') {
         e.preventDefault();
         if (suggestionItems.length === 0) {
           return;
@@ -6758,7 +6805,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         updateSelection();
         scrollSelectedSuggestionIntoView('down', didWrap);
         searchInput.focus();
-      } else if (e.key === 'ArrowUp') {
+      } else if (suggestionNavigationKey === 'ArrowUp') {
         e.preventDefault();
         if (suggestionItems.length === 0) {
           return;
@@ -7062,6 +7109,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             suggestionsContainer,
             numberShortcutOptions
           )) {
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (e.type === 'keydown' && searchInputActive && getSuggestionNavigationKey(e)) {
+        handleSearchInputKeydown(e);
         e.stopImmediatePropagation();
         return;
       }
@@ -8723,6 +8775,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }),
       initialNumberShortcutInstantReady.catch(() => {
         numberShortcutInstantEnabled = false;
+      }),
+      initialMacosCtrlSuggestionNavigationReady.catch(() => {
+        macosCtrlSuggestionNavigationEnabled = false;
       })
     ]).then(() => {
       if (!overlay || !overlay.isConnected) {

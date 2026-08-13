@@ -243,6 +243,12 @@
   "settings_number_shortcut_instant_desc": {
     "message": "When enabled, pressing Command/Ctrl once in the command bar or search suggestions immediately shows number jump badges; \"Open in background tab\" no longer uses Command (middle-click still opens in the background)."
   },
+  "settings_macos_ctrl_suggestion_navigation_title": {
+    "message": "Mac keyboard navigation"
+  },
+  "settings_macos_ctrl_suggestion_navigation_desc": {
+    "message": "On macOS, use Ctrl+N / Ctrl+P to select the next / previous result in New Tab and the command bar. Thanks to @wanghanzhen for the contribution."
+  },
   "document_pip_picker_hint": {
     "message": "Move over the page to choose an element. Click to open PiP, scroll to switch parents, Esc to cancel."
   },

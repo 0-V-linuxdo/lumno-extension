@@ -243,6 +243,12 @@
   "settings_number_shortcut_instant_desc": {
     "message": "開啟後，指令列與搜尋建議中單按 Command/Ctrl 即顯示數字跳轉標記；「在背景新開」不再占用 Command（滑鼠中鍵仍可背景開啟）"
   },
+  "settings_macos_ctrl_suggestion_navigation_title": {
+    "message": "Mac 鍵盤導覽"
+  },
+  "settings_macos_ctrl_suggestion_navigation_desc": {
+    "message": "在 macOS 的新分頁與指令列中，用 Ctrl+N / Ctrl+P 選擇下一項 / 上一項。感謝 @wanghanzhen 的貢獻。"
+  },
   "document_pip_picker_hint": {
     "message": "移動滑鼠選擇元素，點擊開啟懸浮窗，滾輪切換父層，Esc 取消。"
   },

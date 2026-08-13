@@ -1,7 +1,7 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 51);
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 52);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
@@ -9,6 +9,7 @@ assert.strictEqual(
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_2024_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_motion_effects_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_number_shortcut_instant_enabled_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_input_auto_focus_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_search_result_display_limit_2026_unique_'));
@@ -133,6 +134,14 @@ assert.strictEqual(settings.normalizeNumberShortcutInstantEnabled(false), false)
 assert.strictEqual(settings.normalizeNumberShortcutInstantEnabled(true), true);
 assert.strictEqual(settings.normalizeNumberShortcutInstantEnabled(undefined), false);
 assert.strictEqual(settings.normalizeNumberShortcutInstantEnabled('true'), false);
+assert.strictEqual(settings.normalizeMacosCtrlSuggestionNavigationEnabled(false), false);
+assert.strictEqual(settings.normalizeMacosCtrlSuggestionNavigationEnabled(true), true);
+assert.strictEqual(settings.normalizeMacosCtrlSuggestionNavigationEnabled(undefined), false);
+assert.strictEqual(settings.normalizeMacosCtrlSuggestionNavigationEnabled('true'), false);
+assert.strictEqual(
+  settings.MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY,
+  '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_'
+);
 assert.strictEqual(settings.shouldSkipEntryMotion({
   matchMedia: () => ({ matches: false })
 }, false), true);

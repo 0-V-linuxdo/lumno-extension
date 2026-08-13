@@ -120,6 +120,9 @@
     '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
+  const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
+    SETTINGS.MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY ||
+    '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -448,6 +451,7 @@
   let newtabTopContentMode = 'brand';
   let newtabInputAutoFocusEnabled = false;
   let numberShortcutInstantEnabled = false;
+  let macosCtrlSuggestionNavigationEnabled = false;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1278,6 +1282,29 @@
   }
 
   const initialNumberShortcutInstantReadyTask = loadNumberShortcutInstantEnabled();
+
+  function normalizeMacosCtrlSuggestionNavigationEnabled(value) {
+    return typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
+      ? SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled(value)
+      : value === true;
+  }
+
+  function loadMacosCtrlSuggestionNavigationEnabled() {
+    if (!storageArea) {
+      macosCtrlSuggestionNavigationEnabled = false;
+      return Promise.resolve(macosCtrlSuggestionNavigationEnabled);
+    }
+    return new Promise((resolve) => {
+      storageArea.get([MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY], (result) => {
+        const rawValue = result && result[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY];
+        macosCtrlSuggestionNavigationEnabled =
+          normalizeMacosCtrlSuggestionNavigationEnabled(rawValue);
+        resolve(macosCtrlSuggestionNavigationEnabled);
+      });
+    });
+  }
+
+  loadMacosCtrlSuggestionNavigationEnabled();
 
   function normalizeNumberShortcutInstantEnabled(value) {
     return typeof SETTINGS.normalizeNumberShortcutInstantEnabled === 'function'
@@ -4982,6 +5009,11 @@
           changes[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY].newValue
         );
         SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
+      }
+      if (changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]) {
+        macosCtrlSuggestionNavigationEnabled = normalizeMacosCtrlSuggestionNavigationEnabled(
+          changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY].newValue
+        );
       }
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
@@ -14793,6 +14825,13 @@
     onKeyDown: function(event) {
       syncSuggestionActionModifiersFromEvent(event);
       dismissAutocompletePreviewOnNonTabKey(event);
+      const suggestionNavigationKey =
+        typeof SUGGESTION_NAVIGATION.getSuggestionNavigationKey === 'function'
+          ? SUGGESTION_NAVIGATION.getSuggestionNavigationKey(event, {
+            macosCtrlEnabled: macosCtrlSuggestionNavigationEnabled,
+            navigatorLike: typeof navigator === 'object' && navigator ? navigator : null
+          })
+          : (event.key === 'ArrowDown' || event.key === 'ArrowUp' ? event.key : '');
       if (event.key !== 'Backspace' && !event.metaKey && !event.ctrlKey && !event.altKey) {
         latestRawQuery = inputParts.input.value;
         latestQuery = inputParts.input.value.trim();
@@ -14856,13 +14895,13 @@
         }
         return;
       }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (suggestionNavigationKey) {
         if (suggestionItems.length === 0) {
           return;
         }
         event.preventDefault();
         let didWrap = false;
-        if (event.key === 'ArrowDown') {
+        if (suggestionNavigationKey === 'ArrowDown') {
           if (selectedIndex === -1) {
             const autoIndex = getAutoHighlightIndex();
             selectedIndex = autoIndex >= 0
@@ -14894,7 +14933,10 @@
           }
         }
         updateSelection();
-        scrollSelectedSuggestionIntoView(event.key === 'ArrowDown' ? 'down' : 'up', didWrap);
+        scrollSelectedSuggestionIntoView(
+          suggestionNavigationKey === 'ArrowDown' ? 'down' : 'up',
+          didWrap
+        );
         return;
       }
       if (event.key === 'Tab' && handleTabKey) {

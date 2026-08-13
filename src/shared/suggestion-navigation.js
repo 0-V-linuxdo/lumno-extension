@@ -9,6 +9,60 @@
   const NUMBER_SHORTCUT_TIMEOUT_MS = 2000;
   const numberShortcutStates = new WeakMap();
 
+  function getPlatformFamily(navigatorLike) {
+    const source = navigatorLike || {};
+    const candidates = [
+      source.userAgentData && source.userAgentData.platform,
+      source.platform,
+      source.userAgent
+    ];
+    for (const candidate of candidates) {
+      const value = String(candidate || '').trim().toLowerCase();
+      if (!value) {
+        continue;
+      }
+      if (/(mac|iphone|ipad|ipod)/.test(value)) {
+        return 'mac';
+      }
+      if (/win/.test(value)) {
+        return 'windows';
+      }
+      if (/(linux|android|cros)/.test(value)) {
+        return 'other';
+      }
+    }
+    return 'other';
+  }
+
+  // Suggested by @wanghanzhen in https://github.com/kubai087/lumno-extension/pull/38.
+  // This stays opt-in while the macOS input convention is evaluated in Labs.
+  function getSuggestionNavigationKey(event, options) {
+    const key = String(event && event.key || '');
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      return key;
+    }
+    const config = options || {};
+    if (!event || config.macosCtrlEnabled !== true) {
+      return '';
+    }
+    const platform = config.platform
+      ? String(config.platform).trim().toLowerCase()
+      : getPlatformFamily(config.navigatorLike);
+    if (!platform.includes('mac') ||
+        !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+      return '';
+    }
+    const normalizedKey = key.trim().toLowerCase();
+    const code = String(event.code || '').trim();
+    if (normalizedKey === 'n' || code === 'KeyN') {
+      return 'ArrowDown';
+    }
+    if (normalizedKey === 'p' || code === 'KeyP') {
+      return 'ArrowUp';
+    }
+    return '';
+  }
+
   function getVisibleRowsViewportHeight(options) {
     const config = options && typeof options === 'object' ? options : {};
     const visibleRowLimit = Math.max(0, Math.floor(Number(config.visibleRowLimit) || 0));
@@ -336,6 +390,7 @@
   }
 
   return {
+    getSuggestionNavigationKey,
     getVisibleRowsViewportHeight,
     scrollItemIntoView,
     handleNumberShortcutKeyEvent,

@@ -135,6 +135,7 @@ npm run test:onboarding-content
 ## Credits
 
 - Japanese localization: thanks to [Humi](https://github.com/Hum1Tab) for Japanese translation and review.
+- macOS `Ctrl+N` / `Ctrl+P` suggestion navigation experiment: based on a contribution by [wanghanzhen](https://github.com/wanghanzhen) in [PR #38](https://github.com/kubai087/lumno-extension/pull/38).
 - Bundled icon set: [Remix Icon](https://remixicon.com/)
 - Bundled typeface: Open Sans
 

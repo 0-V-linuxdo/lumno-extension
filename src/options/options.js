@@ -90,6 +90,7 @@
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const motionEffectsToggle = document.getElementById('_x_extension_motion_effects_toggle_2026_unique_');
   const numberShortcutInstantToggle = document.getElementById('_x_extension_number_shortcut_instant_toggle_2026_unique_');
+  const macosCtrlSuggestionNavigationToggle = document.getElementById('_x_extension_macos_ctrl_suggestion_navigation_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
   const fallbackShortcutTokens = document.getElementById('_x_extension_shortcuts_tokens_2024_unique_');
   const fallbackShortcutWrap = document.querySelector('._x_extension_shortcuts_hotkey_wrap_2024_unique_');
@@ -532,6 +533,9 @@
     '_x_extension_motion_effects_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
+  const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
+    SETTINGS.MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY ||
+    '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
   const AUTO_PIP_ENABLED_STORAGE_KEY = '_x_extension_auto_pip_enabled_2026_unique_';
   const TAB_SWITCHER_ENABLED_STORAGE_KEY = '_x_extension_tab_switcher_enabled_2026_unique_';
   const DOCUMENT_PIP_ENABLED_STORAGE_KEY = '_x_extension_document_pip_enabled_2026_unique_';
@@ -600,6 +604,7 @@
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
     NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
+    MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY,
     AUTO_PIP_ENABLED_STORAGE_KEY,
     TAB_SWITCHER_ENABLED_STORAGE_KEY,
     DOCUMENT_PIP_ENABLED_STORAGE_KEY,
@@ -1600,6 +1605,12 @@
   function normalizeNumberShortcutInstantEnabled(value) {
     return typeof SETTINGS.normalizeNumberShortcutInstantEnabled === 'function'
       ? SETTINGS.normalizeNumberShortcutInstantEnabled(value)
+      : value === true;
+  }
+
+  function normalizeMacosCtrlSuggestionNavigationEnabled(value) {
+    return typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
+      ? SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled(value)
       : value === true;
   }
 
@@ -4377,6 +4388,18 @@
       storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: next });
     });
   }
+  if (macosCtrlSuggestionNavigationToggle) {
+    macosCtrlSuggestionNavigationToggle.addEventListener('change', () => {
+      const next = normalizeMacosCtrlSuggestionNavigationEnabled(
+        macosCtrlSuggestionNavigationToggle.checked
+      );
+      setOptionsToggleState(macosCtrlSuggestionNavigationToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]: next });
+    });
+  }
   if (autoPipToggle) {
     autoPipToggle.addEventListener('change', () => {
       const next = Boolean(autoPipToggle.checked);
@@ -5031,6 +5054,17 @@
       }
       if (rawValue !== stored) {
         storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY];
+      const stored = normalizeMacosCtrlSuggestionNavigationEnabled(rawValue);
+      if (macosCtrlSuggestionNavigationToggle) {
+        setOptionsToggleState(macosCtrlSuggestionNavigationToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -6275,6 +6309,16 @@
       setOptionsToggleState(numberShortcutInstantToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY] &&
+        macosCtrlSuggestionNavigationToggle) {
+      const raw = changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeMacosCtrlSuggestionNavigationEnabled(raw);
+      setOptionsToggleState(macosCtrlSuggestionNavigationToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }

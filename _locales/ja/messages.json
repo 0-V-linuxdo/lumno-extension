@@ -243,6 +243,12 @@
   "settings_number_shortcut_instant_desc": {
     "message": "有効にすると、コマンドバーや検索候補で Command/Ctrl を単押しした時点で数字ジャンプバッジが表示されます。「バックグラウンドで開く」は Command に割り当てられなくなります（マウス中クリックは引き続きバックグラウンドで開きます）。"
   },
+  "settings_macos_ctrl_suggestion_navigation_title": {
+    "message": "Mac キーボードナビゲーション"
+  },
+  "settings_macos_ctrl_suggestion_navigation_desc": {
+    "message": "macOS の新しいタブとコマンドバーで Ctrl+N / Ctrl+P を使い、次 / 前の候補を選択します。コントリビューションを提供した @wanghanzhen に感謝します。"
+  },
   "document_pip_picker_hint": {
     "message": "マウスを動かして要素を選択し、クリックするとWebクリップで表示します。ホイールで親要素へ切り替え、Escでキャンセルできます。"
   },

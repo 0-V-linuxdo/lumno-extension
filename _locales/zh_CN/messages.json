@@ -243,6 +243,12 @@
   "settings_number_shortcut_instant_desc": {
     "message": "开启后，命令栏与搜索建议中单按 Command/Ctrl 即显示数字跳转标记；「在后台新开」不再占用 Command（鼠标中键仍可后台打开）"
   },
+  "settings_macos_ctrl_suggestion_navigation_title": {
+    "message": "Mac 键盘导航"
+  },
+  "settings_macos_ctrl_suggestion_navigation_desc": {
+    "message": "在 macOS 的新标签页和命令栏中，用 Ctrl+N / Ctrl+P 选择下一项 / 上一项。感谢 @wanghanzhen 的贡献。"
+  },
   "document_pip_picker_hint": {
     "message": "移动鼠标选择元素，点击打开悬浮窗，滚轮切换父级，Esc 取消。"
   },

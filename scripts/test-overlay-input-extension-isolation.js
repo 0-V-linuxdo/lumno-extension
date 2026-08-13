@@ -32,6 +32,11 @@ assert.ok(
   handlerSource.includes('if (e.metaKey || e.ctrlKey || e.altKey)'),
   'input isolation should leave browser and system modifier shortcuts untouched'
 );
+assert.match(
+  handlerSource,
+  /e\.type === 'keydown' && searchInputActive && getSuggestionNavigationKey\(e\)[\s\S]*?handleSearchInputKeydown\(e\);[\s\S]*?e\.stopImmediatePropagation\(\);[\s\S]*?return;/,
+  'enabled macOS Ctrl navigation should be consumed once before modifier keys reach the host page'
+);
 assert.ok(
   !handlerSource.includes('e.shiftKey'),
   'Shift-modified text should remain isolated from page and extension shortcuts'
@@ -102,9 +107,11 @@ const createHandler = new Function(
   'suggestionItems',
   'suggestionsContainer',
   'numberShortcutOptions',
+  'getSuggestionNavigationKey',
   `let overlayKeyCaptureHandler;\n${trustedHandlerSource}\nreturn overlayKeyCaptureHandler;`
 );
 const numberShortcutSignals = [];
+let macosCtrlNavigationEnabled = false;
 const overlayKeyCaptureHandler = createHandler(
   overlay,
   searchInput,
@@ -143,7 +150,10 @@ const overlayKeyCaptureHandler = createHandler(
     onHoldEnd() {
       numberShortcutSignals.push('toast-hide');
     }
-  }
+  },
+  (event) => macosCtrlNavigationEnabled && event.ctrlKey && event.key.toLowerCase() === 'n'
+    ? 'ArrowDown'
+    : ''
 );
 
 window.addEventListener('keydown', overlayKeyCaptureHandler, true);
@@ -238,6 +248,44 @@ assert.deepStrictEqual(
   [],
   'double-Tab keyup events should not reach host-page shortcuts'
 );
+
+const disabledMacCtrlNavigationEvent = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: 'n',
+  code: 'KeyN',
+  ctrlKey: true
+});
+searchInput.dispatchEvent(disabledMacCtrlNavigationEvent);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [{ key: 'n', targetTag: 'DIV' }],
+  'Ctrl+N should remain untouched while the Labs experiment is off'
+);
+hostPageKeys.length = 0;
+
+macosCtrlNavigationEnabled = true;
+const enabledMacCtrlNavigationEvent = new window.KeyboardEvent('keydown', {
+  bubbles: true,
+  cancelable: true,
+  composed: true,
+  key: 'n',
+  code: 'KeyN',
+  ctrlKey: true
+});
+searchInput.dispatchEvent(enabledMacCtrlNavigationEvent);
+assert.strictEqual(
+  handledInputKeys.filter((key) => key === 'n').length,
+  1,
+  'enabled Ctrl+N should run the Overlay input handler exactly once'
+);
+assert.deepStrictEqual(
+  hostPageKeys,
+  [],
+  'enabled Ctrl+N should not leak to the host page'
+);
+macosCtrlNavigationEnabled = false;
 
 const enterNumberModeEvent = new window.KeyboardEvent('keydown', {
   bubbles: true,
