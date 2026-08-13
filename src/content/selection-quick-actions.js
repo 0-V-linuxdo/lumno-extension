@@ -8,6 +8,7 @@
 
   const INTENT = globalThis.LumnoSelectionIntent || {};
   const ACTION_ICON_LIBRARY = globalThis.LumnoSelectionActionIcons || {};
+  const TOAST = globalThis.LumnoToast || {};
   if (typeof INTENT.classifySelection !== 'function') {
     return;
   }
@@ -25,6 +26,8 @@
   // One-click source switch for local selection diagnostics. Keep disabled in releases.
   const SELECTION_DEBUG_MODE = false;
   const DEBUG_HOST_ID = '_x_extension_selection_quick_actions_debug_host_2026_unique_';
+  const TOAST_HOST_ID = '_x_extension_selection_quick_actions_toast_host_2026_unique_';
+  const TOAST_STYLE_ID = '_x_extension_selection_quick_actions_toast_style_2026_unique_';
   const ENTRY_DELAY_MS = 320;
   const SELECTION_CHANGE_DELAY_MS = 80;
   const SELECTION_GESTURE_TIMEOUT_MS = 1600;
@@ -71,7 +74,9 @@
   let contentViewport = null;
   let actionsViewport = null;
   let menu = null;
-  let status = null;
+  let toastHost = null;
+  let toastController = null;
+  let toastStyleGate = null;
   let ownershipObserver = null;
   let surfaceResizeObserver = null;
   let toolbarEntranceAnimations = [];
@@ -323,6 +328,104 @@
       return;
     }
     host.style.setProperty('color-scheme', value, 'important');
+  }
+
+  function clearSelectionToast() {
+    if (toastController && typeof toastController.destroy === 'function') {
+      toastController.destroy();
+    }
+    if (toastStyleGate && typeof toastStyleGate.destroy === 'function') {
+      toastStyleGate.destroy();
+    }
+    if (toastHost && toastHost.isConnected) {
+      toastHost.remove();
+    }
+    toastHost = null;
+    toastController = null;
+    toastStyleGate = null;
+  }
+
+  function ensureSelectionToast() {
+    if (toastHost && toastHost.isConnected && toastController) {
+      return true;
+    }
+    if (typeof TOAST.createToastController !== 'function' ||
+        typeof TOAST.createToastStyleGate !== 'function') {
+      return false;
+    }
+    clearSelectionToast();
+    const staleHost = document.getElementById(TOAST_HOST_ID);
+    if (staleHost) {
+      staleHost.remove();
+    }
+    toastHost = document.createElement('div');
+    toastHost.id = TOAST_HOST_ID;
+    applyNoTranslate(toastHost);
+    const hostStyles = {
+      all: 'initial',
+      position: 'fixed',
+      inset: '0',
+      'z-index': '2147483647',
+      display: 'block',
+      width: 'auto',
+      height: 'auto',
+      margin: '0',
+      padding: '0',
+      border: '0',
+      opacity: '1',
+      visibility: 'visible',
+      'pointer-events': 'none',
+      transform: 'none',
+      filter: 'none',
+      overflow: 'visible',
+      isolation: 'isolate',
+      contain: 'none'
+    };
+    Object.entries(hostStyles).forEach(([property, value]) => {
+      toastHost.style.setProperty(property, value, 'important');
+    });
+
+    const toastShadow = toastHost.attachShadow({ mode: 'closed' });
+    const stylesheet = document.createElement('link');
+    stylesheet.id = TOAST_STYLE_ID;
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = chrome.runtime.getURL('src/shared/toast.css');
+    const toastElement = document.createElement('div');
+    toastElement.className = 'x-lumno-toast';
+    toastElement.setAttribute('data-show', 'false');
+    toastElement.setAttribute('role', 'status');
+    toastElement.setAttribute('aria-live', 'polite');
+    toastElement.style.setProperty(
+      '--x-lumno-toast-top',
+      'max(24px, calc(env(safe-area-inset-top) + 12px))'
+    );
+    toastElement.style.setProperty('--x-lumno-toast-z-index', '2147483647');
+    applyNoTranslate(toastElement);
+    toastShadow.append(stylesheet, toastElement);
+    (document.documentElement || document.body).appendChild(toastHost);
+
+    toastStyleGate = TOAST.createToastStyleGate(toastElement, {
+      stylesheetElement: stylesheet,
+      windowObj: window
+    });
+    toastController = TOAST.createToastController(toastElement, {
+      duration: ACTION_FAILURE_DISMISS_MS,
+      windowObj: window
+    });
+    return true;
+  }
+
+  function showSelectionToast(message, options) {
+    if (!ensureSelectionToast()) {
+      return;
+    }
+    toastController.show(message, options || {});
+  }
+
+  function hideSelectionToast() {
+    if (toastController && typeof toastController.hide === 'function') {
+      toastController.hide();
+    }
   }
 
   function getViewportBounds() {
@@ -912,6 +1015,7 @@
   function hideSurface(options) {
     cancelToolbarEntranceAnimation();
     clearTimers();
+    hideSelectionToast();
     if (viewportRepositionFrame != null) {
       window.cancelAnimationFrame(viewportRepositionFrame);
       viewportRepositionFrame = null;
@@ -960,6 +1064,7 @@
 
   function clearOwnedSurface() {
     cancelToolbarEntranceAnimation();
+    clearSelectionToast();
     if (surfaceResizeObserver) {
       surfaceResizeObserver.disconnect();
       surfaceResizeObserver = null;
@@ -975,7 +1080,6 @@
     selectionLogo = null;
     mainLabel = null;
     menu = null;
-    status = null;
     currentCandidate = null;
   }
 
@@ -1668,12 +1772,6 @@
         opacity: 1;
         transform: translateX(0);
       }
-      .lumno-selection-status {
-        padding: 0 8px;
-        font: 400 12px/1 "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        white-space: nowrap;
-      }
-      .lumno-selection-status[hidden] { display: none; }
       @supports (corner-shape: superellipse(1.25)) {
         .lumno-selection-surface,
         .lumno-selection-material,
@@ -1740,14 +1838,9 @@
     menu.setAttribute('aria-label', getMessage('selection_quick_action_open_menu', '使用 Lumno 处理所选文字'));
     actionsViewport.append(menu);
 
-    status = document.createElement('span');
-    status.className = 'lumno-selection-status';
-    status.hidden = true;
-    status.setAttribute('role', 'status');
-
     contentViewport = document.createElement('div');
     contentViewport.className = 'lumno-selection-content';
-    contentViewport.append(status, actionsViewport, primaryDivider, mainButton);
+    contentViewport.append(actionsViewport, primaryDivider, mainButton);
 
     surface.append(material, contentViewport);
     applyNoTranslateDeep(surface);
@@ -1916,8 +2009,6 @@
     actionsViewport.hidden = true;
     menu.hidden = true;
     menu.replaceChildren();
-    status.hidden = true;
-    status.textContent = '';
     positionSurface(candidate.rect, 'inline');
     const renderedCandidate = currentCandidate;
     window.requestAnimationFrame(() => {
@@ -1984,7 +2075,6 @@
     primaryDivider.hidden = false;
     actionsViewport.hidden = false;
     menu.hidden = false;
-    status.hidden = true;
     positionSurface(currentCandidate.rect, 'panel', originRect);
     menu.focus({ preventScroll: true });
     animateToolbarEntrance(originRect);
@@ -1995,32 +2085,24 @@
     if (!host || !currentCandidate) {
       return;
     }
-    const originRect = surface.getBoundingClientRect();
     cancelToolbarEntranceAnimation();
-    surface.dataset.iconOnly = 'false';
-    mainButton.hidden = true;
-    primaryDivider.hidden = true;
-    actionsViewport.hidden = true;
-    menu.hidden = true;
-    status.textContent = getMessage('selection_quick_action_sending', '正在后台打开…');
-    status.hidden = false;
-    positionSurface(currentCandidate.rect, 'panel', originRect);
+    host.dataset.visible = 'false';
+    setHostHidden(true);
+    showSelectionToast(
+      getMessage('selection_quick_action_sending', '正在后台打开…'),
+      { duration: ACTION_SUCCESS_DISMISS_MS }
+    );
   }
 
   function renderFailureStatus() {
-    ensureSurface();
-    if (!host) {
-      return;
+    if (host) {
+      host.dataset.visible = 'false';
+      setHostHidden(true);
     }
-    surface.dataset.iconOnly = 'false';
-    setHostHidden(false);
-    host.dataset.visible = 'true';
-    mainButton.hidden = true;
-    primaryDivider.hidden = true;
-    actionsViewport.hidden = true;
-    menu.hidden = true;
-    status.textContent = getMessage('selection_quick_action_failed', '发送失败，请重试');
-    status.hidden = false;
+    showSelectionToast(
+      getMessage('selection_quick_action_failed', '发送失败，请重试'),
+      { error: true, duration: ACTION_FAILURE_DISMISS_MS }
+    );
     scheduleDismiss(ACTION_FAILURE_DISMISS_MS);
   }
 

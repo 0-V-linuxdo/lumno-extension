@@ -103,7 +103,10 @@ function wait(ms) {
       }
     };
   };
+  const selectionHostId = '_x_extension_selection_quick_actions_host_2026_unique_';
+  const selectionToastHostId = '_x_extension_selection_quick_actions_toast_host_2026_unique_';
   let selectionShadow = null;
+  let selectionToastShadow = null;
   const storageChangeListeners = [];
   const localStorageValues = {
     _x_extension_selection_quick_actions_trigger_style_2026_unique_: 'lumno'
@@ -115,8 +118,13 @@ function wait(ms) {
   };
   const attachShadow = window.Element.prototype.attachShadow;
   window.Element.prototype.attachShadow = function(options) {
-    selectionShadow = attachShadow.call(this, options);
-    return selectionShadow;
+    const root = attachShadow.call(this, options);
+    if (this.id === selectionHostId) {
+      selectionShadow = root;
+    } else if (this.id === selectionToastHostId) {
+      selectionToastShadow = root;
+    }
+    return root;
   };
   const runtimeMessages = [];
   const pendingSelectionActionCallbacks = [];
@@ -220,6 +228,7 @@ function wait(ms) {
   });
   window.eval(fs.readFileSync('src/shared/settings.js', 'utf8'));
   window.eval(fs.readFileSync('src/shared/selection-action-icons.js', 'utf8'));
+  window.eval(fs.readFileSync('src/shared/toast.js', 'utf8'));
   assert.strictEqual(
     window.LumnoSelectionButterfly,
     undefined,
@@ -611,8 +620,15 @@ function wait(ms) {
     locale: 'zh-CN',
     text: 'React components'
   }, 'the background request should preserve the inferred intent and captured selection');
-  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
-    'a clicked action should immediately enter the sending state');
+  assert.strictEqual(host.hidden, true,
+    'a clicked action should close the selection toolbar while work continues in the background');
+  assert(selectionToastShadow, 'a clicked action should mount the shared Toast component');
+  const selectionToast = selectionToastShadow.querySelector('.x-lumno-toast');
+  assert(selectionToast, 'the action status should render through the shared Toast surface');
+  assert.strictEqual(selectionToast.dataset.show, 'true',
+    'a clicked action should immediately show the shared Toast');
+  assert.strictEqual(selectionToast.textContent, '正在后台打开…',
+    'the shared Toast should retain the localized opening-in-background message');
   assert.strictEqual(sendingMaterialGrowth.cancelled, true,
     'switching from toolbar controls to the sending status should release the retained entrance width');
   assert.strictEqual(pendingSelectionActionCallbacks.length, 1,
@@ -628,8 +644,10 @@ function wait(ms) {
   await wait(0);
   assert.strictEqual(host.hidden, false,
     'a stale failed action response must not hide a newer selection candidate');
-  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, true,
-    'a stale failed action response must not replace a newer candidate with an error status');
+  assert.strictEqual(selectionToast.dataset.show, 'false',
+    'a stale failed action response must not replace a newer candidate with an error Toast');
+  assert.notStrictEqual(selectionToast.textContent, '发送失败，请重试',
+    'a stale failed action response must not overwrite the shared Toast copy');
   selectionShadow.querySelector('.lumno-selection-main').click();
   assert.strictEqual(
     selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]').dataset.intent,
@@ -638,13 +656,19 @@ function wait(ms) {
   );
   nextSelectionActionResponse = { ok: false };
   selectionShadow.querySelector('.lumno-selection-toolbar [data-intent]').click();
-  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
-    'an immediate action failure should show its error status');
+  assert.strictEqual(host.hidden, true,
+    'an immediate action failure should keep the selection toolbar closed');
+  assert.strictEqual(selectionToast.dataset.show, 'true',
+    'an immediate action failure should show the shared Toast error state');
+  assert.strictEqual(selectionToast.textContent, '发送失败，请重试',
+    'an immediate action failure should localize its shared Toast copy');
+  assert.match(selectionToast.style.background, /153, 27, 27/,
+    'the shared Toast should use its error treatment for failed actions');
   await wait(1100);
-  assert.strictEqual(host.hidden, false,
-    'an immediate action failure should not be dismissed by the success hide timer');
-  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
-    'the failure status should remain visible for its dedicated dismissal interval');
+  assert.strictEqual(host.hidden, true,
+    'an immediate action failure should not reopen the selection toolbar');
+  assert.strictEqual(selectionToast.dataset.show, 'true',
+    'the failure Toast should remain visible for its dedicated dismissal interval');
 
   await selectTextControl(selectableTextarea, 0, selectableTextarea.value.length);
   assert.strictEqual(host.hidden, false, 'textarea selections should reach intent evaluation');
@@ -661,10 +685,12 @@ function wait(ms) {
   await wait(850);
   latestActionResponse({ ok: false });
   await wait(250);
-  assert.strictEqual(host.hidden, false,
-    'an older action timer must not release ownership of the latest action timer');
-  assert.strictEqual(selectionShadow.querySelector('.lumno-selection-status').hidden, false,
-    'the latest overlapping action failure should retain its dedicated error interval');
+  assert.strictEqual(host.hidden, true,
+    'an older action timer must not reopen the toolbar owned by the latest action');
+  assert.strictEqual(selectionToast.dataset.show, 'true',
+    'the latest overlapping action failure should retain its dedicated Toast interval');
+  assert.strictEqual(selectionToast.textContent, '发送失败，请重试',
+    'the latest overlapping action failure should own the shared Toast copy');
   olderActionResponse({ ok: false });
   selectableLink.focus();
   await selectDomText(selectableLink);

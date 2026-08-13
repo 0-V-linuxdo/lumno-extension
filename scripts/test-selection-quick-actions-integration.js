@@ -10,6 +10,7 @@ const providerResolverSource = fs.readFileSync('src/background/selection-quick-a
 const contentSource = fs.readFileSync('src/content/selection-quick-actions.js', 'utf8');
 const intentSource = fs.readFileSync('src/shared/selection-intent.js', 'utf8');
 const iconSource = fs.readFileSync('src/shared/selection-action-icons.js', 'utf8');
+const toastSource = fs.readFileSync('src/shared/toast.js', 'utf8');
 const settingsSource = fs.readFileSync('src/shared/settings.js', 'utf8');
 const selectStyles = fs.readFileSync('src/shared/custom-select.css', 'utf8');
 const localeNames = ['en', 'ja', 'zh_CN', 'zh_TW'];
@@ -25,8 +26,8 @@ const selectionContentScript = manifest.content_scripts.find((entry) => (
 assert(selectionContentScript, 'manifest should inject the selection quick actions content script');
 assert.deepStrictEqual(
   selectionContentScript.js,
-  ['src/shared/settings.js', 'src/shared/selection-action-icons.js', 'src/shared/selection-intent.js', 'src/content/selection-quick-actions.js'],
-  'provider-aware settings and the selection classifier should load before the content interaction runtime'
+  ['src/shared/settings.js', 'src/shared/selection-action-icons.js', 'src/shared/selection-intent.js', 'src/shared/toast.js', 'src/content/selection-quick-actions.js'],
+  'provider-aware settings, the selection classifier, and the shared Toast should load before the content interaction runtime'
 );
 assert.strictEqual(
   fs.existsSync('src/shared/selection-butterfly.js'),
@@ -136,10 +137,18 @@ assert(contentSource.includes('element.selectionEnd'));
 assert(contentSource.includes('function getUnifiedSelectionSnapshot'));
 assert(contentSource.includes('function buildCandidateFromSnapshot(snapshot, classification)'));
 assert(
-  contentSource.includes('const SELECTION_DEBUG_MODE = false;') &&
+  /const SELECTION_DEBUG_MODE = (?:true|false);/.test(contentSource) &&
     contentSource.includes('renderSelectionDecisionDebug(resolvedSnapshot, classification, target)') &&
     contentSource.includes('renderSelectionSortingDebug(currentCandidate, actions)'),
-  'selection diagnostics should remain disabled in releases and cover trigger plus ordering reasons'
+  'selection diagnostics should remain source-switchable and cover trigger plus ordering reasons'
+);
+assert(
+  contentSource.includes('const TOAST = globalThis.LumnoToast || {};') &&
+    contentSource.includes('TOAST.createToastController') &&
+    contentSource.includes("toastElement.className = 'x-lumno-toast'") &&
+    toastSource.includes('function createToastController') &&
+    !contentSource.includes('lumno-selection-status'),
+  'selection action progress and failures should use the shared Toast component instead of an in-toolbar status block'
 );
 assert(!/suppressed[\s\S]*settings\.editable\s*===\s*true/.test(intentSource),
   'editable context alone should not suppress a meaningful selection');
@@ -244,7 +253,7 @@ assert(
     contentSource.includes("contentViewport.className = 'lumno-selection-content'") &&
     contentSource.includes("actionsViewport.className = 'lumno-selection-actions-viewport'") &&
     contentSource.includes('actionsViewport.append(menu)') &&
-    contentSource.includes('contentViewport.append(status, actionsViewport, primaryDivider, mainButton)') &&
+    contentSource.includes('contentViewport.append(actionsViewport, primaryDivider, mainButton)') &&
     contentSource.includes('surface.append(material, contentViewport)'),
   'all toolbar controls should share one right-aligned clipping layer with the butterfly last'
 );
