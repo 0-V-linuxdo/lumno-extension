@@ -7,7 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  const DEFAULT_GROUP_TITLE = 'AI \u67E5\u8BE2';
+  const DEFAULT_GROUP_TITLE = 'AI Search';
   const DEFAULT_GROUP_COLOR = 'blue';
 
   function getChromeApi(chromeApi) {

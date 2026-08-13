@@ -5,6 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8');
+const selectionTargetSource = fs.readFileSync('src/background/selection-target.js', 'utf8');
 const providerResolverSource = fs.readFileSync('src/background/selection-quick-action-provider.js', 'utf8');
 const contentSource = fs.readFileSync('src/content/selection-quick-actions.js', 'utf8');
 const intentSource = fs.readFileSync('src/shared/selection-intent.js', 'utf8');
@@ -103,8 +104,14 @@ assert(
 );
 assert(
   /Promise\.all\(\[[\s\S]*loadSelectionQuickActionsGroupEnabled\(\)[\s\S]*\]\)/.test(backgroundSource) &&
-    /SELECTION_TARGET\.openSelectionTarget\([\s\S]*groupEnabled[\s\S]*groupTitle:\s*SELECTION_TARGET\.DEFAULT_GROUP_TITLE[\s\S]*groupColor:\s*'blue'/.test(backgroundSource),
-  'selection targets should only use the optional AI 查询 group when the setting is enabled'
+    backgroundSource.includes('loadSelectionQuickActionGroupTitle(request.locale)') &&
+    /SELECTION_TARGET\.openSelectionTarget\([\s\S]*groupEnabled[\s\S]*groupTitle:\s*groupTitle\s*\|\|\s*SELECTION_TARGET\.DEFAULT_GROUP_TITLE[\s\S]*groupColor:\s*'blue'/.test(backgroundSource),
+  'selection targets should localize the optional AI group name when the setting is enabled'
+);
+assert(
+  selectionTargetSource.includes("const DEFAULT_GROUP_TITLE = 'AI Search';") &&
+    !selectionTargetSource.includes('\\u67E5\\u8BE2'),
+  'the reusable selection-target helper should not fall back to a Chinese-only group name'
 );
 assert(
   /async function openAndSubmitSelectionPrompt\([\s\S]*?targetInfo\.mode === 'reused'[\s\S]*?reuseExisting:\s*false[\s\S]*?submitSelectionPromptInTab/.test(backgroundSource) &&
@@ -112,7 +119,7 @@ assert(
   'a failed attempt to submit into a reusable AI page should fall back to one fresh grouped tab'
 );
 assert(
-  /active:\s*true/.test(fs.readFileSync('src/background/selection-target.js', 'utf8')),
+  /active:\s*true/.test(selectionTargetSource),
   'default selection target tabs should activate immediately'
 );
 
@@ -127,7 +134,13 @@ assert(contentSource.includes("sourceKind: 'text-control'"),
 assert(contentSource.includes('element.selectionStart'));
 assert(contentSource.includes('element.selectionEnd'));
 assert(contentSource.includes('function getUnifiedSelectionSnapshot'));
-assert(contentSource.includes('function buildCandidateFromSnapshot(snapshot)'));
+assert(contentSource.includes('function buildCandidateFromSnapshot(snapshot, classification)'));
+assert(
+  contentSource.includes('const SELECTION_DEBUG_MODE = false;') &&
+    contentSource.includes('renderSelectionDecisionDebug(resolvedSnapshot, classification, target)') &&
+    contentSource.includes('renderSelectionSortingDebug(currentCandidate, actions)'),
+  'selection diagnostics should remain disabled in releases and cover trigger plus ordering reasons'
+);
 assert(!/suppressed[\s\S]*settings\.editable\s*===\s*true/.test(intentSource),
   'editable context alone should not suppress a meaningful selection');
 assert(contentSource.includes('input[type="password"]'));
@@ -373,6 +386,7 @@ localeNames.forEach((locale) => {
     'settings_selection_quick_actions_provider_title',
     'settings_selection_quick_actions_group_title',
     'settings_selection_quick_actions_group_desc',
+    'selection_quick_actions_group_name',
     'selection_quick_action_ask',
     'selection_quick_action_translate',
     'selection_quick_action_explain',
@@ -399,6 +413,24 @@ assert.strictEqual(
   zhCnMessages.settings_selection_quick_actions_group_desc.message,
   '所有 AI 网页皆归入「AI 查询」标签组'
 );
+
+const expectedGroupCopy = {
+  en: ['AI Search', 'Collect all AI pages in the “AI Search” tab group'],
+  ja: ['AI 検索', 'すべての AI ページを「AI 検索」タブグループにまとめます'],
+  zh_CN: ['AI 查询', '所有 AI 网页皆归入「AI 查询」标签组'],
+  zh_TW: ['AI 查詢', '所有 AI 網頁皆歸入「AI 查詢」分頁群組']
+};
+localeNames.forEach((locale) => {
+  const messages = JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'));
+  assert.deepStrictEqual(
+    [
+      messages.selection_quick_actions_group_name.message,
+      messages.settings_selection_quick_actions_group_desc.message
+    ],
+    expectedGroupCopy[locale],
+    `${locale} should use one localized AI group name in both runtime and settings copy`
+  );
+});
 
 const expectedTaskLabels = {
   en: ['Answer', 'Translate', 'Explain', 'Summarize', 'Research', 'Calculate'],

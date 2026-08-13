@@ -68,18 +68,19 @@ function createChromeStub(options) {
   selectionTarget.openSelectionTarget(chromeApi, {
     url: 'https://chatgpt.com/',
     sourceTab: { id: 12, windowId: 9, groupId: 77 },
-    groupEnabled: true
+    groupEnabled: true,
+    groupTitle: 'AI 検索'
   }, (result) => {
     response = result;
   });
   assert.deepStrictEqual(
     groupedTabs[0],
     { tabIds: 100, groupId: 33 },
-    'background AI targets should always join the dedicated AI 查询 group rather than the source page group'
+    'background AI targets should always join the localized AI group rather than the source page group'
   );
   assert.deepStrictEqual(updatedGroups[0], {
     groupId: 33,
-    title: 'AI 查询',
+    title: 'AI 検索',
     color: 'blue',
     collapsed: true
   });
@@ -122,7 +123,7 @@ function createChromeStub(options) {
   assert.strictEqual(createdTabs.length, 0,
     'an already-open page for the same AI provider should be reused instead of duplicated');
   assert.deepStrictEqual(groupedTabs[0], { tabIds: 64, groupId: 33 },
-    'a reused AI page should be collected into the dedicated AI 查询 group');
+    'a reused AI page should be collected into the dedicated AI group');
   assert.strictEqual(response.mode, 'reused');
   assert.strictEqual(response.tab.id, 64);
 }
@@ -156,7 +157,7 @@ function createChromeStub(options) {
     openerTabId: 7
   }, 'the page that triggered the selection action must not be reused as its own target');
   assert.deepStrictEqual(groupedTabs[0], { tabIds: 100, groupId: 33 },
-    'a fresh target should join the dedicated AI 查询 group');
+    'a fresh target should join the dedicated AI group');
   assert.strictEqual(response.mode, 'group');
   assert.strictEqual(response.tab.id, 100);
 }
@@ -180,7 +181,7 @@ function createChromeStub(options) {
   assert.deepStrictEqual(groupedTabs[0], { tabIds: 100, groupId: 33 });
   assert.deepStrictEqual(updatedGroups[0], {
     groupId: 33,
-    title: 'AI 查询',
+    title: 'AI Search',
     color: 'blue',
     collapsed: true
   });

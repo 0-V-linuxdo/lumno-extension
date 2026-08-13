@@ -5208,6 +5208,27 @@ function loadSelectionQuickActionsGroupEnabled() {
 
 let selectionTargetOpenQueue = Promise.resolve();
 let selectionQuickActionFallbackProvidersPromise = null;
+const selectionQuickActionGroupTitlePromises = new Map();
+
+function loadSelectionQuickActionGroupTitle(locale) {
+  const normalizedLocale = normalizeLocaleForMessages(locale);
+  if (selectionQuickActionGroupTitlePromises.has(normalizedLocale)) {
+    return selectionQuickActionGroupTitlePromises.get(normalizedLocale);
+  }
+  const fallbackTitle = String(SELECTION_TARGET.DEFAULT_GROUP_TITLE || 'AI Search');
+  const localePath = chrome.runtime.getURL(`_locales/${normalizedLocale}/messages.json`);
+  const titlePromise = fetch(localePath, { cache: 'no-store' })
+    .then((response) => response.json())
+    .then((messages) => {
+      const title = messages && messages.selection_quick_actions_group_name
+        ? String(messages.selection_quick_actions_group_name.message || '').trim()
+        : '';
+      return title || fallbackTitle;
+    })
+    .catch(() => fallbackTitle);
+  selectionQuickActionGroupTitlePromises.set(normalizedLocale, titlePromise);
+  return titlePromise;
+}
 
 function queueSelectionTargetOpen(options) {
   const task = selectionTargetOpenQueue
@@ -5281,12 +5302,19 @@ function submitSelectionPromptInTab(provider, prompt, entryUrl, tab, targetInfo)
     }));
 }
 
-async function openAndSubmitSelectionPrompt(provider, prompt, entryUrl, sourceTab, groupEnabled) {
+async function openAndSubmitSelectionPrompt(
+  provider,
+  prompt,
+  entryUrl,
+  sourceTab,
+  groupEnabled,
+  groupTitle
+) {
   const targetOptions = {
     url: entryUrl,
     sourceTab,
     groupEnabled,
-    groupTitle: SELECTION_TARGET.DEFAULT_GROUP_TITLE,
+    groupTitle: groupTitle || SELECTION_TARGET.DEFAULT_GROUP_TITLE,
     groupColor: 'blue',
     splitViewAdapter: globalThis.LumnoChromeSplitViewAdapter || null
   };
@@ -5317,11 +5345,12 @@ async function openAndSubmitSelectionPrompt(provider, prompt, entryUrl, sourceTa
 }
 
 async function runSelectionQuickAction(request, sender) {
-  const [enabled, preferredProviderKey, groupEnabled, bundledProviders] = await Promise.all([
+  const [enabled, preferredProviderKey, groupEnabled, bundledProviders, groupTitle] = await Promise.all([
     loadSelectionQuickActionsEnabled(),
     loadSelectionQuickActionsProvider(),
     loadSelectionQuickActionsGroupEnabled(),
-    loadSelectionQuickActionFallbackProviders()
+    loadSelectionQuickActionFallbackProviders(),
+    loadSelectionQuickActionGroupTitle(request.locale)
   ]);
   if (!enabled) {
     return { ok: false, reason: 'selection-quick-actions-disabled' };
@@ -5361,7 +5390,14 @@ async function runSelectionQuickAction(request, sender) {
     return { ok: false, reason: 'selection-provider-url-unavailable' };
   }
   const sourceTab = sender && sender.tab ? sender.tab : null;
-  return openAndSubmitSelectionPrompt(provider, prompt, entryUrl, sourceTab, groupEnabled);
+  return openAndSubmitSelectionPrompt(
+    provider,
+    prompt,
+    entryUrl,
+    sourceTab,
+    groupEnabled,
+    groupTitle
+  );
 }
 
 function runInteractiveSiteSearchProvider(provider, query, sender, disposition) {
