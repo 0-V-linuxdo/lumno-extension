@@ -266,14 +266,26 @@ assert(
   'Ask AI should use the simpler single-sparkle Remix icon'
 );
 assert(
-  /\.lumno-selection-surface\s*\{[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*13px/.test(contentSource) &&
-    /\.lumno-selection-material\s*\{[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.96\)\)/.test(contentSource),
+  /\.lumno-selection-surface\s*\{[\s\S]*?--lumno-selection-surface-radius:\s*13px[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*var\(--lumno-selection-surface-radius\)/.test(contentSource) &&
+    /\.lumno-selection-material\s*\{[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.92\)\)/.test(contentSource),
   'the expanded toolbar should use the approved compact surface geometry'
 );
 assert(
   /\.lumno-selection-material\s*\{[\s\S]*?border:\s*1px solid light-dark\(rgba\(15, 23, 42, 0\.12\), rgba\(255, 255, 255, 0\.13\)\)/.test(contentSource) &&
     /\.lumno-selection-surface\s*\{[\s\S]*?color:\s*light-dark\(#18181b, #e7e8eb\)/.test(contentSource),
   'the expanded toolbar should tune border and text contrast for each theme'
+);
+assert(
+  /\.lumno-selection-material\s*\{[\s\S]*?inset 0 0 0 1px light-dark\(rgba\(255, 255, 255, 0\.3\), transparent\)/.test(contentSource),
+  'the expanded toolbar should omit its inner highlight in dark mode'
+);
+assert(
+  /\.lumno-selection-material::before\s*\{[\s\S]*?border-radius:\s*calc\(var\(--lumno-selection-surface-radius\) - 1px\)/.test(contentSource),
+  'the inner material curve should stay one pixel inside the outer border curve'
+);
+assert(
+  /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before,[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
+  'the inner material and border should use the same continuous corner shape when supported'
 );
 assert(
   /\.lumno-selection-material::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(contentSource),

@@ -865,14 +865,26 @@ function wait(ms) {
   assert(selectionStyles.includes('width: 12px'), 'the compact trigger should use the 12px Lumno mark');
   assert(selectionStyles.includes('inset: -5px'), 'the smaller visual should retain an expanded pointer target');
   assert(
-    /\.lumno-selection-surface\s*\{[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*13px/.test(selectionStyles) &&
-      /\.lumno-selection-material\s*\{[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.96\)\)/.test(selectionStyles),
+    /\.lumno-selection-surface\s*\{[\s\S]*?--lumno-selection-surface-radius:\s*13px[\s\S]*?height:\s*38px[\s\S]*?padding:\s*3px[\s\S]*?border-radius:\s*var\(--lumno-selection-surface-radius\)/.test(selectionStyles) &&
+      /\.lumno-selection-material\s*\{[\s\S]*?background:\s*light-dark\(rgba\(244, 245, 247, 0\.94\), rgba\(26, 27, 31, 0\.92\)\)/.test(selectionStyles),
     'the expanded toolbar should use the approved compact 38px surface geometry'
   );
   assert(
     /\.lumno-selection-material\s*\{[\s\S]*?border:\s*1px solid light-dark\(rgba\(15, 23, 42, 0\.12\), rgba\(255, 255, 255, 0\.13\)\)/.test(selectionStyles) &&
       /\.lumno-selection-surface\s*\{[\s\S]*?color:\s*light-dark\(#18181b, #e7e8eb\)/.test(selectionStyles),
     'light and dark toolbar materials should use independently tuned borders and foregrounds'
+  );
+  assert(
+    /\.lumno-selection-material\s*\{[\s\S]*?inset 0 0 0 1px light-dark\(rgba\(255, 255, 255, 0\.3\), transparent\)/.test(selectionStyles),
+    'the dark toolbar material should remove the inner highlight while preserving it in light mode'
+  );
+  assert(
+    /\.lumno-selection-material::before\s*\{[\s\S]*?border-radius:\s*calc\(var\(--lumno-selection-surface-radius\) - 1px\)/.test(selectionStyles),
+    'the inner material radius should follow the one-pixel inset inside the outer border'
+  );
+  assert(
+    /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before,[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),
+    'the inner material and its border should share the same continuous corner curve'
   );
   assert(
     /\.lumno-selection-material::before\s*\{[\s\S]*?radial-gradient\([\s\S]*?transparent 72%[\s\S]*?radial-gradient\([\s\S]*?transparent 78%/.test(selectionStyles),

@@ -1495,6 +1495,7 @@
         display: none !important;
       }
       .lumno-selection-surface {
+        --lumno-selection-surface-radius: 13px;
         position: relative;
         display: inline-flex;
         align-items: center;
@@ -1503,7 +1504,7 @@
         height: 38px;
         padding: 3px;
         border: 1px solid transparent;
-        border-radius: 13px;
+        border-radius: var(--lumno-selection-surface-radius);
         background: transparent;
         color: light-dark(#18181b, #e7e8eb);
         -webkit-backdrop-filter: none;
@@ -1525,11 +1526,11 @@
         overflow: hidden;
         border: 1px solid light-dark(rgba(15, 23, 42, 0.12), rgba(255, 255, 255, 0.13));
         border-radius: inherit;
-        background: light-dark(rgba(244, 245, 247, 0.94), rgba(26, 27, 31, 0.96));
+        background: light-dark(rgba(244, 245, 247, 0.94), rgba(26, 27, 31, 0.92));
         -webkit-backdrop-filter: blur(14px) saturate(130%);
         backdrop-filter: blur(14px) saturate(130%);
         box-shadow:
-          inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06)),
+          inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.3), transparent),
           0 8px 24px light-dark(rgba(15, 23, 42, 0.14), rgba(0, 0, 0, 0.38)),
           0 2px 6px light-dark(rgba(15, 23, 42, 0.08), rgba(0, 0, 0, 0.24));
         pointer-events: none;
@@ -1538,7 +1539,7 @@
         content: "";
         position: absolute;
         inset: 0;
-        border-radius: inherit;
+        border-radius: calc(var(--lumno-selection-surface-radius) - 1px);
         background:
           radial-gradient(125% 165% at 50% -38%, light-dark(rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.16)) 0%, transparent 72%),
           radial-gradient(115% 145% at 50% 138%, light-dark(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08)) 0%, transparent 78%);
@@ -1775,6 +1776,7 @@
       @supports (corner-shape: superellipse(1.25)) {
         .lumno-selection-surface,
         .lumno-selection-material,
+        .lumno-selection-material::before,
         button,
         .lumno-selection-toolbar button:hover,
         .lumno-selection-toolbar button:focus-visible,
