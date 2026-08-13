@@ -3101,17 +3101,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     const getLuminance = FAVICON_THEME.getLuminance;
     const buildTheme = FAVICON_THEME.buildTheme;
 
-    function getHighlightColors(theme) {
-      const resolvedTheme = getThemeForMode(theme);
-      if (!resolvedTheme || !resolvedTheme._xIsBrand) {
-        return {
-          bg: 'var(--x-ov-hover-bg, #F3F4F6)',
-          border: 'transparent'
-        };
-      }
+    function getHighlightColors() {
       return {
-        bg: resolvedTheme.highlightBg,
-        border: resolvedTheme.highlightBorder
+        bg: 'var(--x-ov-hover-bg, #F3F4F6)',
+        border: 'transparent'
       };
     }
 
@@ -4796,8 +4789,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         visitButtonAction: 'openNewTab',
         alwaysHideVisitButton: false,
         hasActionTags: false,
-        hasSwitchAction: false,
-        hideSourceTags: false
+        hasSwitchAction: false
       };
     }
 
@@ -7812,6 +7804,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         getBrowserPageFaviconUrl: getPageFaviconCandidateUrl,
         getPageFaviconRenderCandidates: getReactOverlayFaviconCandidates,
         getHostFromUrl,
+        getUrlDisplay,
         getThemeHostForSuggestion: (suggestion) => (
           suggestion && suggestion.url ? getHostFromUrl(suggestion.url) : ''
         ),
@@ -8277,9 +8270,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ? null
         : {
           type: 'newtab',
-          title: formatMessage('search_query', '搜索 "{query}"', {
-            query: query
-          }),
+          title: query,
           url: buildDefaultSearchUrlForOverlay(query),
           favicon: getDefaultSearchEngineFaviconUrlForOverlay(),
           searchQuery: query,

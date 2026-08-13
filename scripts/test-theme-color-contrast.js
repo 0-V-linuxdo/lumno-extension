@@ -172,7 +172,7 @@ assert.doesNotMatch(
 );
 assert.match(
   newtabHtml,
-  /\.x-nt-suggestion-action-button:focus-visible,[\s\S]*?\.x-nt-suggestion-utility-button:focus-visible[\s\S]*?outline:\s*2px solid currentColor;/,
+  /\.x-nt-suggestion-utility-button:focus-visible,[\s\S]*?\.x-nt-tab-switch-button:focus-visible[\s\S]*?outline:\s*2px solid currentColor;/,
   'New Tab should preserve a strong keyboard focus indicator when passive borders are softened'
 );
 assert.match(

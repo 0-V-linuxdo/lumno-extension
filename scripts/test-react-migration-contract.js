@@ -314,12 +314,6 @@ assert(
   'the injected Overlay IIFE should install React shell, suggestions, and search-input APIs'
 );
 assert(
-  /\.x-ov-suggestion-mark\s*\{[^}]*background:\s*var\(--x-ext-mark-bg,\s*#CFE8FF\)[^}]*color:\s*var\(--x-ext-mark-text,\s*#1E3A8A\)/s.test(
-    overlaySuggestionsCss
-  ),
-  'the Overlay query mark should retain its themed background and text colors'
-);
-assert(
   overlaySource.includes(
     'overlay._lumnoSuggestionsView = overlaySuggestionsView'
   ) &&

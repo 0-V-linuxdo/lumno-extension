@@ -5146,17 +5146,10 @@
   const siteThemeRequestPending = new Map();
   const themeFaviconCandidateRequestPending = new Map();
 
-  function getHighlightColors(theme) {
-    const resolvedTheme = getThemeForMode(theme);
-    if (!resolvedTheme || !resolvedTheme._xIsBrand) {
-      return {
-        bg: 'var(--x-nt-hover-bg, #F3F4F6)',
-        border: 'transparent'
-      };
-    }
+  function getHighlightColors() {
     return {
-      bg: resolvedTheme.highlightBg,
-      border: resolvedTheme.highlightBorder
+      bg: 'var(--x-nt-hover-bg, #F3F4F6)',
+      border: 'transparent'
     };
   }
 
@@ -6028,12 +6021,10 @@
     target.style.setProperty('--x-ext-key-text', resolvedTheme.keyText);
     target.style.setProperty('--x-ext-key-border', resolvedTheme.keyBorder);
     target.style.setProperty('--x-ext-icon-color', resolvedTheme.accent);
-    const highlight = getHighlightColors(theme);
-    const hover = resolvedTheme._xIsBrand
-      ? getHoverColors(theme)
-      : {
-        bg: 'var(--x-nt-hover-bg, #F3F4F6)',
-        border: 'transparent'
+    const highlight = getHighlightColors();
+    const hover = {
+      bg: 'var(--x-nt-hover-bg, #F3F4F6)',
+      border: 'transparent'
     };
     target.style.setProperty('--x-nt-suggestion-active-bg', highlight.bg);
     target.style.setProperty('--x-nt-suggestion-hover-bg', hover.bg);
@@ -13900,6 +13891,7 @@
     shouldBlockFaviconForHost,
     isLocalNetworkHost,
     getHostFromUrl,
+    getUrlDisplay,
     getThemeHostForSuggestion,
     getImmediateThemeForSuggestion,
     getThemeForSuggestion,
@@ -14246,9 +14238,7 @@
         ? null
         : {
           type: 'newtab',
-          title: formatMessage('search_query', '搜索 "{query}"', {
-            query: query
-          }),
+          title: query,
           url: buildDefaultSearchUrl(query),
           favicon: getDefaultSearchEngineFaviconUrl(),
           searchQuery: query,

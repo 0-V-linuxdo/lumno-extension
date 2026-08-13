@@ -3096,7 +3096,6 @@
         #_x_extension_newtab_suggestions_outline_2026_unique_,
         #_x_extension_newtab_suggestions_container_2024_unique_,
         .x-nt-suggestion-item,
-        .x-nt-suggestion-visit-button,
         .x-nt-suggestion-number-shortcut {
           corner-shape: superellipse(1.25);
         }
@@ -5626,6 +5625,8 @@
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 100%;
+        flex: 0 1 auto;
+        min-width: 0;
         box-sizing: border-box;
         margin: 0;
         padding: 0;
@@ -5690,14 +5691,6 @@
         font-size: 13px;
         text-align: center;
       }
-      .x-nt-suggestion-mark {
-        background: var(--x-ext-mark-bg, #CFE8FF);
-        color: var(--x-ext-mark-text, #1E3A8A);
-        padding: 0 1px;
-        border-radius: 2px;
-        line-height: inherit;
-        font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      }
       .x-nt-suggestion-reason {
         all: unset;
         color: var(--x-nt-subtext, #6B7280);
@@ -5735,7 +5728,9 @@
         font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         text-decoration: none;
         display: inline-block;
-        max-width: 60%;
+        max-width: 40%;
+        flex: 0 4 auto;
+        min-width: 0;
         line-height: 1.4;
         white-space: nowrap;
         overflow: hidden;
@@ -5883,8 +5878,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .x-nt-suggestion-right[data-action-column="true"] .x-nt-suggestion-action-tags[data-visible="true"],
-      .x-nt-suggestion-right[data-action-column="true"] .x-nt-suggestion-action-button[data-visible="true"] {
+      .x-nt-suggestion-right[data-action-column="true"] .x-nt-suggestion-action-tags[data-visible="true"] {
         flex: 0 1 auto;
         min-width: 0;
         max-width: 100%;
@@ -5892,7 +5886,6 @@
       .x-nt-suggestion-right[data-action-column="true"] .x-nt-suggestion-action-tags[data-visible="true"] .x-nt-suggestion-action-tag {
         max-width: 100%;
       }
-      .x-nt-suggestion-right[data-action-column="true"] .x-nt-suggestion-action-button,
       .x-nt-suggestion-right[data-action-column="true"] .x-nt-tab-switch-button {
         justify-content: flex-end;
       }
@@ -5913,85 +5906,6 @@
         font-weight: 500;
         line-height: 1;
         box-sizing: border-box;
-      }
-      .x-nt-suggestion-action-button {
-        all: unset;
-        background: var(--x-nt-suggestion-action-button-bg, transparent);
-        color: var(--x-nt-suggestion-action-button-text, var(--x-nt-subtext, #9CA3AF));
-        font-size: 12px;
-        font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        cursor: pointer;
-        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 160ms ease;
-        box-sizing: border-box;
-        margin: 0;
-        line-height: 1;
-        text-decoration: none;
-        list-style: none;
-        outline: none;
-        display: none;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 4px;
-        vertical-align: baseline;
-        max-width: 100%;
-        min-width: 0;
-        white-space: nowrap;
-      }
-      .x-nt-suggestion-action-button[data-visible="true"] {
-        display: inline-flex;
-      }
-      .x-nt-suggestion-visit-button {
-        border: 1px solid var(--x-nt-suggestion-action-button-border, transparent);
-        border-radius: 16px;
-        height: var(--x-nt-suggestion-action-height, 26px);
-        padding: 0 var(--x-nt-suggestion-action-icon-end, 7px) 0 var(--x-nt-suggestion-action-button-start, 10px);
-      }
-      .x-nt-suggestion-action-button[data-visible="true"]:hover {
-        transform: none;
-      }
-      .x-nt-suggestion-action-button__label,
-      .x-nt-suggestion-action-button__icon {
-        all: unset;
-        display: inline-flex;
-        align-items: center;
-        line-height: 1;
-      }
-      .x-nt-suggestion-action-button__label {
-        line-height: 1.35;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .x-nt-suggestion-action-button__icon {
-        flex: 0 0 auto;
-      }
-      .x-nt-suggestion-action-button .ri-icon {
-        flex-shrink: 0;
-        pointer-events: none;
-      }
-      .x-nt-suggestion-tag {
-        all: unset;
-        background: var(--x-nt-suggestion-tag-bg, var(--x-nt-tag-bg, #F3F4F6));
-        color: var(--x-nt-suggestion-tag-text, var(--x-nt-tag-text, #6B7280));
-        font-size: 10px;
-        font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        padding: 4px 6px;
-        border-radius: 8px;
-        box-sizing: border-box;
-        line-height: 1.2;
-        text-decoration: none;
-        list-style: none;
-        outline: none;
-        border: 1px solid var(--x-nt-suggestion-tag-border, transparent);
-        display: inline-flex;
-        align-items: center;
-        vertical-align: middle;
-        flex-shrink: 0;
-      }
-      .x-nt-suggestion-tag[data-tag-type="bookmark"] {
-        background: var(--x-nt-suggestion-tag-bg, var(--x-nt-bookmark-tag-bg, #FEF3C7));
-        color: var(--x-nt-suggestion-tag-text, var(--x-nt-bookmark-tag-text, #D97706));
       }
       .x-nt-suggestion-utility-slot {
         all: unset;
@@ -6073,8 +5987,8 @@
       .x-nt-suggestion-utility-button[data-hover="true"] .ri-icon {
         transform: scale(1.06);
       }
-      .x-nt-suggestion-action-button:focus-visible,
-      .x-nt-suggestion-utility-button:focus-visible {
+      .x-nt-suggestion-utility-button:focus-visible,
+      .x-nt-tab-switch-button:focus-visible {
         outline: 2px solid currentColor;
         outline-offset: 2px;
       }
@@ -6107,6 +6021,9 @@
       }
       .x-nt-suggestion-item[data-row-state="active"] .x-nt-tab-switch-button {
         color: var(--x-nt-text, #111827);
+      }
+      .x-nt-tab-switch-button:hover {
+        transform: none;
       }
       .x-nt-tab-rank-debug {
         all: unset;

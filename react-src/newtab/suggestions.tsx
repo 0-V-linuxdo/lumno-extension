@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject
@@ -136,10 +135,6 @@ export interface SuggestionElement extends HTMLDivElement {
   _xTitle?: HTMLSpanElement | null;
   _xCommandLabel?: HTMLSpanElement | null;
   _xSwitchButton?: HTMLButtonElement | null;
-  _xHistoryTag?: SuggestionActionTagElement | null;
-  _xBookmarkTag?: SuggestionActionTagElement | null;
-  _xTopSiteTag?: SuggestionActionTagElement | null;
-  _xOpenTabTag?: SuggestionActionTagElement | null;
   _xTagContainer?: HTMLDivElement | null;
   _xActionModel?: SuggestionActionModelResult;
   _xHasActionTags?: boolean;
@@ -149,7 +144,6 @@ export interface SuggestionElement extends HTMLDivElement {
   _xActionTags?: SuggestionActionTagElement[];
   _xSuggestion?: Suggestion;
   _xAlwaysHideVisitButton?: boolean;
-  _xHasSwitchAction?: boolean;
   _xHistoryDeleteButton?: HTMLButtonElement | null;
   _xUtilityActions?: SuggestionUtilityActionElements[];
   _xIsHovering?: boolean;
@@ -190,6 +184,7 @@ export interface SuggestionsViewOptions {
   isLocalNetworkHost?: (host: string) => boolean;
   getChromeFaviconUrl?: (url: string) => string;
   getHostFromUrl?: (url: string) => string;
+  getUrlDisplay?: (url: string) => string;
   getThemeHostForSuggestion?: (suggestion: Suggestion) => string;
   getImmediateThemeForSuggestion?: (
     suggestion: Suggestion
@@ -340,6 +335,7 @@ interface NormalizedOptions {
     SuggestionsViewOptions['getChromeFaviconUrl']
   >;
   getHostFromUrl: NonNullable<SuggestionsViewOptions['getHostFromUrl']>;
+  getUrlDisplay: NonNullable<SuggestionsViewOptions['getUrlDisplay']>;
   getThemeHostForSuggestion: NonNullable<
     SuggestionsViewOptions['getThemeHostForSuggestion']
   >;
@@ -479,12 +475,9 @@ function createQueryStore(): QueryStore {
 function noop(): void {}
 
 const OVERLAY_CLASS_OVERRIDES: Record<string, string> = {
-  'x-nt-suggestion-tag': 'x-ov-suggestion-source-tag',
   'x-nt-suggestion-action-tag': 'x-ov-action-tag',
   'x-nt-suggestion-action-tag__label': 'x-ov-action-tag__label',
   'x-nt-suggestion-action-tag__key': 'x-ov-action-tag__key',
-  'x-nt-suggestion-action-button__label': 'x-ov-inline-label',
-  'x-nt-suggestion-action-button__icon': 'x-ov-inline-icon',
   'x-nt-tab-switch-button':
     'x-ov-suggestion-action-button x-ov-suggestion-switch-button'
 };
@@ -492,9 +485,6 @@ const OVERLAY_CLASS_OVERRIDES: Record<string, string> = {
 const OVERLAY_VARIABLE_OVERRIDES: Record<string, string> = {
   '--x-nt-suggestion-active-bg': '--x-ov-suggestion-row-bg',
   '--x-nt-suggestion-hover-bg': '--x-ov-suggestion-row-bg',
-  '--x-nt-suggestion-tag-bg': '--x-ov-suggestion-source-tag-bg',
-  '--x-nt-suggestion-tag-text': '--x-ov-suggestion-source-tag-text',
-  '--x-nt-suggestion-tag-border': '--x-ov-suggestion-source-tag-border',
   '--x-nt-suggestion-icon-color': 'color'
 };
 
@@ -626,6 +616,7 @@ function normalizeOptions(
       raw.isLocalNetworkHost || shouldBlockFaviconForHost,
     getChromeFaviconUrl,
     getHostFromUrl: raw.getHostFromUrl || (() => ''),
+    getUrlDisplay: raw.getUrlDisplay || ((url) => String(url || '')),
     getThemeHostForSuggestion:
       raw.getThemeHostForSuggestion || (() => ''),
     getImmediateThemeForSuggestion:
@@ -706,84 +697,6 @@ function normalizeOptions(
     enterAction: String(raw.enterAction || 'go'),
     autoHighlightFirstTab: Boolean(raw.autoHighlightFirstTab)
   };
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getHighlightNeedles(query: string): string[] {
-  const fullQuery = String(query || '').trim();
-  if (!fullQuery) {
-    return [];
-  }
-  const needles = [
-    fullQuery,
-    ...fullQuery.split(/[^a-z0-9\u4e00-\u9fff]+/i)
-  ];
-  const seen = new Set<string>();
-  return needles
-    .map((needle) => needle.trim())
-    .filter((needle) => {
-      const key = needle.toLowerCase();
-      if (!key || seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    })
-    .sort((left, right) => right.length - left.length);
-}
-
-function getHighlightedParts(
-  options: NormalizedOptions,
-  text: unknown,
-  query: string
-): Array<{ text: string; highlighted: boolean }> {
-  const safeText = options.sanitizeDisplayText(text);
-  const needles = getHighlightNeedles(query);
-  if (needles.length === 0) {
-    return [{ text: safeText, highlighted: false }];
-  }
-  const needleSet = new Set(needles.map((needle) => needle.toLowerCase()));
-  const parts = safeText.split(
-    new RegExp(`(${needles.map(escapeRegExp).join('|')})`, 'gi')
-  );
-  if (parts.length === 1) {
-    return [{ text: safeText, highlighted: false }];
-  }
-  return parts.filter(Boolean).map((part) => ({
-    text: part,
-    highlighted: needleSet.has(part.toLowerCase())
-  }));
-}
-
-function HighlightedText({
-  options,
-  text,
-  queryStore
-}: {
-  options: NormalizedOptions;
-  text: unknown;
-  queryStore: QueryStore;
-}) {
-  const query = useSyncExternalStore(
-    queryStore.subscribe,
-    queryStore.getSnapshot,
-    queryStore.getSnapshot
-  );
-  return getHighlightedParts(options, text, query).map((part, index) =>
-    part.highlighted ? (
-      <mark
-        key={`highlight:${index}`}
-        className={surfaceClass(options, 'x-nt-suggestion-mark')}
-      >
-        {part.text}
-      </mark>
-    ) : (
-      part.text
-    )
-  );
 }
 
 function isOverflowing(target: HTMLElement): boolean {
@@ -991,47 +904,6 @@ function setPalette(
   );
 }
 
-function applyTagStyle(
-  options: NormalizedOptions,
-  tag: SuggestionActionTagElement | null | undefined,
-  theme: ModeTheme,
-  active: boolean
-): void {
-  if (!tag) {
-    return;
-  }
-  setSurfaceStyle(
-    options,
-    tag,
-    '--x-nt-suggestion-tag-bg',
-    (
-      active
-        ? theme.tagBg || ''
-        : tag._xDefaultBg || 'var(--x-nt-tag-bg, #F3F4F6)'
-    )
-  );
-  setSurfaceStyle(
-    options,
-    tag,
-    '--x-nt-suggestion-tag-text',
-    (
-      active
-        ? theme.tagText || ''
-        : tag._xDefaultText || 'var(--x-nt-tag-text, #6B7280)'
-    )
-  );
-  setSurfaceStyle(
-    options,
-    tag,
-    '--x-nt-suggestion-tag-border',
-    (
-      active
-        ? theme.tagBorder || ''
-        : tag._xDefaultBorder || 'transparent'
-    )
-  );
-}
-
 function applySearchActionStyles(
   runtime: SuggestionsRuntime,
   item: SuggestionElement,
@@ -1080,25 +952,6 @@ function applySearchActionStyles(
       setPalette(options, item._xVisitButton);
     }
   }
-  applyTagStyle(options, item._xHistoryTag, theme, themed);
-  applyTagStyle(options, item._xBookmarkTag, theme, themed);
-  applyTagStyle(options, item._xTopSiteTag, theme, themed);
-  applyTagStyle(options, item._xOpenTabTag, theme, themed);
-  const showSourceTags = !item._xHasSwitchAction;
-  [
-    item._xHistoryTag,
-    item._xBookmarkTag,
-    item._xTopSiteTag
-  ].forEach((tag) => {
-    tag?.setAttribute(
-      'data-visible',
-      showSourceTags ? 'true' : 'false'
-    );
-  });
-  item._xOpenTabTag?.setAttribute(
-    'data-visible',
-    item._xHasSwitchAction ? 'true' : 'false'
-  );
   item._xTagContainer?.setAttribute(
     'data-visible',
     active && item._xHasActionTags ? 'true' : 'false'
@@ -1160,9 +1013,6 @@ function updateSelectionForRuntime(
     const themed = highlighted || (
       hovering && Boolean(theme?._xIsBrand)
     );
-    const hoverColors = hovering && theme?._xIsBrand
-      ? options.getHoverColors(theme)
-      : null;
     if (highlighted) {
       item.setAttribute('data-row-state', 'active');
       if (options.surface === 'overlay') {
@@ -1182,7 +1032,7 @@ function updateSelectionForRuntime(
           item,
           '--x-nt-suggestion-active-bg',
           hovering
-            ? hoverColors?.bg || 'var(--x-ov-hover-bg, #F3F4F6)'
+            ? 'var(--x-ov-hover-bg, #F3F4F6)'
             : 'transparent'
         );
       } else if (hovering) {
@@ -1190,7 +1040,7 @@ function updateSelectionForRuntime(
           options,
           item,
           '--x-nt-suggestion-hover-bg',
-          hoverColors?.bg || 'var(--x-nt-hover-bg, #F3F4F6)'
+          'var(--x-nt-hover-bg, #F3F4F6)'
         );
       } else {
         setSurfaceStyle(
@@ -1233,15 +1083,6 @@ function updateSelectionForRuntime(
         );
       }
     } else {
-      if (selected && theme?._xIsBrand) {
-        const hover = options.getHoverColors(theme);
-        setSurfaceStyle(
-          options,
-          item,
-          '--x-nt-suggestion-active-bg',
-          hover.bg || ''
-        );
-      }
       if (options.surface === 'overlay') {
         const active = highlighted;
         item._xTagContainer?.setAttribute(
@@ -1763,10 +1604,6 @@ function SearchSuggestionRowComponent({
   const iconSlotRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLSpanElement>(null);
   const commandRef = useRef<HTMLSpanElement>(null);
-  const historyTagRef = useRef<SuggestionActionTagElement>(null);
-  const bookmarkTagRef = useRef<SuggestionActionTagElement>(null);
-  const topSiteTagRef = useRef<SuggestionActionTagElement>(null);
-  const openTabTagRef = useRef<SuggestionActionTagElement>(null);
   const actionTagsRef = useRef<HTMLDivElement>(null);
   const visitButtonRef = useRef<HTMLButtonElement>(null);
   const visitLabelRef = useRef<HTMLSpanElement>(null);
@@ -1889,66 +1726,9 @@ function SearchSuggestionRowComponent({
       ? commandRef.current
       : titleRef.current;
     item._xCommandLabel = command ? commandRef.current : null;
-    item._xHistoryTag = historyTagRef.current;
-    item._xBookmarkTag = bookmarkTagRef.current;
-    item._xTopSiteTag = topSiteTagRef.current;
-    item._xOpenTabTag = openTabTagRef.current;
-    if (item._xHistoryTag) {
-      item._xHistoryTag._xDefaultBg =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-tag-bg, #F3F4F6)'
-        );
-      item._xHistoryTag._xDefaultText =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-tag-text, #6B7280)'
-        );
-      item._xHistoryTag._xDefaultBorder = 'transparent';
-    }
-    if (item._xTopSiteTag) {
-      item._xTopSiteTag._xDefaultBg =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-tag-bg, #F3F4F6)'
-        );
-      item._xTopSiteTag._xDefaultText =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-tag-text, #6B7280)'
-        );
-      item._xTopSiteTag._xDefaultBorder = 'transparent';
-    }
-    if (item._xBookmarkTag) {
-      item._xBookmarkTag._xDefaultBg =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-bookmark-tag-bg, #FEF3C7)'
-        );
-      item._xBookmarkTag._xDefaultText =
-        surfaceCssValue(
-          options,
-          'var(--x-nt-bookmark-tag-text, #D97706)'
-        );
-      item._xBookmarkTag._xDefaultBorder = 'transparent';
-    }
-    if (item._xOpenTabTag) {
-      item._xOpenTabTag._xDefaultBg = surfaceCssValue(
-        options,
-        'var(--x-nt-tag-bg, #F3F4F6)'
-      );
-      item._xOpenTabTag._xDefaultText = surfaceCssValue(
-        options,
-        'var(--x-nt-tag-text, #6B7280)'
-      );
-      item._xOpenTabTag._xDefaultBorder = 'transparent';
-    }
     item._xTagContainer = actionTagsRef.current;
     item._xActionModel = actionModel;
     item._xHasActionTags = actionModel.hasActionTags;
-    item._xVisitButton = visitButtonRef.current;
-    item._xVisitButtonLabel = visitLabelRef.current;
-    item._xVisitButtonAction = actionModel.visitButtonAction;
     item._xActionTags = actionTagRefs.current;
     item._xActionTags.forEach((tag) => {
       tag._xActionLabel = tag.querySelector<HTMLSpanElement>(
@@ -1961,7 +1741,6 @@ function SearchSuggestionRowComponent({
     item._xSuggestion = suggestionRef.current;
     item._xAlwaysHideVisitButton =
       actionModel.alwaysHideVisitButton;
-    item._xHasSwitchAction = actionModel.hasSwitchAction;
     item._xHistoryDeleteButton = deleteButtonRef.current;
     item._xUtilityActions = [
       copySlotRef.current && copyButtonRef.current
@@ -2157,11 +1936,7 @@ function SearchSuggestionRowComponent({
                 'x-nt-suggestion-command'
               )}
             >
-              <HighlightedText
-                options={options}
-                text={suggestion.commandText || ''}
-                queryStore={queryStore}
-              />
+              {options.sanitizeDisplayText(suggestion.commandText || '')}
             </span>
           )}
           <span
@@ -2173,15 +1948,7 @@ function SearchSuggestionRowComponent({
                 : 'x-nt-suggestion-title'
             )}
           >
-            {command ? (
-              options.sanitizeDisplayText(suggestion.title || '')
-            ) : (
-              <HighlightedText
-                options={options}
-                text={suggestion.title || ''}
-                queryStore={queryStore}
-              />
-            )}
+            {options.sanitizeDisplayText(suggestion.title || '')}
           </span>
           {options.isTabRankScoreDebugEnabled() &&
             Array.isArray(suggestion.reasons) &&
@@ -2207,77 +1974,19 @@ function SearchSuggestionRowComponent({
                 'x-nt-suggestion-url-line'
               )}
             >
-              <HighlightedText
-                options={options}
-                text={String(suggestion.url || '')}
-                queryStore={queryStore}
-              />
+              {options.sanitizeDisplayText(
+                options.getUrlDisplay(String(suggestion.url || ''))
+              )}
             </span>
           )}
-          {suggestion.type === 'history' &&
-            !suggestion.isTopSite && (
+          {suggestion.type === 'bookmark' && suggestion.path && (
             <span
-              ref={historyTagRef}
               className={surfaceClass(
                 options,
-                'x-nt-suggestion-tag'
+                'x-nt-suggestion-bookmark-path'
               )}
-              data-visible="true"
-              data-tag-type="history"
             >
-              {options.t('search_tag_history', '历史')}
-            </span>
-          )}
-          {isTopSite(suggestion) && (
-            <span
-              ref={topSiteTagRef}
-              className={surfaceClass(
-                options,
-                'x-nt-suggestion-tag'
-              )}
-              data-visible="true"
-              data-tag-type="top-site"
-            >
-              {options.t('search_tag_top_site', '常用')}
-            </span>
-          )}
-          {suggestion.type === 'bookmark' && (
-            <>
-              {suggestion.path && (
-                <span
-                  className={surfaceClass(
-                    options,
-                    'x-nt-suggestion-bookmark-path'
-                  )}
-                >
-                  {String(suggestion.path)}
-                </span>
-              )}
-              <span
-                ref={bookmarkTagRef}
-                className={surfaceClass(
-                  options,
-                  'x-nt-suggestion-tag'
-                )}
-                data-visible="true"
-                data-tag-type="bookmark"
-              >
-                {options.t('search_tag_bookmark', '书签')}
-              </span>
-            </>
-          )}
-          {options.surface === 'overlay' &&
-            shouldSwitchMatchedTab && (
-            <span
-              ref={openTabTagRef}
-              className={surfaceClass(
-                options,
-                'x-nt-suggestion-tag'
-              )}
-              data-visible="true"
-              data-tag-type="open-tab"
-            >
-              {options.t('search_tag_open_tab', '已打开')}
+              {String(suggestion.path)}
             </span>
           )}
         </div>
@@ -2288,10 +1997,7 @@ function SearchSuggestionRowComponent({
           'x-nt-suggestion-right'
         )}
         data-action-column={
-          !actionModel.alwaysHideVisitButton ||
-          actionModel.hasActionTags
-            ? 'true'
-            : undefined
+          actionModel.hasActionTags ? 'true' : undefined
         }
       >
         <div
@@ -2349,77 +2055,9 @@ function SearchSuggestionRowComponent({
                   suggestion
                 )}
               </span>
-              <span
-                className={surfaceClass(
-                  options,
-                  'x-nt-suggestion-action-tag__key'
-                )}
-              >
-                {tag.keyLabel || 'Enter'}
-              </span>
             </span>
           ))}
         </div>
-        <button
-          ref={visitButtonRef}
-          type="button"
-          className={surfaceClass(
-            options,
-            'x-nt-suggestion-action-button x-nt-suggestion-visit-button'
-          )}
-          data-visible={
-            actionModel.alwaysHideVisitButton ? 'false' : 'true'
-          }
-          aria-label={getActionLabel(
-            runtime,
-            getModifierAction(
-              runtime,
-              actionModel.visitButtonAction
-            ),
-            suggestion
-          )}
-          onClick={(event) => {
-            event.stopPropagation();
-            activate(event);
-          }}
-          onAuxClick={(event) => {
-            if (event.button !== 1) {
-              return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            activate(event);
-          }}
-        >
-          <span
-            ref={visitLabelRef}
-            className={surfaceClass(
-              options,
-              'x-nt-suggestion-action-button__label'
-            )}
-          >
-            {getActionLabel(
-              runtime,
-              getModifierAction(
-                runtime,
-                actionModel.visitButtonAction
-              ),
-              suggestion
-            )}
-          </span>
-          <span
-            className={surfaceClass(
-              options,
-              'x-nt-suggestion-action-button__icon'
-            )}
-            dangerouslySetInnerHTML={{
-              __html: options.getRiSvg(
-                'ri-arrow-right-line',
-                'ri-size-12'
-              )
-            }}
-          />
-        </button>
         {copyableUrl && (
           <SuggestionUtilityAction
             options={options}
@@ -2653,16 +2291,7 @@ function OpenTabRow({
         ) {
           return;
         }
-        const theme = item._xTheme;
-        if (theme?._xIsBrand) {
-          const hover = options.getHoverColors(theme);
-          setSurfaceStyle(
-            options,
-            item,
-            '--x-nt-suggestion-hover-bg',
-            hover.bg || ''
-          );
-        } else if (options.surface === 'overlay') {
+        if (options.surface === 'overlay') {
           setSurfaceStyle(
             options,
             item,

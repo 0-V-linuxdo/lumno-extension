@@ -206,29 +206,11 @@ describe('Suggestions React island', () => {
     expect(items[0].dataset.themed).toBe('true');
     expect(items[0].dataset.rowState).toBe('active');
     expect(items[0]._xTagContainer?.dataset.visible).toBe('true');
-    expect(items[0]._xVisitButton?.dataset.visible).toBe('false');
-    expect(
-      items[0].querySelector('mark')?.textContent
-    ).toBe('Exa');
+    expect(items[0]._xVisitButton).toBeUndefined();
+    expect(items[0]._xTitle?.textContent).toBe('Example result');
   });
 
-  it('uses the themed Overlay mark class for matched query text', () => {
-    const { view, items } = createView({
-      surface: 'overlay'
-    });
-
-    render(view, [{
-      type: 'history',
-      title: 'Example result',
-      url: 'https://example.com/page'
-    }]);
-
-    expect(
-      items[0].querySelector('mark')?.className
-    ).toBe('x-ov-suggestion-mark');
-  });
-
-  it('highlights separate query terms in both the title and URL', () => {
+  it('does not highlight matched query text in row titles or URLs', () => {
     const { view, items } = createView();
 
     render(view, [{
@@ -239,11 +221,8 @@ describe('Suggestions React island', () => {
       query: 'codex 最爱'
     });
 
-    expect(
-      Array.from(items[0].querySelectorAll('mark')).map((mark) =>
-        mark.textContent
-      )
-    ).toEqual(['Codex', '最爱']);
+    expect(items[0].querySelectorAll('mark')).toHaveLength(0);
+    expect(items[0]._xTitle?.textContent).toBe('Codex workspace');
   });
 
   it('reports whether highlighted text belongs to the selected row', () => {
@@ -310,7 +289,7 @@ describe('Suggestions React island', () => {
     expect(items[2].dataset.last).toBe('true');
   });
 
-  it('updates only the matching mark when result content is unchanged', () => {
+  it('keeps the row and title node mounted when only the query changes', () => {
     const bindCursorTooltip = vi.fn();
     const onSetSelectedIndex = vi.fn();
     const { view, items } = createView({
@@ -328,7 +307,7 @@ describe('Suggestions React island', () => {
       updateKind: 'structure'
     });
     const row = items[0];
-    const mark = row.querySelector('mark');
+    const title = row._xTitle;
     bindCursorTooltip.mockClear();
     onSetSelectedIndex.mockClear();
 
@@ -338,8 +317,8 @@ describe('Suggestions React island', () => {
     });
 
     expect(items[0]).toBe(row);
-    expect(items[0].querySelector('mark')).toBe(mark);
-    expect(mark?.textContent).toBe('Exam');
+    expect(items[0]._xTitle).toBe(title);
+    expect(title?.textContent).toBe('Example result');
     expect(bindCursorTooltip).not.toHaveBeenCalled();
     expect(onSetSelectedIndex).not.toHaveBeenCalledWith(-1);
   });
@@ -369,7 +348,7 @@ describe('Suggestions React island', () => {
       updateKind: 'structure'
     });
     const row = items[0];
-    const mark = row.querySelector('mark');
+    const title = row._xTitle;
     const iconSlot = row.querySelector('.x-nt-suggestion-icon-slot');
     const inlineIcon = iconSlot?.firstElementChild;
     applyThemeVariables.mockClear();
@@ -388,8 +367,8 @@ describe('Suggestions React island', () => {
     });
 
     expect(items[0]).toBe(row);
-    expect(items[0].querySelector('mark')).toBe(mark);
-    expect(mark?.textContent).toBe('https://code.0htt');
+    expect(items[0]._xTitle).toBe(title);
+    expect(title?.textContent).toBe('打开 https://code.0htt');
     expect(row.querySelector('.x-nt-suggestion-icon-slot')).toBe(iconSlot);
     expect(iconSlot?.firstElementChild).toBe(inlineIcon);
     expect(iconSlot?.querySelector('img')).toBeNull();
@@ -588,7 +567,6 @@ describe('Suggestions React island', () => {
     });
 
     expect(items[0]).toBe(row);
-    expect(items[0]._xVisitButtonLabel?.textContent).toBe('前往');
     expect(
       items[0]._xActionTags?.[0]._xActionLabel?.textContent
     ).toBe('前往');
@@ -858,9 +836,6 @@ describe('Suggestions React island', () => {
       '--x-ov-suggestion-row-bg'
     )).toBe('#eef');
     expect(
-      items[0].querySelector('.x-ov-suggestion-source-tag')
-    ).not.toBeNull();
-    expect(
       items[0].querySelector('.x-ov-action-tag__label')
     ).not.toBeNull();
     expect(
@@ -879,7 +854,7 @@ describe('Suggestions React island', () => {
     expect(items[0]._xSwitchButton?.dataset.visible).toBe('false');
   });
 
-  it('applies the brand treatment to hovered search results', () => {
+  it('keeps a neutral row background when hovering search results, even with a brand theme', () => {
     const brandTheme = {
       _xIsBrand: true,
       buttonText: '#14532d',
@@ -891,7 +866,6 @@ describe('Suggestions React island', () => {
       markBg: '#bbf7d0',
       markText: '#14532d'
     };
-    const markThemes: unknown[] = [];
     const { view, items } = createView({
       surface: 'overlay',
       getImmediateThemeForSuggestion: () => brandTheme,
@@ -900,14 +874,11 @@ describe('Suggestions React island', () => {
         bg: '#f0fdf4',
         border: '#86efac'
       }),
-      applyMarkVariables: (_item, theme) => {
-        markThemes.push(theme);
-      },
       actionModel: {
         createSearchActionModel: () => ({
           actionTags: [],
           visitButtonAction: 'openNewTab',
-          alwaysHideVisitButton: false,
+          alwaysHideVisitButton: true,
           hasActionTags: false,
           hasSwitchAction: false
         })
@@ -924,8 +895,6 @@ describe('Suggestions React island', () => {
     });
 
     const row = items[0];
-    const visitButton = row._xVisitButton as HTMLButtonElement;
-    const historyTag = row._xHistoryTag as HTMLSpanElement;
 
     act(() => {
       row.dispatchEvent(new MouseEvent('mouseover', {
@@ -935,19 +904,8 @@ describe('Suggestions React island', () => {
 
     expect(row.dataset.rowState).toBe('hover');
     expect(row.style.getPropertyValue('--x-ov-suggestion-row-bg'))
-      .toBe('#f0fdf4');
-    expect(historyTag.style.getPropertyValue(
-      '--x-ov-suggestion-source-tag-bg'
-    )).toBe('#dcfce7');
-    expect(historyTag.style.getPropertyValue(
-      '--x-ov-suggestion-source-tag-text'
-    )).toBe('#166534');
-    expect(historyTag.style.getPropertyValue(
-      '--x-ov-suggestion-source-tag-border'
-    )).toBe('#86efac');
-    expect(visitButton.style.getPropertyValue(
-      '--x-ov-suggestion-action-button-bg'
-    )).toBe('#dcfce7');
-    expect(markThemes[markThemes.length - 1]).toBe(brandTheme);
+      .toBe('var(--x-ov-hover-bg, #F3F4F6)');
+    expect(row._xVisitButton).toBeUndefined();
+    expect(row.querySelector('[data-tag-type]')).toBeNull();
   });
 });

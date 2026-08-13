@@ -139,7 +139,7 @@ assert.match(
 assertStableHoverTarget(newtabHtml, '.x-nt-feedback-action:hover');
 assertStableHoverTarget(
   newtabHtml,
-  '.x-nt-suggestion-action-button[data-visible="true"]:hover'
+  '.x-nt-tab-switch-button:hover'
 );
 assertStableHoverTarget(
   documentPipPicker,

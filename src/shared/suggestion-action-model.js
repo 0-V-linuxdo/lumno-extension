@@ -139,24 +139,18 @@
     } else if (shouldShowEnterTag) {
       actionTags.push({ action: enterAction, keyLabel: 'Enter' });
     }
-    if (isPrimaryHighlight && onlyKeywordSuggestions && suggestion && suggestion.type === 'newtab') {
-      actionTags.push({ action: 'search', keyLabel: 'Enter' });
-    }
 
     const visitButtonAction = getVisitButtonAction(suggestion, {
       shouldSwitchMatchedTab
     });
-    const alwaysHideVisitButton = !visitButtonAction || Boolean(
-      suggestion && (suggestion.type === 'modeSwitch' || suggestion.type === 'zenSwitch')
-    );
+    const alwaysHideVisitButton = true;
 
     return {
       actionTags,
       visitButtonAction,
       alwaysHideVisitButton,
       hasActionTags: actionTags.length > 0,
-      hasSwitchAction: shouldSwitchMatchedTab,
-      hideSourceTags: shouldSwitchMatchedTab
+      hasSwitchAction: shouldSwitchMatchedTab
     };
   }
 
