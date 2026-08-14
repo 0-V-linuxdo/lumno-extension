@@ -148,4 +148,47 @@ assert.strictEqual(
   'search results that explicitly create tabs should default to foreground new tabs'
 );
 
+const normalNavigationModel = actionModel.createSearchActionModel({
+  suggestion: historySuggestion,
+  isPrimaryHighlight: true,
+  primaryHighlightReason: 'autocomplete',
+  enterAction: 'openNewTab'
+});
+assert.deepStrictEqual(
+  normalNavigationModel.actionTags,
+  [{ action: 'openNewTab', keyLabel: 'Enter' }],
+  'normal mode should retain its Enter key chip'
+);
+assert.strictEqual(normalNavigationModel.alwaysHideVisitButton, false);
+
+const simpleNavigationModel = actionModel.createSearchActionModel({
+  suggestion: historySuggestion,
+  isPrimaryHighlight: true,
+  primaryHighlightReason: 'autocomplete',
+  enterAction: 'openNewTab',
+  simpleMode: true
+});
+assert.deepStrictEqual(
+  simpleNavigationModel.actionTags,
+  [{ action: 'openNewTab', keyLabel: '' }],
+  'simple mode should keep only the plain action label'
+);
+assert.strictEqual(
+  simpleNavigationModel.alwaysHideVisitButton,
+  true,
+  'simple mode should hide the decorated visit button'
+);
+
+const simpleSearchModel = actionModel.createSearchActionModel({
+  suggestion: { type: 'newtab', searchQuery: 'lumno' },
+  isPrimaryHighlight: true,
+  onlyKeywordSuggestions: true,
+  simpleMode: true
+});
+assert.deepStrictEqual(
+  simpleSearchModel.actionTags,
+  [],
+  'simple mode should remove the redundant Search/Enter decoration'
+);
+
 console.log('suggestion action model tests passed');

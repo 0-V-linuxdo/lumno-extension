@@ -8,6 +8,7 @@ const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8')
 const selectionTargetSource = fs.readFileSync('src/background/selection-target.js', 'utf8');
 const providerResolverSource = fs.readFileSync('src/background/selection-quick-action-provider.js', 'utf8');
 const contentSource = fs.readFileSync('src/content/selection-quick-actions.js', 'utf8');
+const selectionMarkSource = fs.readFileSync('assets/images/lumno-selection-mark.svg', 'utf8');
 const intentSource = fs.readFileSync('src/shared/selection-intent.js', 'utf8');
 const iconSource = fs.readFileSync('src/shared/selection-action-icons.js', 'utf8');
 const toastSource = fs.readFileSync('src/shared/toast.js', 'utf8');
@@ -155,8 +156,10 @@ assert(!/suppressed[\s\S]*settings\.editable\s*===\s*true/.test(intentSource),
 assert(contentSource.includes('input[type="password"]'));
 assert(contentSource.includes('[autocomplete^="cc-"]'));
 assert(
-  contentSource.includes("assets/images/lumno-selection-mark.png"),
-  'the default floating selection affordance should use the supplied Lumno mark'
+  contentSource.includes("assets/images/lumno-selection-mark.svg") &&
+    selectionMarkSource.includes('shape-rendering="geometricPrecision"') &&
+    (selectionMarkSource.match(/<path\b/g) || []).length === 2,
+  'the selection affordance should use the precise two-layer vector Lumno mark'
 );
 assert(
   contentSource.includes("const RUNTIME_REVISION = 'selection-toolbar-v32'") &&
@@ -284,7 +287,7 @@ assert(
   'the inner material curve should stay one pixel inside the outer border curve'
 );
 assert(
-  /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before,[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
+  /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before\s*\{[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
   'the inner material and border should use the same continuous corner shape when supported'
 );
 assert(
@@ -313,8 +316,9 @@ assert(
   'the toolbar should use the same supported smooth-corner primitive as Overlay'
 );
 assert(
-  /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?\.lumno-selection-toolbar button:hover,[\s\S]*?\.lumno-selection-main:hover[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource),
-  'toolbar action and butterfly hover backgrounds should explicitly retain continuous corners'
+  /button\s*\{[\s\S]*?border-radius:\s*9px[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(contentSource) &&
+    /button:hover, button:focus-visible\s*\{[\s\S]*?background:/.test(contentSource),
+  'toolbar action and butterfly hover backgrounds should draw directly with continuous corners'
 );
 assert(
   contentSource.includes('menu.tabIndex = -1') &&

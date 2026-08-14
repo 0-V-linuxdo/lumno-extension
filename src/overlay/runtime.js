@@ -24,6 +24,7 @@
     overlayEnterAnimation: '_x_extension_overlay_enter_animation_2026_unique_',
     overlayPageThemeAdaptationEnabled: '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_',
     motionEffectsEnabled: '_x_extension_motion_effects_enabled_2026_unique_',
+    simpleModeEnabled: '_x_extension_simple_mode_enabled_2026_unique_',
     numberShortcutInstantEnabled: '_x_extension_number_shortcut_instant_enabled_2026_unique_',
     macosCtrlSuggestionNavigationEnabled: '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_',
     overlayTabPriority: '_x_extension_overlay_tab_priority_2024_unique_',

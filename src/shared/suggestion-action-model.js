@@ -122,6 +122,7 @@
     const isPrimarySearchSuggest = Boolean(config.isPrimarySearchSuggest);
     const isMergedHighlight = Boolean(config.isMergedHighlight);
     const shouldSwitchMatchedTab = Boolean(config.shouldSwitchMatchedTab);
+    const simpleMode = Boolean(config.simpleMode);
     const enterAction = config.enterAction || 'openNewTab';
     const actionTags = [];
     const isDirectHighlight = isPrimaryHighlight && isDirectNavigationSuggestion(suggestion);
@@ -135,22 +136,28 @@
       );
 
     if (shouldSwitchMatchedTab) {
-      actionTags.push({ action: 'switch', keyLabel: 'Enter' });
+      actionTags.push({ action: 'switch', keyLabel: simpleMode ? '' : 'Enter' });
     } else if (shouldShowEnterTag) {
-      actionTags.push({ action: enterAction, keyLabel: 'Enter' });
+      actionTags.push({ action: enterAction, keyLabel: simpleMode ? '' : 'Enter' });
+    }
+    if (!simpleMode && isPrimaryHighlight && onlyKeywordSuggestions && suggestion && suggestion.type === 'newtab') {
+      actionTags.push({ action: 'search', keyLabel: 'Enter' });
     }
 
     const visitButtonAction = getVisitButtonAction(suggestion, {
       shouldSwitchMatchedTab
     });
-    const alwaysHideVisitButton = true;
+    const alwaysHideVisitButton = simpleMode || !visitButtonAction || Boolean(
+      suggestion && (suggestion.type === 'modeSwitch' || suggestion.type === 'zenSwitch')
+    );
 
     return {
       actionTags,
       visitButtonAction,
       alwaysHideVisitButton,
       hasActionTags: actionTags.length > 0,
-      hasSwitchAction: shouldSwitchMatchedTab
+      hasSwitchAction: shouldSwitchMatchedTab,
+      hideSourceTags: shouldSwitchMatchedTab
     };
   }
 

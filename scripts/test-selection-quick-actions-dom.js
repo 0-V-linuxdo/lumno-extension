@@ -344,8 +344,8 @@ function wait(ms) {
   const highButterfly = selectionShadow.querySelector('.lumno-selection-butterfly-stage');
   assert(highLogo, 'the selection surface should contain the Lumno mark');
   assert.strictEqual(highLogo.hidden, false, 'the fixed Lumno mark should remain visible');
-  assert(highLogo.src.endsWith('/assets/images/lumno-selection-mark.png'),
-    'every triggerable selection should use the compact butterfly mark');
+  assert(highLogo.src.endsWith('/assets/images/lumno-selection-mark.svg'),
+    'every triggerable selection should use the vector butterfly mark');
   assert.strictEqual(highButterfly, null, 'the removed butterfly visual should not remain in the shadow DOM');
   assert.strictEqual(selectionShadow.querySelector('.lumno-selection-more'), null,
     'the compact entry should open the toolbar directly without a second disclosure button');
@@ -883,7 +883,7 @@ function wait(ms) {
     'the inner material radius should follow the one-pixel inset inside the outer border'
   );
   assert(
-    /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before,[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),
+    /@supports\s*\(corner-shape:\s*superellipse\(1\.25\)\)\s*\{[\s\S]*?\.lumno-selection-material,[\s\S]*?\.lumno-selection-material::before\s*\{[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),
     'the inner material and its border should share the same continuous corner curve'
   );
   assert(
@@ -937,8 +937,9 @@ function wait(ms) {
     'the toolbar shell and controls should share the Overlay superellipse corner treatment'
   );
   assert(
-    /@supports \(corner-shape:\s*superellipse\(1\.25\)\)[\s\S]*?\.lumno-selection-toolbar button:hover,[\s\S]*?\.lumno-selection-main:hover[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles),
-    'toolbar action and butterfly hover backgrounds should explicitly retain continuous corners'
+    /button\s*\{[\s\S]*?border-radius:\s*9px[\s\S]*?corner-shape:\s*superellipse\(1\.25\)/.test(selectionStyles) &&
+      /button:hover, button:focus-visible\s*\{[\s\S]*?background:/.test(selectionStyles),
+    'toolbar action and butterfly hover backgrounds should draw directly with continuous corners'
   );
   assert(
     /\.lumno-selection-action-icon\s*\{[\s\S]*?width:\s*16px[\s\S]*?height:\s*16px/.test(selectionStyles),

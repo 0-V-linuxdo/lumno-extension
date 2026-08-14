@@ -1582,6 +1582,7 @@
         padding: 0 8px;
         min-height: 30px;
         border-radius: 9px;
+        corner-shape: superellipse(1.25);
         background: transparent;
         color: inherit;
         display: inline-flex;
@@ -1776,12 +1777,7 @@
       @supports (corner-shape: superellipse(1.25)) {
         .lumno-selection-surface,
         .lumno-selection-material,
-        .lumno-selection-material::before,
-        button,
-        .lumno-selection-toolbar button:hover,
-        .lumno-selection-toolbar button:focus-visible,
-        .lumno-selection-main:hover,
-        .lumno-selection-main:focus-visible {
+        .lumno-selection-material::before {
           corner-shape: superellipse(1.25);
         }
       }
@@ -1813,7 +1809,7 @@
     const logo = document.createElement('img');
     logo.className = 'lumno-selection-logo';
     logo.alt = '';
-    logo.src = chrome.runtime.getURL('assets/images/lumno.png');
+    logo.src = chrome.runtime.getURL('assets/images/lumno-selection-mark.svg');
     selectionLogo = logo;
     mainLabel = document.createElement('span');
     mainLabel.className = 'lumno-selection-label';
@@ -1969,7 +1965,7 @@
 
   function updateSelectionMark() {
     if (selectionLogo) {
-      selectionLogo.src = chrome.runtime.getURL('assets/images/lumno-selection-mark.png');
+      selectionLogo.src = chrome.runtime.getURL('assets/images/lumno-selection-mark.svg');
     }
     if (host) {
       host.dataset.selectionMark = 'lumno';

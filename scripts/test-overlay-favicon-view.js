@@ -338,8 +338,8 @@ function testOverlayRendererLoadsFaviconPolicyBeforeInitialTabs() {
   );
   assert.match(
     overlayJs,
-    /const initialOverlayContentReady = Promise\.all\(\[\s*initialOverlayOpenTabsDefaultVisibleReady,\s*initialFaviconEnhancedFetchReady\s*\]\)[\s\S]*?requestTabsAndRender\(\)/,
-    'first open-tab rendering should wait for the favicon policy setting without blocking the input shell'
+    /const initialOverlayContentReady = Promise\.all\(\[\s*initialOverlayOpenTabsDefaultVisibleReady,\s*initialFaviconEnhancedFetchReady,\s*initialSimpleModeReady\s*\]\)[\s\S]*?requestTabsAndRender\(\)/,
+    'first open-tab rendering should wait for favicon policy and simple-mode presentation without blocking the input shell'
   );
   assert.doesNotMatch(
     overlayJs.slice(overlayJs.lastIndexOf('const revealReady =')),

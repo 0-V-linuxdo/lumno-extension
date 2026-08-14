@@ -123,6 +123,8 @@
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
     SETTINGS.MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY ||
     '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
+  const SIMPLE_MODE_ENABLED_STORAGE_KEY = SETTINGS.SIMPLE_MODE_ENABLED_STORAGE_KEY ||
+    '_x_extension_simple_mode_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -452,6 +454,7 @@
   let newtabInputAutoFocusEnabled = false;
   let numberShortcutInstantEnabled = false;
   let macosCtrlSuggestionNavigationEnabled = false;
+  let simpleModeEnabled = false;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1282,6 +1285,28 @@
   }
 
   const initialNumberShortcutInstantReadyTask = loadNumberShortcutInstantEnabled();
+
+  function normalizeSimpleModeEnabled(value) {
+    return typeof SETTINGS.normalizeSimpleModeEnabled === 'function'
+      ? SETTINGS.normalizeSimpleModeEnabled(value)
+      : value === true;
+  }
+
+  function loadSimpleModeEnabled() {
+    if (!storageArea) {
+      simpleModeEnabled = false;
+      return Promise.resolve(simpleModeEnabled);
+    }
+    return new Promise((resolve) => {
+      storageArea.get([SIMPLE_MODE_ENABLED_STORAGE_KEY], (result) => {
+        const rawValue = result && result[SIMPLE_MODE_ENABLED_STORAGE_KEY];
+        simpleModeEnabled = normalizeSimpleModeEnabled(rawValue);
+        resolve(simpleModeEnabled);
+      });
+    });
+  }
+
+  loadSimpleModeEnabled();
 
   function normalizeMacosCtrlSuggestionNavigationEnabled(value) {
     return typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
@@ -5015,6 +5040,14 @@
           changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY].newValue
         );
       }
+      if (changes[SIMPLE_MODE_ENABLED_STORAGE_KEY]) {
+        simpleModeEnabled = normalizeSimpleModeEnabled(
+          changes[SIMPLE_MODE_ENABLED_STORAGE_KEY].newValue
+        );
+        if (latestQuery) {
+          renderSuggestions(lastSuggestionResponse, latestQuery);
+        }
+      }
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
         if (latestQuery) {
@@ -5146,10 +5179,17 @@
   const siteThemeRequestPending = new Map();
   const themeFaviconCandidateRequestPending = new Map();
 
-  function getHighlightColors() {
+  function getHighlightColors(theme) {
+    const resolvedTheme = getThemeForMode(theme);
+    if (!resolvedTheme || !resolvedTheme._xIsBrand) {
+      return {
+        bg: 'var(--x-nt-hover-bg, #F3F4F6)',
+        border: 'transparent'
+      };
+    }
     return {
-      bg: 'var(--x-nt-hover-bg, #F3F4F6)',
-      border: 'transparent'
+      bg: resolvedTheme.highlightBg,
+      border: resolvedTheme.highlightBorder
     };
   }
 
@@ -6021,10 +6061,12 @@
     target.style.setProperty('--x-ext-key-text', resolvedTheme.keyText);
     target.style.setProperty('--x-ext-key-border', resolvedTheme.keyBorder);
     target.style.setProperty('--x-ext-icon-color', resolvedTheme.accent);
-    const highlight = getHighlightColors();
-    const hover = {
-      bg: 'var(--x-nt-hover-bg, #F3F4F6)',
-      border: 'transparent'
+    const highlight = getHighlightColors(theme);
+    const hover = resolvedTheme._xIsBrand
+      ? getHoverColors(theme)
+      : {
+        bg: 'var(--x-nt-hover-bg, #F3F4F6)',
+        border: 'transparent'
     };
     target.style.setProperty('--x-nt-suggestion-active-bg', highlight.bg);
     target.style.setProperty('--x-nt-suggestion-hover-bg', hover.bg);
@@ -13892,6 +13934,7 @@
     isLocalNetworkHost,
     getHostFromUrl,
     getUrlDisplay,
+    isSimpleModeEnabled: () => simpleModeEnabled,
     getThemeHostForSuggestion,
     getImmediateThemeForSuggestion,
     getThemeForSuggestion,
@@ -14238,7 +14281,11 @@
         ? null
         : {
           type: 'newtab',
-          title: query,
+          title: simpleModeEnabled
+            ? query
+            : formatMessage('search_query', '搜索 "{query}"', {
+                query: query
+              }),
           url: buildDefaultSearchUrl(query),
           favicon: getDefaultSearchEngineFaviconUrl(),
           searchQuery: query,

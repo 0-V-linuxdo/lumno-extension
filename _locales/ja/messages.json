@@ -259,6 +259,12 @@
   "settings_motion_effects_desc": {
     "message": "動作が重い場合や、より素早く表示したい場合はオフにできます"
   },
+  "settings_simple_mode_title": {
+    "message": "シンプルモード"
+  },
+  "settings_simple_mode_desc": {
+    "message": "装飾要素を減らし、検索ボックスをすっきり表示します"
+  },
   "settings_auto_pip_title": {
     "message": "動画を自動でピクチャーインピクチャー表示"
   },

@@ -89,6 +89,7 @@
   const syncImportInput = document.getElementById('_x_extension_sync_import_input_2024_unique_');
   const updateNoticeToggle = document.getElementById('_x_extension_update_notice_toggle_2026_unique_');
   const motionEffectsToggle = document.getElementById('_x_extension_motion_effects_toggle_2026_unique_');
+  const simpleModeToggle = document.getElementById('_x_extension_simple_mode_toggle_2026_unique_');
   const numberShortcutInstantToggle = document.getElementById('_x_extension_number_shortcut_instant_toggle_2026_unique_');
   const macosCtrlSuggestionNavigationToggle = document.getElementById('_x_extension_macos_ctrl_suggestion_navigation_toggle_2026_unique_');
   const fallbackShortcutInput = document.getElementById('_x_extension_shortcuts_input_2024_unique_');
@@ -327,6 +328,7 @@
   [
     [updateNoticeToggle, 'update-notice'],
     [motionEffectsToggle, 'motion-effects'],
+    [simpleModeToggle, 'simple-mode'],
     [autoPipToggle, 'auto-pip'],
     [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
     [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
@@ -531,6 +533,8 @@
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = SETTINGS.MOTION_EFFECTS_ENABLED_STORAGE_KEY ||
     '_x_extension_motion_effects_enabled_2026_unique_';
+  const SIMPLE_MODE_ENABLED_STORAGE_KEY = SETTINGS.SIMPLE_MODE_ENABLED_STORAGE_KEY ||
+    '_x_extension_simple_mode_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
@@ -603,6 +607,7 @@
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+    SIMPLE_MODE_ENABLED_STORAGE_KEY,
     NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
     MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY,
     AUTO_PIP_ENABLED_STORAGE_KEY,
@@ -1600,6 +1605,12 @@
     return typeof SETTINGS.normalizeMotionEffectsEnabled === 'function'
       ? SETTINGS.normalizeMotionEffectsEnabled(value)
       : value !== false;
+  }
+
+  function normalizeSimpleModeEnabled(value) {
+    return typeof SETTINGS.normalizeSimpleModeEnabled === 'function'
+      ? SETTINGS.normalizeSimpleModeEnabled(value)
+      : value === true;
   }
 
   function normalizeNumberShortcutInstantEnabled(value) {
@@ -4378,6 +4389,16 @@
       storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
     });
   }
+  if (simpleModeToggle) {
+    simpleModeToggle.addEventListener('change', () => {
+      const next = normalizeSimpleModeEnabled(simpleModeToggle.checked);
+      setOptionsToggleState(simpleModeToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [SIMPLE_MODE_ENABLED_STORAGE_KEY]: next });
+    });
+  }
   if (numberShortcutInstantToggle) {
     numberShortcutInstantToggle.addEventListener('change', () => {
       const next = normalizeNumberShortcutInstantEnabled(numberShortcutInstantToggle.checked);
@@ -5043,6 +5064,17 @@
       }
       if (rawValue !== stored) {
         storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: stored });
+      }
+      refreshCustomSelects();
+    });
+    storageArea.get([SIMPLE_MODE_ENABLED_STORAGE_KEY], (result) => {
+      const rawValue = result[SIMPLE_MODE_ENABLED_STORAGE_KEY];
+      const stored = normalizeSimpleModeEnabled(rawValue);
+      if (simpleModeToggle) {
+        setOptionsToggleState(simpleModeToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [SIMPLE_MODE_ENABLED_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
     });
@@ -6300,6 +6332,15 @@
       setOptionsToggleState(motionEffectsToggle, next);
       if (raw !== next && storageArea) {
         storageArea.set({ [MOTION_EFFECTS_ENABLED_STORAGE_KEY]: next });
+      }
+      refreshCustomSelects();
+    }
+    if (changes[SIMPLE_MODE_ENABLED_STORAGE_KEY] && simpleModeToggle) {
+      const raw = changes[SIMPLE_MODE_ENABLED_STORAGE_KEY].newValue;
+      const next = normalizeSimpleModeEnabled(raw);
+      setOptionsToggleState(simpleModeToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [SIMPLE_MODE_ENABLED_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
     }
