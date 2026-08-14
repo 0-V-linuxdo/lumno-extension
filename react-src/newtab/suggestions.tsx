@@ -154,6 +154,7 @@ export interface SuggestionElement extends HTMLDivElement {
   _xUtilityActions?: SuggestionUtilityActionElements[];
   _xIsHovering?: boolean;
   _xTabId?: number | null;
+  _xSimpleMode?: boolean;
 }
 
 export interface SuggestionsRenderPayload {
@@ -190,6 +191,8 @@ export interface SuggestionsViewOptions {
   isLocalNetworkHost?: (host: string) => boolean;
   getChromeFaviconUrl?: (url: string) => string;
   getHostFromUrl?: (url: string) => string;
+  getUrlDisplay?: (url: string) => string;
+  isSimpleModeEnabled?: () => boolean;
   getThemeHostForSuggestion?: (suggestion: Suggestion) => string;
   getImmediateThemeForSuggestion?: (
     suggestion: Suggestion
@@ -340,6 +343,10 @@ interface NormalizedOptions {
     SuggestionsViewOptions['getChromeFaviconUrl']
   >;
   getHostFromUrl: NonNullable<SuggestionsViewOptions['getHostFromUrl']>;
+  getUrlDisplay: NonNullable<SuggestionsViewOptions['getUrlDisplay']>;
+  isSimpleModeEnabled: NonNullable<
+    SuggestionsViewOptions['isSimpleModeEnabled']
+  >;
   getThemeHostForSuggestion: NonNullable<
     SuggestionsViewOptions['getThemeHostForSuggestion']
   >;
@@ -626,6 +633,8 @@ function normalizeOptions(
       raw.isLocalNetworkHost || shouldBlockFaviconForHost,
     getChromeFaviconUrl,
     getHostFromUrl: raw.getHostFromUrl || (() => ''),
+    getUrlDisplay: raw.getUrlDisplay || ((url) => String(url || '')),
+    isSimpleModeEnabled: raw.isSimpleModeEnabled || (() => false),
     getThemeHostForSuggestion:
       raw.getThemeHostForSuggestion || (() => ''),
     getImmediateThemeForSuggestion:
@@ -761,17 +770,22 @@ function getHighlightedParts(
 function HighlightedText({
   options,
   text,
-  queryStore
+  queryStore,
+  simpleMode
 }: {
   options: NormalizedOptions;
   text: unknown;
   queryStore: QueryStore;
+  simpleMode: boolean;
 }) {
   const query = useSyncExternalStore(
     queryStore.subscribe,
     queryStore.getSnapshot,
     queryStore.getSnapshot
   );
+  if (simpleMode) {
+    return options.sanitizeDisplayText(text);
+  }
   return getHighlightedParts(options, text, query).map((part, index) =>
     part.highlighted ? (
       <mark
@@ -1084,7 +1098,7 @@ function applySearchActionStyles(
   applyTagStyle(options, item._xBookmarkTag, theme, themed);
   applyTagStyle(options, item._xTopSiteTag, theme, themed);
   applyTagStyle(options, item._xOpenTabTag, theme, themed);
-  const showSourceTags = !item._xHasSwitchAction;
+  const showSourceTags = !item._xSimpleMode && !item._xHasSwitchAction;
   [
     item._xHistoryTag,
     item._xBookmarkTag,
@@ -1097,7 +1111,7 @@ function applySearchActionStyles(
   });
   item._xOpenTabTag?.setAttribute(
     'data-visible',
-    item._xHasSwitchAction ? 'true' : 'false'
+    !item._xSimpleMode && item._xHasSwitchAction ? 'true' : 'false'
   );
   item._xTagContainer?.setAttribute(
     'data-visible',
@@ -1112,6 +1126,11 @@ function applyUtilityActionStyles(
   themed: boolean
 ): void {
   const visible = Boolean(item._xIsHovering);
+  const simpleMode = Boolean(item._xSimpleMode);
+  const useTheme = visible && themed && !simpleMode;
+  const neutralHover = simpleMode
+    ? options.getNeutralHoverActionColors()
+    : null;
   item._xUtilityActions?.forEach(({ slot, button }) => {
     slot.setAttribute('data-visible', visible ? 'true' : 'false');
     button.setAttribute('data-visible', visible ? 'true' : 'false');
@@ -1119,7 +1138,7 @@ function applyUtilityActionStyles(
       options,
       button,
       '--x-nt-suggestion-utility-color',
-      visible && themed
+      useTheme
         ? theme?.buttonText || ''
         : surfaceCssValue(
             options,
@@ -1130,14 +1149,34 @@ function applyUtilityActionStyles(
       options,
       button,
       '--x-nt-suggestion-utility-bg',
-      visible && themed ? theme?.buttonBg || '' : 'transparent'
+      useTheme ? theme?.buttonBg || '' : 'transparent'
     );
     setSurfaceStyle(
       options,
       button,
       '--x-nt-suggestion-utility-border',
-      visible && themed ? theme?.buttonBorder || '' : 'transparent'
+      useTheme ? theme?.buttonBorder || '' : 'transparent'
     );
+    if (neutralHover) {
+      setSurfaceStyle(
+        options,
+        button,
+        '--x-nt-suggestion-utility-hover-bg',
+        neutralHover.bg || ''
+      );
+      setSurfaceStyle(
+        options,
+        button,
+        '--x-nt-suggestion-utility-hover-border',
+        neutralHover.border || ''
+      );
+      setSurfaceStyle(
+        options,
+        button,
+        '--x-nt-suggestion-utility-hover-color',
+        neutralHover.text || ''
+      );
+    }
   });
 }
 
@@ -1160,13 +1199,20 @@ function updateSelectionForRuntime(
     const themed = highlighted || (
       hovering && Boolean(theme?._xIsBrand)
     );
-    const hoverColors = hovering && theme?._xIsBrand
+    const simpleMode = Boolean(item._xSimpleMode);
+    const hoverColors = !simpleMode && hovering && theme?._xIsBrand
       ? options.getHoverColors(theme)
       : null;
     if (highlighted) {
       item.setAttribute('data-row-state', 'active');
-      if (options.surface === 'overlay') {
-        const highlight = options.getHighlightColors(theme);
+      if (options.surface === 'overlay' || simpleMode) {
+        const highlight = simpleMode
+          ? {
+              bg: options.surface === 'overlay'
+                ? 'var(--x-ov-hover-bg, #F3F4F6)'
+                : 'var(--x-nt-hover-bg, #F3F4F6)'
+            }
+          : options.getHighlightColors(theme);
         setSurfaceStyle(
           options,
           item,
@@ -1233,7 +1279,7 @@ function updateSelectionForRuntime(
         );
       }
     } else {
-      if (selected && theme?._xIsBrand) {
+      if (!simpleMode && selected && theme?._xIsBrand) {
         const hover = options.getHoverColors(theme);
         setSurfaceStyle(
           options,
@@ -1651,9 +1697,11 @@ function SuggestionUtilityAction({
     const selectedIndex = options.getSelectedIndex();
     const theme = item._xTheme || options.defaultTheme;
     const useTheme =
-      itemIndex === selectedIndex ||
-      (selectedIndex === -1 && item._xIsAutocompleteTop) ||
-      (item._xIsHovering && Boolean(theme?._xIsBrand));
+      !item._xSimpleMode && (
+        itemIndex === selectedIndex ||
+        (selectedIndex === -1 && item._xIsAutocompleteTop) ||
+        (item._xIsHovering && Boolean(theme?._xIsBrand))
+      );
     const modeTheme = options.getThemeForMode(theme);
     const hover = useTheme
       ? options.getHoverColors(theme)
@@ -1744,6 +1792,7 @@ interface SearchSuggestionRowProps {
   isMergedHighlight: boolean;
   onlyKeywordSuggestions: boolean;
   last: boolean;
+  simpleMode: boolean;
 }
 
 function SearchSuggestionRowComponent({
@@ -1755,7 +1804,8 @@ function SearchSuggestionRowComponent({
   primaryHighlightReason,
   isMergedHighlight,
   onlyKeywordSuggestions,
-  last
+  last,
+  simpleMode
 }: SearchSuggestionRowProps) {
   const { options, queryStore } = runtime;
   const suggestion = suggestionRef.current;
@@ -1846,7 +1896,8 @@ function SearchSuggestionRowComponent({
       onlyKeywordSuggestions,
       isMergedHighlight,
       shouldSwitchMatchedTab,
-      enterAction: options.enterAction
+      enterAction: options.enterAction,
+      simpleMode
     }),
     [
       isPrimary,
@@ -1855,6 +1906,7 @@ function SearchSuggestionRowComponent({
       options,
       primaryHighlightReason,
       primarySearch,
+      simpleMode,
       shouldSwitchMatchedTab,
       suggestion
     ]
@@ -1962,6 +2014,7 @@ function SearchSuggestionRowComponent({
     item._xAlwaysHideVisitButton =
       actionModel.alwaysHideVisitButton;
     item._xHasSwitchAction = actionModel.hasSwitchAction;
+    item._xSimpleMode = simpleMode;
     item._xHistoryDeleteButton = deleteButtonRef.current;
     item._xUtilityActions = [
       copySlotRef.current && copyButtonRef.current
@@ -1989,6 +2042,7 @@ function SearchSuggestionRowComponent({
     removable,
     suggestion.type,
     suggestionRef,
+    simpleMode,
     themeHost
   ]);
 
@@ -2029,6 +2083,7 @@ function SearchSuggestionRowComponent({
     immediateTheme,
     options,
     runtime,
+    simpleMode,
     shouldLoadTheme
   ]);
 
@@ -2117,6 +2172,7 @@ function SearchSuggestionRowComponent({
       data-last={last ? 'true' : 'false'}
       data-row-state={isPrimary ? 'active' : undefined}
       data-command-row={command ? 'true' : undefined}
+      data-simple-mode={simpleMode ? 'true' : 'false'}
       onMouseEnter={handleRowMouseEnter}
       onMouseDown={preserveCommandInputFocus}
       onMouseLeave={() => {
@@ -2161,6 +2217,7 @@ function SearchSuggestionRowComponent({
                 options={options}
                 text={suggestion.commandText || ''}
                 queryStore={queryStore}
+                simpleMode={simpleMode}
               />
             </span>
           )}
@@ -2180,6 +2237,7 @@ function SearchSuggestionRowComponent({
                 options={options}
                 text={suggestion.title || ''}
                 queryStore={queryStore}
+                simpleMode={simpleMode}
               />
             )}
           </span>
@@ -2209,12 +2267,15 @@ function SearchSuggestionRowComponent({
             >
               <HighlightedText
                 options={options}
-                text={String(suggestion.url || '')}
+                text={simpleMode
+                  ? options.getUrlDisplay(String(suggestion.url || ''))
+                  : String(suggestion.url || '')}
                 queryStore={queryStore}
+                simpleMode={simpleMode}
               />
             </span>
           )}
-          {suggestion.type === 'history' &&
+          {!simpleMode && suggestion.type === 'history' &&
             !suggestion.isTopSite && (
             <span
               ref={historyTagRef}
@@ -2228,7 +2289,7 @@ function SearchSuggestionRowComponent({
               {options.t('search_tag_history', '历史')}
             </span>
           )}
-          {isTopSite(suggestion) && (
+          {!simpleMode && isTopSite(suggestion) && (
             <span
               ref={topSiteTagRef}
               className={surfaceClass(
@@ -2253,20 +2314,22 @@ function SearchSuggestionRowComponent({
                   {String(suggestion.path)}
                 </span>
               )}
-              <span
-                ref={bookmarkTagRef}
-                className={surfaceClass(
-                  options,
-                  'x-nt-suggestion-tag'
-                )}
-                data-visible="true"
-                data-tag-type="bookmark"
-              >
-                {options.t('search_tag_bookmark', '书签')}
-              </span>
+              {!simpleMode && (
+                <span
+                  ref={bookmarkTagRef}
+                  className={surfaceClass(
+                    options,
+                    'x-nt-suggestion-tag'
+                  )}
+                  data-visible="true"
+                  data-tag-type="bookmark"
+                >
+                  {options.t('search_tag_bookmark', '书签')}
+                </span>
+              )}
             </>
           )}
-          {options.surface === 'overlay' &&
+          {!simpleMode && options.surface === 'overlay' &&
             shouldSwitchMatchedTab && (
             <span
               ref={openTabTagRef}
@@ -2349,14 +2412,16 @@ function SearchSuggestionRowComponent({
                   suggestion
                 )}
               </span>
-              <span
-                className={surfaceClass(
-                  options,
-                  'x-nt-suggestion-action-tag__key'
-                )}
-              >
-                {tag.keyLabel || 'Enter'}
-              </span>
+              {tag.keyLabel ? (
+                <span
+                  className={surfaceClass(
+                    options,
+                    'x-nt-suggestion-action-tag__key'
+                  )}
+                >
+                  {tag.keyLabel}
+                </span>
+              ) : null}
             </span>
           ))}
         </div>
@@ -2463,12 +2528,14 @@ function OpenTabRow({
   runtime,
   tab,
   index,
-  last
+  last,
+  simpleMode
 }: {
   runtime: SuggestionsRuntime;
   tab: OpenTabSuggestion;
   index: number;
   last: boolean;
+  simpleMode: boolean;
 }) {
   const { options } = runtime;
   const itemRef = useRef<SuggestionElement>(null);
@@ -2556,6 +2623,7 @@ function OpenTabRow({
     item._xVisitButtonAction = 'switch';
     item._xSuggestion = tabSuggestion;
     item._xTabId = typeof tab.id === 'number' ? tab.id : null;
+    item._xSimpleMode = simpleMode;
     item._xUtilityActions =
       copySlotRef.current && copyButtonRef.current
         ? [{
@@ -2607,6 +2675,7 @@ function OpenTabRow({
     localFallback,
     options,
     runtime,
+    simpleMode,
     tab.id,
     tabSuggestion,
     themeSuggestion,
@@ -2636,6 +2705,7 @@ function OpenTabRow({
       id={`_x_extension_${options.surface === 'overlay' ? '' : 'newtab_'}suggestion_item_${index}_2024_unique_`}
       className={surfaceClass(options, 'x-nt-suggestion-item')}
       data-last={last ? 'true' : 'false'}
+      data-simple-mode={simpleMode ? 'true' : 'false'}
       onMouseEnter={() => {
         const item = itemRef.current;
         if (!item) {
@@ -2654,7 +2724,7 @@ function OpenTabRow({
           return;
         }
         const theme = item._xTheme;
-        if (theme?._xIsBrand) {
+        if (!simpleMode && theme?._xIsBrand) {
           const hover = options.getHoverColors(theme);
           setSurfaceStyle(
             options,
@@ -2981,6 +3051,7 @@ export function createSuggestionsView(
   );
   let destroyed = false;
   let lastRenderWasSuggestions = false;
+  let lastSimpleModeEnabled = options.isSimpleModeEnabled();
   let suggestionValueRefs = new Map<string, SuggestionValueRef>();
   const runtime: SuggestionsRuntime = {
     options,
@@ -3018,6 +3089,7 @@ export function createSuggestionsView(
       ? payload.suggestions
       : [];
     const query = payload.query || '';
+    const simpleMode = options.isSimpleModeEnabled();
     const renderKeys = getStableRenderKeys(
       suggestions,
       getSuggestionStructureIdentity
@@ -3030,7 +3102,8 @@ export function createSuggestionsView(
     suggestionValueRefs = nextValueRefs.byKey;
     if (
       payload.updateKind === 'highlight' &&
-      lastRenderWasSuggestions
+      lastRenderWasSuggestions &&
+      simpleMode === lastSimpleModeEnabled
     ) {
       flushSync(() => queryStore.set(query));
       syncLatestSuggestionMetadata(options, suggestions);
@@ -3090,6 +3163,7 @@ export function createSuggestionsView(
               payload.onlyKeywordSuggestions
             )}
             last={index === suggestions.length - 1}
+            simpleMode={simpleMode}
           />
         ))
       );
@@ -3097,6 +3171,7 @@ export function createSuggestionsView(
     syncItems(options);
     syncLatestSuggestionMetadata(options, suggestions);
     lastRenderWasSuggestions = true;
+    lastSimpleModeEnabled = simpleMode;
     runtime.updateSelection(options.getSelectedIndex());
   }
 
@@ -3113,6 +3188,7 @@ export function createSuggestionsView(
           Math.max(1, options.openTabSuggestionLimit)
         )
       : [];
+    const simpleMode = options.isSimpleModeEnabled();
     tabs.forEach((tab) => {
       if (tab.favIconUrl) {
         options.preloadIcon(
@@ -3139,11 +3215,13 @@ export function createSuggestionsView(
             tab={tab}
             index={index}
             last={index === tabs.length - 1}
+            simpleMode={simpleMode}
           />
         ))
       );
     });
     lastRenderWasSuggestions = false;
+    lastSimpleModeEnabled = simpleMode;
     syncItems(options);
     options.onSetSelectedIndex(-1);
     runtime.updateSelection(-1);

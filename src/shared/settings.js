@@ -15,6 +15,7 @@
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = '_x_extension_motion_effects_enabled_2026_unique_';
+  const SIMPLE_MODE_ENABLED_STORAGE_KEY = '_x_extension_simple_mode_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
     '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
@@ -65,6 +66,7 @@
     '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_',
     '_x_extension_update_notice_enabled_2026_unique_',
     '_x_extension_motion_effects_enabled_2026_unique_',
+    '_x_extension_simple_mode_enabled_2026_unique_',
     '_x_extension_number_shortcut_instant_enabled_2026_unique_',
     '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_',
     '_x_extension_auto_pip_enabled_2026_unique_',
@@ -210,6 +212,10 @@
 
   function normalizeMotionEffectsEnabled(value) {
     return value !== false;
+  }
+
+  function normalizeSimpleModeEnabled(value) {
+    return value === true;
   }
 
   function normalizeNumberShortcutInstantEnabled(value) {
@@ -417,6 +423,7 @@
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
     MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+    SIMPLE_MODE_ENABLED_STORAGE_KEY,
     NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY,
     MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
@@ -449,6 +456,7 @@
     normalizeBookmarkFolderIconsVisible,
     normalizeUpdateNoticeEnabled,
     normalizeMotionEffectsEnabled,
+    normalizeSimpleModeEnabled,
     normalizeNumberShortcutInstantEnabled,
     normalizeMacosCtrlSuggestionNavigationEnabled,
     shouldSkipEntryMotion,

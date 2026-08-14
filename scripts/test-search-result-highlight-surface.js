@@ -106,8 +106,13 @@ assert.match(
 
 assert.match(
   suggestionsReact,
-  /const highlight = options\.getHighlightColors\(theme\);[\s\S]*?'--x-nt-suggestion-active-bg'[\s\S]*?highlight\.bg/,
-  'React Overlay active suggestions should apply the shared background token'
+  /const highlight = simpleMode[\s\S]*?: options\.getHighlightColors\(theme\);[\s\S]*?'--x-nt-suggestion-active-bg'[\s\S]*?highlight\.bg/,
+  'React Overlay active suggestions should preserve themed backgrounds outside simple mode'
+);
+assert.match(
+  suggestionsReact,
+  /simpleMode[\s\S]*?'var\(--x-ov-hover-bg, #F3F4F6\)'[\s\S]*?'var\(--x-nt-hover-bg, #F3F4F6\)'/,
+  'simple mode should use neutral active backgrounds on both search surfaces'
 );
 
 assert.doesNotMatch(

@@ -49,6 +49,7 @@
     "test:no-usage-stats-code": "node scripts/test-no-usage-stats-code.js",
     "test:options-auto-pip-placement": "node scripts/test-options-auto-pip-placement.js",
     "test:motion-effects-setting": "node scripts/test-motion-effects-setting.js",
+    "test:simple-mode": "node scripts/test-simple-mode-setting.js",
     "test:options-site-search-query-button": "node scripts/test-options-site-search-query-button.js",
     "test:onboarding-content": "node scripts/test-onboarding-content.js",
     "test:ja-ui-copy": "node scripts/test-ja-ui-copy.js",

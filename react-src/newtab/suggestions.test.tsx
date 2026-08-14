@@ -228,6 +228,83 @@ describe('Suggestions React island', () => {
     ).toBe('x-ov-suggestion-mark');
   });
 
+  it('switches decorative search-row treatment only when simple mode is enabled', () => {
+    let simpleModeEnabled = true;
+    const { view, items } = createView({
+      surface: 'overlay',
+      isSimpleModeEnabled: () => simpleModeEnabled,
+      getUrlDisplay: (url) => url
+        .replace(/^https?:\/\/(?:www\.)?/i, '')
+    });
+    const suggestions = [{
+      type: 'history',
+      title: 'Example result',
+      url: 'https://www.example.com/page'
+    }];
+
+    render(view, suggestions, {
+      primaryHighlightReason: 'autocomplete'
+    });
+
+    expect(items[0].dataset.simpleMode).toBe('true');
+    expect(items[0].querySelector('mark')).toBeNull();
+    expect(
+      items[0].querySelector('.x-ov-suggestion-url-line')?.textContent
+    ).toBe('example.com/page');
+    expect(
+      items[0].querySelector('[data-tag-type="history"]')
+    ).toBeNull();
+    expect(items[0].querySelector('.x-ov-action-tag__key')).toBeNull();
+    expect(items[0]._xVisitButton?.dataset.visible).toBe('false');
+    expect(
+      items[0].style.getPropertyValue('--x-ov-suggestion-row-bg')
+    ).toBe('var(--x-ov-hover-bg, #F3F4F6)');
+
+    const utilityButton = items[0].querySelector<HTMLButtonElement>(
+      '.x-ov-suggestion-utility-button'
+    ) as HTMLButtonElement;
+    act(() => {
+      items[0].dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+      utilityButton.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+    });
+    expect(utilityButton.dataset.visible).toBe('true');
+    expect(utilityButton.style.getPropertyValue(
+      '--x-ov-suggestion-utility-color'
+    )).toBe('var(--x-ov-subtext, #6B7280)');
+    expect(utilityButton.style.getPropertyValue(
+      '--x-ov-suggestion-utility-bg'
+    )).toBe('transparent');
+    expect(utilityButton.style.getPropertyValue(
+      '--x-ov-suggestion-utility-border'
+    )).toBe('transparent');
+    expect(utilityButton.style.getPropertyValue(
+      '--x-ov-suggestion-utility-hover-bg'
+    )).toBe('#f5f5f5');
+    expect(utilityButton.style.getPropertyValue(
+      '--x-ov-suggestion-utility-hover-color'
+    )).toBe('#555');
+
+    simpleModeEnabled = false;
+    render(view, suggestions, {
+      primaryHighlightReason: 'autocomplete',
+      updateKind: 'highlight'
+    });
+
+    expect(items[0].dataset.simpleMode).toBe('false');
+    expect(items[0].querySelector('mark')?.textContent).toBe('Exa');
+    expect(
+      items[0].querySelector('[data-tag-type="history"]')
+        ?.getAttribute('data-visible')
+    ).toBe('true');
+    expect(
+      items[0].querySelector('.x-ov-action-tag__key')?.textContent
+    ).toBe('Enter');
+  });
+
   it('highlights separate query terms in both the title and URL', () => {
     const { view, items } = createView();
 

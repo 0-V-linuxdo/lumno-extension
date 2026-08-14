@@ -259,6 +259,12 @@
   "settings_motion_effects_desc": {
     "message": "若遇到卡頓，或偏好更俐落的喚起方式，可關閉"
   },
+  "settings_simple_mode_title": {
+    "message": "簡潔模式"
+  },
+  "settings_simple_mode_desc": {
+    "message": "移除更多裝飾元素，讓搜尋框更整潔"
+  },
   "settings_auto_pip_title": {
     "message": "自動畫中畫"
   },

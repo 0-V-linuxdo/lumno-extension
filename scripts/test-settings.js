@@ -1,13 +1,14 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 52);
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 53);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
 );
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_language_2024_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_motion_effects_enabled_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_simple_mode_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_number_shortcut_instant_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_'));
@@ -31,6 +32,10 @@ assert(!settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_local_wa
 assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(undefined), false);
 assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(true), true);
 assert.strictEqual(settings.normalizeNewtabInputAutoFocusEnabled(false), false);
+assert.strictEqual(settings.normalizeSimpleModeEnabled(undefined), false);
+assert.strictEqual(settings.normalizeSimpleModeEnabled(false), false);
+assert.strictEqual(settings.normalizeSimpleModeEnabled(true), true);
+assert.strictEqual(settings.normalizeSimpleModeEnabled('true'), false);
 
 assert.strictEqual(settings.normalizeLocale(''), 'en');
 assert.strictEqual(settings.normalizeLocale('en-US'), 'en');

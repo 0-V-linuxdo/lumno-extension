@@ -13,6 +13,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySearchResultDisplayLimitStorageListener = null;
   let overlayNumberShortcutInstantStorageListener = null;
   let overlayMacosCtrlSuggestionNavigationStorageListener = null;
+  let overlaySimpleModeStorageListener = null;
   let overlaySearchBlacklistStorageListener = null;
   let overlayFaviconEnhancedFetchStorageListener = null;
   let overlayOpenTabsDefaultVisibleStorageListener = null;
@@ -261,6 +262,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     '_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_';
   const MOTION_EFFECTS_ENABLED_STORAGE_KEY = overlayStorageKeys.motionEffectsEnabled ||
     '_x_extension_motion_effects_enabled_2026_unique_';
+  const SIMPLE_MODE_ENABLED_STORAGE_KEY = overlayStorageKeys.simpleModeEnabled ||
+    '_x_extension_simple_mode_enabled_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = overlayStorageKeys.numberShortcutInstantEnabled ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
@@ -294,6 +297,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySizeMode = 'standard';
   let overlayEnterAnimation = 'elastic';
   let motionEffectsEnabled = true;
+  let simpleModeEnabled = false;
   let overlayPageThemeAdaptationEnabled = true;
   const OVERLAY_ENTER_MOTION = Object.freeze({
     elastic: Object.freeze({
@@ -332,6 +336,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       OVERLAY_SIZE_MODE_STORAGE_KEY,
       OVERLAY_ENTER_ANIMATION_STORAGE_KEY,
       MOTION_EFFECTS_ENABLED_STORAGE_KEY,
+      SIMPLE_MODE_ENABLED_STORAGE_KEY,
       FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
       FAVICON_REQUEST_BLACKLIST_STORAGE_KEY,
       SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
@@ -351,6 +356,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       ? SETTINGS.normalizeMotionEffectsEnabled(result[MOTION_EFFECTS_ENABLED_STORAGE_KEY])
       : result[MOTION_EFFECTS_ENABLED_STORAGE_KEY] !== false;
     return motionEffectsEnabled;
+  });
+  const initialSimpleModeReady = initialOverlaySettingsReady.then((result) => {
+    const rawValue = result[SIMPLE_MODE_ENABLED_STORAGE_KEY];
+    simpleModeEnabled = typeof SETTINGS.normalizeSimpleModeEnabled === 'function'
+      ? SETTINGS.normalizeSimpleModeEnabled(rawValue)
+      : rawValue === true;
+    return simpleModeEnabled;
   });
   const initialSearchResultDisplayLimitReady = initialOverlaySettingsReady.then((result) => {
     const rawValue = result[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY];
@@ -1544,6 +1556,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (overlayMacosCtrlSuggestionNavigationStorageListener) {
       chrome.storage.onChanged.removeListener(overlayMacosCtrlSuggestionNavigationStorageListener);
       overlayMacosCtrlSuggestionNavigationStorageListener = null;
+    }
+    if (overlaySimpleModeStorageListener) {
+      chrome.storage.onChanged.removeListener(overlaySimpleModeStorageListener);
+      overlaySimpleModeStorageListener = null;
     }
     if (overlaySearchBlacklistStorageListener) {
       chrome.storage.onChanged.removeListener(overlaySearchBlacklistStorageListener);
@@ -3967,6 +3983,25 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           : rawValue === true;
     };
     chrome.storage.onChanged.addListener(overlayMacosCtrlSuggestionNavigationStorageListener);
+    overlaySimpleModeStorageListener = (changes, areaName) => {
+      if (!isPrimaryStorageAreaName(areaName) || !changes[SIMPLE_MODE_ENABLED_STORAGE_KEY]) {
+        return;
+      }
+      const rawValue = changes[SIMPLE_MODE_ENABLED_STORAGE_KEY].newValue;
+      simpleModeEnabled = typeof SETTINGS.normalizeSimpleModeEnabled === 'function'
+        ? SETTINGS.normalizeSimpleModeEnabled(rawValue)
+        : rawValue === true;
+      if (openTabsSearchModeActive || (!latestOverlayQuery && shouldShowOpenTabsForEmptyQuery())) {
+        renderTabSuggestions(filterTabsForOverlay(tabs, latestOverlayQuery));
+        return;
+      }
+      if (latestOverlayQuery) {
+        updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery, {
+          forceFullRerender: true
+        });
+      }
+    };
+    chrome.storage.onChanged.addListener(overlaySimpleModeStorageListener);
     overlaySearchBlacklistStorageListener = (changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
         return;
@@ -7812,6 +7847,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         getBrowserPageFaviconUrl: getPageFaviconCandidateUrl,
         getPageFaviconRenderCandidates: getReactOverlayFaviconCandidates,
         getHostFromUrl,
+        getUrlDisplay,
+        isSimpleModeEnabled: () => simpleModeEnabled,
         getThemeHostForSuggestion: (suggestion) => (
           suggestion && suggestion.url ? getHostFromUrl(suggestion.url) : ''
         ),
@@ -8277,9 +8314,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ? null
         : {
           type: 'newtab',
-          title: formatMessage('search_query', '搜索 "{query}"', {
-            query: query
-          }),
+          title: simpleModeEnabled
+            ? query
+            : formatMessage('search_query', '搜索 "{query}"', {
+                query: query
+              }),
           url: buildDefaultSearchUrlForOverlay(query),
           favicon: getDefaultSearchEngineFaviconUrlForOverlay(),
           searchQuery: query,
@@ -8711,7 +8750,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     const initialOverlayContentReady = Promise.all([
       initialOverlayOpenTabsDefaultVisibleReady,
-      initialFaviconEnhancedFetchReady
+      initialFaviconEnhancedFetchReady,
+      initialSimpleModeReady
     ]).then(() => initialSearchResultDisplayLimitReady).then(() => {
       if (!overlay || !overlay.isConnected) {
         return false;
@@ -8772,6 +8812,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }),
       initialMotionEffectsReady.catch(() => {
         motionEffectsEnabled = true;
+      }),
+      initialSimpleModeReady.catch(() => {
+        simpleModeEnabled = false;
       }),
       initialNumberShortcutInstantReady.catch(() => {
         numberShortcutInstantEnabled = false;

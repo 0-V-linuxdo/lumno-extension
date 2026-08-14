@@ -259,6 +259,12 @@
   "settings_motion_effects_desc": {
     "message": "Turn this off if performance stutters or you prefer a snappier opening experience"
   },
+  "settings_simple_mode_title": {
+    "message": "Minimal mode"
+  },
+  "settings_simple_mode_desc": {
+    "message": "Remove more decorative elements for a cleaner search box"
+  },
   "settings_auto_pip_title": {
     "message": "Auto Picture-in-Picture"
   },

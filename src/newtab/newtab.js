@@ -123,6 +123,8 @@
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
     SETTINGS.MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY ||
     '_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_';
+  const SIMPLE_MODE_ENABLED_STORAGE_KEY = SETTINGS.SIMPLE_MODE_ENABLED_STORAGE_KEY ||
+    '_x_extension_simple_mode_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
@@ -452,6 +454,7 @@
   let newtabInputAutoFocusEnabled = false;
   let numberShortcutInstantEnabled = false;
   let macosCtrlSuggestionNavigationEnabled = false;
+  let simpleModeEnabled = false;
   let zenModeEnabled = false;
   let bookmarkCurrentPage = 0;
   let bookmarkAllItems = [];
@@ -1282,6 +1285,28 @@
   }
 
   const initialNumberShortcutInstantReadyTask = loadNumberShortcutInstantEnabled();
+
+  function normalizeSimpleModeEnabled(value) {
+    return typeof SETTINGS.normalizeSimpleModeEnabled === 'function'
+      ? SETTINGS.normalizeSimpleModeEnabled(value)
+      : value === true;
+  }
+
+  function loadSimpleModeEnabled() {
+    if (!storageArea) {
+      simpleModeEnabled = false;
+      return Promise.resolve(simpleModeEnabled);
+    }
+    return new Promise((resolve) => {
+      storageArea.get([SIMPLE_MODE_ENABLED_STORAGE_KEY], (result) => {
+        const rawValue = result && result[SIMPLE_MODE_ENABLED_STORAGE_KEY];
+        simpleModeEnabled = normalizeSimpleModeEnabled(rawValue);
+        resolve(simpleModeEnabled);
+      });
+    });
+  }
+
+  loadSimpleModeEnabled();
 
   function normalizeMacosCtrlSuggestionNavigationEnabled(value) {
     return typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
@@ -5014,6 +5039,14 @@
         macosCtrlSuggestionNavigationEnabled = normalizeMacosCtrlSuggestionNavigationEnabled(
           changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY].newValue
         );
+      }
+      if (changes[SIMPLE_MODE_ENABLED_STORAGE_KEY]) {
+        simpleModeEnabled = normalizeSimpleModeEnabled(
+          changes[SIMPLE_MODE_ENABLED_STORAGE_KEY].newValue
+        );
+        if (latestQuery) {
+          renderSuggestions(lastSuggestionResponse, latestQuery);
+        }
       }
       if (changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         openTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY].newValue);
@@ -13900,6 +13933,8 @@
     shouldBlockFaviconForHost,
     isLocalNetworkHost,
     getHostFromUrl,
+    getUrlDisplay,
+    isSimpleModeEnabled: () => simpleModeEnabled,
     getThemeHostForSuggestion,
     getImmediateThemeForSuggestion,
     getThemeForSuggestion,
@@ -14246,9 +14281,11 @@
         ? null
         : {
           type: 'newtab',
-          title: formatMessage('search_query', '搜索 "{query}"', {
-            query: query
-          }),
+          title: simpleModeEnabled
+            ? query
+            : formatMessage('search_query', '搜索 "{query}"', {
+                query: query
+              }),
           url: buildDefaultSearchUrl(query),
           favicon: getDefaultSearchEngineFaviconUrl(),
           searchQuery: query,
