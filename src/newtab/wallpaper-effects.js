@@ -147,6 +147,9 @@
     let resizeTransitionFrame = 0;
     let resizeTransitionTimer = 0;
     let shouldCrossfadeResize = false;
+    let renderRequestRevision = 0;
+    let renderCompletedRevision = 0;
+    const renderWaiters = [];
 
     function requestFrame(callback) {
       if (windowObj && typeof windowObj.requestAnimationFrame === 'function') {
@@ -364,6 +367,27 @@
         canvas.style.mixBlendMode = 'normal';
       }
       onRender();
+    }
+
+    function waitForRenderRevision(revision) {
+      if (renderCompletedRevision >= revision) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        renderWaiters.push({ revision, resolve });
+      });
+    }
+
+    function completeRender(revision) {
+      renderCompletedRevision = Math.max(renderCompletedRevision, revision);
+      for (let index = renderWaiters.length - 1; index >= 0; index -= 1) {
+        const waiter = renderWaiters[index];
+        if (waiter.revision > renderCompletedRevision) {
+          continue;
+        }
+        renderWaiters.splice(index, 1);
+        waiter.resolve();
+      }
     }
 
     function loadImage(url, token) {
@@ -860,14 +884,16 @@
       );
     }
 
-    function renderNow() {
+    function renderNow(revision) {
       renderFrame = 0;
       const normalized = normalizePrefs(prefs);
       if (normalized.type === 'none' || !isWallpaperActive()) {
         clearCanvas();
+        completeRender(revision);
         return;
       }
       if (!ensureCanvas()) {
+        completeRender(revision);
         return;
       }
       const crossfadeResize = shouldCrossfadeResize &&
@@ -878,41 +904,66 @@
       }
       const viewport = resizeCanvas();
       if (!viewport) {
+        completeRender(revision);
         return;
       }
       const token = ++renderToken;
       if (normalized.type === 'grain') {
         drawGrain(viewport, normalized.strength);
+        completeRender(revision);
         return;
       }
       const wallpaper = getCurrentWallpaper();
       const imageUrl = wallpaper ? getWallpaperImageUrl(wallpaper) : '';
       loadImage(imageUrl, token).then((image) => {
-        if (token !== renderToken || !image) {
+        if (token !== renderToken) {
+          return;
+        }
+        if (!image) {
+          clearCanvas();
+          completeRender(revision);
           return;
         }
         const sampler = getSampler(image, imageUrl);
         if (!sampler) {
           clearCanvas();
+          completeRender(revision);
           return;
         }
         const nextViewport = resizeCanvas();
         if (!nextViewport) {
+          completeRender(revision);
           return;
         }
         if (normalized.type === 'halftone') {
           drawHalftone(nextViewport, sampler, normalized.strength, normalized.size, normalized.spacing);
+          completeRender(revision);
           return;
         }
         if (normalized.type === 'ascii') {
           drawAscii(nextViewport, sampler, normalized.strength, normalized.size, normalized.spacing);
         }
+        completeRender(revision);
       }).catch(() => {
         clearCanvas();
+        completeRender(revision);
       });
     }
 
+    function runRenderNow(revision) {
+      try {
+        renderNow(revision);
+      } catch (_error) {
+        try {
+          clearCanvas();
+        } finally {
+          completeRender(revision);
+        }
+      }
+    }
+
     function scheduleRender(delay) {
+      const revision = ++renderRequestRevision;
       if (renderFrame) {
         cancelFrame(renderFrame);
         renderFrame = 0;
@@ -925,11 +976,12 @@
       if (wait > 0) {
         renderTimer = setTimeout(() => {
           renderTimer = 0;
-          renderFrame = requestFrame(renderNow);
+          renderFrame = requestFrame(() => runRenderNow(revision));
         }, wait);
-        return;
+        return revision;
       }
-      renderFrame = requestFrame(renderNow);
+      renderFrame = requestFrame(() => runRenderNow(revision));
+      return revision;
     }
 
     function apply(nextPrefs) {
@@ -964,18 +1016,18 @@
       scheduleRender();
     }
 
-    function refresh() {
+    function refresh(options) {
       const normalized = normalizePrefs(prefs);
+      const immediate = Boolean(options && options.immediate);
       if (canvas &&
           context &&
           canAnimateTransition() &&
           normalized.type !== 'none' &&
           getCanvasOpacity() > 0.01) {
         canvas.style.opacity = '0';
-        scheduleRender(EFFECT_CROSSFADE_MS);
-        return;
+        return waitForRenderRevision(scheduleRender(immediate ? 0 : EFFECT_CROSSFADE_MS));
       }
-      scheduleRender(60);
+      return waitForRenderRevision(scheduleRender(immediate ? 0 : 60));
     }
 
     if (windowObj && typeof windowObj.addEventListener === 'function') {

@@ -305,6 +305,51 @@ describe('Suggestions React island', () => {
     ).toBe('Enter');
   });
 
+  it('removes trailing result arrows outside simple mode on both search surfaces', () => {
+    (['newtab', 'overlay'] as const).forEach((surface) => {
+      let simpleModeEnabled = false;
+      const { view, items } = createView({
+        surface,
+        isSimpleModeEnabled: () => simpleModeEnabled
+      });
+
+      render(view, [{
+        type: 'history',
+        title: 'Example result',
+        url: 'https://example.com/'
+      }]);
+      expect(
+        items[0].querySelector('.ri-arrow-right-line'),
+        `${surface} search result`
+      ).toBeNull();
+
+      act(() => {
+        view.renderTabs([{
+          id: 42,
+          title: 'Example tab',
+          url: 'https://example.com/tab'
+        }]);
+      });
+      expect(
+        items[0].querySelector('.ri-arrow-right-line'),
+        `${surface} open-tab result`
+      ).toBeNull();
+
+      simpleModeEnabled = true;
+      act(() => {
+        view.renderTabs([{
+          id: 42,
+          title: 'Example tab',
+          url: 'https://example.com/tab'
+        }]);
+      });
+      expect(
+        items[0].querySelector('.ri-arrow-right-line'),
+        `${surface} simple-mode open-tab result`
+      ).not.toBeNull();
+    });
+  });
+
   it('highlights separate query terms in both the title and URL', () => {
     const { view, items } = createView();
 

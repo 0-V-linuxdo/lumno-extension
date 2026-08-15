@@ -24,7 +24,7 @@ assert(
 );
 assert.match(
   appearanceContent,
-  /data-i18n="settings_simple_mode_desc">移除更多装饰元素，使搜索框更整洁</,
+  /data-i18n="settings_simple_mode_desc">移除更多提示元素，使搜索框更简洁</,
   'the Simplified Chinese fallback should use the requested description'
 );
 assert.match(
@@ -99,7 +99,7 @@ assert.match(
 const expectedCopy = {
   en: ['Minimal mode', 'Remove more decorative elements for a cleaner search box'],
   ja: ['シンプルモード', '装飾要素を減らし、検索ボックスをすっきり表示します'],
-  zh_CN: ['简洁模式', '移除更多装饰元素，使搜索框更整洁'],
+  zh_CN: ['简洁模式', '移除更多提示元素，使搜索框更简洁'],
   zh_TW: ['簡潔模式', '移除更多裝飾元素，讓搜尋框更整潔']
 };
 Object.entries(expectedCopy).forEach(([locale, [title, description]]) => {

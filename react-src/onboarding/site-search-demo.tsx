@@ -360,9 +360,6 @@ function SearchResult({
           <span className="x-ov-inline-label">
             {String(item.actionLabel || model.openLabel)}
           </span>
-          <span className="x-ov-inline-icon">
-            <Icon className="ri-arrow-right-line ri-size-12" />
-          </span>
         </button>
       </div>
     </div>

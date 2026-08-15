@@ -6,9 +6,20 @@
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" type="image/svg+xml" sizes="any" href="../../assets/images/lumno-newtab-favicon.svg" data-lumno-newtab-favicon="true" data-newtab-favicon-id="alternate" />
     <title>New Tab</title>
+    <style data-nt-focus-paint-gate="true">
+      html[data-nt-focus-route-pending="true"] {
+        visibility: hidden;
+      }
+      html[data-nt-focus-route-pending="true"] body,
+      html[data-nt-focus-route="true"] body:not([data-nt-wallpaper-ready="1"]) {
+        visibility: hidden;
+        background-image: none !important;
+      }
+    </style>
     <script src="../shared/settings.js"></script>
     <script src="newtab-focus-entry.js"></script>
     <script src="../shared/motion-preload.js"></script>
+    <script src="wallpaper-effects.js"></script>
     <script src="wallpaper-preload.js"></script>
     <link rel="stylesheet" href="../../assets/fonts/open-sans/open-sans.css" />
     <link rel="stylesheet" href="../../assets/remixicon/fonts/remixicon.css" />
@@ -22,9 +33,6 @@
     <link rel="stylesheet" href="shortcut-dialog.css" />
     <!-- Thanks to the Remix Icon project; this extension uses its icon set: https://remixicon.com/ -->
     <style>
-      html[data-nt-focus-route-pending="true"] {
-        visibility: hidden;
-      }
       html,
       body {
         height: 100%;
@@ -6544,6 +6552,7 @@
     </style>
   </head>
   <body class="notranslate" translate="no" notranslate data-no-translate="true" data-lumno-page="newtab">
+    <script src="wallpaper-effect-preload.js"></script>
     <div id="_x_extension_newtab_root_2024_unique_" class="x-lumno-search-entry"></div>
     <div id="_x_extension_toast_2024_unique_" class="_x_extension_toast_2024_unique_ x-lumno-toast" data-show="false" role="status" aria-live="polite"></div>
     <script src="../shared/codex-debug-surface.js"></script>
@@ -6587,7 +6596,6 @@
     <script src="shortcut-icon-store.js"></script>
     <script src="wallpaper-local-store.js"></script>
     <script src="wallpaper-adaptive-tone.js"></script>
-    <script src="wallpaper-effects.js"></script>
     <script src="wallpaper.js"></script>
     <script src="../overlay/tab-switcher.js"></script>
     <script

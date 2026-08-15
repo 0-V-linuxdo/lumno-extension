@@ -252,23 +252,6 @@ function SourceTag({ result }: { result: BookmarkFocusResult }) {
   );
 }
 
-function InlineAction({
-  iconClass,
-  label
-}: {
-  iconClass: string;
-  label: string;
-}) {
-  return (
-    <>
-      <span className="x-ov-inline-label">{label}</span>
-      <span className="x-ov-inline-icon">
-        <Icon className={iconClass} />
-      </span>
-    </>
-  );
-}
-
 function OverlayResult({
   active,
   index,
@@ -339,10 +322,9 @@ function OverlayResult({
           data-visible={showActionTag ? 'false' : 'true'}
           type="button"
         >
-          <InlineAction
-            iconClass="ri-arrow-right-line ri-size-12"
-            label={String(result.visitButtonLabel || model.openLabel)}
-          />
+          <span className="x-ov-inline-label">
+            {String(result.visitButtonLabel || model.openLabel)}
+          </span>
         </button>
         {result.historyDeletable ? (
           <div className="x-ov-suggestion-utility-slot" data-visible="false">

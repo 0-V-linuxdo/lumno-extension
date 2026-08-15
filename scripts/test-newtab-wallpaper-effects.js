@@ -122,6 +122,8 @@ assert.match(
 
 const effectsSource = fs.readFileSync('src/newtab/wallpaper-effects.js', 'utf8');
 const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
+const wallpaperPreloadSource = fs.readFileSync('src/newtab/wallpaper-preload.js', 'utf8');
+const effectPreloadSource = fs.readFileSync('src/newtab/wallpaper-effect-preload.js', 'utf8');
 vm.runInNewContext(wallpaperSource, sandbox, {
   filename: 'src/newtab/wallpaper.js'
 });
@@ -211,5 +213,182 @@ assert.match(
   /visualPrefsChanged && previousType === prefs\.type[\s\S]*?scheduleRender\(PARAMETER_RENDER_DEBOUNCE_MS\)/,
   'continuous parameter input should debounce expensive full-layer renders'
 );
+assert.match(
+  effectsSource,
+  /function refresh\(options\)[\s\S]*?return waitForRenderRevision\(scheduleRender/,
+  'wallpaper effect refreshes should expose render completion for first-paint gating'
+);
+assert.match(
+  wallpaperSource,
+  /function waitForInitialWallpaperEffectVisual\(\)[\s\S]*?initialWallpaperReadyPromise[\s\S]*?wallpaperEffects\.refresh\(\{ immediate: true \}\)/,
+  'the New Tab should wait for the selected wallpaper effect to render before becoming ready'
+);
+assert.ok(
+  newtabHtml.indexOf('<script src="wallpaper-effects.js"></script>') <
+    newtabHtml.indexOf('<script src="wallpaper-preload.js"></script>'),
+  'the wallpaper effect renderer should load before the head preload fast path'
+);
+assert.ok(
+  newtabHtml.indexOf('<script src="wallpaper-effect-preload.js"></script>') <
+    newtabHtml.indexOf('<div id="_x_extension_newtab_root_2024_unique_"'),
+  'the focused-route wallpaper effect should start before New Tab content bootstraps'
+);
+assert.match(
+  wallpaperSource,
+  /wallpaperEffects:\s*getWallpaperEffectStorageValue\(\)/,
+  'the synchronous wallpaper preload cache should retain the current mode-aware effect'
+);
+assert.match(
+  wallpaperSource,
+  /wallpaperEffectPreload && wallpaperEffectPreload\.controller[\s\S]*?wallpaperEffects = wallpaperEffectPreload\.controller/,
+  'the full wallpaper runtime should adopt the early effect canvas instead of repainting it'
+);
+assert.match(
+  wallpaperPreloadSource,
+  /effectPrefsReady:\s*readStoredEffectPrefs\(cachedWallpaper\.mode, cachedWallpaper\.effectPrefs\)/,
+  'the head preload should use cached effect preferences and fall back to an early storage read'
+);
 
-process.stdout.write('new tab wallpaper effects tests passed\n');
+function createFakeCanvas() {
+  const attributes = new Map();
+  const context = {
+    setTransform() {},
+    clearRect() {},
+    createImageData(width, height) {
+      return { data: new Uint8ClampedArray(width * height * 4) };
+    },
+    putImageData() {},
+    createPattern() {
+      return {};
+    },
+    fillRect() {}
+  };
+  return {
+    className: '',
+    height: 0,
+    parentNode: null,
+    style: {},
+    width: 0,
+    getAttribute(name) {
+      return attributes.get(name) || null;
+    },
+    getContext() {
+      return context;
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+    },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    }
+  };
+}
+
+async function testEffectRefreshWaitsForPaint() {
+  const bodyAttributes = new Map([['data-wallpaper-active', 'true']]);
+  const createdCanvases = [];
+  const body = {
+    firstChild: null,
+    getAttribute(name) {
+      return bodyAttributes.get(name) || null;
+    },
+    insertBefore(element) {
+      element.parentNode = this;
+      this.firstChild = element;
+    }
+  };
+  const documentObj = {
+    body,
+    documentElement: { clientHeight: 800, clientWidth: 1200 },
+    createElement() {
+      const canvas = createFakeCanvas();
+      createdCanvases.push(canvas);
+      return canvas;
+    }
+  };
+  const windowObj = {
+    devicePixelRatio: 1,
+    innerHeight: 800,
+    innerWidth: 1200,
+    addEventListener() {},
+    cancelAnimationFrame: clearTimeout,
+    requestAnimationFrame(callback) {
+      return setTimeout(callback, 0);
+    }
+  };
+  const controller = effects.createWallpaperEffects({
+    documentObj,
+    windowObj,
+    getCurrentWallpaper: () => ({ id: 'test-wallpaper' }),
+    getWallpaperImageUrl: () => '',
+    shouldAnimateTransition: () => false
+  });
+  controller.apply({ type: 'grain', strength: 50, size: 50, spacing: 50 });
+  await controller.refresh({ immediate: true });
+  assert.strictEqual(createdCanvases[0].getAttribute('data-effect'), 'grain');
+  assert.notStrictEqual(createdCanvases[0].style.opacity, '0');
+}
+
+async function testFocusedRoutePreloadsEffectBeforeContent() {
+  const attributes = new Map();
+  const body = {
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    }
+  };
+  const appliedPrefs = [];
+  const controller = {
+    apply(prefs) {
+      appliedPrefs.push(prefs);
+    },
+    refresh() {
+      return Promise.resolve();
+    }
+  };
+  const preloadSandbox = {
+    console,
+    document: {
+      body,
+      documentElement: {
+        getAttribute(name) {
+          return name === 'data-nt-focus-route' ? 'true' : null;
+        }
+      }
+    },
+    LumnoNewtabWallpaperEffects: {
+      createWallpaperEffects() {
+        return controller;
+      },
+      normalizePrefs(value) {
+        return value;
+      }
+    },
+    LumnoNewtabWallpaperPreload: {
+      effectPrefsReady: Promise.resolve({ type: 'grain', strength: 50, size: 50, spacing: 50 }),
+      imageUrl: 'chrome-extension://abc/assets/wallpapers/test.webp',
+      wallpaper: { id: 'test-wallpaper' }
+    },
+    window: {}
+  };
+  preloadSandbox.globalThis = preloadSandbox;
+  vm.runInNewContext(effectPreloadSource, preloadSandbox, {
+    filename: 'src/newtab/wallpaper-effect-preload.js'
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.strictEqual(appliedPrefs.length, 1);
+  assert.strictEqual(attributes.get('data-wallpaper-effect'), 'grain');
+  assert.strictEqual(attributes.get('data-nt-wallpaper-ready'), '1');
+  assert.strictEqual(preloadSandbox.LumnoNewtabWallpaperEffectPreload.controller, controller);
+}
+
+Promise.all([
+  testEffectRefreshWaitsForPaint(),
+  testFocusedRoutePreloadsEffectBeforeContent()
+]).then(() => {
+  process.stdout.write('new tab wallpaper effects tests passed\n');
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

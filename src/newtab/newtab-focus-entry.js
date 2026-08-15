@@ -1,6 +1,10 @@
 (function() {
   const locationUrl = new URL(window.location.href);
   if (locationUrl.searchParams.get('focus') === '1') {
+    const documentElement = document.documentElement;
+    if (documentElement) {
+      documentElement.setAttribute('data-nt-focus-route', 'true');
+    }
     return;
   }
 

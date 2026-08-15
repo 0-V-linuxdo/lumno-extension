@@ -412,6 +412,11 @@ describe('Onboarding visual surface React island', () => {
         ?.getAttribute('aria-label')
     ).toBe('Demo settings');
     expect(
+      surface?.querySelector(
+        '.site-search-demo-result .ri-arrow-right-line'
+      )
+    ).toBeNull();
+    expect(
       cards?.[1]?.querySelector('.site-search-demo-mode-prefix__icon')
     ).not.toBeNull();
   });
@@ -471,6 +476,11 @@ describe('Onboarding visual surface React island', () => {
     expect(surface?.querySelectorAll('.surface-rail-dot')).toHaveLength(3);
     expect(surface?.querySelectorAll('.browser-page-row')).toHaveLength(4);
     expect(surface?.querySelectorAll('.lumno-overlay-result')).toHaveLength(3);
+    expect(
+      surface?.querySelector(
+        '.lumno-overlay-result .ri-arrow-right-line'
+      )
+    ).toBeNull();
     expect(
       surface?.querySelectorAll('.lumno-overlay-query-text .onboarding-typing-char')
     ).toHaveLength(9);

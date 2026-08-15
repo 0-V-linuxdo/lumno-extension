@@ -2692,6 +2692,18 @@
     return wallpaperRuntime ? wallpaperRuntime.bootstrapInitialWallpaperEffect() : Promise.resolve();
   }
 
+  function waitForInitialWallpaperEffectVisual() {
+    return wallpaperRuntime && typeof wallpaperRuntime.waitForInitialWallpaperEffectVisual === 'function'
+      ? wallpaperRuntime.waitForInitialWallpaperEffectVisual()
+      : Promise.resolve();
+  }
+
+  function markInitialWallpaperVisualReady() {
+    if (document.body) {
+      document.body.setAttribute('data-nt-wallpaper-ready', '1');
+    }
+  }
+
   function bootstrapInitialNewtabFavicon() {
     return wallpaperRuntime && typeof wallpaperRuntime.bootstrapInitialNewtabFavicon === 'function'
       ? wallpaperRuntime.bootstrapInitialNewtabFavicon()
@@ -4169,11 +4181,18 @@
   window.addEventListener('pagehide', hideToast);
 
   const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay();
-  const initialAppearanceReadyTask = Promise.all([
+  const initialWallpaperVisualReadyTask = Promise.all([
     bootstrapInitialThemeMode(),
     initialWallpaperOverlayReadyTask.then(() => bootstrapInitialWallpaper()),
     initialWallpaperOverlayReadyTask,
-    bootstrapInitialWallpaperEffect(),
+    bootstrapInitialWallpaperEffect()
+  ]).then(() => waitForInitialWallpaperEffectVisual()).catch((error) => {
+    console.warn('[Lumno] Initial new tab wallpaper setup failed.', error);
+  }).then(() => {
+    markInitialWallpaperVisualReady();
+  });
+  const initialAppearanceReadyTask = Promise.all([
+    initialWallpaperVisualReadyTask,
     bootstrapInitialNewtabFavicon()
   ]).catch((error) => {
     console.warn('[Lumno] Initial new tab appearance setup failed.', error);
@@ -15398,6 +15417,22 @@
     retryDelays.forEach((delay) => {
       setTimeout(attemptFocusIfVisible, delay);
     });
+
+    if (document.body &&
+        document.body.getAttribute('data-nt-ready') !== '1' &&
+        typeof window.MutationObserver === 'function') {
+      const readyObserver = new window.MutationObserver(() => {
+        if (document.body.getAttribute('data-nt-ready') !== '1') {
+          return;
+        }
+        readyObserver.disconnect();
+        setTimeout(attemptFocusIfVisible, 0);
+      });
+      readyObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-nt-ready']
+      });
+    }
 
     window.addEventListener('focus', () => {
       setTimeout(attemptFocusIfVisible, 0);

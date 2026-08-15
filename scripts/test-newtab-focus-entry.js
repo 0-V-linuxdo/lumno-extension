@@ -19,6 +19,11 @@ assert.match(
   'the maintained New Tab page should load the preference-aware focus entry router'
 );
 assert.ok(
+  html.indexOf('<style data-nt-focus-paint-gate="true">') <
+    html.indexOf('<script src="../shared/settings.js"></script>'),
+  'the New Tab paint gate should be parsed before visual preload scripts can expose the wallpaper'
+);
+assert.ok(
   html.indexOf('<script src="../shared/settings.js"></script>') <
     html.indexOf('<script src="newtab-focus-entry.js"></script>'),
   'the shared setting contract should load before the focus entry router'
@@ -30,8 +35,13 @@ assert.ok(
 );
 assert.match(
   html,
-  /html\[data-nt-focus-route-pending="true"\][\s\S]*visibility:\s*hidden/,
-  'the direct New Tab page should stay hidden while an enabled redirect decision is pending'
+  /html\[data-nt-focus-route-pending="true"\] body,\s*html\[data-nt-focus-route="true"\] body:not\(\[data-nt-wallpaper-ready="1"\]\)\s*\{\s*visibility:\s*hidden;\s*background-image:\s*none !important;/,
+  'pending and focused New Tab routes should suppress the propagated body wallpaper until the final effect is ready'
+);
+assert.match(
+  html,
+  /<style data-nt-focus-paint-gate="true">[\s\S]*?<\/style>\s*<script src="\.\.\/shared\/settings\.js"><\/script>/,
+  'the focused destination paint gate should be available before focus routing starts'
 );
 
 function runEntry({ storedValue, search = '', storageAvailable = true }) {
@@ -115,6 +125,11 @@ function runEntry({ storedValue, search = '', storageAvailable = true }) {
   const result = runEntry({ search: '?focus=1', storedValue: true });
   assert.deepStrictEqual(result.replacedUrls, []);
   assert.strictEqual(result.storageReads, 0, 'the focused destination must not redirect again');
+  assert.strictEqual(
+    result.attributes.has('data-nt-focus-route'),
+    true,
+    'the focused destination should retain a first-paint readiness gate'
+  );
 }
 
 {

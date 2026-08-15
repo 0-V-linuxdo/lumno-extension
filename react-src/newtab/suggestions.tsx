@@ -2472,18 +2472,20 @@ function SearchSuggestionRowComponent({
               suggestion
             )}
           </span>
-          <span
-            className={surfaceClass(
-              options,
-              'x-nt-suggestion-action-button__icon'
-            )}
-            dangerouslySetInnerHTML={{
-              __html: options.getRiSvg(
-                'ri-arrow-right-line',
-                'ri-size-12'
-              )
-            }}
-          />
+          {simpleMode && (
+            <span
+              className={surfaceClass(
+                options,
+                'x-nt-suggestion-action-button__icon'
+              )}
+              dangerouslySetInnerHTML={{
+                __html: options.getRiSvg(
+                  'ri-arrow-right-line',
+                  'ri-size-12'
+                )
+              }}
+            />
+          )}
         </button>
         {copyableUrl && (
           <SuggestionUtilityAction
@@ -2860,20 +2862,25 @@ function OpenTabRow({
                   tabSuggestion
                 )
               : options.t('switch_to_tab', '切换到标签页')}
-          </span>{' '}
-          <span
-            className={
-              options.surface === 'overlay'
-                ? 'x-ov-inline-icon'
-                : undefined
-            }
-            dangerouslySetInnerHTML={{
-              __html: options.getRiSvg(
-                'ri-arrow-right-line',
-                'ri-size-12'
-              )
-            }}
-          />
+          </span>
+          {simpleMode && (
+            <>
+              {' '}
+              <span
+                className={
+                  options.surface === 'overlay'
+                    ? 'x-ov-inline-icon'
+                    : undefined
+                }
+                dangerouslySetInnerHTML={{
+                  __html: options.getRiSvg(
+                    'ri-arrow-right-line',
+                    'ri-size-12'
+                  )
+                }}
+              />
+            </>
+          )}
         </button>
         {copyableUrl && (
           <SuggestionUtilityAction

@@ -1,6 +1,7 @@
 (function() {
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
   const PRELOAD_STORAGE_VERSION = 4;
+  const WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
   const FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
   const FAVICON_PRELOAD_STORAGE_KEY = '_x_extension_newtab_favicon_preload_2026_unique_';
   const providerStorageRuntime = globalThis.LumnoSettings &&
@@ -42,6 +43,62 @@
     return normalizeWallpaperMode(data && data.mode);
   }
 
+  function normalizeEffectPrefs(value) {
+    const effects = globalThis.LumnoNewtabWallpaperEffects;
+    if (effects && typeof effects.normalizePrefs === 'function') {
+      return effects.normalizePrefs(value);
+    }
+    const source = value && typeof value === 'object' ? value : {};
+    const normalizePercent = (raw, fallback) => {
+      const number = Number(raw);
+      return Number.isFinite(number)
+        ? Math.max(0, Math.min(100, Math.round(number)))
+        : fallback;
+    };
+    return {
+      version: 3,
+      type: ['none', 'grain', 'halftone', 'ascii'].includes(source.type)
+        ? source.type
+        : 'none',
+      strength: normalizePercent(source.strength, 50),
+      size: normalizePercent(source.size, 50),
+      spacing: normalizePercent(source.spacing, 50)
+    };
+  }
+
+  function getEffectPrefsForMode(value, mode) {
+    const source = value && typeof value === 'object' ? value : null;
+    const candidate = source && (source.light || source.dark)
+      ? (source[mode] || source.light || source.dark)
+      : source;
+    return candidate ? normalizeEffectPrefs(candidate) : null;
+  }
+
+  function readStoredEffectPrefs(mode, cachedPrefs) {
+    if (cachedPrefs) {
+      return Promise.resolve(cachedPrefs);
+    }
+    const storage = providerStorageRuntime
+      ? providerStorageRuntime.area
+      : (window.chrome && window.chrome.storage &&
+        (window.chrome.storage.sync || window.chrome.storage.local));
+    if (!storage || typeof storage.get !== 'function') {
+      return Promise.resolve(normalizeEffectPrefs(null));
+    }
+    return new Promise((resolve) => {
+      try {
+        storage.get([WALLPAPER_EFFECT_STORAGE_KEY], (result) => {
+          resolve(getEffectPrefsForMode(
+            result && result[WALLPAPER_EFFECT_STORAGE_KEY],
+            mode
+          ) || normalizeEffectPrefs(null));
+        });
+      } catch (_error) {
+        resolve(normalizeEffectPrefs(null));
+      }
+    });
+  }
+
   function readCachedWallpaper() {
     try {
       const raw = window.localStorage ? window.localStorage.getItem(PRELOAD_STORAGE_KEY) : '';
@@ -65,7 +122,8 @@
       return {
         mode,
         path: WALLPAPER_PATH_PATTERN.test(path) ? path : '',
-        overlayStops
+        overlayStops,
+        effectPrefs: getEffectPrefsForMode(data.wallpaperEffects, mode)
       };
     } catch (e) {
       return null;
@@ -241,6 +299,16 @@
     return;
   }
   const url = getRuntimeUrl(cachedWallpaper.path);
+  const preloadState = {
+    effectPrefsReady: readStoredEffectPrefs(cachedWallpaper.mode, cachedWallpaper.effectPrefs),
+    imageUrl: url,
+    mode: cachedWallpaper.mode,
+    wallpaper: {
+      id: cachedWallpaper.path,
+      path: cachedWallpaper.path
+    }
+  };
+  globalThis.LumnoNewtabWallpaperPreload = preloadState;
   if (root) {
     root.style.setProperty('--x-nt-wallpaper-image', getCssUrlValue(url));
     root.style.setProperty('--x-nt-wallpaper-size', 'cover');

@@ -49,6 +49,11 @@ function testNewtabRedirectFocusHintIsConsumedOnce() {
     /initialNewtabInputAutoFocusReadyTask\.then\(\(\) => \{\s*scheduleAutoFocusRecovery\(\);/,
     'New Tab should load the persisted auto-focus preference before scheduling focus recovery'
   );
+  assert.match(
+    recoverySource,
+    /new window\.MutationObserver\([\s\S]*?data-nt-ready[\s\S]*?setTimeout\(attemptFocusIfVisible, 0\)/,
+    'New Tab should retry automatic focus when a readiness-gated destination becomes visible'
+  );
   const preferenceLoadSource = newtabSource.slice(
     newtabSource.indexOf('function loadNewtabInputAutoFocusEnabled()'),
     newtabSource.indexOf('const initialNewtabInputAutoFocusReadyTask')
@@ -1157,8 +1162,13 @@ function testContinuousResizeKeepsDockDensityStableUntilSettle() {
 function testInitialEntryMotionIsStaggeredAndTransient() {
   assert.match(
     newtabSource,
-    /const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay\(\);\s*const initialAppearanceReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*initialWallpaperOverlayReadyTask\.then\(\(\) => bootstrapInitialWallpaper\(\)\),\s*initialWallpaperOverlayReadyTask,\s*bootstrapInitialWallpaperEffect\(\),\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
+    /const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay\(\);\s*const initialWallpaperVisualReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*initialWallpaperOverlayReadyTask\.then\(\(\) => bootstrapInitialWallpaper\(\)\),\s*initialWallpaperOverlayReadyTask,\s*bootstrapInitialWallpaperEffect\(\)\s*\]\)\.then\(\(\) => waitForInitialWallpaperEffectVisual\(\)\)[\s\S]*?markInitialWallpaperVisualReady\(\);[\s\S]*?const initialAppearanceReadyTask = Promise\.all\(\[\s*initialWallpaperVisualReadyTask,\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
     'critical appearance and motion preference state should settle before the mode-specific entry path'
+  );
+  assert.match(
+    newtabSource,
+    /function markInitialWallpaperVisualReady\(\)[\s\S]*?setAttribute\('data-nt-wallpaper-ready', '1'\)/,
+    'the focused-route wallpaper gate should release independently from full New Tab readiness'
   );
   assert.match(
     newtabHtml,

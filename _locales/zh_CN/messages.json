@@ -263,7 +263,7 @@
     "message": "简洁模式"
   },
   "settings_simple_mode_desc": {
-    "message": "移除更多装饰元素，使搜索框更整洁"
+    "message": "移除更多提示元素，使搜索框更简洁"
   },
   "settings_auto_pip_title": {
     "message": "视频自动画中画"

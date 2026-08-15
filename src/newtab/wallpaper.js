@@ -1179,8 +1179,8 @@
         applyWordmarkThemeAppearance
       })
       : null;
-    wallpaperEffects = typeof WALLPAPER_EFFECTS.createWallpaperEffects === 'function'
-      ? WALLPAPER_EFFECTS.createWallpaperEffects({
+    const wallpaperEffectPreload = globalThis.LumnoNewtabWallpaperEffectPreload || null;
+    const wallpaperEffectRuntimeOptions = {
         documentObj,
         windowObj,
         getCurrentWallpaper: () => getWallpaperById(currentWallpaperId),
@@ -1190,8 +1190,19 @@
           documentObj.body.getAttribute('data-nt-enter') === 'done'
         ),
         onRender: scheduleWallpaperAdaptiveToneUpdate
-      })
-      : null;
+      };
+    if (wallpaperEffectPreload && wallpaperEffectPreload.controller) {
+      wallpaperEffectPreload.attach({
+        onRender: scheduleWallpaperAdaptiveToneUpdate,
+        shouldAnimateTransition: wallpaperEffectRuntimeOptions.shouldAnimateTransition
+      });
+      wallpaperEffects = wallpaperEffectPreload.controller;
+    } else if (typeof WALLPAPER_EFFECTS.createWallpaperEffects === 'function') {
+      if (wallpaperEffectPreload) {
+        wallpaperEffectPreload.claimed = true;
+      }
+      wallpaperEffects = WALLPAPER_EFFECTS.createWallpaperEffects(wallpaperEffectRuntimeOptions);
+    }
 
     function scheduleWallpaperAdaptiveToneUpdate() {
       if (wallpaperAdaptiveTone) {
@@ -1207,8 +1218,9 @@
 
     function refreshWallpaperEffects() {
       if (wallpaperEffects) {
-        wallpaperEffects.refresh();
+        return wallpaperEffects.refresh();
       }
+      return Promise.resolve();
     }
 
     function getRuntimeAssetUrl(path) {
@@ -1317,6 +1329,9 @@
       }
       if (document.body) {
         document.body.setAttribute('data-wallpaper-active', wallpaper ? 'true' : 'false');
+      }
+      if (wallpaperEffectPreload && typeof wallpaperEffectPreload.updateSource === 'function') {
+        wallpaperEffectPreload.updateSource(wallpaper, imageUrl);
       }
       return imageUrl;
     }
@@ -1772,6 +1787,7 @@
           themeMode: getEffectiveThemeMode(),
           wallpapers,
           overlayStops: getWallpaperPreloadOverlayStops(),
+          wallpaperEffects: getWallpaperEffectStorageValue(),
           updatedAt: Date.now()
         }));
       } catch (e) {
@@ -2631,6 +2647,9 @@
       });
       setWallpaperEffectPrefsForModes(nextPrefsByMode);
       applyWallpaperEffectForResolvedMode();
+      if (hasStoredWallpaperStateLoaded) {
+        writeWallpaperPreloadCache();
+      }
       if (!storageArea) {
         return;
       }
@@ -2653,6 +2672,9 @@
         initialWallpaperEffectReadyPromise = Promise.resolve().then(() => {
           hasStoredWallpaperEffectLoaded = true;
           applyWallpaperEffectPrefs(NEWTAB_WALLPAPER_EFFECT_DEFAULTS);
+          if (hasStoredWallpaperStateLoaded) {
+            writeWallpaperPreloadCache();
+          }
         });
         return initialWallpaperEffectReadyPromise;
       }
@@ -2662,6 +2684,9 @@
           const prefs = normalizeWallpaperEffectStoragePrefs(raw);
           hasStoredWallpaperEffectLoaded = true;
           applyWallpaperEffectPrefs(prefs);
+          if (hasStoredWallpaperStateLoaded) {
+            writeWallpaperPreloadCache();
+          }
           const storedPrefs = getWallpaperEffectStorageValue();
           if (raw && JSON.stringify(raw) !== JSON.stringify(storedPrefs)) {
             storageArea.set({ [NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY]: storedPrefs });
@@ -2670,6 +2695,22 @@
         });
       });
       return initialWallpaperEffectReadyPromise;
+    }
+
+    function waitForInitialWallpaperEffectVisual() {
+      const effectPreferencesReady = initialWallpaperEffectReadyPromise ||
+        bootstrapInitialWallpaperEffect();
+      return Promise.all([
+        initialWallpaperReadyPromise,
+        effectPreferencesReady
+      ]).then(() => {
+        if (!wallpaperEffects ||
+            !currentWallpaperId ||
+            currentAppliedWallpaperEffectPrefs.type === 'none') {
+          return;
+        }
+        return wallpaperEffects.refresh({ immediate: true });
+      });
     }
 
     function finalizeInitialWallpaper() {
@@ -4351,6 +4392,9 @@
       if (changes[NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY]) {
         const raw = changes[NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY].newValue;
         applyWallpaperEffectPrefs(raw);
+        if (hasStoredWallpaperStateLoaded) {
+          writeWallpaperPreloadCache();
+        }
         const storedPrefs = getWallpaperEffectStorageValue();
         if (storageArea && raw && JSON.stringify(raw) !== JSON.stringify(storedPrefs)) {
           storageArea.set({ [NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY]: storedPrefs });
@@ -4403,6 +4447,7 @@
       bootstrapInitialWallpaper,
       bootstrapInitialWallpaperOverlay,
       bootstrapInitialWallpaperEffect,
+      waitForInitialWallpaperEffectVisual,
       bootstrapInitialNewtabFavicon,
       handleStorageChange,
       handleThemeModeChange,
