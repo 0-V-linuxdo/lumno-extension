@@ -3566,11 +3566,6 @@
   }
 
   function getSearchActionLabel() {
-    if (defaultSearchEngineState && defaultSearchEngineState.name) {
-      return formatMessage('action_search_engine', '在 {engine} 中搜索', {
-        engine: defaultSearchEngineState.name
-      });
-    }
     return t('action_search', '搜索');
   }
 

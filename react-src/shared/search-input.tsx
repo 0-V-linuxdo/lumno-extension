@@ -81,7 +81,7 @@ const BASE_STYLES: Record<keyof typeof CLASSES, StyleOverrides> = {
   container: {
     all: 'unset',
     background: 'transparent',
-    'border-radius': '32px 32px 0 0',
+    'border-radius': 'var(--x-ext-search-input-corners,28px 28px 0 0)',
     'box-sizing': 'border-box',
     color: 'inherit',
     display: 'block',
@@ -450,7 +450,7 @@ export function createSearchInput(
   }
   if (!input || !icon || !divider) {
     root.unmount();
-    throw new Error('Lumno React search input did not mount.');
+    throw new Error('Search input mount');
   }
   const modeBadge = config.modeBadge
     ? container.querySelector<HTMLDivElement>(`#${config.modeBadge.id}`)
@@ -509,7 +509,7 @@ export function createSearchInput(
     !modeTabHintText
   ) {
     root.unmount();
-    throw new Error('Lumno React search input mode surface did not mount.');
+    throw new Error('Search mode mount');
   }
   const parts = {
     container,

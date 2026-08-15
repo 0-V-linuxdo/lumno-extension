@@ -624,7 +624,12 @@
     );
     return {
       bg: rgbToCss(hoverBg),
-      border: rgbToCss(getSoftThemeBorderColor(surfaceAccent, hoverBg))
+      border: rgbToCss(getSoftThemeBorderColor(surfaceAccent, hoverBg)),
+      text: rgbToCss(getAccessibleThemeColor(
+        accentRgb,
+        hoverBg,
+        MIN_THEME_FOREGROUND_CONTRAST
+      ))
     };
   }
 

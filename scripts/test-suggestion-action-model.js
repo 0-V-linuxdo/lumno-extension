@@ -27,7 +27,7 @@ assert.ok(actionModel, 'suggestion action model should be exported');
   assert.strictEqual(commandModel.alwaysHideVisitButton, true,
     `${type} command rows should keep the right-side action hidden`);
   assert.deepStrictEqual(commandModel.actionTags, [],
-    `${type} command rows should not replace the removed action with an Enter tag`);
+    `${type} command rows should not replace the removed action with an action tag`);
 });
 assert.strictEqual(
   actionModel.getModifierAdjustedAction('openNewTab', { openInCurrentTab: true }),
@@ -156,10 +156,33 @@ const normalNavigationModel = actionModel.createSearchActionModel({
 });
 assert.deepStrictEqual(
   normalNavigationModel.actionTags,
-  [{ action: 'openNewTab', keyLabel: 'Enter' }],
-  'normal mode should retain its Enter key chip'
+  [{ action: 'openNewTab' }],
+  'normal mode should keep only the action label'
 );
 assert.strictEqual(normalNavigationModel.alwaysHideVisitButton, false);
+
+const switchNavigationModel = actionModel.createSearchActionModel({
+  suggestion: historySuggestion,
+  isPrimaryHighlight: true,
+  primaryHighlightReason: 'openTab',
+  shouldSwitchMatchedTab: true
+});
+assert.deepStrictEqual(
+  switchNavigationModel.actionTags,
+  [{ action: 'switch' }],
+  'matched tabs should keep only the switch action label'
+);
+
+const normalSearchModel = actionModel.createSearchActionModel({
+  suggestion: { type: 'newtab', searchQuery: 'lumno' },
+  isPrimaryHighlight: true,
+  onlyKeywordSuggestions: true
+});
+assert.deepStrictEqual(
+  normalSearchModel.actionTags,
+  [{ action: 'search' }],
+  'keyword search should keep only the search action label'
+);
 
 const simpleNavigationModel = actionModel.createSearchActionModel({
   suggestion: historySuggestion,
@@ -170,7 +193,7 @@ const simpleNavigationModel = actionModel.createSearchActionModel({
 });
 assert.deepStrictEqual(
   simpleNavigationModel.actionTags,
-  [{ action: 'openNewTab', keyLabel: '' }],
+  [{ action: 'openNewTab' }],
   'simple mode should keep only the plain action label'
 );
 assert.strictEqual(

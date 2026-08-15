@@ -1036,12 +1036,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   }
 
   function getSearchActionLabel() {
-    const state = getOverlaySearchEngineState();
-    if (state.name) {
-      return formatMessage('action_search_engine', '在 {engine} 中搜索', {
-        engine: state.name
-      });
-    }
     return t('action_search', '搜索');
   }
 
@@ -2487,8 +2481,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         inputContainer,
         'border-radius',
         shouldCollapse
-          ? 'var(--x-ov-panel-radius, 28px)'
-          : 'var(--x-ov-panel-radius, 28px) var(--x-ov-panel-radius, 28px) 0 0'
+          ? 'var(--x-ov-content-radius, 27px)'
+          : 'var(--x-ov-content-radius, 27px) var(--x-ov-content-radius, 27px) 0 0'
       );
       if (shouldCollapse) {
         finishSuggestionsHeightInputSession({ animate: false });
@@ -3144,10 +3138,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         link: '#2563EB',
         placeholder: '#9CA3AF',
         hoverBg: 'rgba(200, 208, 218, 0.45)',
+        neutralMarkBg: '#E5E7EB',
+        neutralMarkText: '#111827',
         tagBg: '#F3F4F6',
-        tagText: '#6B7280',
-        bookmarkTagBg: '#FEF3C7',
-        bookmarkTagText: '#D97706',
+        tagText: '#667085',
+        bookmarkTagBg: '#F3F4F6',
+        bookmarkTagText: '#667085',
         underline: '#E5E7EB',
         dividerOpacity: '0.5',
         dividerInset: '24px',
@@ -3165,10 +3161,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         link: '#D1D5DB',
         placeholder: '#9CA3AF',
         hoverBg: 'rgba(255, 255, 255, 0.08)',
+        neutralMarkBg: 'rgba(148, 163, 184, 0.28)',
+        neutralMarkText: '#F8FAFC',
         tagBg: 'rgba(255, 255, 255, 0.12)',
         tagText: '#E5E7EB',
-        bookmarkTagBg: 'rgba(245, 158, 11, 0.22)',
-        bookmarkTagText: '#FBBF24',
+        bookmarkTagBg: 'rgba(255, 255, 255, 0.12)',
+        bookmarkTagText: '#E5E7EB',
         underline: 'rgba(255, 255, 255, 0.18)',
         dividerOpacity: '0.35',
         dividerInset: '24px',
@@ -3644,6 +3642,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       target.style.setProperty('--x-ov-link', tokens.link);
       target.style.setProperty('--x-ov-placeholder', tokens.placeholder);
       target.style.setProperty('--x-ov-hover-bg', tokens.hoverBg);
+      target.style.setProperty('--x-ov-neutral-mark-bg', tokens.neutralMarkBg);
+      target.style.setProperty('--x-ov-neutral-mark-text', tokens.neutralMarkText);
       target.style.setProperty('--x-ov-tag-bg', tokens.tagBg);
       target.style.setProperty('--x-ov-tag-text', tokens.tagText);
       target.style.setProperty('--x-ov-bookmark-tag-bg', tokens.bookmarkTagBg);

@@ -439,7 +439,6 @@ describe('Onboarding visual surface React island', () => {
           removeHistoryLabel: 'Remove this history item',
           results: [
             {
-              actionTagKey: 'Enter',
               actionTagLabel: 'New tab',
               favicon: '/assets/store.png',
               sourceTag: 'Top site',
@@ -476,6 +475,7 @@ describe('Onboarding visual surface React island', () => {
     expect(surface?.querySelectorAll('.surface-rail-dot')).toHaveLength(3);
     expect(surface?.querySelectorAll('.browser-page-row')).toHaveLength(4);
     expect(surface?.querySelectorAll('.lumno-overlay-result')).toHaveLength(3);
+    expect(surface?.querySelector('.x-ov-action-tag__key')).toBeNull();
     expect(
       surface?.querySelector(
         '.lumno-overlay-result .ri-arrow-right-line'

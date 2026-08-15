@@ -2293,11 +2293,11 @@ assertContains(
   'React shortcut input affixes should use the no-prefix options mode'
 );
 
-const themeBootstrapIndex = newtabJs.indexOf('const initialAppearanceReadyTask = Promise.all([');
+const themeBootstrapIndex = newtabJs.indexOf('const initialWallpaperVisualReadyTask = Promise.all([');
 assert.ok(themeBootstrapIndex > -1, 'newtab runtime should bootstrap the initial appearance');
 assert.ok(
   newtabJs.indexOf('bootstrapInitialThemeMode(),', themeBootstrapIndex) > themeBootstrapIndex,
-  'the initial appearance task should resolve the theme before first paint'
+  'the initial wallpaper visual task should resolve the theme before first paint'
 );
 [
   'const suggestionItems = [];',

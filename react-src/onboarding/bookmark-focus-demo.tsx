@@ -6,7 +6,6 @@ import {
 import { HighlightedText } from './site-search-demo';
 
 export interface BookmarkFocusResult {
-  actionTagKey?: string;
   actionTagLabel?: string;
   detail?: string;
   favicon?: string;
@@ -229,23 +228,30 @@ function ResultFavicon({
   );
 }
 
-function SourceTag({ result }: { result: BookmarkFocusResult }) {
+function SourceTag({
+  active,
+  result
+}: {
+  active: boolean;
+  result: BookmarkFocusResult;
+}) {
   if (!result.sourceTag) {
     return null;
   }
-  const bookmarkStyle = result.sourceTagKind === 'bookmark'
-    ? {
-        '--x-ov-suggestion-source-tag-bg':
-          'var(--x-ov-bookmark-tag-bg, #FEF3C7)',
-        '--x-ov-suggestion-source-tag-text':
-          'var(--x-ov-bookmark-tag-text, #D97706)'
-      } as CSSProperties
-    : undefined;
+  const sourceTagStyle = {
+    '--x-ov-suggestion-source-tag-bg': active
+      ? 'transparent'
+      : 'var(--x-ov-tag-bg, #F3F4F6)',
+    '--x-ov-suggestion-source-tag-text': active
+      ? 'var(--x-ext-tag-text, #1E3A8A)'
+      : 'var(--x-ov-tag-text, #667085)',
+    '--x-ov-suggestion-source-tag-border': 'transparent'
+  } as CSSProperties;
   return (
     <span
       className="x-ov-suggestion-source-tag"
       data-visible="true"
-      style={bookmarkStyle}
+      style={sourceTagStyle}
     >
       {String(result.sourceTag)}
     </span>
@@ -275,6 +281,7 @@ function OverlayResult({
       data-has-action-tags={hasActionTags ? 'true' : 'false'}
       data-history-deletable={result.historyDeletable ? 'true' : 'false'}
       data-last={index === model.results.length - 1 ? 'true' : 'false'}
+      data-simple-mode="false"
       data-type={String(result.type || '')}
       style={style}
     >
@@ -285,6 +292,7 @@ function OverlayResult({
             <HighlightedText
               query={model.query}
               text={String(result.title || '')}
+              themed={active}
             />
           </span>
           {result.detail ? (
@@ -298,7 +306,7 @@ function OverlayResult({
               {String(result.detail)}
             </span>
           ) : null}
-          <SourceTag result={result} />
+          <SourceTag active={active} result={result} />
         </div>
       </div>
       <div className="x-ov-suggestion-right" data-action-column="true">
@@ -310,9 +318,6 @@ function OverlayResult({
             <span className="x-ov-action-tag">
               <span className="x-ov-action-tag__label">
                 {String(result.actionTagLabel || model.openLabel)}
-              </span>
-              <span className="x-ov-action-tag__key">
-                {String(result.actionTagKey || 'Enter')}
               </span>
             </span>
           ) : null}
@@ -327,7 +332,11 @@ function OverlayResult({
           </span>
         </button>
         {result.historyDeletable ? (
-          <div className="x-ov-suggestion-utility-slot" data-visible="false">
+          <div
+            className="x-ov-suggestion-utility-slot"
+            data-leading="true"
+            data-visible="false"
+          >
             <button
               aria-label={model.removeHistoryLabel}
               className="x-ov-suggestion-utility-button"

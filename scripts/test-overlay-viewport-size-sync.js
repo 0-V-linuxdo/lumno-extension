@@ -280,13 +280,13 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /shouldCollapse\s*\?\s*'var\(--x-ov-panel-radius, 28px\)'\s*:\s*'var\(--x-ov-panel-radius, 28px\) var\(--x-ov-panel-radius, 28px\) 0 0'/,
-  'the input should retain 28px top corners while its internal expanded seam stays square'
+  /shouldCollapse\s*\?\s*'var\(--x-ov-content-radius, 27px\)'\s*:\s*'var\(--x-ov-content-radius, 27px\) var\(--x-ov-content-radius, 27px\) 0 0'/,
+  'the input should follow the 27px radius inside the shell border while its expanded seam stays square'
 );
 assert.match(
   suggestionsViewSource,
-  /border-radius:\s*0 0 var\(--x-ov-panel-radius,\s*28px\) var\(--x-ov-panel-radius,\s*28px\);/,
-  'overlay results should share the 28px shell radius at the lower corners'
+  /border-radius:\s*0 0 var\(--x-ov-content-radius,\s*27px\) var\(--x-ov-content-radius,\s*27px\);/,
+  'overlay results should follow the 27px radius inside the shell border at the lower corners'
 );
 assert.match(
   searchPanelSource,

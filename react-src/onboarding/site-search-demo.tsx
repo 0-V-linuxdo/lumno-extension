@@ -264,10 +264,12 @@ function SearchInput({
 
 export function HighlightedText({
   query,
-  text
+  text,
+  themed = true
 }: {
   query: string;
   text: string;
+  themed?: boolean;
 }) {
   const value = String(text || '');
   const needle = String(query || '').trim();
@@ -289,9 +291,13 @@ export function HighlightedText({
       <mark
         key={`${matchIndex}-${match}`}
         style={{
-          background: 'var(--x-ext-mark-bg, #CFE8FF)',
+          background: themed
+            ? 'var(--x-ext-mark-bg, #CFE8FF)'
+            : 'var(--x-ov-neutral-mark-bg, #E5E7EB)',
           borderRadius: '2px',
-          color: 'var(--x-ext-mark-text, #1E3A8A)',
+          color: themed
+            ? 'var(--x-ext-mark-text, #1E3A8A)'
+            : 'var(--x-ov-neutral-mark-text, #111827)',
           lineHeight: 'inherit',
           padding: '0 1px'
         }}
@@ -321,6 +327,7 @@ function SearchResult({
       className="x-ov-suggestion-item site-search-demo-result"
       data-active="true"
       data-last="true"
+      data-simple-mode="false"
       data-type={String(item.kind || '')}
       style={style}
     >

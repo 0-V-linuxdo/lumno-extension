@@ -77,6 +77,7 @@ accentSamples.forEach((accent) => {
     const label = `${accent.join(',')} ${mode}`;
     assertContrast(theme.highlightBg, base, 1.18, `${label} selected-row surface`);
     assertContrast(hover.bg, base, 1.12, `${label} hover surface`);
+    assertContrast(hover.text, hover.bg, 4.5, `${label} hover-themed text`);
     assertContrast(theme.accent, theme.highlightBg, 4.5, `${label} themed icon`);
     assertContrast(theme.placeholderText, base, 4.5, `${label} themed placeholder`);
     assertContrast(theme.markText, theme.markBg, 4.5, `${label} highlighted text`);
@@ -114,6 +115,19 @@ accentSamples.forEach((accent) => {
     assertSoftBoundary(theme.buttonBorder, theme.buttonBg, `${label} action button boundary`);
   });
 });
+
+assertContrast(
+  '#667085',
+  '#F3F4F6',
+  4.5,
+  'neutral source tag text'
+);
+assertContrast(
+  '#111827',
+  '#E5E7EB',
+  4.5,
+  'neutral passive match text'
+);
 
 const yellowTheme = faviconTheme.buildTheme([255, 193, 7]);
 const redTheme = faviconTheme.buildTheme([255, 0, 0]);

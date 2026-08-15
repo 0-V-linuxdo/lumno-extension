@@ -36,9 +36,11 @@ const overlayScope =
     source: newtabHtml,
     right: '.x-nt-suggestion-right',
     actionTag: '.x-nt-suggestion-action-tag',
+    searchActionTag: '.x-nt-suggestion-action-tag[data-action="search"]',
     utilitySlot: '.x-nt-suggestion-utility-slot',
     visibleUtilitySlot: '.x-nt-suggestion-utility-slot[data-visible="true"]',
-    actionEndToken: '--x-nt-suggestion-action-icon-end',
+    leadingUtilitySlot: '.x-nt-suggestion-utility-slot[data-visible="true"][data-leading="true"]',
+    nonSimpleVisitButton: '.x-nt-suggestion-item[data-simple-mode="false"] .x-nt-suggestion-visit-button',
     actionHeightToken: '--x-nt-suggestion-action-height',
     label: 'New Tab'
   },
@@ -46,19 +48,33 @@ const overlayScope =
     source: overlayCss,
     right: `${overlayScope} .x-ov-suggestion-right`,
     actionTag: `${overlayScope} .x-ov-action-tag`,
+    searchActionTag: `${overlayScope} .x-ov-action-tag[data-action="search"]`,
     utilitySlot: `${overlayScope} .x-ov-suggestion-utility-slot`,
     visibleUtilitySlot: `${overlayScope} .x-ov-suggestion-utility-slot[data-visible="true"]`,
-    actionEndToken: '--x-ov-suggestion-action-icon-end',
+    leadingUtilitySlot: `${overlayScope} .x-ov-suggestion-utility-slot[data-visible="true"][data-leading="true"]`,
+    nonSimpleVisitButton: `${overlayScope} .x-ov-suggestion-item[data-simple-mode="false"] .x-ov-suggestion-visit-button`,
     actionHeightToken: '--x-ov-suggestion-action-height',
     label: 'Overlay'
   }
 ].forEach((surface) => {
   const rightBlock = getCssRuleBlock(surface.source, surface.right);
   const actionTagBlock = getCssRuleBlock(surface.source, surface.actionTag);
+  const searchActionTagBlock = getCssRuleBlock(
+    surface.source,
+    surface.searchActionTag
+  );
   const utilitySlotBlock = getCssRuleBlock(surface.source, surface.utilitySlot);
   const visibleUtilitySlotBlock = getCssRuleBlock(
     surface.source,
     surface.visibleUtilitySlot
+  );
+  const leadingUtilitySlotBlock = getCssRuleBlock(
+    surface.source,
+    surface.leadingUtilitySlot
+  );
+  const nonSimpleVisitButtonBlock = getCssRuleBlock(
+    surface.source,
+    surface.nonSimpleVisitButton
   );
 
   assert.match(
@@ -78,19 +94,31 @@ const overlayScope =
   );
   assert.match(
     visibleUtilitySlotBlock,
-    new RegExp(`width:\\s*var\\(${surface.actionHeightToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},\\s*26px\\);`),
-    `${surface.label} visible utility slots should expand to the shared action height`
+    /width:\s*22px;/,
+    `${surface.label} visible utility slots should use the compact action width`
   );
   assert.match(
     visibleUtilitySlotBlock,
-    /margin-left:\s*6px;/,
-    `${surface.label} should add spacing only when a utility action is visible`
+    /margin-left:\s*3px;/,
+    `${surface.label} should keep compact spacing between visible utility actions`
   );
   assert.match(
-    actionTagBlock,
-    new RegExp(`padding:\\s*0\\s+var\\(${surface.actionEndToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},\\s*7px\\)\\s+0\\s+8px;`),
-    `${surface.label} Enter tags and arrow buttons should share the same visual end inset`
+    leadingUtilitySlotBlock,
+    /margin-left:\s*10px;/,
+    `${surface.label} should leave more space between the text action and its first utility icon`
   );
+  assert.match(actionTagBlock, /border:\s*0;/);
+  assert.match(actionTagBlock, /height:\s*auto;/);
+  assert.match(actionTagBlock, /padding:\s*4px 8px;/);
+  assert.match(actionTagBlock, /border-radius:\s*8px;/);
+  assert.match(searchActionTagBlock, /justify-content:\s*center;/);
+  assert.match(searchActionTagBlock, /gap:\s*0;/);
+  assert.match(searchActionTagBlock, /padding:\s*4px 8px;/);
+  assert.match(nonSimpleVisitButtonBlock, /background:\s*transparent;/);
+  assert.match(nonSimpleVisitButtonBlock, /border:\s*0;/);
+  assert.match(nonSimpleVisitButtonBlock, /padding:\s*0;/);
+  assert.match(nonSimpleVisitButtonBlock, /justify-content:\s*flex-end;/);
+  assert.match(nonSimpleVisitButtonBlock, /text-align:\s*right;/);
 });
 
 const previewRightBlock = getCssRuleBlock(
@@ -105,21 +133,25 @@ const previewVisibleUtilitySlotBlock = getCssRuleBlock(
   onboardingHtml,
   '.newtab-preview-viewport .x-nt-suggestion-utility-slot[data-visible="true"]'
 );
+const previewLeadingUtilitySlotBlock = getCssRuleBlock(
+  onboardingHtml,
+  '.newtab-preview-viewport .x-nt-suggestion-utility-slot[data-visible="true"][data-leading="true"]'
+);
 const overlayDemoActionTagBlock = getCssRuleBlock(
   onboardingHtml,
   '.site-search-demo-result .x-ov-action-tag'
 );
 
 assert.match(previewRightBlock, /gap:\s*0;/);
-assert.match(previewVisibleUtilitySlotBlock, /margin-left:\s*6px;/);
-assert.match(
-  previewActionTagBlock,
-  /padding:\s*0 var\(--x-nt-suggestion-action-icon-end, 7px\) 0 8px;/
-);
-assert.match(
-  overlayDemoActionTagBlock,
-  /padding:\s*0 var\(--x-ov-suggestion-action-icon-end, 7px\) 0 8px;/
-);
+assert.match(previewVisibleUtilitySlotBlock, /width:\s*22px;/);
+assert.match(previewVisibleUtilitySlotBlock, /margin-left:\s*3px;/);
+assert.match(previewLeadingUtilitySlotBlock, /margin-left:\s*10px;/);
+[previewActionTagBlock, overlayDemoActionTagBlock].forEach((block) => {
+  assert.match(block, /border:\s*0;/);
+  assert.match(block, /height:\s*auto;/);
+  assert.match(block, /padding:\s*4px 8px;/);
+  assert.match(block, /border-radius:\s*8px;/);
+});
 
 assert.match(
   suggestionsReact,

@@ -171,6 +171,54 @@ describe('Suggestions React island', () => {
     });
   });
 
+  it('uses one neutral default style for common, bookmark, and history tags', () => {
+    (['newtab', 'overlay'] as const).forEach((surface) => {
+      const { view, items } = createView({ surface });
+      render(view, [
+        {
+          type: 'topSite',
+          title: 'Common result',
+          url: 'https://common.example/'
+        },
+        {
+          type: 'bookmark',
+          title: 'Bookmark result',
+          url: 'https://bookmark.example/'
+        },
+        {
+          type: 'history',
+          title: 'History result',
+          url: 'https://history.example/'
+        }
+      ], {
+        primaryHighlightIndex: -1,
+        updateKind: 'structure'
+      });
+
+      const propertyPrefix = surface === 'overlay'
+        ? '--x-ov-suggestion-source-tag'
+        : '--x-nt-suggestion-tag';
+      const tokenPrefix = surface === 'overlay' ? '--x-ov' : '--x-nt';
+      const tags = items.map((item) => item.querySelector<HTMLElement>(
+        '[data-tag-type]'
+      ));
+
+      expect(tags.map((tag) => tag?.style.getPropertyValue(
+        `${propertyPrefix}-bg`
+      ))).toEqual(Array(3).fill(
+        `var(${tokenPrefix}-tag-bg, #F3F4F6)`
+      ));
+      expect(tags.map((tag) => tag?.style.getPropertyValue(
+        `${propertyPrefix}-text`
+      ))).toEqual(Array(3).fill(
+        `var(${tokenPrefix}-tag-text, #667085)`
+      ));
+      expect(tags.map((tag) => tag?.style.getPropertyValue(
+        `${propertyPrefix}-border`
+      ))).toEqual(Array(3).fill('transparent'));
+    });
+  });
+
   it('exposes the React API and renders legacy metadata synchronously', () => {
     const actionModel = {
       createSearchActionModel: () => ({
@@ -256,6 +304,12 @@ describe('Suggestions React island', () => {
     ).toBeNull();
     expect(items[0].querySelector('.x-ov-action-tag__key')).toBeNull();
     expect(items[0]._xVisitButton?.dataset.visible).toBe('false');
+    expect(items[0]._xVisitButton?.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-bg'
+    )).toBe('#eee');
+    expect(items[0]._xVisitButton?.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-border'
+    )).toBe('#ddd');
     expect(
       items[0].style.getPropertyValue('--x-ov-suggestion-row-bg')
     ).toBe('var(--x-ov-hover-bg, #F3F4F6)');
@@ -300,9 +354,13 @@ describe('Suggestions React island', () => {
       items[0].querySelector('[data-tag-type="history"]')
         ?.getAttribute('data-visible')
     ).toBe('true');
-    expect(
-      items[0].querySelector('.x-ov-action-tag__key')?.textContent
-    ).toBe('Enter');
+    expect(items[0].querySelector('.x-ov-action-tag__key')).toBeNull();
+    expect(items[0]._xVisitButton?.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-bg'
+    )).toBe('transparent');
+    expect(items[0]._xVisitButton?.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-border'
+    )).toBe('transparent');
   });
 
   it('removes trailing result arrows outside simple mode on both search surfaces', () => {
@@ -680,6 +738,53 @@ describe('Suggestions React island', () => {
     expect(rowStatesAtThemeApplication[0]).toBe('active');
   });
 
+  it('uses a concise label for engine and site search actions', () => {
+    const actionModel = {
+      createSearchActionModel: () => ({
+        actionTags: [{ action: 'search', keyLabel: 'Enter' }],
+        visitButtonAction: 'search',
+        alwaysHideVisitButton: false,
+        hasActionTags: true,
+        hasSwitchAction: false
+      })
+    };
+    const { view, items } = createView({
+      actionModel,
+      getSearchActionLabel: () => '在 Google 中搜索',
+      getSiteSearchDisplayName: () => 'GitHub',
+      isAiSiteSearchProvider: () => false
+    });
+
+    render(view, [
+      {
+        type: 'googleSuggest',
+        title: 'Engine search',
+        url: 'https://google.com/search?q=example'
+      },
+      {
+        type: 'siteSearch',
+        title: 'Site search',
+        url: 'https://github.com/search?q=example',
+        provider: { name: 'GitHub' }
+      }
+    ]);
+
+    expect(
+      items.map((item) => item._xActionTags?.[0]._xActionLabel?.textContent)
+    ).toEqual(['搜索', '搜索']);
+    expect(
+      items.map((item) => item._xVisitButtonLabel?.textContent)
+    ).toEqual(['搜索', '搜索']);
+    expect(
+      items.map((item) => item._xActionTags?.[0].dataset.action)
+    ).toEqual(['search', 'search']);
+    expect(
+      items.map((item) => item._xActionTags?.[0].querySelector(
+        '.x-nt-suggestion-action-tag__key'
+      ))
+    ).toEqual([null, null]);
+  });
+
   it('updates action labels without remounting rows', () => {
     const actionModel = {
       createSearchActionModel: () => ({
@@ -841,11 +946,13 @@ describe('Suggestions React island', () => {
     const onDeleteHistory = vi.fn();
     const onCopyUrl = vi.fn();
     const showTopActionTooltip = vi.fn();
+    const hideTopActionTooltip = vi.fn();
     const { view, items } = createView({
       onActivateSuggestion,
       onDeleteHistory,
       onCopyUrl,
-      showTopActionTooltip
+      showTopActionTooltip,
+      hideTopActionTooltip
     });
     const suggestion: Suggestion = {
       type: 'history',
@@ -859,12 +966,72 @@ describe('Suggestions React island', () => {
     );
     const copyButton = utilityButtons[0];
     const deleteButton = row._xHistoryDeleteButton as HTMLButtonElement;
+    const utilitySlots = Array.from(row.querySelectorAll<HTMLElement>(
+      '.x-nt-suggestion-utility-slot'
+    ));
+
+    expect(utilitySlots.map((slot) => slot.dataset.leading)).toEqual([
+      'true',
+      undefined
+    ]);
 
     act(() => {
       row.dispatchEvent(new MouseEvent('mouseover', {
         bubbles: true
       }));
+    });
+
+    expect(showTopActionTooltip).not.toHaveBeenCalled();
+    [copyButton, deleteButton].forEach((button) => {
+      expect(button.style.getPropertyValue(
+        '--x-nt-suggestion-utility-bg'
+      )).toBe('transparent');
+      expect(button.style.getPropertyValue(
+        '--x-nt-suggestion-utility-border'
+      )).toBe('transparent');
+      expect(button.dataset.hover).toBeUndefined();
+    });
+
+    act(() => {
       copyButton.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+    });
+
+    expect(copyButton.dataset.hover).toBe('true');
+    expect(deleteButton.dataset.hover).toBeUndefined();
+    expect(showTopActionTooltip).toHaveBeenLastCalledWith(
+      copyButton,
+      '复制链接'
+    );
+
+    act(() => {
+      copyButton.dispatchEvent(new MouseEvent('mouseout', {
+        bubbles: true
+      }));
+      deleteButton.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true
+      }));
+    });
+
+    expect(copyButton.dataset.hover).toBeUndefined();
+    expect(deleteButton.dataset.hover).toBe('true');
+    expect(hideTopActionTooltip).toHaveBeenCalled();
+    expect(showTopActionTooltip).toHaveBeenLastCalledWith(
+      deleteButton,
+      '移除该历史'
+    );
+
+    act(() => {
+      deleteButton.dispatchEvent(new MouseEvent('mouseout', {
+        bubbles: true
+      }));
+    });
+
+    expect(deleteButton.dataset.hover).toBeUndefined();
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('mouseover', {
         bubbles: true
       }));
       copyButton.dispatchEvent(new MouseEvent('click', {
@@ -881,10 +1048,6 @@ describe('Suggestions React island', () => {
     expect(copyButton.dataset.visible).toBe('true');
     expect(deleteButton.dataset.visible).toBe('true');
     expect(copyButton.getAttribute('aria-label')).toBe('复制链接');
-    expect(showTopActionTooltip).toHaveBeenCalledWith(
-      copyButton,
-      '复制链接'
-    );
     [
       '--x-nt-suggestion-utility-color',
       '--x-nt-suggestion-utility-bg',
@@ -986,6 +1149,9 @@ describe('Suggestions React island', () => {
       items[0].querySelector('.x-ov-action-tag__label')
     ).not.toBeNull();
     expect(
+      items[0].querySelector('.x-ov-action-tag__key')
+    ).toBeNull();
+    expect(
       items[0].querySelector('.x-ov-suggestion-utility-button')
     ).not.toBeNull();
 
@@ -999,11 +1165,13 @@ describe('Suggestions React island', () => {
     expect(items[0]._xIsAutocompleteTop).toBe(true);
     expect(items[0]._xTagContainer?.dataset.visible).toBe('true');
     expect(items[0]._xSwitchButton?.dataset.visible).toBe('false');
+    expect(items[0].querySelector('.x-ov-action-tag__key')).toBeNull();
   });
 
-  it('applies the brand treatment to hovered search results', () => {
+  it('applies contrast-aware brand text without a tag surface', () => {
     const brandTheme = {
       _xIsBrand: true,
+      accent: '#14532d',
       buttonText: '#14532d',
       buttonBg: '#dcfce7',
       buttonBorder: '#86efac',
@@ -1020,10 +1188,20 @@ describe('Suggestions React island', () => {
       getThemeForMode: (theme) => theme || brandTheme,
       getHoverColors: () => ({
         bg: '#f0fdf4',
-        border: '#86efac'
+        border: '#86efac',
+        text: '#166534'
       }),
-      applyMarkVariables: (_item, theme) => {
+      applyMarkVariables: (item, theme, active) => {
         markThemes.push(theme);
+        const markTheme = theme as typeof brandTheme;
+        item.style.setProperty(
+          '--x-ext-mark-bg',
+          active ? '#86efac' : markTheme.markBg
+        );
+        item.style.setProperty(
+          '--x-ext-mark-text',
+          markTheme.markText
+        );
       },
       actionModel: {
         createSearchActionModel: () => ({
@@ -1049,6 +1227,13 @@ describe('Suggestions React island', () => {
     const visitButton = row._xVisitButton as HTMLButtonElement;
     const historyTag = row._xHistoryTag as HTMLSpanElement;
 
+    expect(row.style.getPropertyValue('--x-ext-mark-bg')).toBe(
+      'var(--x-ov-neutral-mark-bg, #E5E7EB)'
+    );
+    expect(row.style.getPropertyValue('--x-ext-mark-text')).toBe(
+      'var(--x-ov-neutral-mark-text, #111827)'
+    );
+
     act(() => {
       row.dispatchEvent(new MouseEvent('mouseover', {
         bubbles: true
@@ -1058,18 +1243,47 @@ describe('Suggestions React island', () => {
     expect(row.dataset.rowState).toBe('hover');
     expect(row.style.getPropertyValue('--x-ov-suggestion-row-bg'))
       .toBe('#f0fdf4');
+    expect(row.style.getPropertyValue('--x-ext-mark-bg'))
+      .toBe('#bbf7d0');
+    expect(row.style.getPropertyValue('--x-ext-mark-text'))
+      .toBe('#14532d');
     expect(historyTag.style.getPropertyValue(
       '--x-ov-suggestion-source-tag-bg'
-    )).toBe('#dcfce7');
+    )).toBe('transparent');
     expect(historyTag.style.getPropertyValue(
       '--x-ov-suggestion-source-tag-text'
     )).toBe('#166534');
     expect(historyTag.style.getPropertyValue(
       '--x-ov-suggestion-source-tag-border'
-    )).toBe('#86efac');
+    )).toBe('transparent');
     expect(visitButton.style.getPropertyValue(
       '--x-ov-suggestion-action-button-bg'
-    )).toBe('#dcfce7');
+    )).toBe('transparent');
+    expect(visitButton.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-border'
+    )).toBe('transparent');
+    expect(visitButton.style.getPropertyValue(
+      '--x-ov-suggestion-action-button-text'
+    )).toBe('#14532d');
     expect(markThemes[markThemes.length - 1]).toBe(brandTheme);
+
+    act(() => {
+      view.updateSelection(0);
+    });
+
+    expect(row.dataset.rowState).toBe('active');
+    expect(row.style.getPropertyValue('--x-ext-mark-bg'))
+      .toBe('#86efac');
+    expect(row.style.getPropertyValue('--x-ext-mark-text'))
+      .toBe('#14532d');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-bg'
+    )).toBe('transparent');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-text'
+    )).toBe('#14532d');
+    expect(historyTag.style.getPropertyValue(
+      '--x-ov-suggestion-source-tag-border'
+    )).toBe('transparent');
   });
 });

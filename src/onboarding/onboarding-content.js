@@ -131,7 +131,6 @@
               sourceTag: '常用',
               favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32',
               actionTagLabel: '新开',
-              actionTagKey: 'Enter',
               visitButtonLabel: '新开',
               active: true
             }),
@@ -213,7 +212,7 @@
               favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fgithub.com%2F&size=64',
               iconClass: 'ri-github-fill',
               resultTitle: '在 GitHub 中搜索 "lumno extension"',
-              actionLabel: '在 GitHub 中搜索',
+              actionLabel: '搜索',
               brandAccentRgb: Object.freeze([36, 41, 46])
             }),
             Object.freeze({
@@ -332,7 +331,7 @@
         lumnoOverlay: Object.freeze({
           query: 'extension',
           results: Object.freeze([
-            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: '常用', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: '開啟', actionTagKey: 'Enter', visitButtonLabel: '開啟', active: true }),
+            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: '常用', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: '開啟', visitButtonLabel: '開啟', active: true }),
             Object.freeze({ type: 'bookmark', title: 'Chrome Extensions API Reference', detail: '書籤 / 開發 / Browser extensions', sourceTag: '書籤', sourceTagKind: 'bookmark', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: '開啟' }),
             Object.freeze({ type: 'history', title: 'Extensions - Chrome for Developers', detail: 'https://developer.chrome.com/docs/extensions', sourceTag: '歷史', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: '開啟', historyDeletable: true }),
             Object.freeze({ type: 'newtab', title: '搜尋 "extension"', visitButtonLabel: '搜尋' }),
@@ -461,7 +460,7 @@
         lumnoOverlay: Object.freeze({
           query: 'extension',
           results: Object.freeze([
-            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: 'よく使う', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: '開く', actionTagKey: 'Enter', visitButtonLabel: '開く', active: true }),
+            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: 'よく使う', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: '開く', visitButtonLabel: '開く', active: true }),
             Object.freeze({ type: 'bookmark', title: 'Chrome Extensions API Reference', detail: 'ブックマーク / 開発 / Browser extensions', sourceTag: 'ブックマーク', sourceTagKind: 'bookmark', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: '開く' }),
             Object.freeze({ type: 'history', title: 'Extensions - Chrome for Developers', detail: 'https://developer.chrome.com/docs/extensions', sourceTag: '履歴', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: '開く', historyDeletable: true }),
             Object.freeze({ type: 'newtab', title: '"extension" を検索', visitButtonLabel: '検索' }),
@@ -594,7 +593,7 @@
         lumnoOverlay: Object.freeze({
           query: 'extension',
           results: Object.freeze([
-            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: 'Top', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: 'Open', actionTagKey: 'Enter', visitButtonLabel: 'Open', active: true }),
+            Object.freeze({ type: 'topSite', title: 'Chrome Web Store - Extensions', detail: 'https://chromewebstore.google.com/category/extensions', sourceTag: 'Top', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchromewebstore.google.com%2F&size=32', actionTagLabel: 'Open', visitButtonLabel: 'Open', active: true }),
             Object.freeze({ type: 'bookmark', title: 'Chrome Extensions API Reference', detail: 'Bookmarks / Dev / Browser extensions', sourceTag: 'Bookmark', sourceTagKind: 'bookmark', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: 'Open' }),
             Object.freeze({ type: 'history', title: 'Extensions - Chrome for Developers', detail: 'https://developer.chrome.com/docs/extensions', sourceTag: 'History', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fdeveloper.chrome.com%2F&size=32', visitButtonLabel: 'Open', historyDeletable: true }),
             Object.freeze({ type: 'newtab', title: 'Search "extension"', visitButtonLabel: 'Search' }),
@@ -619,7 +618,7 @@
         siteSearchDemo: Object.freeze({
           tabHintTemplate: 'Search with {provider}',
           cases: Object.freeze([
-            Object.freeze({ kind: 'site', label: 'Site search', triggerQuery: 'github', modeLabel: 'GitHub', prefixLabel: 'GitHub', promptQuery: 'lumno extension', promptWidth: '15ch', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fgithub.com%2F&size=64', iconClass: 'ri-github-fill', resultTitle: 'Search in GitHub "lumno extension"', actionLabel: 'Search in GitHub', brandAccentRgb: Object.freeze([36, 41, 46]) }),
+            Object.freeze({ kind: 'site', label: 'Site search', triggerQuery: 'github', modeLabel: 'GitHub', prefixLabel: 'GitHub', promptQuery: 'lumno extension', promptWidth: '15ch', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fgithub.com%2F&size=64', iconClass: 'ri-github-fill', resultTitle: 'Search in GitHub "lumno extension"', actionLabel: 'Search', brandAccentRgb: Object.freeze([36, 41, 46]) }),
             Object.freeze({ kind: 'ai', label: 'Ask AI', triggerQuery: 'chatgpt', modeLabel: 'ChatGPT', prefixLabel: 'ChatGPT', promptQuery: 'What should I watch for in this PR?', promptWidth: '16em', favicon: 'https://t2.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE%2CSIZE%2CURL&url=https%3A%2F%2Fchatgpt.com%2F&size=64', iconClass: 'ri-sparkling-2-line', resultTitle: 'Ask ChatGPT "What should I watch for in this PR?"', actionLabel: 'Open ChatGPT web app', brandAccentRgb: Object.freeze([16, 163, 127]) })
           ])
         }),

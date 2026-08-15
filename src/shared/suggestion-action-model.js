@@ -21,7 +21,7 @@
     'commandDocumentPip'
   ]);
 
-  const PRIMARY_ENTER_REASONS = new Set([
+  const PRIMARY_ACTION_REASONS = new Set([
     'topSite',
     'inline',
     'autocomplete',
@@ -126,22 +126,22 @@
     const enterAction = config.enterAction || 'openNewTab';
     const actionTags = [];
     const isDirectHighlight = isPrimaryHighlight && isDirectNavigationSuggestion(suggestion);
-    const shouldShowEnterTag = !isPrimarySearchSuggest &&
+    const shouldShowPrimaryActionTag = !isPrimarySearchSuggest &&
       isPrimaryHighlight &&
       !onlyKeywordSuggestions &&
       (
-        PRIMARY_ENTER_REASONS.has(primaryHighlightReason) ||
+        PRIMARY_ACTION_REASONS.has(primaryHighlightReason) ||
         isDirectHighlight ||
         isMergedHighlight
       );
 
     if (shouldSwitchMatchedTab) {
-      actionTags.push({ action: 'switch', keyLabel: simpleMode ? '' : 'Enter' });
-    } else if (shouldShowEnterTag) {
-      actionTags.push({ action: enterAction, keyLabel: simpleMode ? '' : 'Enter' });
+      actionTags.push({ action: 'switch' });
+    } else if (shouldShowPrimaryActionTag) {
+      actionTags.push({ action: enterAction });
     }
     if (!simpleMode && isPrimaryHighlight && onlyKeywordSuggestions && suggestion && suggestion.type === 'newtab') {
-      actionTags.push({ action: 'search', keyLabel: 'Enter' });
+      actionTags.push({ action: 'search' });
     }
 
     const visitButtonAction = getVisitButtonAction(suggestion, {

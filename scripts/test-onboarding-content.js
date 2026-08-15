@@ -584,7 +584,7 @@ assert.deepStrictEqual(
     {
       kind: 'site',
       resultTitle: 'Search in GitHub "lumno extension"',
-      actionLabel: 'Search in GitHub'
+      actionLabel: 'Search'
     },
     {
       kind: 'ai',

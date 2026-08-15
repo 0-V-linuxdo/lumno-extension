@@ -19,7 +19,7 @@
   vertical-align: baseline;
   display: block;
   background: transparent;
-  border-radius: 32px 32px 0 0;
+  border-radius: var(--x-ext-search-input-corners, 28px 28px 0 0);
   overflow: hidden;
 }
 
