@@ -8,6 +8,7 @@ const storeManifest = { ...manifest };
 delete storeManifest.key;
 delete storeManifest.externally_connectable;
 const version = manifest.version;
+const repoRoot = process.cwd();
 const distDir = path.join(process.cwd(), 'dist');
 const zipPath = path.join(distDir, `lumno-store-v${version}.zip`);
 const packageRoots = [
@@ -15,12 +16,11 @@ const packageRoots = [
   '_locales',
   'assets'
 ];
-const packageExcludePatterns = [
-  '*.DS_Store',
-  'assets/images/readme/*'
-];
-const injectedScriptFiles = [
+const developmentOnlyFiles = new Set([
   'src/background/codex-debug-bridge.js',
+  'src/shared/codex-debug-surface.js'
+]);
+const injectedScriptFiles = [
   'src/background/extension-pages.js',
   'src/background/message-router.js',
   'src/background/newtab-fallback.js',
@@ -28,7 +28,6 @@ const injectedScriptFiles = [
   'src/background/pip-ownership.js',
   'src/background/pip-main-world.js',
   'src/shared/extension-routes.js',
-  'src/shared/codex-debug-surface.js',
   'src/shared/navigation-disposition.js',
   'src/shared/community-links.js',
   'src/shared/settings.js',
@@ -60,32 +59,147 @@ if (fs.existsSync(zipPath)) {
   fs.rmSync(zipPath);
 }
 
-const manifestStageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumno-store-manifest-'));
-const stagedManifestPath = path.join(manifestStageDir, 'manifest.json');
-fs.writeFileSync(stagedManifestPath, `${JSON.stringify(storeManifest, null, 3)}\n`);
+const packageStageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumno-store-package-'));
+let packageStageRemoved = false;
+
+function cleanupPackageStage() {
+  if (packageStageRemoved) {
+    return;
+  }
+  packageStageRemoved = true;
+  fs.rmSync(packageStageDir, { recursive: true, force: true });
+}
+
+process.on('exit', cleanupPackageStage);
+
+function normalizePackagePath(value) {
+  return String(value || '').split(path.sep).join('/');
+}
+
+function stagedPath(value) {
+  return path.join(packageStageDir, value);
+}
+
+function packagePathForFile(file) {
+  return normalizePackagePath(path.relative(packageStageDir, file));
+}
+
+function shouldCopyPackagePath(sourcePath) {
+  const packagePath = normalizePackagePath(path.relative(repoRoot, sourcePath));
+  if (developmentOnlyFiles.has(packagePath)) {
+    return false;
+  }
+  if (path.basename(sourcePath) === '.DS_Store') {
+    return false;
+  }
+  return packagePath !== 'assets/images/readme' &&
+    !packagePath.startsWith('assets/images/readme/');
+}
+
+packageRoots.forEach((packageRoot) => {
+  fs.cpSync(path.join(repoRoot, packageRoot), stagedPath(packageRoot), {
+    recursive: true,
+    filter: shouldCopyPackagePath
+  });
+});
+fs.writeFileSync(stagedPath('manifest.json'), `${JSON.stringify(storeManifest, null, 3)}\n`);
+
+function replaceRequired(source, pattern, replacement, expectedCount, label) {
+  let count = 0;
+  const nextSource = source.replace(pattern, () => {
+    count += 1;
+    return replacement;
+  });
+  if (count !== expectedCount) {
+    throw new Error(`Store package transform expected ${expectedCount} ${label} match(es), found ${count}.`);
+  }
+  return nextSource;
+}
+
+const stagedHtmlFiles = [];
+function collectHtmlFiles(dir) {
+  fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectHtmlFiles(fullPath);
+    } else if (entry.isFile() && fullPath.endsWith('.html')) {
+      stagedHtmlFiles.push(fullPath);
+    }
+  });
+}
+collectHtmlFiles(stagedPath('src'));
+
+let debugSurfaceScriptCount = 0;
+stagedHtmlFiles.forEach((file) => {
+  let source = fs.readFileSync(file, 'utf8');
+  source = source.replace(
+    /^[ \t]*<script\s+src=["']\.\.\/shared\/codex-debug-surface\.js["']\s*><\/script>\s*\r?\n/gm,
+    () => {
+      debugSurfaceScriptCount += 1;
+      return '';
+    }
+  );
+  fs.writeFileSync(file, source);
+});
+if (debugSurfaceScriptCount !== 3) {
+  throw new Error(`Store package transform expected 3 debug surface script tags, found ${debugSurfaceScriptCount}.`);
+}
+
+const stagedBackgroundPath = stagedPath('src/background/background.js');
+let stagedBackground = fs.readFileSync(stagedBackgroundPath, 'utf8');
+stagedBackground = replaceRequired(
+  stagedBackground,
+  /try \{\r?\n  importScripts\(chrome\.runtime\.getURL\('src\/background\/codex-debug-bridge\.js'\)\);\r?\n\} catch \(error\) \{\r?\n  console\.warn\('Lumno: failed to load Codex debug bridge helpers\.', error\);\r?\n\}\r?\n\r?\n/,
+  '',
+  1,
+  'background debug bridge import'
+);
+stagedBackground = replaceRequired(
+  stagedBackground,
+  /const CODEX_DEBUG_BRIDGE = globalThis\.LumnoCodexDebugBackground \|\| \{\};\r?\nconst codexDebugBridge = CODEX_DEBUG_BRIDGE && typeof CODEX_DEBUG_BRIDGE\.create === 'function'\r?\n  \? CODEX_DEBUG_BRIDGE\.create\(\{ chromeApi: chrome \}\)\r?\n  : null;\r?\n/,
+  '',
+  1,
+  'background debug bridge initialization'
+);
+stagedBackground = replaceRequired(
+  stagedBackground,
+  /if \(codexDebugBridge && typeof codexDebugBridge\.attach === 'function'\) \{\r?\n  codexDebugBridge\.attach\(\);\r?\n\}\r?\n\r?\n/,
+  '',
+  1,
+  'background debug bridge attachment'
+);
+stagedBackground = replaceRequired(
+  stagedBackground,
+  /^[ \t]*'src\/shared\/codex-debug-surface\.js',\r?\n/gm,
+  '',
+  3,
+  'injected debug surface entry'
+);
+fs.writeFileSync(stagedBackgroundPath, stagedBackground);
+
+developmentOnlyFiles.forEach((file) => {
+  if (fs.existsSync(stagedPath(file))) {
+    throw new Error(`Development-only file remained in store package stage: ${file}`);
+  }
+});
+stagedHtmlFiles.forEach((file) => {
+  const source = fs.readFileSync(file, 'utf8');
+  if (source.includes('codex-debug-surface.js')) {
+    throw new Error(`Development-only surface reference remained in ${packagePathForFile(file)}.`);
+  }
+});
+if (/codex-debug-(?:bridge|surface)\.js|LumnoCodexDebug|codexDebugBridge/.test(stagedBackground)) {
+  throw new Error('Development-only debug bridge reference remained in staged background.js.');
+}
 
 let zipResult = null;
-let manifestZipResult = null;
-try {
-  const zipArgs = ['-r', '-D', zipPath, ...packageRoots, '-x', ...packageExcludePatterns];
-  zipResult = spawnSync('zip', zipArgs, {
-    cwd: process.cwd(),
-    stdio: 'inherit'
-  });
-  if (zipResult.status === 0) {
-    manifestZipResult = spawnSync('zip', ['-j', zipPath, stagedManifestPath], {
-      cwd: process.cwd(),
-      stdio: 'inherit'
-    });
-  }
-} finally {
-  fs.rmSync(manifestStageDir, { recursive: true, force: true });
-}
+const zipArgs = ['-r', '-D', zipPath, ...packageRoots, 'manifest.json'];
+zipResult = spawnSync('zip', zipArgs, {
+  cwd: packageStageDir,
+  stdio: 'inherit'
+});
 if (zipResult.status !== 0) {
   process.exit(zipResult.status || 1);
-}
-if (!manifestZipResult || manifestZipResult.status !== 0) {
-  process.exit((manifestZipResult && manifestZipResult.status) || 1);
 }
 
 const listResult = spawnSync('zipinfo', ['-1', zipPath], {
@@ -134,8 +248,8 @@ function checkManifestPath(value) {
     return;
   }
   if (!entrySet.has(value)) {
-    if (fs.existsSync(value) &&
-        fs.statSync(value).isDirectory() &&
+    if (fs.existsSync(stagedPath(value)) &&
+        fs.statSync(stagedPath(value)).isDirectory() &&
         entries.some((entry) => entry.startsWith(`${value}/`))) {
       return;
     }
@@ -242,12 +356,13 @@ function listHtmlFiles(dir) {
 }
 
 function checkRuntimeGetUrlReferences() {
-  const files = listJsFiles('src');
+  const files = listJsFiles(stagedPath('src'));
   const staticGetUrlPattern = /chrome\.runtime\.getURL\(\s*(['"`])([^'"`]+)\1\s*\)/g;
   files.forEach((file) => {
     const source = fs.readFileSync(file, 'utf8');
-    checkConcreteExtensionPathReferences(file, source);
-    checkCssUrlReferences(file, source);
+    const packageFile = packagePathForFile(file);
+    checkConcreteExtensionPathReferences(packageFile, source);
+    checkCssUrlReferences(packageFile, source);
     let match = null;
     while ((match = staticGetUrlPattern.exec(source))) {
       const value = match[2];
@@ -260,11 +375,12 @@ function checkRuntimeGetUrlReferences() {
 }
 
 function checkHtmlReferences() {
-  const files = listHtmlFiles('src');
+  const files = listHtmlFiles(stagedPath('src'));
   const referencePattern = /\b(?:src|href)=["']([^"']+)["']/g;
   files.forEach((file) => {
     const source = fs.readFileSync(file, 'utf8');
-    checkCssUrlReferences(file, source);
+    const packageFile = packagePathForFile(file);
+    checkCssUrlReferences(packageFile, source);
     let match = null;
     while ((match = referencePattern.exec(source))) {
       const value = match[1];
@@ -272,7 +388,7 @@ function checkHtmlReferences() {
         continue;
       }
       const cleanValue = value.split(/[?#]/)[0];
-      const resolved = path.normalize(path.join(path.dirname(file), cleanValue));
+      const resolved = path.normalize(path.join(path.dirname(packageFile), cleanValue));
       checkManifestPath(resolved);
     }
   });
@@ -280,20 +396,21 @@ function checkHtmlReferences() {
 
 function checkCssFiles() {
   const files = [
-    ...listFilesWithExtension('src', '.css'),
-    ...listFilesWithExtension('assets', '.css')
+    ...listFilesWithExtension(stagedPath('src'), '.css'),
+    ...listFilesWithExtension(stagedPath('assets'), '.css')
   ];
   files.forEach((file) => {
-    checkCssUrlReferences(file, fs.readFileSync(file, 'utf8'));
+    checkCssUrlReferences(packagePathForFile(file), fs.readFileSync(file, 'utf8'));
   });
 }
 
 function checkNewtabWallpaperFiles() {
   const file = 'src/newtab/wallpaper.js';
-  if (!fs.existsSync(file)) {
+  const fullPath = stagedPath(file);
+  if (!fs.existsSync(fullPath)) {
     return;
   }
-  const source = fs.readFileSync(file, 'utf8');
+  const source = fs.readFileSync(fullPath, 'utf8');
   const directoryMatch = source.match(/NEWTAB_WALLPAPER_EXTENSION_DIRECTORY\s*=\s*['"]([^'"]+)['"]/);
   const suffixMatch = source.match(/NEWTAB_WALLPAPER_THUMBNAIL_SUFFIX\s*=\s*['"]([^'"]+)['"]/);
   const directory = directoryMatch ? directoryMatch[1] : '';
@@ -313,15 +430,15 @@ function checkNewtabWallpaperFiles() {
   }
 }
 
-checkManifestPath(manifest.background && manifest.background.service_worker);
-checkManifestPath(manifest.chrome_url_overrides && manifest.chrome_url_overrides.newtab);
-checkManifestPath(manifest.options_ui && manifest.options_ui.page);
-Object.values(manifest.icons || {}).forEach(checkManifestPath);
-(manifest.content_scripts || []).forEach((script) => {
+checkManifestPath(storeManifest.background && storeManifest.background.service_worker);
+checkManifestPath(storeManifest.chrome_url_overrides && storeManifest.chrome_url_overrides.newtab);
+checkManifestPath(storeManifest.options_ui && storeManifest.options_ui.page);
+Object.values(storeManifest.icons || {}).forEach(checkManifestPath);
+(storeManifest.content_scripts || []).forEach((script) => {
   (script.js || []).forEach(checkManifestPath);
   (script.css || []).forEach(checkManifestPath);
 });
-(manifest.web_accessible_resources || []).forEach((entry) => {
+(storeManifest.web_accessible_resources || []).forEach((entry) => {
   (entry.resources || []).forEach(checkManifestPath);
 });
 injectedScriptFiles.forEach(checkManifestPath);
@@ -335,5 +452,6 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+cleanupPackageStage();
 console.log(`Created ${zipPath}`);
 console.log(`Entries: ${entries.length}`);

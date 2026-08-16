@@ -37,6 +37,10 @@ const packagedManifest = JSON.parse(execFileSync('unzip', ['-p', zipPath, 'manif
   cwd: repoRoot,
   encoding: 'utf8'
 }));
+const readPackagedText = (entry) => execFileSync('unzip', ['-p', zipPath, entry], {
+  cwd: repoRoot,
+  encoding: 'utf8'
+});
 
 assert(
   entries.every((entry) => !entry.startsWith('assets/images/readme/')),
@@ -78,6 +82,37 @@ assert(
 assert(
   entries.every((entry) => !/^(?:supabase|docs|scripts)\//.test(entry)),
   'store package should contain no backend, deployment, or repository tooling files'
+);
+const developmentOnlyFiles = [
+  'src/background/codex-debug-bridge.js',
+  'src/shared/codex-debug-surface.js'
+];
+assert(
+  developmentOnlyFiles.every((file) => !entries.includes(file)),
+  'store package should exclude development-only Codex debug scripts'
+);
+[
+  'src/newtab/newtab.html',
+  'src/options/options.html',
+  'src/onboarding/onboarding.html'
+].forEach((file) => {
+  assert(
+    !readPackagedText(file).includes('codex-debug-surface.js'),
+    `${file} should not load the development-only debug surface in the store package`
+  );
+  assert(
+    fs.readFileSync(path.join(repoRoot, file), 'utf8').includes('codex-debug-surface.js'),
+    `${file} should retain the debug surface in development source`
+  );
+});
+const packagedBackground = readPackagedText('src/background/background.js');
+assert(
+  !/codex-debug-(?:bridge|surface)\.js|LumnoCodexDebug|codexDebugBridge/.test(packagedBackground),
+  'store background should not retain development-only debug bridge references'
+);
+assert(
+  /codex-debug-bridge\.js/.test(fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8')),
+  'development background should retain the Codex debug bridge'
 );
 assert(
   !Object.prototype.hasOwnProperty.call(packagedManifest, 'key'),
