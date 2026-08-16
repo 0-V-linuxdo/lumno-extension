@@ -110,6 +110,8 @@ async function runBackgroundBridgeTests() {
   assert(describeResponse.result.methods.includes('surface.snapshot'));
   assert(describeResponse.result.methods.includes('surface.performance'));
   assert(describeResponse.result.methods.includes('surface.profileAction'));
+  assert(describeResponse.result.methods.includes('surface.performancePanel'));
+  assert(describeResponse.result.methods.includes('surface.performanceRecording'));
   assert.strictEqual(describeResponse.result.developmentOnly, true);
 
   let listResponse = null;
@@ -181,7 +183,7 @@ async function runBackgroundBridgeTests() {
 async function runSurfaceBridgeTests() {
   const dom = new JSDOM(`<!doctype html>
     <html><head><title>New Tab</title></head><body data-lumno-page="newtab">
-      <button id="action" class="x-nt-shortcut-tile" aria-label="Run action">Run</button>
+      <button id="action" class="x-nt-shortcut-tile" data-action="run" data-shortcut-id="fixture-shortcut" aria-label="Run action">Run</button>
       <input id="query" class="x-nt-suggestion-item" value="before" />
       <input id="secret" type="password" value="do-not-return" />
       <input id="checkbox" type="checkbox" />
@@ -264,6 +266,32 @@ async function runSurfaceBridgeTests() {
       jsHeapSizeLimit: 256_000_000
     }
   });
+  let copiedPerformanceReport = '';
+  Object.defineProperty(dom.window.navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      async writeText(value) {
+        copiedPerformanceReport = String(value || '');
+      }
+    }
+  });
+  let downloadedPerformanceUrl = '';
+  let revokedPerformanceUrl = '';
+  Object.defineProperty(dom.window.URL, 'createObjectURL', {
+    configurable: true,
+    value() {
+      return 'blob:lumno-performance-report';
+    }
+  });
+  Object.defineProperty(dom.window.URL, 'revokeObjectURL', {
+    configurable: true,
+    value(value) {
+      revokedPerformanceUrl = String(value || '');
+    }
+  });
+  dom.window.HTMLAnchorElement.prototype.click = function() {
+    downloadedPerformanceUrl = this.href;
+  };
   dom.window.document.documentElement.setAttribute(
     'data-lumno-newtab-bootstrap-storage-requests',
     '1'
@@ -302,6 +330,11 @@ async function runSurfaceBridgeTests() {
   assert.strictEqual(dom.window.document.documentElement.dataset.lumnoCodexDebugReady, 'true');
   assert.strictEqual(port.posted[0].type, 'surface.register');
   assert.strictEqual(port.posted[0].pageType, 'newtab');
+  assert.strictEqual(
+    dom.window.document.querySelector('[data-lumno-performance-panel-host]'),
+    null,
+    'development performance panel should not mount until explicitly opened'
+  );
 
   performanceObservers.get('longtask').emit([{
     name: 'self',
@@ -309,12 +342,21 @@ async function runSurfaceBridgeTests() {
     duration: 73.4
   }]);
   performanceObservers.get('event').emit([{
-    name: 'click',
+    name: 'pointerout',
     startTime: 140,
     duration: 42.2,
     processingStart: 144,
     processingEnd: 170,
-    interactionId: 7
+    interactionId: 7,
+    target: dom.window.document.getElementById('action')
+  }, {
+    name: 'pointerleave',
+    startTime: 140,
+    duration: 42.2,
+    processingStart: 145,
+    processingEnd: 169,
+    interactionId: 7,
+    target: dom.window.document.getElementById('action')
   }]);
   performanceObservers.get('layout-shift').emit([{
     startTime: 90,
@@ -345,6 +387,40 @@ async function runSurfaceBridgeTests() {
   assert.strictEqual(performanceSnapshot.startup.largestContentfulPaint.startTime, 81.5);
   assert.strictEqual(performanceSnapshot.responsiveness.longTasks.longestMs, 73.4);
   assert.strictEqual(performanceSnapshot.responsiveness.events.longestMs, 42.2);
+  assert.strictEqual(performanceSnapshot.responsiveness.events.count, 2);
+  assert.strictEqual(performanceSnapshot.responsiveness.events.entries[0].inputDelayMs, 4);
+  assert.strictEqual(performanceSnapshot.responsiveness.events.entries[0].processingDurationMs, 26);
+  assert.strictEqual(performanceSnapshot.responsiveness.events.entries[0].presentationDelayMs, 12.2);
+  assert.strictEqual(
+    performanceSnapshot.responsiveness.events.entries[0].target.element.id,
+    'action'
+  );
+  assert.strictEqual(
+    performanceSnapshot.responsiveness.events.entries[0].target.element.attributes[
+      'data-shortcut-id'
+    ],
+    'fixture-shortcut'
+  );
+  assert.strictEqual(performanceSnapshot.responsiveness.eventBursts.count, 1);
+  assert.strictEqual(performanceSnapshot.responsiveness.eventBursts.rawEntryCount, 2);
+  assert.strictEqual(performanceSnapshot.responsiveness.eventBursts.totalDurationMs, 42.2);
+  assert.strictEqual(performanceSnapshot.responsiveness.eventBursts.longestInputDelayMs, 4);
+  assert.strictEqual(
+    performanceSnapshot.responsiveness.eventBursts.longestProcessingDurationMs,
+    26
+  );
+  assert.strictEqual(
+    performanceSnapshot.responsiveness.eventBursts.longestPresentationDelayMs,
+    12.2
+  );
+  assert.deepStrictEqual(
+    performanceSnapshot.responsiveness.eventBursts.entries[0].names,
+    ['pointerout', 'pointerleave']
+  );
+  assert.strictEqual(
+    performanceSnapshot.responsiveness.eventBursts.entries[0].entryCount,
+    2
+  );
   assert.strictEqual(performanceSnapshot.responsiveness.cumulativeLayoutShift, 0.12);
   assert.deepStrictEqual(performanceSnapshot.responsiveness.observerSupport, {
     longtask: true,
@@ -364,6 +440,7 @@ async function runSurfaceBridgeTests() {
   const metricsWithoutEntries = agent.executeRequest('surface.performance', { maxEntries: 0 });
   assert.deepStrictEqual(metricsWithoutEntries.responsiveness.longTasks.entries, []);
   assert.deepStrictEqual(metricsWithoutEntries.responsiveness.events.entries, []);
+  assert.deepStrictEqual(metricsWithoutEntries.responsiveness.eventBursts.entries, []);
   assert.deepStrictEqual(metricsWithoutEntries.responsiveness.layoutShifts, []);
   assert.deepStrictEqual(metricsWithoutEntries.resources.slowest, []);
 
@@ -392,6 +469,129 @@ async function runSurfaceBridgeTests() {
   assert(profiledAction.interactionToFirstFrameMs >= profiledAction.syncDurationMs);
   assert(profiledAction.interactionToSettledFramesMs >= profiledAction.interactionToFirstFrameMs);
   assert.strictEqual(profiledAction.performanceDelta.longTasks.count, 0);
+
+  const recordingStatus = agent.executeRequest('surface.performanceRecording', {
+    action: 'start',
+    durationMs: 1000,
+    scenario: 'search'
+  });
+  assert.strictEqual(recordingStatus.active, true);
+  assert.strictEqual(recordingStatus.scenario, 'search');
+  performanceObservers.get('event').emit(Array.from({ length: 205 }, (_, index) => ({
+    name: 'pointerover',
+    startTime: 1000 + (index * 2),
+    duration: index === 0 ? 96 : 24,
+    processingStart: 1004 + (index * 2),
+    processingEnd: (index === 0 ? 1020 : 1005) + (index * 2),
+    interactionId: 0,
+    target: dom.window.document.getElementById('action')
+  })));
+  await new Promise((resolve) => dom.window.requestAnimationFrame(() => {
+    dom.window.requestAnimationFrame(resolve);
+  }));
+  const recordingReport = agent.executeRequest('surface.performanceRecording', {
+    action: 'stop'
+  });
+  assert.strictEqual(recordingReport.surfaceType, 'newtab');
+  assert.strictEqual(recordingReport.scenario, 'search');
+  assert.strictEqual(recordingReport.finishedBy, 'manual');
+  assert(recordingReport.frames.count >= 1);
+  assert(recordingReport.durationMs >= 0);
+  assert.strictEqual(typeof recordingReport.performanceDelta.longTasks.count, 'number');
+  assert.strictEqual(typeof recordingReport.performanceDelta.eventBursts.count, 'number');
+  assert.strictEqual(
+    recordingReport.performanceDelta.events.longestMs,
+    96,
+    'recording aggregate maxima should survive bounded raw event eviction'
+  );
+  assert.strictEqual(
+    recordingReport.performanceDelta.eventBursts.longestMs,
+    96,
+    'recording aggregate maxima should survive bounded event burst eviction'
+  );
+  assert.strictEqual(
+    recordingReport.performanceDelta.eventBursts.longestProcessingDurationMs,
+    16
+  );
+  assert.strictEqual(
+    recordingReport.performanceDelta.eventBursts.longestInputDelayMs,
+    4
+  );
+  assert.strictEqual(
+    recordingReport.performanceDelta.eventBursts.longestPresentationDelayMs,
+    76
+  );
+  assert.strictEqual(
+    agent.executeRequest('surface.performanceRecording', { action: 'latest' }),
+    recordingReport
+  );
+
+  const shortcutEvent = new dom.window.KeyboardEvent('keydown', {
+    altKey: true,
+    bubbles: true,
+    code: 'KeyP',
+    ctrlKey: true,
+    key: 'p',
+    shiftKey: true
+  });
+  dom.window.document.body.dispatchEvent(shortcutEvent);
+  const performancePanelHost = dom.window.document.querySelector(
+    '[data-lumno-performance-panel-host]'
+  );
+  assert(performancePanelHost, 'development shortcut should mount the performance panel');
+  assert.strictEqual(performancePanelHost.hidden, false);
+  assert(performancePanelHost.shadowRoot, 'performance panel should isolate its styles in Shadow DOM');
+  assert(
+    performancePanelHost.shadowRoot.textContent.includes('Lumno Performance'),
+    'performance panel should expose scenario recording controls'
+  );
+  const performancePanelStyles = performancePanelHost.shadowRoot.querySelector('style').textContent;
+  assert(!/\b(?:animation|transition|filter|will-change)\s*:/i.test(performancePanelStyles),
+    'performance panel should not introduce motion or paint-heavy effects into its own samples');
+  const panelStartButton = performancePanelHost.shadowRoot.querySelector('[data-action="start"]');
+  const panelStopButton = performancePanelHost.shadowRoot.querySelector('[data-action="stop"]');
+  panelStartButton.click();
+  assert.strictEqual(
+    agent.executeRequest('surface.performanceRecording', { action: 'status' }).active,
+    true,
+    'panel Start should begin the same bounded performance recorder exposed by the bridge'
+  );
+  panelStopButton.click();
+  assert.strictEqual(
+    agent.executeRequest('surface.performanceRecording', { action: 'status' }).active,
+    false,
+    'panel Stop should finish recording without changing app controls'
+  );
+  assert(
+    performancePanelHost.shadowRoot.querySelector('[data-role="output"]').textContent
+      .includes('Estimated dropped frames (60 Hz)'),
+    'completed panel recording should render a concise frame and responsiveness summary'
+  );
+  assert(
+    performancePanelHost.shadowRoot.querySelector('[data-role="output"]').textContent
+      .includes('max processing'),
+    'panel summary should distinguish event processing from total presentation latency'
+  );
+  performancePanelHost.shadowRoot.querySelector('[data-action="copy"]').click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(
+    JSON.parse(copiedPerformanceReport).scenario,
+    'mixed',
+    'Copy JSON should export the latest sanitized recording'
+  );
+  performancePanelHost.shadowRoot.querySelector('[data-action="download"]').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.strictEqual(downloadedPerformanceUrl, 'blob:lumno-performance-report');
+  assert.strictEqual(revokedPerformanceUrl, 'blob:lumno-performance-report');
+  const closedPanelStatus = agent.executeRequest('surface.performancePanel', {
+    action: 'close'
+  });
+  assert.strictEqual(closedPanelStatus.open, false);
+  assert.strictEqual(performancePanelHost.hidden, true);
+  const reopenedPanelStatus = agent.executeRequest('surface.performancePanel', {
+    action: 'open'
+  });
+  assert.strictEqual(reopenedPanelStatus.open, true);
 
   const fillResult = agent.executeRequest('surface.action', {
     selector: '#query',
@@ -526,9 +726,30 @@ async function runSurfaceBridgeTests() {
     0,
     'store page should not create performance observers for the development-only probe'
   );
+  productionDom.window.document.body.dispatchEvent(new productionDom.window.KeyboardEvent(
+    'keydown',
+    {
+      altKey: true,
+      bubbles: true,
+      code: 'KeyP',
+      ctrlKey: true,
+      key: 'p',
+      shiftKey: true
+    }
+  ));
+  assert.strictEqual(
+    productionDom.window.document.querySelector('[data-lumno-performance-panel-host]'),
+    null,
+    'store page should not install or mount the development performance panel'
+  );
 
   dom.window.dispatchEvent(new dom.window.Event('pagehide'));
   assert.strictEqual(performanceObservers.size, 0, 'page teardown should disconnect performance observers');
+  assert.strictEqual(
+    dom.window.document.querySelector('[data-lumno-performance-panel-host]'),
+    null,
+    'page teardown should remove the development performance panel'
+  );
   productionDom.window.close();
   dom.window.close();
 }

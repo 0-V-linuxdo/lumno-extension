@@ -7279,9 +7279,10 @@
     };
   }
 
-  function applyShortcutDockPointerStyles(tile, pointerX, offset) {
-    const icon = getShortcutDockIcon(tile);
-    const influence = getShortcutDockInfluence(pointerX, icon);
+  function applyShortcutDockPointerStyles(tile, pointerX, offset, measurement) {
+    const prepared = measurement && typeof measurement === 'object' ? measurement : null;
+    const icon = prepared ? prepared.icon : getShortcutDockIcon(tile);
+    const influence = prepared ? prepared.influence : getShortcutDockInfluence(pointerX, icon);
     if (!icon || !influence || !icon.style || typeof icon.style.setProperty !== 'function') {
       return;
     }
@@ -7363,6 +7364,19 @@
       resetShortcutDockHover();
       return;
     }
+    const pointerMeasurements = Number.isFinite(pointerX)
+      ? tiles.map((tile, index) => {
+        const offset = index - activeIndex;
+        if (Math.abs(offset) > 2) {
+          return null;
+        }
+        const icon = getShortcutDockIcon(tile);
+        return {
+          icon,
+          influence: getShortcutDockInfluence(pointerX, icon)
+        };
+      })
+      : [];
     shortcutGrid.setAttribute('data-dock-active', 'true');
     tiles.forEach((tile, index) => {
       const offset = index - activeIndex;
@@ -7374,7 +7388,7 @@
       tile.setAttribute('data-dock-distance', String(distance));
       tile.setAttribute('data-dock-side', offset < 0 ? 'before' : offset > 0 ? 'after' : 'active');
       if (Number.isFinite(pointerX)) {
-        applyShortcutDockPointerStyles(tile, pointerX, offset);
+        applyShortcutDockPointerStyles(tile, pointerX, offset, pointerMeasurements[index]);
       }
     });
   }
@@ -7385,8 +7399,7 @@
     }
     const tile = getShortcutTileFromNode(event.target);
     if (tile) {
-      cancelShortcutDockPointerFrame();
-      setShortcutDockHover(tile, getShortcutDockPointerX(event));
+      scheduleShortcutDockPointerStyles(tile, getShortcutDockPointerX(event));
     }
   }
 

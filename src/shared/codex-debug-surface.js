@@ -79,15 +79,124 @@
     }
   }
 
+  function describePerformanceTargetElement(element) {
+    if (!element || typeof element !== 'object') {
+      return null;
+    }
+    const getAttribute = (name) => {
+      if (typeof element.getAttribute !== 'function') {
+        return '';
+      }
+      try {
+        return truncate(element.getAttribute(name) || '', 120);
+      } catch (error) {
+        return '';
+      }
+    };
+    const classes = (() => {
+      try {
+        return Array.from(element.classList || String(element.className || '').split(/\s+/))
+          .map((value) => truncate(value, 80))
+          .filter(Boolean)
+          .slice(0, 6);
+      } catch (error) {
+        return [];
+      }
+    })();
+    const attributes = {};
+    [
+      'data-action',
+      'data-bookmark-id',
+      'data-mode',
+      'data-role',
+      'data-shortcut-id',
+      'type'
+    ].forEach((name) => {
+      const value = getAttribute(name);
+      if (value) {
+        attributes[name] = value;
+      }
+    });
+    const descriptor = {
+      tag: truncate(element.localName || element.tagName || '', 40).toLowerCase(),
+      id: getAttribute('id'),
+      classes,
+      role: getAttribute('role'),
+      attributes,
+      cursorTooltipBound: getAttribute('data-cursor-tooltip-bound') === 'true'
+    };
+    return descriptor.tag || descriptor.id || classes.length > 0 ||
+      Object.keys(attributes).length > 0
+      ? descriptor
+      : null;
+  }
+
+  function hasPerformanceContextMarker(descriptor) {
+    if (!descriptor) {
+      return false;
+    }
+    return Boolean(
+      descriptor.id ||
+      descriptor.role ||
+      descriptor.cursorTooltipBound ||
+      Object.keys(descriptor.attributes || {}).length > 0 ||
+      (descriptor.classes || []).some((className) =>
+        /(?:shortcut|bookmark|wallpaper|search|suggestion|toolbar|recent)/i.test(className)
+      )
+    );
+  }
+
+  function sanitizePerformanceEventTarget(target) {
+    let element = target && target.nodeType === 1
+      ? target
+      : (target && target.parentElement) || null;
+    if (!element) {
+      return null;
+    }
+    const targetDescriptor = describePerformanceTargetElement(element);
+    let contextDescriptor = hasPerformanceContextMarker(targetDescriptor)
+      ? targetDescriptor
+      : null;
+    let depth = 0;
+    while (!contextDescriptor && element && depth < 6) {
+      element = element.parentElement || null;
+      const descriptor = describePerformanceTargetElement(element);
+      if (hasPerformanceContextMarker(descriptor)) {
+        contextDescriptor = descriptor;
+      }
+      depth += 1;
+    }
+    if (!targetDescriptor && !contextDescriptor) {
+      return null;
+    }
+    return {
+      element: targetDescriptor,
+      context: contextDescriptor && contextDescriptor !== targetDescriptor
+        ? contextDescriptor
+        : null
+    };
+  }
+
   function createPerformanceCollector(windowObj, documentObj, surfaceType) {
     const performanceObj = windowObj && windowObj.performance;
     const longTasks = [];
     const events = [];
+    const eventBursts = [];
     const layoutShifts = [];
     const observers = [];
+    const activeBaselines = new Set();
     const observerSupport = {};
     const longTaskStats = { count: 0, duration: 0, maxDuration: 0, sequence: 0 };
     const eventStats = { count: 0, duration: 0, maxDuration: 0, sequence: 0 };
+    const eventBurstStats = {
+      count: 0,
+      duration: 0,
+      maxDuration: 0,
+      maxInputDelay: 0,
+      maxProcessingDuration: 0,
+      maxPresentationDelay: 0,
+      sequence: 0
+    };
     let cumulativeLayoutShift = 0;
     let largestContentfulPaint = null;
     let readyAtMs = null;
@@ -98,6 +207,99 @@
       if (list.length > MAX_PERFORMANCE_ENTRIES) {
         list.splice(0, list.length - MAX_PERFORMANCE_ENTRIES);
       }
+    }
+
+    function trackBaselineMaximum(name, value) {
+      activeBaselines.forEach((baseline) => {
+        baseline[name] = Math.max(Number(baseline[name]) || 0, Number(value) || 0);
+      });
+    }
+
+    function updateEventBurstMaximums(burst) {
+      eventBurstStats.maxDuration = Math.max(eventBurstStats.maxDuration, burst.duration);
+      eventBurstStats.maxInputDelay = Math.max(
+        eventBurstStats.maxInputDelay,
+        burst.inputDelayMs
+      );
+      eventBurstStats.maxProcessingDuration = Math.max(
+        eventBurstStats.maxProcessingDuration,
+        burst.processingDurationMs
+      );
+      eventBurstStats.maxPresentationDelay = Math.max(
+        eventBurstStats.maxPresentationDelay,
+        burst.presentationDelayMs
+      );
+      trackBaselineMaximum('eventBurstLongestMs', burst.duration);
+      trackBaselineMaximum('eventBurstLongestInputDelayMs', burst.inputDelayMs);
+      trackBaselineMaximum(
+        'eventBurstLongestProcessingDurationMs',
+        burst.processingDurationMs
+      );
+      trackBaselineMaximum(
+        'eventBurstLongestPresentationDelayMs',
+        burst.presentationDelayMs
+      );
+    }
+
+    function appendEventBurst(eventEntry) {
+      const burstKey = [
+        eventEntry.startTime,
+        eventEntry.duration,
+        eventEntry.interactionId
+      ].join(':');
+      const latestBurst = eventBursts[eventBursts.length - 1];
+      if (latestBurst && latestBurst.key === burstKey) {
+        latestBurst.entryCount += 1;
+        if (!latestBurst.names.includes(eventEntry.name) && latestBurst.names.length < 12) {
+          latestBurst.names.push(eventEntry.name);
+        }
+        if (eventEntry.processingStart > 0) {
+          latestBurst.processingStart = latestBurst.processingStart > 0
+            ? Math.min(latestBurst.processingStart, eventEntry.processingStart)
+            : eventEntry.processingStart;
+        }
+        latestBurst.processingEnd = Math.max(
+          latestBurst.processingEnd,
+          eventEntry.processingEnd
+        );
+        if (!latestBurst.target && eventEntry.target) {
+          latestBurst.target = eventEntry.target;
+        }
+        latestBurst.inputDelayMs = roundMetric(Math.max(
+          0,
+          latestBurst.processingStart - latestBurst.startTime
+        ));
+        latestBurst.processingDurationMs = roundMetric(Math.max(
+          0,
+          latestBurst.processingEnd - latestBurst.processingStart
+        ));
+        latestBurst.presentationDelayMs = roundMetric(Math.max(
+          0,
+          latestBurst.startTime + latestBurst.duration - latestBurst.processingEnd
+        ));
+        updateEventBurstMaximums(latestBurst);
+        return;
+      }
+      eventBurstStats.count += 1;
+      eventBurstStats.duration += eventEntry.duration;
+      eventBurstStats.sequence += 1;
+      const burst = {
+        sequence: eventBurstStats.sequence,
+        key: burstKey,
+        names: [eventEntry.name],
+        entryCount: 1,
+        startTime: eventEntry.startTime,
+        duration: eventEntry.duration,
+        processingStart: eventEntry.processingStart,
+        processingEnd: eventEntry.processingEnd,
+        inputDelayMs: eventEntry.inputDelayMs,
+        processingDurationMs: eventEntry.processingDurationMs,
+        presentationDelayMs: eventEntry.presentationDelayMs,
+        interactionId: eventEntry.interactionId,
+        target: eventEntry.target
+      };
+      appendBounded(eventBursts, burst);
+      updateEventBurstMaximums(burst);
     }
 
     function isSurfaceReady() {
@@ -159,6 +361,7 @@
         longTaskStats.count += 1;
         longTaskStats.duration += duration;
         longTaskStats.maxDuration = Math.max(longTaskStats.maxDuration, duration);
+        trackBaselineMaximum('longTaskLongestMs', duration);
         longTaskStats.sequence += 1;
         appendBounded(longTasks, {
           sequence: longTaskStats.sequence,
@@ -175,19 +378,32 @@
     }, (entries) => {
       entries.forEach((entry) => {
         const duration = roundMetric(entry.duration);
+        const startTime = roundMetric(entry.startTime);
+        const processingStart = roundMetric(entry.processingStart);
+        const processingEnd = roundMetric(entry.processingEnd);
         eventStats.count += 1;
         eventStats.duration += duration;
         eventStats.maxDuration = Math.max(eventStats.maxDuration, duration);
+        trackBaselineMaximum('eventLongestMs', duration);
         eventStats.sequence += 1;
-        appendBounded(events, {
+        const eventEntry = {
           sequence: eventStats.sequence,
           name: String(entry.name || 'event'),
-          startTime: roundMetric(entry.startTime),
+          startTime,
           duration,
-          processingStart: roundMetric(entry.processingStart),
-          processingEnd: roundMetric(entry.processingEnd),
-          interactionId: Number(entry.interactionId) || 0
-        });
+          processingStart,
+          processingEnd,
+          inputDelayMs: roundMetric(Math.max(0, processingStart - startTime)),
+          processingDurationMs: roundMetric(Math.max(0, processingEnd - processingStart)),
+          presentationDelayMs: roundMetric(Math.max(
+            0,
+            startTime + duration - processingEnd
+          )),
+          interactionId: Number(entry.interactionId) || 0,
+          target: sanitizePerformanceEventTarget(entry.target)
+        };
+        appendBounded(events, eventEntry);
+        appendEventBurst(eventEntry);
       });
     });
     observerSupport.layoutShift = observe('layout-shift', { type: 'layout-shift', buffered: true }, (entries) => {
@@ -240,24 +456,39 @@
     }
 
     function getBaseline() {
-      return {
+      const baseline = {
         longTaskCount: longTaskStats.count,
         longTaskDuration: longTaskStats.duration,
         longTaskSequence: longTaskStats.sequence,
+        longTaskLongestMs: 0,
         eventCount: eventStats.count,
         eventDuration: eventStats.duration,
         eventSequence: eventStats.sequence,
+        eventLongestMs: 0,
+        eventBurstCount: eventBurstStats.count,
+        eventBurstDuration: eventBurstStats.duration,
+        eventBurstSequence: eventBurstStats.sequence,
+        eventBurstLongestMs: 0,
+        eventBurstLongestInputDelayMs: 0,
+        eventBurstLongestProcessingDurationMs: 0,
+        eventBurstLongestPresentationDelayMs: 0,
         cumulativeLayoutShift
       };
+      activeBaselines.add(baseline);
+      return baseline;
     }
 
     function getDelta(baseline) {
       const start = baseline && typeof baseline === 'object' ? baseline : {};
+      activeBaselines.delete(start);
       const newLongTasks = longTasks.filter((entry) =>
         entry.sequence > (Number(start.longTaskSequence) || 0)
       );
       const newEvents = events.filter((entry) =>
         entry.sequence > (Number(start.eventSequence) || 0)
+      );
+      const newEventBursts = eventBursts.filter((entry) =>
+        entry.sequence > (Number(start.eventBurstSequence) || 0)
       );
       return {
         longTasks: {
@@ -265,14 +496,40 @@
           totalDurationMs: roundMetric(
             longTaskStats.duration - (Number(start.longTaskDuration) || 0)
           ),
-          longestMs: roundMetric(Math.max(0, ...newLongTasks.map((entry) => entry.duration)))
+          longestMs: roundMetric(Math.max(
+            Number(start.longTaskLongestMs) || 0,
+            ...newLongTasks.map((entry) => entry.duration)
+          ))
         },
         events: {
           count: Math.max(0, eventStats.count - (Number(start.eventCount) || 0)),
           totalDurationMs: roundMetric(
             eventStats.duration - (Number(start.eventDuration) || 0)
           ),
-          longestMs: roundMetric(Math.max(0, ...newEvents.map((entry) => entry.duration)))
+          longestMs: roundMetric(Math.max(
+            Number(start.eventLongestMs) || 0,
+            ...newEvents.map((entry) => entry.duration)
+          ))
+        },
+        eventBursts: {
+          count: Math.max(0, eventBurstStats.count - (Number(start.eventBurstCount) || 0)),
+          rawEntryCount: Math.max(0, eventStats.count - (Number(start.eventCount) || 0)),
+          totalDurationMs: roundMetric(
+            eventBurstStats.duration - (Number(start.eventBurstDuration) || 0)
+          ),
+          longestMs: roundMetric(Math.max(
+            Number(start.eventBurstLongestMs) || 0,
+            ...newEventBursts.map((entry) => entry.duration)
+          )),
+          longestInputDelayMs: roundMetric(
+            Number(start.eventBurstLongestInputDelayMs) || 0
+          ),
+          longestProcessingDurationMs: roundMetric(
+            Number(start.eventBurstLongestProcessingDurationMs) || 0
+          ),
+          longestPresentationDelayMs: roundMetric(
+            Number(start.eventBurstLongestPresentationDelayMs) || 0
+          )
         },
         cumulativeLayoutShift: roundMetric(
           cumulativeLayoutShift - (Number(start.cumulativeLayoutShift) || 0)
@@ -383,6 +640,21 @@
             entries: (maximum > 0 ? events.slice(-maximum) : [])
               .map(({ sequence, ...entry }) => entry)
           },
+          eventBursts: {
+            count: eventBurstStats.count,
+            rawEntryCount: eventStats.count,
+            totalDurationMs: roundMetric(eventBurstStats.duration),
+            longestMs: roundMetric(eventBurstStats.maxDuration),
+            longestInputDelayMs: roundMetric(eventBurstStats.maxInputDelay),
+            longestProcessingDurationMs: roundMetric(
+              eventBurstStats.maxProcessingDuration
+            ),
+            longestPresentationDelayMs: roundMetric(
+              eventBurstStats.maxPresentationDelay
+            ),
+            entries: (maximum > 0 ? eventBursts.slice(-maximum) : [])
+              .map(({ sequence, key, ...entry }) => entry)
+          },
           observerSupport: { ...observerSupport },
           cumulativeLayoutShift: roundMetric(cumulativeLayoutShift),
           layoutShifts: maximum > 0 ? layoutShifts.slice(-maximum) : []
@@ -408,6 +680,7 @@
       if (config.clear === true) {
         longTasks.length = 0;
         events.length = 0;
+        eventBursts.length = 0;
         layoutShifts.length = 0;
         longTaskStats.count = 0;
         longTaskStats.duration = 0;
@@ -415,12 +688,19 @@
         eventStats.count = 0;
         eventStats.duration = 0;
         eventStats.maxDuration = 0;
+        eventBurstStats.count = 0;
+        eventBurstStats.duration = 0;
+        eventBurstStats.maxDuration = 0;
+        eventBurstStats.maxInputDelay = 0;
+        eventBurstStats.maxProcessingDuration = 0;
+        eventBurstStats.maxPresentationDelay = 0;
         cumulativeLayoutShift = 0;
       }
       return result;
     }
 
     function destroy() {
+      activeBaselines.clear();
       observers.forEach((observer) => observer.disconnect());
       observers.length = 0;
       if (readyObserver) {
@@ -430,6 +710,630 @@
     }
 
     return Object.freeze({ destroy, getBaseline, getDelta, snapshot });
+  }
+
+  function summarizeFrameDurations(values) {
+    const durations = Array.isArray(values)
+      ? values.filter((value) => Number.isFinite(value) && value >= 0).slice()
+      : [];
+    durations.sort((left, right) => left - right);
+    if (durations.length === 0) {
+      return {
+        count: 0,
+        minMs: 0,
+        medianMs: 0,
+        p95Ms: 0,
+        maxMs: 0,
+        framesOver20Ms: 0,
+        framesOver32Ms: 0,
+        framesOver50Ms: 0,
+        referenceFrameBudgetMs: roundMetric(1000 / 60),
+        estimatedDroppedFramesAt60Hz: 0
+      };
+    }
+    const percentile = (ratio) => durations[
+      Math.min(durations.length - 1, Math.floor(durations.length * ratio))
+    ];
+    return {
+      count: durations.length,
+      minMs: roundMetric(durations[0]),
+      medianMs: roundMetric(percentile(0.5)),
+      p95Ms: roundMetric(percentile(0.95)),
+      maxMs: roundMetric(durations[durations.length - 1]),
+      framesOver20Ms: durations.filter((duration) => duration > 20).length,
+      framesOver32Ms: durations.filter((duration) => duration > 32).length,
+      framesOver50Ms: durations.filter((duration) => duration > 50).length,
+      referenceFrameBudgetMs: roundMetric(1000 / 60),
+      estimatedDroppedFramesAt60Hz: durations.reduce((total, duration) => {
+        return total + Math.max(0, Math.floor(duration / (1000 / 60)) - 1);
+      }, 0)
+    };
+  }
+
+  function createPerformanceRecorder(windowObj, performanceCollector, surfaceType) {
+    const MAX_FRAME_SAMPLES = 10000;
+    let activeRecording = null;
+    let latestReport = null;
+
+    function cancelRecordingTimers(recording) {
+      if (!recording) {
+        return;
+      }
+      if (recording.timer !== null) {
+        windowObj.clearTimeout(recording.timer);
+        recording.timer = null;
+      }
+      if (recording.cancelFrame) {
+        recording.cancelFrame();
+        recording.cancelFrame = null;
+        recording.frameRequestId = null;
+      }
+    }
+
+    function requestRecordingFrame(recording) {
+      if (!recording || activeRecording !== recording) {
+        return;
+      }
+      const onFrame = (frameTime) => {
+        recording.frameRequestId = null;
+        recording.cancelFrame = null;
+        if (activeRecording !== recording) {
+          return;
+        }
+        const now = Number.isFinite(Number(frameTime))
+          ? Number(frameTime)
+          : getPerformanceNow(windowObj);
+        if (recording.frameDurations.length < MAX_FRAME_SAMPLES) {
+          recording.frameDurations.push(Math.max(0, now - recording.lastFrameAt));
+        }
+        recording.lastFrameAt = now;
+        if (now - recording.startedAt >= recording.durationLimitMs) {
+          finish('duration');
+          return;
+        }
+        requestRecordingFrame(recording);
+      };
+      if (typeof windowObj.requestAnimationFrame === 'function') {
+        recording.frameRequestId = windowObj.requestAnimationFrame(onFrame);
+        recording.cancelFrame = () => {
+          if (typeof windowObj.cancelAnimationFrame === 'function') {
+            windowObj.cancelAnimationFrame(recording.frameRequestId);
+          }
+        };
+        return;
+      }
+      recording.frameRequestId = windowObj.setTimeout(
+        () => onFrame(getPerformanceNow(windowObj)),
+        16
+      );
+      recording.cancelFrame = () => windowObj.clearTimeout(recording.frameRequestId);
+    }
+
+    function getStatus() {
+      if (!activeRecording) {
+        return {
+          active: false,
+          latestReport: latestReport ? {
+            durationMs: latestReport.durationMs,
+            finishedBy: latestReport.finishedBy,
+            scenario: latestReport.scenario
+          } : null
+        };
+      }
+      return {
+        active: true,
+        durationLimitMs: activeRecording.durationLimitMs,
+        elapsedMs: roundMetric(getPerformanceNow(windowObj) - activeRecording.startedAt),
+        frameSamples: activeRecording.frameDurations.length,
+        scenario: activeRecording.scenario
+      };
+    }
+
+    function finish(reason) {
+      const recording = activeRecording;
+      if (!recording) {
+        return latestReport;
+      }
+      activeRecording = null;
+      cancelRecordingTimers(recording);
+      const finishedAt = getPerformanceNow(windowObj);
+      const finalSnapshot = performanceCollector.snapshot({
+        maxEntries: recording.maxEntries
+      });
+      const initialHeap = recording.initialSnapshot.memory &&
+        recording.initialSnapshot.memory.usedJsHeapBytes;
+      const finalHeap = finalSnapshot.memory && finalSnapshot.memory.usedJsHeapBytes;
+      latestReport = Object.freeze({
+        version: 1,
+        surfaceType,
+        scenario: recording.scenario,
+        startedAtUnixMs: recording.startedAtUnixMs,
+        durationLimitMs: recording.durationLimitMs,
+        durationMs: roundMetric(finishedAt - recording.startedAt),
+        finishedBy: String(reason || 'manual'),
+        frames: summarizeFrameDurations(recording.frameDurations),
+        performanceDelta: performanceCollector.getDelta(recording.baseline),
+        changes: {
+          domNodes: finalSnapshot.document.nodeCount -
+            recording.initialSnapshot.document.nodeCount,
+          usedJsHeapBytes: Number.isFinite(initialHeap) && Number.isFinite(finalHeap)
+            ? finalHeap - initialHeap
+            : null
+        },
+        initial: recording.initialSnapshot,
+        final: finalSnapshot
+      });
+      if (typeof recording.onComplete === 'function') {
+        try {
+          recording.onComplete(latestReport);
+        } catch (error) {
+          // The report remains available even if a development panel callback fails.
+        }
+      }
+      return latestReport;
+    }
+
+    function start(params, onComplete) {
+      if (activeRecording) {
+        finish('restarted');
+      }
+      const config = params && typeof params === 'object' ? params : {};
+      const durationLimitMs = clamp(config.durationMs, 1000, 60000, 15000);
+      const startedAt = getPerformanceNow(windowObj);
+      activeRecording = {
+        baseline: performanceCollector.getBaseline(),
+        cancelFrame: null,
+        durationLimitMs,
+        frameDurations: [],
+        frameRequestId: null,
+        initialSnapshot: performanceCollector.snapshot({ maxEntries: 0 }),
+        lastFrameAt: startedAt,
+        maxEntries: clamp(config.maxEntries, 0, 100, 30),
+        onComplete,
+        scenario: truncate(config.scenario || 'mixed', 64),
+        startedAt,
+        startedAtUnixMs: Date.now(),
+        timer: null
+      };
+      const recording = activeRecording;
+      recording.timer = windowObj.setTimeout(() => finish('duration'), durationLimitMs);
+      requestRecordingFrame(recording);
+      return getStatus();
+    }
+
+    function clear() {
+      if (activeRecording) {
+        finish('cleared');
+      }
+      latestReport = null;
+      return getStatus();
+    }
+
+    function destroy() {
+      const recording = activeRecording;
+      activeRecording = null;
+      cancelRecordingTimers(recording);
+      latestReport = null;
+    }
+
+    function execute(params) {
+      const config = params && typeof params === 'object' ? params : {};
+      const action = String(config.action || 'status');
+      if (action === 'start') {
+        return start(config);
+      }
+      if (action === 'stop') {
+        return finish('manual');
+      }
+      if (action === 'latest') {
+        return latestReport;
+      }
+      if (action === 'clear') {
+        return clear();
+      }
+      if (action === 'status') {
+        return getStatus();
+      }
+      const error = new Error('Unsupported performance recording action.');
+      error.code = 'unsupported_recording_action';
+      throw error;
+    }
+
+    return Object.freeze({
+      clear,
+      destroy,
+      execute,
+      finish,
+      getLatestReport: () => latestReport,
+      getStatus,
+      start
+    });
+  }
+
+  function createPerformancePanel(
+    windowObj,
+    documentObj,
+    performanceRecorder,
+    performanceCollector
+  ) {
+    const scenarioInstructions = Object.freeze({
+      mixed: 'Type in search, move across shortcuts, page bookmarks, then open the wallpaper panel.',
+      search: 'Focus search, type and erase several queries, and move through suggestions with the keyboard.',
+      shortcuts: 'Move across shortcut tiles, then drag one without dropping it in an unintended position.',
+      bookmarks: 'Page bookmarks, open nested folders, use breadcrumbs, and exercise the cascade menu.',
+      wallpaper: 'Open the wallpaper panel, switch tabs or choices, scroll it, and close it.'
+    });
+    let host = null;
+    let shadowRoot = null;
+    let panelOpen = false;
+    let latestPanelReport = null;
+
+    function formatReport(report) {
+      if (!report) {
+        return 'No recording yet.';
+      }
+      const frames = report.frames || {};
+      const delta = report.performanceDelta || {};
+      const longTasks = delta.longTasks || {};
+      const events = delta.events || {};
+      const eventBursts = delta.eventBursts || {};
+      const changes = report.changes || {};
+      const startup = report.final && report.final.startup || {};
+      const heapDelta = Number.isFinite(changes.usedJsHeapBytes)
+        ? `${Math.round(changes.usedJsHeapBytes / 1024)} KiB`
+        : 'unavailable';
+      return [
+        `Scenario: ${report.scenario}`,
+        `Duration: ${report.durationMs} ms (${report.finishedBy})`,
+        `Startup ready: ${startup.readyAtMs == null ? 'unavailable' : `${startup.readyAtMs} ms`} · storage reads/requests ${startup.storage ? `${startup.storage.reads}/${startup.storage.requests}` : 'unavailable'}`,
+        `Frames: ${frames.count || 0} · p95 ${frames.p95Ms || 0} ms · max ${frames.maxMs || 0} ms`,
+        `Over 20/32/50 ms: ${frames.framesOver20Ms || 0}/${frames.framesOver32Ms || 0}/${frames.framesOver50Ms || 0}`,
+        `Estimated dropped frames (60 Hz): ${frames.estimatedDroppedFramesAt60Hz || 0}`,
+        `Long tasks: ${longTasks.count || 0} · longest ${longTasks.longestMs || 0} ms`,
+        `Event bursts: ${eventBursts.count || 0} · raw entries ${eventBursts.rawEntryCount || events.count || 0} · max processing ${eventBursts.longestProcessingDurationMs || 0} ms · max total ${eventBursts.longestMs || events.longestMs || 0} ms`,
+        `CLS delta: ${delta.cumulativeLayoutShift || 0}`,
+        `DOM node delta: ${changes.domNodes || 0}`,
+        `Used heap delta: ${heapDelta}`
+      ].join('\n');
+    }
+
+    function getElement(selector) {
+      return shadowRoot ? shadowRoot.querySelector(selector) : null;
+    }
+
+    function updateScenarioInstructions() {
+      const select = getElement('[data-role="scenario"]');
+      const instructions = getElement('[data-role="instructions"]');
+      if (!select || !instructions) {
+        return;
+      }
+      instructions.textContent = scenarioInstructions[select.value] || scenarioInstructions.mixed;
+    }
+
+    function updateControls() {
+      const status = performanceRecorder.getStatus();
+      const startButton = getElement('[data-action="start"]');
+      const stopButton = getElement('[data-action="stop"]');
+      const statusElement = getElement('[data-role="status"]');
+      if (startButton) {
+        startButton.disabled = status.active;
+      }
+      if (stopButton) {
+        stopButton.disabled = !status.active;
+      }
+      if (statusElement) {
+        statusElement.textContent = status.active ? 'Recording' : 'Idle';
+        statusElement.setAttribute('data-active', status.active ? 'true' : 'false');
+      }
+    }
+
+    function renderReport(report) {
+      latestPanelReport = report || performanceRecorder.getLatestReport();
+      const output = getElement('[data-role="output"]');
+      if (output) {
+        output.textContent = formatReport(latestPanelReport);
+      }
+      updateControls();
+    }
+
+    function startRecording() {
+      const scenarioElement = getElement('[data-role="scenario"]');
+      const durationElement = getElement('[data-role="duration"]');
+      const scenario = String(scenarioElement && scenarioElement.value || 'mixed');
+      const durationMs = Number(durationElement && durationElement.value) || 15000;
+      latestPanelReport = null;
+      performanceRecorder.start({ durationMs, maxEntries: 40, scenario }, renderReport);
+      const output = getElement('[data-role="output"]');
+      if (output) {
+        output.textContent = [
+          `Recording “${scenario}” for up to ${Math.round(durationMs / 1000)} seconds.`,
+          scenarioInstructions[scenario] || scenarioInstructions.mixed,
+          'You can close this panel while recording and reopen it with the same shortcut.'
+        ].join('\n');
+      }
+      updateControls();
+    }
+
+    function stopRecording() {
+      renderReport(performanceRecorder.finish('manual'));
+    }
+
+    async function copyLatestReport() {
+      const report = latestPanelReport || performanceRecorder.getLatestReport();
+      if (!report) {
+        return false;
+      }
+      const value = JSON.stringify(report, null, 2);
+      try {
+        if (windowObj.navigator && windowObj.navigator.clipboard &&
+            typeof windowObj.navigator.clipboard.writeText === 'function') {
+          await windowObj.navigator.clipboard.writeText(value);
+        } else {
+          const textarea = getElement('[data-role="copy-buffer"]');
+          if (!textarea || typeof documentObj.execCommand !== 'function') {
+            return false;
+          }
+          textarea.value = value;
+          textarea.hidden = false;
+          textarea.select();
+          const copied = documentObj.execCommand('copy');
+          textarea.hidden = true;
+          if (!copied) {
+            return false;
+          }
+        }
+        const statusElement = getElement('[data-role="status"]');
+        if (statusElement) {
+          statusElement.textContent = 'Copied';
+        }
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function downloadLatestReport() {
+      const report = latestPanelReport || performanceRecorder.getLatestReport();
+      const URLClass = windowObj.URL;
+      const BlobClass = windowObj.Blob;
+      if (!report || !URLClass || typeof URLClass.createObjectURL !== 'function' ||
+          typeof BlobClass !== 'function') {
+        return false;
+      }
+      const blob = new BlobClass([JSON.stringify(report, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URLClass.createObjectURL(blob);
+      const anchor = documentObj.createElement('a');
+      anchor.download = `lumno-newtab-performance-${Date.now()}.json`;
+      anchor.href = url;
+      anchor.click();
+      windowObj.setTimeout(() => URLClass.revokeObjectURL(url), 0);
+      return true;
+    }
+
+    function clearReport() {
+      performanceRecorder.clear();
+      performanceCollector.snapshot({ clear: true, maxEntries: 0 });
+      latestPanelReport = null;
+      renderReport(null);
+    }
+
+    function handlePanelClick(event) {
+      const target = event && event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('[data-action]')
+        : null;
+      if (!target) {
+        return;
+      }
+      const action = String(target.getAttribute('data-action') || '');
+      if (action === 'start') {
+        startRecording();
+      } else if (action === 'stop') {
+        stopRecording();
+      } else if (action === 'copy') {
+        copyLatestReport();
+      } else if (action === 'download') {
+        downloadLatestReport();
+      } else if (action === 'clear') {
+        clearReport();
+      } else if (action === 'close') {
+        close();
+      }
+    }
+
+    function ensureMounted() {
+      if (host || !documentObj || !documentObj.documentElement) {
+        return host;
+      }
+      host = documentObj.createElement('div');
+      host.setAttribute('data-lumno-performance-panel-host', '');
+      host.hidden = true;
+      host.style.cssText = [
+        'position:fixed',
+        'right:16px',
+        'bottom:16px',
+        'z-index:2147483647',
+        'width:min(360px,calc(100vw - 32px))'
+      ].join(';');
+      shadowRoot = host.attachShadow({ mode: 'open' });
+      shadowRoot.innerHTML = `
+        <style>
+          :host { all: initial; color-scheme: dark; }
+          * { box-sizing: border-box; }
+          .panel {
+            background: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 12px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+            color: #f9fafb;
+            font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            padding: 14px;
+          }
+          .header, .row, .actions { align-items: center; display: flex; gap: 8px; }
+          .header { justify-content: space-between; margin-bottom: 12px; }
+          h2 { font-size: 14px; line-height: 1.2; margin: 0; }
+          .status { color: #9ca3af; margin-left: auto; }
+          .status[data-active="true"] { color: #34d399; }
+          label { color: #d1d5db; display: grid; flex: 1; gap: 4px; }
+          select, button {
+            background: #1f2937;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 7px;
+            color: #f9fafb;
+            font: inherit;
+            min-height: 30px;
+          }
+          select { padding: 4px 8px; width: 100%; }
+          button { cursor: pointer; padding: 4px 10px; }
+          button:hover { background: #374151; }
+          button:focus-visible, select:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+          button:disabled { cursor: default; opacity: 0.45; }
+          .close { min-height: 26px; padding: 2px 8px; }
+          .instructions { color: #9ca3af; margin: 10px 0; }
+          .actions { flex-wrap: wrap; margin-top: 10px; }
+          .primary { background: #2563eb; border-color: #3b82f6; }
+          .output {
+            background: #030712;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #d1d5db;
+            margin: 12px 0 0;
+            max-height: 210px;
+            overflow: auto;
+            padding: 10px;
+            white-space: pre-wrap;
+          }
+          .hint { color: #6b7280; margin: 10px 0 0; }
+          [data-role="copy-buffer"] { left: -10000px; position: fixed; top: 0; }
+        </style>
+        <section class="panel" role="dialog" aria-label="Lumno New Tab performance recorder">
+          <div class="header">
+            <h2>Lumno Performance</h2>
+            <span class="status" data-role="status">Idle</span>
+            <button class="close" data-action="close" type="button" aria-label="Close">Close</button>
+          </div>
+          <div class="row">
+            <label>Scenario
+              <select data-role="scenario">
+                <option value="mixed">Mixed flow</option>
+                <option value="search">Search</option>
+                <option value="shortcuts">Shortcuts</option>
+                <option value="bookmarks">Bookmarks</option>
+                <option value="wallpaper">Wallpaper</option>
+              </select>
+            </label>
+            <label>Duration
+              <select data-role="duration">
+                <option value="10000">10 seconds</option>
+                <option value="15000" selected>15 seconds</option>
+                <option value="30000">30 seconds</option>
+              </select>
+            </label>
+          </div>
+          <p class="instructions" data-role="instructions"></p>
+          <div class="actions">
+            <button class="primary" data-action="start" type="button">Start</button>
+            <button data-action="stop" type="button" disabled>Stop</button>
+            <button data-action="copy" type="button">Copy JSON</button>
+            <button data-action="download" type="button">Download</button>
+            <button data-action="clear" type="button">Clear</button>
+          </div>
+          <pre class="output" data-role="output">No recording yet.</pre>
+          <textarea data-role="copy-buffer" hidden aria-hidden="true"></textarea>
+          <p class="hint">Toggle: Ctrl/⌘ + Alt + Shift + P</p>
+        </section>`;
+      shadowRoot.addEventListener('click', handlePanelClick);
+      const scenarioElement = getElement('[data-role="scenario"]');
+      if (scenarioElement) {
+        scenarioElement.addEventListener('change', updateScenarioInstructions);
+      }
+      ['click', 'pointerdown', 'pointerup', 'keydown', 'keyup'].forEach((eventName) => {
+        host.addEventListener(eventName, (event) => event.stopPropagation());
+      });
+      documentObj.documentElement.appendChild(host);
+      updateScenarioInstructions();
+      renderReport(performanceRecorder.getLatestReport());
+      return host;
+    }
+
+    function open() {
+      ensureMounted();
+      if (!host) {
+        return getStatus();
+      }
+      panelOpen = true;
+      host.hidden = false;
+      host.setAttribute('aria-hidden', 'false');
+      renderReport(performanceRecorder.getLatestReport());
+      return getStatus();
+    }
+
+    function close() {
+      panelOpen = false;
+      if (host) {
+        host.hidden = true;
+        host.setAttribute('aria-hidden', 'true');
+      }
+      return getStatus();
+    }
+
+    function toggle() {
+      return panelOpen ? close() : open();
+    }
+
+    function getStatus() {
+      return {
+        mounted: Boolean(host),
+        open: Boolean(panelOpen && host && !host.hidden),
+        recording: performanceRecorder.getStatus()
+      };
+    }
+
+    function execute(params) {
+      const action = String(params && params.action || 'status');
+      if (action === 'open') {
+        return open();
+      }
+      if (action === 'close') {
+        return close();
+      }
+      if (action === 'toggle') {
+        return toggle();
+      }
+      if (action === 'status') {
+        return getStatus();
+      }
+      const error = new Error('Unsupported performance panel action.');
+      error.code = 'unsupported_panel_action';
+      throw error;
+    }
+
+    function handleShortcut(event) {
+      const keyMatches = String(event && event.key || '').toLowerCase() === 'p' ||
+        String(event && event.code || '') === 'KeyP';
+      if (!keyMatches || !event.altKey || !event.shiftKey ||
+          (!event.ctrlKey && !event.metaKey)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      toggle();
+    }
+
+    function destroy() {
+      windowObj.removeEventListener('keydown', handleShortcut, true);
+      if (host) {
+        host.remove();
+      }
+      host = null;
+      shadowRoot = null;
+      panelOpen = false;
+      latestPanelReport = null;
+    }
+
+    windowObj.addEventListener('keydown', handleShortcut, true);
+    return Object.freeze({ close, destroy, execute, getStatus, open, toggle });
   }
 
   function getManifest(chromeApi) {
@@ -845,6 +1749,19 @@
     const surfaceId = createSurfaceId(windowObj);
     const surfaceType = inferSurfaceType(windowObj.location, documentObj);
     const performanceCollector = createPerformanceCollector(windowObj, documentObj, surfaceType);
+    const performanceRecorder = createPerformanceRecorder(
+      windowObj,
+      performanceCollector,
+      surfaceType
+    );
+    const performancePanel = surfaceType === 'newtab'
+      ? createPerformancePanel(
+        windowObj,
+        documentObj,
+        performanceRecorder,
+        performanceCollector
+      )
+      : null;
     const logs = [];
     let port = null;
     let reconnectTimer = null;
@@ -1092,6 +2009,17 @@
       if (method === 'surface.performance') {
         return performanceCollector.snapshot(params || {});
       }
+      if (method === 'surface.performanceRecording') {
+        return performanceRecorder.execute(params || {});
+      }
+      if (method === 'surface.performancePanel') {
+        if (!performancePanel) {
+          const error = new Error('The performance panel is only available on the New Tab surface.');
+          error.code = 'panel_unavailable';
+          throw error;
+        }
+        return performancePanel.execute(params || {});
+      }
       if (method === 'surface.waitFor') {
         return waitFor(params || {});
       }
@@ -1175,6 +2103,7 @@
       describeElement: (element) => describeElement(element, windowObj),
       executeRequest,
       getPerformanceSnapshot: (params) => performanceCollector.snapshot(params || {}),
+      getPerformanceRecordingStatus: performanceRecorder.getStatus,
       getLogs: () => logs.slice()
     });
     windowObj.__lumnoCodexDebugSurfaceAgentV1 = agent;
@@ -1186,6 +2115,10 @@
     windowObj.addEventListener('load', () => postRegistration('surface.update'), { once: true });
     windowObj.addEventListener('pagehide', () => {
       closed = true;
+      if (performancePanel) {
+        performancePanel.destroy();
+      }
+      performanceRecorder.destroy();
       performanceCollector.destroy();
       if (reconnectTimer) {
         windowObj.clearTimeout(reconnectTimer);
@@ -1214,6 +2147,8 @@
     SURFACE_PORT_NAME,
     OFFICIAL_CODEX_EXTENSION_IDS,
     createPerformanceCollector,
+    createPerformancePanel,
+    createPerformanceRecorder,
     createSurfaceAgent,
     describeElement,
     inferSurfaceType,

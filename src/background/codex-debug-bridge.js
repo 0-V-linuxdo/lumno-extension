@@ -21,6 +21,8 @@
     'surface.action',
     'surface.profileAction',
     'surface.performance',
+    'surface.performancePanel',
+    'surface.performanceRecording',
     'surface.waitFor',
     'surface.logs'
   ]);

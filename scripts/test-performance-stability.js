@@ -95,6 +95,16 @@ assertMatches(
 );
 assertMatches(
   newtabJs,
+  /function handleShortcutDockPointerOver\(event\) \{[\s\S]*?scheduleShortcutDockPointerStyles\(tile, getShortcutDockPointerX\(event\)\)/,
+  'shortcut dock magnification should coalesce pointer-over layout work per frame'
+);
+assertMatches(
+  newtabJs,
+  /function setShortcutDockHover\(activeTile, pointerX\) \{[\s\S]*?getShortcutDockInfluence\(pointerX, icon\)[\s\S]*?shortcutGrid\.setAttribute\('data-dock-active', 'true'\)/,
+  'shortcut dock geometry reads should finish before hover state writes begin'
+);
+assertMatches(
+  newtabJs,
   /function handleShortcutDragPointerMove\(event\) \{[\s\S]*?scheduleShortcutDragMove\(shortcutDragState, pointerX, pointerY\)/,
   'shortcut dragging should coalesce hit testing and FLIP layout work per frame'
 );

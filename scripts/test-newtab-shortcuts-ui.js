@@ -1347,7 +1347,7 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'function applyShortcutDockPointerStyles(tile, pointerX, offset) {',
+  'function applyShortcutDockPointerStyles(tile, pointerX, offset, measurement) {',
   'shortcut dock should continuously update icon transforms from the pointer position'
 );
 
@@ -1568,8 +1568,25 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'applyShortcutDockPointerStyles(tile, pointerX, offset);',
+  'applyShortcutDockPointerStyles(tile, pointerX, offset, pointerMeasurements[index]);',
   'shortcut dock pointer tracking should pass each tile position so the active icon does not jump sideways'
+);
+
+const shortcutDockReadIndex = setShortcutDockHoverSource.indexOf(
+  'getShortcutDockInfluence(pointerX, icon)'
+);
+const shortcutDockWriteIndex = setShortcutDockHoverSource.indexOf(
+  "shortcutGrid.setAttribute('data-dock-active', 'true')"
+);
+assert.ok(
+  shortcutDockReadIndex >= 0 && shortcutDockWriteIndex > shortcutDockReadIndex,
+  'shortcut dock pointer tracking should batch geometry reads before DOM and style writes'
+);
+
+assert.match(
+  newtabJs,
+  /function handleShortcutDockPointerOver\(event\) \{[\s\S]*?scheduleShortcutDockPointerStyles\(tile, getShortcutDockPointerX\(event\)\)/,
+  'shortcut dock pointer-over work should share the frame-coalesced update path'
 );
 
 assertContains(
