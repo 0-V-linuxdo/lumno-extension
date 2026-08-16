@@ -1,4 +1,29 @@
 (function() {
+  const optionsRuntimeStartedAt = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+  let optionsStartupStorageBatchPending = false;
+  let optionsStartupRefreshCoalescing = true;
+  let optionsStartupRefreshDeferred = false;
+  let optionsCustomSelectRefreshCount = 0;
+  let optionsReadyMarked = false;
+  let optionsReadyFallbackTimer = 0;
+
+  function markOptionsPerformance(name) {
+    try {
+      if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+        performance.mark(name);
+      }
+    } catch (e) {
+      // Performance markers are diagnostics only.
+    }
+  }
+
+  markOptionsPerformance('lumno-options-runtime-start');
+  if (document.documentElement) {
+    document.documentElement.setAttribute('data-lumno-options-runtime-started', 'true');
+  }
+
   const NAVIGATION_DISPOSITION = globalThis.LumnoNavigationDisposition || {};
   const COMMUNITY_LINKS = globalThis.LumnoCommunityLinks || {};
   const SETTINGS = globalThis.LumnoSettings || {};
@@ -468,14 +493,102 @@
   const providerStorageRuntime = typeof SETTINGS.createProviderStorageRuntime === 'function'
     ? SETTINGS.createProviderStorageRuntime(chrome)
     : null;
-  const storageArea = providerStorageRuntime
+  const rawStorageArea = providerStorageRuntime
     ? providerStorageRuntime.area
     : ((chrome && chrome.storage && chrome.storage.sync)
         ? chrome.storage.sync
         : (chrome && chrome.storage ? chrome.storage.local : null));
-  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
-    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (rawStorageArea
+    ? (rawStorageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null);
+  const startupStorageReadBatch = rawStorageArea && typeof SETTINGS.createStorageReadBatch === 'function'
+    ? SETTINGS.createStorageReadBatch(rawStorageArea)
+    : null;
+  const storageArea = startupStorageReadBatch ? startupStorageReadBatch.area : rawStorageArea;
+  optionsStartupStorageBatchPending = Boolean(startupStorageReadBatch);
+
+  function finishOptionsStartupStorageBatch(metrics) {
+    optionsStartupStorageBatchPending = false;
+    const root = document.documentElement;
+    const values = metrics && typeof metrics === 'object' ? metrics : {};
+    if (root) {
+      root.setAttribute(
+        'data-lumno-options-bootstrap-storage-reads',
+        String(Number.isFinite(values.underlyingReadCount) ? values.underlyingReadCount : 0)
+      );
+      root.setAttribute(
+        'data-lumno-options-bootstrap-storage-requests',
+        String(Number.isFinite(values.requestCount) ? values.requestCount : 0)
+      );
+      root.setAttribute(
+        'data-lumno-options-bootstrap-storage-keys',
+        values.keyCount === null ? 'all' : String(Number.isFinite(values.keyCount) ? values.keyCount : 0)
+      );
+    }
+    if (optionsStartupRefreshDeferred) {
+      optionsStartupRefreshDeferred = false;
+      refreshCustomSelects({ force: true });
+    }
+    const scheduleFrame = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (callback) => setTimeout(callback, 0);
+    const markOptionsReady = () => {
+      if (optionsReadyMarked) {
+        return;
+      }
+      optionsReadyMarked = true;
+      optionsStartupRefreshCoalescing = false;
+      if (optionsReadyFallbackTimer) {
+        clearTimeout(optionsReadyFallbackTimer);
+        optionsReadyFallbackTimer = 0;
+      }
+      if (optionsStartupRefreshDeferred) {
+        optionsStartupRefreshDeferred = false;
+        refreshCustomSelects({ force: true });
+      }
+      const readyAt = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+      if (root) {
+        root.setAttribute('data-lumno-options-ready', 'true');
+        root.setAttribute(
+          'data-lumno-options-ready-ms',
+          Math.max(0, readyAt - optionsRuntimeStartedAt).toFixed(2)
+        );
+        root.setAttribute(
+          'data-lumno-options-ready-navigation-ms',
+          Math.max(0, readyAt).toFixed(2)
+        );
+      }
+      markOptionsPerformance('lumno-options-ready');
+      try {
+        if (typeof performance !== 'undefined' && typeof performance.measure === 'function') {
+          performance.measure(
+            'lumno-options-startup',
+            'lumno-options-runtime-start',
+            'lumno-options-ready'
+          );
+        }
+      } catch (e) {
+        // Performance measures are diagnostics only.
+      }
+    };
+    optionsReadyFallbackTimer = setTimeout(markOptionsReady, 250);
+    scheduleFrame(() => {
+      scheduleFrame(markOptionsReady);
+    });
+  }
+
+  if (startupStorageReadBatch) {
+    startupStorageReadBatch.ready.then(finishOptionsStartupStorageBatch);
+  } else {
+    Promise.resolve().then(() => finishOptionsStartupStorageBatch({
+      keyCount: 0,
+      requestCount: 0,
+      underlyingReadCount: 0
+    }));
+  }
+
   function getActivePrimaryAreaName() {
     return providerStorageRuntime
       ? providerStorageRuntime.getActiveAreaName()
@@ -726,7 +839,7 @@
   let currentBookmarkCount = 8;
   let currentBookmarkColumns = 6;
   let currentNewtabTopContentMode = 'brand';
-  let currentActiveSettingsTab = 'appearance';
+  let currentActiveSettingsTab = 'general';
   const optionsSelectControlRecords = new Map();
   function registerOptionsSelectControl(select, kind) {
     if (!select ||
@@ -960,7 +1073,7 @@
     if (!storageArea || !chrome || !chrome.storage || !chrome.storage.local) {
       return;
     }
-    if (storageArea === chrome.storage.local) {
+    if (getActivePrimaryAreaName() === 'local') {
       return;
     }
     chrome.storage.local.get(keys, (localResult) => {
@@ -2417,7 +2530,19 @@
     });
   }
 
-  function refreshCustomSelects() {
+  function refreshCustomSelects(options) {
+    const config = options && typeof options === 'object' ? options : {};
+    if ((optionsStartupStorageBatchPending || optionsStartupRefreshCoalescing) && !config.force) {
+      optionsStartupRefreshDeferred = true;
+      return;
+    }
+    optionsCustomSelectRefreshCount += 1;
+    if (document.documentElement) {
+      document.documentElement.setAttribute(
+        'data-lumno-options-control-refreshes',
+        String(optionsCustomSelectRefreshCount)
+      );
+    }
     renderSettingsForms();
     optionsSelectControlRecords.forEach((record, select) => {
       renderOptionsSelectControl(select);

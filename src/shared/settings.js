@@ -357,6 +357,158 @@
     };
   }
 
+  function createStorageReadBatch(area) {
+    if (!area || typeof area.get !== 'function') {
+      return null;
+    }
+    let acceptingReads = true;
+    let flushScheduled = false;
+    let includesAllKeys = false;
+    let requests = [];
+    const requestedKeys = new Set();
+    let resolveReady = null;
+    const ready = new Promise((resolve) => {
+      resolveReady = resolve;
+    });
+
+    function collectRequestKeys(keys) {
+      if (keys === null || typeof keys === 'undefined') {
+        includesAllKeys = true;
+        return;
+      }
+      if (typeof keys === 'string') {
+        requestedKeys.add(keys);
+        return;
+      }
+      if (Array.isArray(keys)) {
+        keys.forEach((key) => requestedKeys.add(String(key)));
+        return;
+      }
+      if (typeof keys === 'object') {
+        Object.keys(keys).forEach((key) => requestedKeys.add(key));
+      }
+    }
+
+    function selectRequestResult(source, keys) {
+      const values = source && typeof source === 'object' ? source : {};
+      if (keys === null || typeof keys === 'undefined') {
+        return values;
+      }
+      if (typeof keys === 'object' && !Array.isArray(keys)) {
+        const result = { ...keys };
+        Object.keys(keys).forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(values, key)) {
+            result[key] = values[key];
+          }
+        });
+        return result;
+      }
+      const list = Array.isArray(keys) ? keys : [keys];
+      const result = {};
+      list.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(values, key)) {
+          result[key] = values[key];
+        }
+      });
+      return result;
+    }
+
+    function flush() {
+      if (!acceptingReads) {
+        return;
+      }
+      acceptingReads = false;
+      flushScheduled = false;
+      const pending = requests;
+      requests = [];
+      const keys = includesAllKeys ? null : Array.from(requestedKeys);
+      let settled = false;
+      const finish = (rawResult) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        const result = rawResult && typeof rawResult === 'object' ? rawResult : {};
+        const callbackErrors = [];
+        pending.forEach((request) => {
+          const selected = selectRequestResult(result, request.keys);
+          try {
+            if (request.callback) {
+              request.callback(selected);
+            } else if (request.resolve) {
+              request.resolve(selected);
+            }
+          } catch (error) {
+            callbackErrors.push(error);
+          }
+        });
+        resolveReady(Object.freeze({
+          keyCount: keys === null ? null : keys.length,
+          requestCount: pending.length,
+          underlyingReadCount: 1
+        }));
+        callbackErrors.forEach((error) => {
+          Promise.resolve().then(() => {
+            throw error;
+          });
+        });
+      };
+      try {
+        const maybePromise = area.get(keys, finish);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(finish).catch(() => finish({}));
+        }
+      } catch (error) {
+        finish({});
+      }
+    }
+
+    function get(keys, callback) {
+      if (typeof keys === 'function' && typeof callback === 'undefined') {
+        callback = keys;
+        keys = null;
+      }
+      if (!acceptingReads) {
+        return area.get(keys, callback);
+      }
+      let resolveRequest = null;
+      const promise = typeof callback === 'function'
+        ? undefined
+        : new Promise((resolve) => {
+            resolveRequest = resolve;
+          });
+      requests.push({
+        callback: typeof callback === 'function' ? callback : null,
+        keys,
+        resolve: resolveRequest
+      });
+      collectRequestKeys(keys);
+      if (!flushScheduled) {
+        flushScheduled = true;
+        Promise.resolve().then(flush);
+      }
+      return promise;
+    }
+
+    function invoke(method, args) {
+      if (typeof area[method] !== 'function') {
+        return undefined;
+      }
+      return area[method](...args);
+    }
+
+    return Object.freeze({
+      area: Object.freeze({
+        clear(...args) { return invoke('clear', args); },
+        get,
+        remove(...args) { return invoke('remove', args); },
+        set(...args) { return invoke('set', args); }
+      }),
+      flush,
+      ready
+    });
+  }
+
   function createProviderStorageRuntime(chromeApi) {
     const storage = chromeApi && chromeApi.storage ? chromeApi.storage : null;
     const syncArea = storage && storage.sync ? storage.sync : null;
@@ -477,6 +629,7 @@
     normalizeThemePreference,
     normalizeThemeMode,
     createGlobalThemeModeStorageUpdate,
+    createStorageReadBatch,
     createProviderStorageRuntime
   });
 });

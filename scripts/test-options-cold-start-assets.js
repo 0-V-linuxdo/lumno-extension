@@ -61,6 +61,17 @@ const root = createElementRecord('root');
 const body = createElementRecord('body');
 const panel = createElementRecord('_x_extension_settings_panel_2024_unique_');
 const themeColorMeta = createElementRecord('theme-color');
+const tabKeys = ['general', 'account', 'appearance', 'shortcuts', 'blacklist', 'labs'];
+const tabButtons = tabKeys.map((key) => {
+  const element = createElementRecord(`tab-${key}`);
+  element.setAttribute('data-tab', key);
+  return element;
+});
+const tabContents = tabKeys.map((key) => {
+  const element = createElementRecord(`content-${key}`);
+  element.setAttribute('data-content', key);
+  return element;
+});
 elements.set(panel.id, panel);
 
 const headChildren = [];
@@ -69,6 +80,9 @@ const documentObject = {
   documentElement: root,
   head: {
     appendChild(node) {
+      if (node.id === '_x_extension_options_background_preload_2026_unique_') {
+        assert(node.href, 'the Options image preload should have an href before DOM insertion');
+      }
       headChildren.push(node);
       if (node.id) {
         elements.set(node.id, node);
@@ -89,6 +103,15 @@ const documentObject = {
   },
   querySelector(selector) {
     return selector === 'meta[name="theme-color"]' ? themeColorMeta : null;
+  },
+  querySelectorAll(selector) {
+    if (selector === '._x_extension_settings_tab_button_2024_unique_[data-tab]') {
+      return tabButtons;
+    }
+    if (selector === '._x_extension_settings_content_2024_unique_[data-content]') {
+      return tabContents;
+    }
+    return [];
   }
 };
 
@@ -117,6 +140,9 @@ const sandbox = {
       localStorageValues.set(key, String(value));
     }
   },
+  location: {
+    hash: '#shortcuts:site-search-ai'
+  },
   matchMedia() {
     return { matches: false };
   },
@@ -136,6 +162,19 @@ assert.strictEqual(root.getAttribute('data-theme-ready'), 'true');
 assert.strictEqual(root.getAttribute('data-options-preload-theme'), 'dark');
 assert.strictEqual(body.getAttribute('data-theme'), 'dark');
 assert.strictEqual(panel.getAttribute('data-theme'), 'dark');
+assert.strictEqual(root.getAttribute('data-options-initial-tab'), 'shortcuts');
+tabButtons.forEach((button) => {
+  assert.strictEqual(
+    button.getAttribute('data-active'),
+    button.getAttribute('data-tab') === 'shortcuts' ? 'true' : 'false'
+  );
+});
+tabContents.forEach((content) => {
+  assert.strictEqual(
+    content.getAttribute('data-active'),
+    content.getAttribute('data-content') === 'shortcuts' ? 'true' : 'false'
+  );
+});
 assert.strictEqual(themeColorMeta.getAttribute('content'), '#111111');
 assert.strictEqual(
   localStorageValues.get('_x_extension_options_theme_preload_2026_unique_'),
@@ -156,6 +195,11 @@ assert(
     optionsSource.includes('cacheOptionsThemeMode(storedMode);') &&
     optionsSource.includes('cacheOptionsThemeMode(nextMode);'),
   'Options should keep the synchronous theme cache current after reads and changes'
+);
+assert(
+  html.includes('data-tab="general" data-active="true"') &&
+    html.includes('data-content="general" data-active="true"'),
+  'Options should statically paint the default General route'
 );
 
 console.log('Options cold-start asset tests passed');

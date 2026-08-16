@@ -4,6 +4,7 @@
   const PRELOAD_THEME_ATTRIBUTE = 'data-options-preload-theme';
   const BACKGROUND_PRELOAD_ID = '_x_extension_options_background_preload_2026_unique_';
   const PANEL_ID = '_x_extension_settings_panel_2024_unique_';
+  const SETTINGS_TAB_KEYS = ['general', 'account', 'appearance', 'shortcuts', 'blacklist', 'labs'];
   const root = document.documentElement;
   if (!root) {
     return;
@@ -11,6 +12,47 @@
 
   let resolvedTheme = 'light';
   let bodyObserver = null;
+  let routeObserver = null;
+
+  function getInitialTabKey() {
+    try {
+      const rawHash = String(globalThis.location && globalThis.location.hash || '')
+        .replace(/^#/, '')
+        .trim();
+      const tabKey = rawHash.split(':')[0] || '';
+      return SETTINGS_TAB_KEYS.includes(tabKey) ? tabKey : 'general';
+    } catch (e) {
+      return 'general';
+    }
+  }
+
+  function applyInitialTabState() {
+    if (typeof document.querySelectorAll !== 'function') {
+      return false;
+    }
+    const tabKey = getInitialTabKey();
+    const tabButtons = Array.from(document.querySelectorAll(
+      '._x_extension_settings_tab_button_2024_unique_[data-tab]'
+    ));
+    const tabContents = Array.from(document.querySelectorAll(
+      '._x_extension_settings_content_2024_unique_[data-content]'
+    ));
+    if (tabButtons.length < SETTINGS_TAB_KEYS.length || tabContents.length < SETTINGS_TAB_KEYS.length) {
+      return false;
+    }
+    tabButtons.forEach((button) => {
+      button.setAttribute('data-active', button.getAttribute('data-tab') === tabKey ? 'true' : 'false');
+    });
+    tabContents.forEach((content) => {
+      content.setAttribute('data-active', content.getAttribute('data-content') === tabKey ? 'true' : 'false');
+    });
+    root.setAttribute('data-options-initial-tab', tabKey);
+    if (routeObserver) {
+      routeObserver.disconnect();
+      routeObserver = null;
+    }
+    return true;
+  }
 
   function normalizeThemeMode(value) {
     if (value === 'dark' || value === 'light') {
@@ -65,6 +107,11 @@
     if (!document.head) {
       return;
     }
+    const href = getRuntimeUrl(
+      theme === 'dark'
+        ? 'assets/images/settings-bg-dark.webp'
+        : 'assets/images/settings-bg-light.webp'
+    );
     let link = document.getElementById(BACKGROUND_PRELOAD_ID);
     if (!link) {
       link = document.createElement('link');
@@ -72,13 +119,11 @@
       link.rel = 'preload';
       link.as = 'image';
       link.fetchPriority = 'high';
+      link.href = href;
       document.head.appendChild(link);
+      return;
     }
-    link.href = getRuntimeUrl(
-      theme === 'dark'
-        ? 'assets/images/settings-bg-dark.webp'
-        : 'assets/images/settings-bg-light.webp'
-    );
+    link.href = href;
   }
 
   function applyTheme(theme) {
@@ -106,11 +151,16 @@
   }
 
   applyTheme(resolveTheme(readCachedThemeMode()));
+  const initialTabApplied = applyInitialTabState();
 
   if ((!document.body || !document.getElementById(PANEL_ID)) &&
       typeof globalThis.MutationObserver === 'function') {
     bodyObserver = new MutationObserver(() => applyTheme(resolvedTheme));
     bodyObserver.observe(root, { childList: true, subtree: true });
+  }
+  if (!initialTabApplied && typeof globalThis.MutationObserver === 'function') {
+    routeObserver = new MutationObserver(applyInitialTabState);
+    routeObserver.observe(root, { childList: true, subtree: true });
   }
 
   try {
