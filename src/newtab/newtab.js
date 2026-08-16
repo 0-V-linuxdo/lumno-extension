@@ -9611,8 +9611,13 @@
       if (!before || !after) {
         return;
       }
-      const dx = before.left - after.left;
-      const dy = before.top - after.top;
+      const delta = NEWTAB_BOOKMARK_DRAG.getLayoutShiftDelta(before, after, {
+        horizontalOnly: isBookmarkTopbarMode()
+      });
+      if (!delta) {
+        return;
+      }
+      const { dx, dy } = delta;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
         return;
       }
@@ -9725,8 +9730,13 @@
       if (!before || !after) {
         return;
       }
-      const dx = before.left - after.left;
-      const dy = before.top - after.top;
+      const delta = NEWTAB_BOOKMARK_DRAG.getLayoutShiftDelta(before, after, {
+        horizontalOnly: isBookmarkTopbarMode()
+      });
+      if (!delta) {
+        return;
+      }
+      const { dx, dy } = delta;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
         return;
       }
@@ -9857,6 +9867,7 @@
       gridElement: bookmarkGrid,
       isCrossPageDrag,
       layoutItems: state && state.layoutItems,
+      markerVerticalInsetPx: isBookmarkTopbarMode() ? 3 : 8,
       pageStartIndex,
       pointerX,
       pointerY
@@ -13802,14 +13813,14 @@
     return matchedTab ? matchedTab.id : null;
   }
 
-  function shouldSwitchMatchedTabSuggestion(suggestion, index) {
+  function shouldSwitchMatchedTabSuggestion(suggestion) {
     if (!suggestion || typeof suggestion._xMatchedTabId !== 'number') {
       return false;
     }
     if (!openTabQuickSwitchEnabled) {
       return false;
     }
-    return index === 0;
+    return true;
   }
 
   function shouldUseNewTabForSwitchAction(suggestion, event, item) {
@@ -14322,6 +14333,17 @@
           })()
         : null;
 
+      const defaultSuggestions = [
+        ...preSuggestions,
+        newTabSuggestion,
+        ...suggestions
+      ].filter(Boolean);
+      const groupedDefaultSuggestions = typeof SEARCH_UTILS.groupSearchSuggestionsByKind === 'function'
+        ? SEARCH_UTILS.groupSearchSuggestionsByKind(defaultSuggestions, {
+          searchFirst: searchResultPriorityMode === 'search'
+        })
+        : defaultSuggestions;
+
       let allSuggestions = localSearchQueryModeActive
         ? suggestions.filter((item) => (
           item &&
@@ -14330,7 +14352,7 @@
         ))
         : (slashCommandModeActive ? [...preSuggestions] : (siteSearchQueryModeActive
           ? (siteSearchSuggestion ? [siteSearchSuggestion] : [])
-          : (toggleCommandActive ? [...preSuggestions] : [...preSuggestions, newTabSuggestion, ...suggestions])));
+          : (toggleCommandActive ? [...preSuggestions] : groupedDefaultSuggestions)));
       allSuggestions.forEach((item) => {
         if (!item || !item.url) {
           return;

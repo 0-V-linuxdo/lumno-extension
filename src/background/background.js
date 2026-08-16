@@ -9344,7 +9344,7 @@ async function getSearchSuggestions(query, options) {
       finalSuggestions = searchUtils.filterSearchSuggestionsBySourceTypes(finalSuggestions, sourceTypes);
     }
     if (typeof searchUtils.applySearchSuggestionHostDiversity === 'function') {
-      finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions);
+      finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions, { context });
     } else {
       finalSuggestions = finalSuggestions.slice(0, searchPolicy.finalSuggestionLimit || 12);
     }
@@ -9443,9 +9443,12 @@ async function getSearchEngineSuggestions(query, localSuggestions, options) {
     finalSuggestions = searchUtils.filterSearchSuggestionsBySourceTypes(finalSuggestions, sourceTypes);
   }
   if (typeof searchUtils.applySearchSuggestionHostDiversity === 'function') {
-    finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions);
+    finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions, { context });
   } else {
     finalSuggestions = finalSuggestions.slice(0, searchPolicy.finalSuggestionLimit || 12);
+  }
+  if (typeof searchUtils.composeSearchSuggestionSlate === 'function') {
+    finalSuggestions = searchUtils.composeSearchSuggestionSlate(finalSuggestions, context);
   }
   return finalSuggestions;
 }

@@ -159,6 +159,135 @@ const rootScore = score({ title: 'Lumno', url: 'https://lumno.kubai.design/' }, 
 const releaseScore = score({ title: 'Release | Lumno', url: 'https://lumno.kubai.design/release/' }, 'lumno release', 'history');
 assert.ok(releaseScore > rootScore, 'specific release page should outrank root for path-intent queries');
 
+const xiaohongshuContext = search.buildSearchQueryContext('小红书');
+assert.strictEqual(
+  search.getSearchSuggestionFamilyKey('https://mall.xiaohongshu.com/finance/cashier/web'),
+  'xiaohongshu.com',
+  'brand-family grouping should collapse sibling subdomains under one registrable domain'
+);
+assert.strictEqual(
+  search.getSearchSuggestionFamilyKey('https://lumno.github.io/docs'),
+  'lumno.github.io',
+  'brand-family grouping should keep separate tenants on common hosted suffixes'
+);
+assert.strictEqual(
+  search.getSearchSuggestionClusterInfo('https://mall.xiaohongshu.com/finance/cashier/web').category,
+  'utility',
+  'transactional utility segments should be recognized below the first path segment'
+);
+const xiaohongshuCashierScore = score({
+  title: '小红书',
+  url: 'https://mall.xiaohongshu.com/finance/cashier/web'
+}, '小红书');
+const xiaohongshuCreatorScore = score({
+  title: '小红书创作服务平台',
+  url: 'https://creator.xiaohongshu.com/'
+}, '小红书');
+assert.ok(
+  xiaohongshuCreatorScore > xiaohongshuCashierScore,
+  'a generic brand title on a deep utility page should not outrank a descriptive product root'
+);
+const xiaohongshuCandidates = [
+  {
+    type: 'history',
+    title: '小红书',
+    url: 'https://mall.xiaohongshu.com/finance/cashier/web',
+    score: xiaohongshuCashierScore
+  },
+  {
+    type: 'history',
+    title: '小红书创作服务平台',
+    url: 'https://creator.xiaohongshu.com/',
+    score: xiaohongshuCreatorScore
+  },
+  {
+    type: 'history',
+    title: '小红书 - 你的生活兴趣社区',
+    url: 'https://www.xiaohongshu.com/explore',
+    score: 240
+  },
+  {
+    type: 'history',
+    title: '小红书 - 你的生活兴趣社区',
+    url: 'https://www.xiaohongshu.com/explore/6a4dcb39000000001',
+    score: 180
+  }
+];
+const xiaohongshuOpenTab = {
+  ...xiaohongshuCandidates[3],
+  _xMatchedTabId: 26,
+  score: 40
+};
+const xiaohongshuDirect = search.buildSearchBrandDirectSuggestion(
+  xiaohongshuCandidates,
+  xiaohongshuContext
+);
+assert.ok(
+  xiaohongshuDirect &&
+    xiaohongshuDirect.url === 'https://www.xiaohongshu.com/' &&
+    xiaohongshuDirect.isBrandRepresentative === true,
+  'an exact configured brand alias should synthesize its stable site representative when history lacks one'
+);
+const xiaohongshuDiverse = search.applySearchSuggestionHostDiversity(
+  [
+    xiaohongshuDirect,
+    ...xiaohongshuCandidates.slice(0, 3),
+    xiaohongshuOpenTab
+  ].filter(Boolean),
+  { context: xiaohongshuContext }
+);
+assert.ok(
+  xiaohongshuDiverse.length <= 3 &&
+    xiaohongshuDiverse.every((item) => search.getSearchSuggestionFamilyKey(item.url) === 'xiaohongshu.com'),
+  'a pure brand query should cap one brand family at three local results'
+);
+assert.ok(
+  xiaohongshuDiverse.some((item) => item && item._xMatchedTabId === 26),
+  'a brand-family cap should reserve one slot for an already-open matching tab'
+);
+const xiaohongshuSlate = search.composeSearchSuggestionSlate([
+  ...xiaohongshuDiverse,
+  {
+    type: 'googleSuggest',
+    title: '小红书薯币购买',
+    url: 'https://www.google.com/search?q=%E5%B0%8F%E7%BA%A2%E4%B9%A6%E8%96%AF%E5%B8%81%E8%B4%AD%E4%B9%B0'
+  }
+], xiaohongshuContext);
+assert.strictEqual(
+  xiaohongshuSlate[1]._xMatchedTabId,
+  26,
+  'an already-open brand page should stay ahead of supplemental search suggestions'
+);
+assert.strictEqual(
+  xiaohongshuSlate[xiaohongshuSlate.length - 1].type,
+  'googleSuggest',
+  'brand result composition should keep search suggestions after the contiguous navigation group'
+);
+assert.ok(
+  xiaohongshuSlate.slice(0, -1).every((item) => item.type !== 'googleSuggest'),
+  'brand result composition should not interleave webpages and search suggestions'
+);
+assert.deepStrictEqual(
+  search.groupSearchSuggestionsByKind([
+    { type: 'history', title: 'Page A' },
+    { type: 'googleSuggest', title: 'Search A' },
+    { type: 'topSite', title: 'Page B' },
+    { type: 'newtab', title: 'Search query' },
+    { type: 'googleSuggest', title: 'Search B' }
+  ]).map((item) => item.title),
+  ['Page A', 'Page B', 'Search A', 'Search query', 'Search B'],
+  'navigation-first mode should keep webpage and keyword-search blocks contiguous'
+);
+assert.deepStrictEqual(
+  search.groupSearchSuggestionsByKind([
+    { type: 'history', title: 'Page A' },
+    { type: 'googleSuggest', title: 'Search A' },
+    { type: 'newtab', title: 'Search query' }
+  ], { searchFirst: true }).map((item) => item.title),
+  ['Search A', 'Search query', 'Page A'],
+  'search-first mode should move the whole search block instead of interleaving individual rows'
+);
+
 const selectionNow = 1_800_000_000_000;
 let selectionStats = search.normalizeSearchSelectionStats(null, { now: selectionNow });
 for (let i = 0; i < 12; i += 1) {
@@ -200,6 +329,26 @@ const selectedSelectionBoost = search.getSearchSelectionBoost(
   selectionContext,
   selectionStats,
   selectionOptions
+);
+let brandDeepSelectionStats = search.normalizeSearchSelectionStats(null, { now: selectionNow });
+brandDeepSelectionStats = search.recordSearchSelectionInStats(brandDeepSelectionStats, {
+  query: '小红书',
+  title: '小红书',
+  url: 'https://mall.xiaohongshu.com/finance/cashier/web',
+  type: 'history'
+}, { now: selectionNow });
+assert.strictEqual(
+  search.getSearchSelectionBoost(
+    {
+      title: '小红书',
+      url: 'https://mall.xiaohongshu.com/finance/cashier/web'
+    },
+    xiaohongshuContext,
+    brandDeepSelectionStats,
+    { now: selectionNow + 1 }
+  ),
+  search.SEARCH_POLICY.brandDeepSelectionBoostLimit,
+  'one recent click should not give a deep page enough learned weight to take over a pure brand query'
 );
 const learnedNavigationList = [
   {

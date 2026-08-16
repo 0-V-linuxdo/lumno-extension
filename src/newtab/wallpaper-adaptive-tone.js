@@ -231,7 +231,7 @@
   }
 
   function isTexturedWallpaperEffect(effectType) {
-    return effectType === 'ascii' || effectType === 'halftone';
+    return effectType === 'ascii' || effectType === 'dither' || effectType === 'halftone';
   }
 
   function isHighTextureTone(textureContrast, effectType, threshold) {

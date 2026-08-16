@@ -276,6 +276,51 @@ describe('Suggestions React island', () => {
     ).toBe('x-ov-suggestion-mark');
   });
 
+  it('shows a compact host and path while keeping noisy query parameters out of the row', () => {
+    const { view, items } = createView();
+
+    render(view, [{
+      type: 'history',
+      title: 'Xiaohongshu cashier',
+      url: 'https://mall.xiaohongshu.com/finance/cashier/web?cashierId=123&redirectPath=%2Fexplore'
+    }]);
+
+    expect(
+      items[0].querySelector('.x-nt-suggestion-url-line')?.textContent
+    ).toBe('mall.xiaohongshu.com/finance/cashier/web');
+  });
+
+  it('keeps a non-primary matching open tab visibly switchable', () => {
+    const { view, items } = createView({
+      surface: 'overlay',
+      shouldSwitchMatchedTabSuggestion: (suggestion) =>
+        typeof suggestion._xMatchedTabId === 'number'
+    });
+
+    render(view, [
+      {
+        type: 'topSite',
+        title: '小红书',
+        url: 'https://www.xiaohongshu.com/'
+      },
+      {
+        type: 'history',
+        title: '小红书 - 你的生活兴趣社区',
+        url: 'https://www.xiaohongshu.com/explore/6a4dcb39000000001',
+        _xMatchedTabId: 26
+      }
+    ], {
+      primaryHighlightIndex: 0,
+      primaryHighlightReason: 'navigation'
+    });
+
+    expect(items[1]._xVisitButtonAction).toBe('switch');
+    expect(items[1]._xHasSwitchAction).toBe(true);
+    expect(
+      items[1].querySelector('[data-tag-type="open-tab"]')?.textContent
+    ).toBe('已打开');
+  });
+
   it('switches decorative search-row treatment only when simple mode is enabled', () => {
     let simpleModeEnabled = true;
     const { view, items } = createView({

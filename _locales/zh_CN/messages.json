@@ -883,11 +883,26 @@
   "newtab_wallpaper_effect_halftone": {
     "message": "网点"
   },
+  "newtab_wallpaper_effect_dither": {
+    "message": "抖色"
+  },
   "newtab_wallpaper_effect_ascii": {
     "message": "ASCII"
   },
   "newtab_wallpaper_effect_select_label": {
     "message": "使用 {effect} 壁纸滤镜"
+  },
+  "newtab_wallpaper_effect_ink_title": {
+    "message": "取样区域"
+  },
+  "newtab_wallpaper_effect_ink_dark": {
+    "message": "暗部"
+  },
+  "newtab_wallpaper_effect_ink_light": {
+    "message": "亮部"
+  },
+  "newtab_wallpaper_effect_ink_select_label": {
+    "message": "从{tone}取样点或字符"
   },
   "newtab_wallpaper_save_error": {
     "message": "壁纸保存失败"

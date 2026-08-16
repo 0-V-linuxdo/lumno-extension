@@ -8,6 +8,7 @@ const {
   getFolderSwitchTarget,
   getFloatingPreviewPosition,
   getGridInsertionTarget,
+  getLayoutShiftDelta,
   isPointInsideElement,
   shouldKeepCascadeOpenAfterDrop,
   updateVisualPosition
@@ -271,6 +272,24 @@ assert.strictEqual(previewStyle.left, '780px');
 assert.strictEqual(previewStyle.top, '720px');
 assert.strictEqual(previewStyle.transform, 'translate3d(0, 0, 0)');
 
+assert.deepStrictEqual(
+  getLayoutShiftDelta(
+    createRect(360, 32, 154, 28),
+    createRect(120, 18, 154, 28)
+  ),
+  { dx: 240, dy: 14 },
+  'grid and cascade drops should preserve two-dimensional layout shifts'
+);
+assert.deepStrictEqual(
+  getLayoutShiftDelta(
+    createRect(360, 32, 154, 28),
+    createRect(120, 18, 154, 28),
+    { horizontalOnly: true }
+  ),
+  { dx: 240, dy: 0 },
+  'topbar drops should animate horizontally without a vertical return'
+);
+
 const hitElement = {
   getBoundingClientRect() {
     return createRect(20, 30, 80, 40);
@@ -387,6 +406,28 @@ const middleTarget = getGridInsertionTarget({
 assert.strictEqual(middleTarget.index, 1);
 assert.strictEqual(middleTarget.markerOffsetPx, 206);
 assert.strictEqual(middleTarget.markerPosition, 'before');
+
+const topbarGridRect = createRect(100, 20, 800, 36);
+const topbarGridElement = {
+  getBoundingClientRect() {
+    return topbarGridRect;
+  }
+};
+const topbarTarget = getGridInsertionTarget({
+  columnGap: '12px',
+  folderId: '1',
+  gridElement: topbarGridElement,
+  layoutItems: [
+    { card: firstCard, rect: createRect(112, 24, 188, 28) },
+    { card: secondCard, rect: createRect(312, 24, 188, 28) }
+  ],
+  markerVerticalInsetPx: 3,
+  pageStartIndex: 0,
+  pointerX: 306,
+  pointerY: 38
+});
+assert.strictEqual(topbarTarget.markerTopPx, 7);
+assert.strictEqual(topbarTarget.markerHeightPx, 22);
 
 const emptyTarget = getGridInsertionTarget({
   folderId: 'empty',

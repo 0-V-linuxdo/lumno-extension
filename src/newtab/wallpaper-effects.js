@@ -1,14 +1,22 @@
 (function(root) {
   'use strict';
 
-  const EFFECT_TYPES = ['none', 'grain', 'halftone', 'ascii'];
+  const EFFECT_TYPES = ['none', 'grain', 'halftone', 'dither', 'ascii'];
+  const EFFECT_INK_TONES = ['auto', 'dark', 'light'];
+  const BAYER_4X4 = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5]
+  ];
   const ASCII_LIGHT_WALLPAPER_THRESHOLD = 0.58;
   const TARGET_EFFECT_CANVAS_PIXELS = 2048 * 2048;
   const MAX_EFFECT_CANVAS_SCALE = 1.6;
   const PARAMETER_RENDER_DEBOUNCE_MS = 72;
   const DEFAULT_PREFS = {
-    version: 3,
+    version: 4,
     type: 'none',
+    inkTone: 'auto',
     strength: 50,
     size: 50,
     spacing: 50
@@ -32,6 +40,93 @@
       return min;
     }
     return Math.min(max, Math.max(min, number));
+  }
+
+  function quantizeDitherChannel(value, threshold, levels) {
+    const stepCount = Math.max(2, Math.round(Number(levels) || 2));
+    const scaled = (clampNumber(value, 0, 255) / 255) * (stepCount - 1);
+    const lower = Math.floor(scaled);
+    const quantizedIndex = Math.min(
+      stepCount - 1,
+      lower + ((scaled - lower) > clampNumber(threshold, 0, 1) ? 1 : 0)
+    );
+    return (quantizedIndex / (stepCount - 1)) * 255;
+  }
+
+  function quantizeDitherColor(color, threshold, levels, mix) {
+    const source = color || {};
+    const blend = clampNumber(mix, 0, 1);
+    const quantize = (value) => {
+      const channel = clampNumber(value, 0, 255);
+      const quantized = quantizeDitherChannel(channel, threshold, levels);
+      return Math.round(channel + ((quantized - channel) * blend));
+    };
+    return {
+      red: quantize(source.red),
+      green: quantize(source.green),
+      blue: quantize(source.blue)
+    };
+  }
+
+  function liftSampleColor(color, brightness, saturationBoost) {
+    const source = color || {};
+    const red = clampNumber(source.red, 0, 255) / 255;
+    const green = clampNumber(source.green, 0, 255) / 255;
+    const blue = clampNumber(source.blue, 0, 255) / 255;
+    const maxChannel = Math.max(red, green, blue);
+    const minChannel = Math.min(red, green, blue);
+    const delta = maxChannel - minChannel;
+    let hue = 0;
+    if (delta > 0) {
+      if (maxChannel === red) {
+        hue = ((green - blue) / delta) % 6;
+      } else if (maxChannel === green) {
+        hue = ((blue - red) / delta) + 2;
+      } else {
+        hue = ((red - green) / delta) + 4;
+      }
+      hue = ((hue * 60) + 360) % 360;
+    }
+    const saturation = maxChannel > 0 ? delta / maxChannel : 0;
+    const liftedValue = maxChannel + (
+      (1 - maxChannel) * clampNumber(brightness, 0, 1)
+    );
+    const liftedSaturation = clampNumber(
+      saturation * (1 + clampNumber(saturationBoost, 0, 1.2)),
+      0,
+      1
+    );
+    const chroma = liftedValue * liftedSaturation;
+    const hueSector = hue / 60;
+    const secondChannel = chroma * (1 - Math.abs((hueSector % 2) - 1));
+    let redPrime = 0;
+    let greenPrime = 0;
+    let bluePrime = 0;
+    if (hueSector < 1) {
+      redPrime = chroma;
+      greenPrime = secondChannel;
+    } else if (hueSector < 2) {
+      redPrime = secondChannel;
+      greenPrime = chroma;
+    } else if (hueSector < 3) {
+      greenPrime = chroma;
+      bluePrime = secondChannel;
+    } else if (hueSector < 4) {
+      greenPrime = secondChannel;
+      bluePrime = chroma;
+    } else if (hueSector < 5) {
+      redPrime = secondChannel;
+      bluePrime = chroma;
+    } else {
+      redPrime = chroma;
+      bluePrime = secondChannel;
+    }
+    const match = liftedValue - chroma;
+    return {
+      red: Math.round(clampNumber((redPrime + match) * 255, 0, 255)),
+      green: Math.round(clampNumber((greenPrime + match) * 255, 0, 255)),
+      blue: Math.round(clampNumber((bluePrime + match) * 255, 0, 255))
+    };
   }
 
   function getEffectCanvasScale(devicePixelRatio, viewportWidth, viewportHeight) {
@@ -94,6 +189,9 @@
       return Object.assign({}, DEFAULT_PREFS);
     }
     const type = EFFECT_TYPES.indexOf(value.type) === -1 ? DEFAULT_PREFS.type : value.type;
+    const inkTone = EFFECT_INK_TONES.indexOf(value.inkTone) === -1
+      ? DEFAULT_PREFS.inkTone
+      : value.inkTone;
     const rawStrength = Number.isFinite(Number(value.strength))
       ? value.strength
       : DEFAULT_PREFS.strength;
@@ -106,10 +204,21 @@
     return {
       version: DEFAULT_PREFS.version,
       type,
+      inkTone,
       strength: Math.round(clampNumber(rawStrength, 0, 100)),
       size: Math.round(clampNumber(rawSize, 0, 100)),
       spacing: Math.round(clampNumber(rawSpacing, 0, 100))
     };
+  }
+
+  function resolveUseDarkInk(inkTone, sampler) {
+    if (inkTone === 'dark') {
+      return true;
+    }
+    if (inkTone === 'light') {
+      return false;
+    }
+    return Boolean(sampler && sampler.useDarkInk === true);
   }
 
   function createWallpaperEffects(options) {
@@ -509,22 +618,6 @@
       return getLuminanceFromRgb(color.red, color.green, color.blue);
     }
 
-    function shiftSampleColor(color, amount, lighten) {
-      const shift = clampNumber(amount, 0, 1);
-      if (lighten) {
-        return {
-          red: Math.round(color.red + ((255 - color.red) * shift)),
-          green: Math.round(color.green + ((255 - color.green) * shift)),
-          blue: Math.round(color.blue + ((255 - color.blue) * shift))
-        };
-      }
-      return {
-        red: Math.round(color.red * (1 - shift)),
-        green: Math.round(color.green * (1 - shift)),
-        blue: Math.round(color.blue * (1 - shift))
-      };
-    }
-
     function clampChannel(value) {
       return Math.round(clampNumber(value, 0, 255));
     }
@@ -557,8 +650,8 @@
       return (leveled * (1 - amount)) + (curved * amount);
     }
 
-    function getLayerEffectTone(luminance, sampler, strength) {
-      const useLightInk = sampler.useDarkInk !== true;
+    function getLayerEffectTone(luminance, sampler, strength, useDarkInk) {
+      const useLightInk = useDarkInk !== true;
       const rawTone = useLightInk ? luminance : (1 - luminance);
       const low = clampNumber(sampler.lowLuminance, 0, 1);
       const high = clampNumber(sampler.highLuminance, 0, 1);
@@ -574,12 +667,6 @@
         (rawTone * (1 - contrastMix)) + (normalizedTone * contrastMix),
         strength
       );
-    }
-
-    function getCurvedEffectColor(color, useLightInk, tone, saturation) {
-      const saturated = boostSampleColor(color, saturation);
-      const contrastShift = 0.04 + (tone * 0.12);
-      return shiftSampleColor(saturated, contrastShift, useLightInk);
     }
 
     function getControlRange(value, minValue, maxValue) {
@@ -713,7 +800,7 @@
       return first + (Math.floor((minimum - first) / step) * step);
     }
 
-    function getEffectBaseKey(type, viewport, sampler, strength, size, spacing) {
+    function getEffectBaseKey(type, viewport, sampler, inkTone, strength, size, spacing) {
       return [
         type,
         loadedImageUrl,
@@ -721,14 +808,15 @@
         canvas ? canvas.height : 0,
         viewport.width,
         viewport.height,
-        sampler.useDarkInk ? 1 : 0,
+        inkTone,
+        resolveUseDarkInk(inkTone, sampler) ? 1 : 0,
         strength,
         size,
         spacing
       ].join(':');
     }
 
-    function drawHalftoneLayer(targetContext, viewport, sampler, strength, size, spacing) {
+    function drawHalftoneLayer(targetContext, viewport, sampler, inkTone, strength, size, spacing) {
       const metrics = getRenderedMetrics(sampler, viewport);
       const step = getControlRange(
         spacing,
@@ -741,7 +829,8 @@
         viewport.width < 720 ? 13 : 15
       );
       const maxRadius = Math.min(sizeRadius, step * 0.78);
-      const useLightInk = sampler.useDarkInk !== true;
+      const useDarkInk = resolveUseDarkInk(inkTone, sampler);
+      const strengthRatio = clampNumber(strength, 0, 100) / 100;
       for (let y = getGridStart(step, 0); y <= viewport.height + step; y += step) {
         if (y < 0 || y > viewport.height + step) {
           continue;
@@ -752,7 +841,7 @@
           }
           const color = sampleColor(sampler, metrics, x, y);
           const luminance = getLuminance(color);
-          const tone = getLayerEffectTone(luminance, sampler, strength);
+          const tone = getLayerEffectTone(luminance, sampler, strength, useDarkInk);
           if (tone <= 0.01) {
             continue;
           }
@@ -761,18 +850,10 @@
             0.7,
             maxRadius
           );
-          const curvedInk = getCurvedEffectColor(
+          const ink = liftSampleColor(
             color,
-            useLightInk,
-            tone,
-            0.2
-          );
-          const ink = shiftSampleColor(
-            curvedInk,
-            useLightInk
-              ? 0.24 + (tone * 0.28)
-              : 0.2 + (tone * 0.3),
-            useLightInk
+            0.18 + (strengthRatio * 0.18) + (tone * 0.2),
+            0.12 + (strengthRatio * 0.16)
           );
           targetContext.globalAlpha = clampNumber(
             0.24 + (tone * 0.58),
@@ -788,9 +869,9 @@
       targetContext.globalAlpha = 1;
     }
 
-    function drawAsciiLayer(targetContext, viewport, sampler, strength, size, spacing) {
+    function drawAsciiLayer(targetContext, viewport, sampler, inkTone, strength, size, spacing) {
       const metrics = getRenderedMetrics(sampler, viewport);
-      const useLightInk = sampler.useDarkInk !== true;
+      const useDarkInk = resolveUseDarkInk(inkTone, sampler);
       const strengthRatio = clampNumber(strength, 0, 100) / 100;
       const fontSize = Math.round(getControlRange(size, 7, viewport.width < 720 ? 22 : 24));
       targetContext.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
@@ -818,7 +899,7 @@
           }
           const color = sampleColor(sampler, metrics, x, y);
           const luminance = getLuminance(color);
-          const tone = getLayerEffectTone(luminance, sampler, strength);
+          const tone = getLayerEffectTone(luminance, sampler, strength, useDarkInk);
           if (tone <= 0.02) {
             continue;
           }
@@ -827,18 +908,10 @@
           if (char === ' ') {
             continue;
           }
-          const curvedInk = getCurvedEffectColor(
+          const ink = liftSampleColor(
             color,
-            useLightInk,
-            tone,
-            0.5 + (strengthRatio * 0.22)
-          );
-          const ink = shiftSampleColor(
-            curvedInk,
-            useLightInk
-              ? 0.32 + (tone * 0.3)
-              : 0.2 + (tone * 0.24),
-            useLightInk
+            0.24 + (strengthRatio * 0.18) + (tone * 0.24),
+            0.16 + (strengthRatio * 0.2)
           );
           const alpha = (0.12 + (tone * 0.7)) *
             (0.72 + (strengthRatio * 0.28));
@@ -850,21 +923,77 @@
       targetContext.globalAlpha = 1;
     }
 
-    function drawCachedLayeredEffect(type, viewport, sampler, strength, size, spacing, drawLayer) {
-      const cacheKey = getEffectBaseKey(type, viewport, sampler, strength, size, spacing);
+    function drawDitherLayer(targetContext, viewport, sampler, _inkTone, strength, size, spacing) {
+      const metrics = getRenderedMetrics(sampler, viewport);
+      const strengthRatio = clampNumber(strength, 0, 100) / 100;
+      const pixelSize = Math.max(2, Math.round(getControlRange(
+        size,
+        2,
+        viewport.width < 720 ? 7 : 9
+      )));
+      const patternScale = Math.max(1, Math.round(getControlRange(spacing, 1, 4)));
+      const colorLevels = Math.max(2, Math.round(getControlRange(strength, 8, 2)));
+      const colorMix = getControlRange(strength, 0.32, 1);
+      const ditherCanvas = documentObj.createElement('canvas');
+      ditherCanvas.width = Math.max(1, Math.ceil(viewport.width / pixelSize));
+      ditherCanvas.height = Math.max(1, Math.ceil(viewport.height / pixelSize));
+      const ditherContext = ditherCanvas.getContext('2d');
+      if (!ditherContext) {
+        return;
+      }
+      const imageData = ditherContext.createImageData(ditherCanvas.width, ditherCanvas.height);
+      for (let y = 0; y < ditherCanvas.height; y += 1) {
+        const matrixY = Math.floor(y / patternScale) % BAYER_4X4.length;
+        for (let x = 0; x < ditherCanvas.width; x += 1) {
+          const matrixX = Math.floor(x / patternScale) % BAYER_4X4[matrixY].length;
+          const threshold = (BAYER_4X4[matrixY][matrixX] + 0.5) / 16;
+          const viewportX = Math.min(viewport.width, (x + 0.5) * pixelSize);
+          const viewportY = Math.min(viewport.height, (y + 0.5) * pixelSize);
+          const color = boostSampleColor(
+            sampleColor(sampler, metrics, viewportX, viewportY),
+            0.06 + (strengthRatio * 0.18)
+          );
+          const dithered = quantizeDitherColor(color, threshold, colorLevels, colorMix);
+          const index = ((y * ditherCanvas.width) + x) * 4;
+          imageData.data[index] = dithered.red;
+          imageData.data[index + 1] = dithered.green;
+          imageData.data[index + 2] = dithered.blue;
+          imageData.data[index + 3] = 255;
+        }
+      }
+      ditherContext.putImageData(imageData, 0, 0);
+      const previousSmoothing = targetContext.imageSmoothingEnabled;
+      targetContext.imageSmoothingEnabled = false;
+      targetContext.drawImage(
+        ditherCanvas,
+        0,
+        0,
+        ditherCanvas.width,
+        ditherCanvas.height,
+        0,
+        0,
+        viewport.width,
+        viewport.height
+      );
+      targetContext.imageSmoothingEnabled = previousSmoothing;
+    }
+
+    function drawCachedLayeredEffect(type, viewport, sampler, inkTone, strength, size, spacing, drawLayer) {
+      const cacheKey = getEffectBaseKey(type, viewport, sampler, inkTone, strength, size, spacing);
       if (effectBaseCacheKey !== cacheKey) {
         context.clearRect(0, 0, viewport.width, viewport.height);
-        drawLayer(context, viewport, sampler, strength, size, spacing);
+        drawLayer(context, viewport, sampler, inkTone, strength, size, spacing);
         effectBaseCacheKey = cacheKey;
       }
       setCanvasVisuals(type, 1, 'normal');
     }
 
-    function drawHalftone(viewport, sampler, strength, size, spacing) {
+    function drawHalftone(viewport, sampler, inkTone, strength, size, spacing) {
       drawCachedLayeredEffect(
         'halftone',
         viewport,
         sampler,
+        inkTone,
         strength,
         size,
         spacing,
@@ -872,15 +1001,29 @@
       );
     }
 
-    function drawAscii(viewport, sampler, strength, size, spacing) {
+    function drawAscii(viewport, sampler, inkTone, strength, size, spacing) {
       drawCachedLayeredEffect(
         'ascii',
         viewport,
         sampler,
+        inkTone,
         strength,
         size,
         spacing,
         drawAsciiLayer
+      );
+    }
+
+    function drawDither(viewport, sampler, inkTone, strength, size, spacing) {
+      drawCachedLayeredEffect(
+        'dither',
+        viewport,
+        sampler,
+        inkTone,
+        strength,
+        size,
+        spacing,
+        drawDitherLayer
       );
     }
 
@@ -897,7 +1040,9 @@
         return;
       }
       const crossfadeResize = shouldCrossfadeResize &&
-        (normalized.type === 'halftone' || normalized.type === 'ascii');
+        (normalized.type === 'halftone' ||
+          normalized.type === 'dither' ||
+          normalized.type === 'ascii');
       shouldCrossfadeResize = false;
       if (crossfadeResize) {
         prepareResizeCrossfade();
@@ -936,12 +1081,38 @@
           return;
         }
         if (normalized.type === 'halftone') {
-          drawHalftone(nextViewport, sampler, normalized.strength, normalized.size, normalized.spacing);
+          drawHalftone(
+            nextViewport,
+            sampler,
+            normalized.inkTone,
+            normalized.strength,
+            normalized.size,
+            normalized.spacing
+          );
+          completeRender(revision);
+          return;
+        }
+        if (normalized.type === 'dither') {
+          drawDither(
+            nextViewport,
+            sampler,
+            normalized.inkTone,
+            normalized.strength,
+            normalized.size,
+            normalized.spacing
+          );
           completeRender(revision);
           return;
         }
         if (normalized.type === 'ascii') {
-          drawAscii(nextViewport, sampler, normalized.strength, normalized.size, normalized.spacing);
+          drawAscii(
+            nextViewport,
+            sampler,
+            normalized.inkTone,
+            normalized.strength,
+            normalized.size,
+            normalized.spacing
+          );
         }
         completeRender(revision);
       }).catch(() => {
@@ -989,13 +1160,14 @@
       prefs = normalizePrefs(nextPrefs);
       const previousType = previousPrefs.type;
       const visualPrefsChanged = previousType !== prefs.type ||
+        previousPrefs.inkTone !== prefs.inkTone ||
         previousPrefs.strength !== prefs.strength ||
         previousPrefs.size !== prefs.size ||
         previousPrefs.spacing !== prefs.spacing;
       if (!visualPrefsChanged) {
         return;
       }
-      if (prefs.type !== 'ascii' && prefs.type !== 'halftone') {
+      if (prefs.type !== 'ascii' && prefs.type !== 'dither' && prefs.type !== 'halftone') {
         clearEffectBaseCache();
       }
       if (canvas &&
@@ -1037,7 +1209,9 @@
           canvas &&
           context &&
           canAnimateTransition() &&
-          (normalized.type === 'halftone' || normalized.type === 'ascii') &&
+          (normalized.type === 'halftone' ||
+            normalized.type === 'dither' ||
+            normalized.type === 'ascii') &&
           getCanvasOpacity() > 0.01
         );
         scheduleRender(RESIZE_RENDER_SETTLE_MS);
@@ -1055,9 +1229,13 @@
   root.LumnoNewtabWallpaperEffects = {
     analyzeImageData,
     DEFAULT_PREFS,
+    EFFECT_INK_TONES,
     EFFECT_TYPES,
     createWallpaperEffects,
     getEffectCanvasScale,
-    normalizePrefs
+    liftSampleColor,
+    normalizePrefs,
+    quantizeDitherColor,
+    resolveUseDarkInk
   };
 })(globalThis);

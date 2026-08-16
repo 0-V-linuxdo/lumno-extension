@@ -554,6 +554,17 @@ assert.ok(
   'cross-page and cross-level drops should animate the dragged preview and displaced destination items'
 );
 assert.ok(
+  newtabJs.includes('NEWTAB_BOOKMARK_DRAG.getLayoutShiftDelta(before, after, {') &&
+    newtabJs.includes('horizontalOnly: isBookmarkTopbarMode()') &&
+    bookmarkDragJs.includes("dy: config.horizontalOnly === true ? 0 : beforeTop - afterTop"),
+  'topbar drop animations should preserve the menu row and only settle horizontally'
+);
+assert.ok(
+  newtabJs.includes('markerVerticalInsetPx: isBookmarkTopbarMode() ? 3 : 8') &&
+    bookmarkDragJs.includes('anchorItem.rect.height - (markerVerticalInsetPx * 2)'),
+  'topbar insertion markers should extend closer to the menu row edges'
+);
+assert.ok(
   cascadeJs.includes("kind: 'insertion'") &&
     cascadeJs.includes("data-bookmark-insert-position"),
   'cascade menu levels should expose before and after insertion targets'

@@ -4362,14 +4362,24 @@
         flex-direction: column;
         gap: 8px;
       }
+      .x-nt-segmented-tabs {
+        --x-nt-segmented-tabs-radius: 10px;
+        --x-nt-segmented-tabs-border-width: 1px;
+        --x-nt-segmented-tabs-inset: 2px;
+        --x-nt-segmented-tabs-inner-radius: calc(
+          var(--x-nt-segmented-tabs-radius) - var(--x-nt-segmented-tabs-border-width) -
+            var(--x-nt-segmented-tabs-inset)
+        );
+      }
       .x-nt-wallpaper-tabs {
         min-width: 0;
         display: flex;
         align-items: center;
         gap: var(--x-nt-panel-tab-gap);
-        padding: 2px;
-        border-radius: 10px;
-        border: 1px solid var(--x-nt-panel-border, rgba(0, 0, 0, 0.08));
+        padding: var(--x-nt-segmented-tabs-inset);
+        border-radius: var(--x-nt-segmented-tabs-radius);
+        border: var(--x-nt-segmented-tabs-border-width) solid
+          var(--x-nt-panel-border, rgba(0, 0, 0, 0.08));
         background: rgba(17, 24, 39, 0.04);
         min-height: 30px;
         position: relative;
@@ -4377,12 +4387,13 @@
       }
       .x-nt-wallpaper-tabs-indicator {
         position: absolute;
-        top: 2px;
-        left: 2px;
+        top: var(--x-nt-segmented-tabs-inset);
+        left: var(--x-nt-segmented-tabs-inset);
         z-index: 0;
         width: 0;
-        height: calc(100% - 4px);
-        border-radius: 8px;
+        height: calc(
+          100% - var(--x-nt-segmented-tabs-inset) - var(--x-nt-segmented-tabs-inset)
+        );
         background: rgba(255, 255, 255, 0.82);
         box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
         transition: transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
@@ -4395,7 +4406,6 @@
         min-width: 0;
         height: 28px;
         padding: 0 10px;
-        border-radius: 10px;
         color: var(--x-nt-subtext, #6b7280);
         display: inline-flex;
         align-items: center;
@@ -4691,9 +4701,10 @@
         align-items: center;
         gap: var(--x-nt-panel-tab-gap);
         margin-top: var(--x-nt-effect-control-gap);
-        padding: 2px;
-        border-radius: 10px;
-        border: 1px solid var(--x-nt-panel-border, rgba(0, 0, 0, 0.08));
+        padding: var(--x-nt-segmented-tabs-inset);
+        border-radius: var(--x-nt-segmented-tabs-radius);
+        border: var(--x-nt-segmented-tabs-border-width) solid
+          var(--x-nt-panel-border, rgba(0, 0, 0, 0.08));
         background: rgba(17, 24, 39, 0.04);
         min-height: 30px;
         position: relative;
@@ -4701,12 +4712,13 @@
       }
       .x-nt-effect-indicator {
         position: absolute;
-        top: 2px;
-        left: 2px;
+        top: var(--x-nt-segmented-tabs-inset);
+        left: var(--x-nt-segmented-tabs-inset);
         z-index: 0;
         width: 0;
-        height: calc(100% - 4px);
-        border-radius: 8px;
+        height: calc(
+          100% - var(--x-nt-segmented-tabs-inset) - var(--x-nt-segmented-tabs-inset)
+        );
         background: rgba(255, 255, 255, 0.82);
         box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
         transition: transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
@@ -4719,7 +4731,6 @@
         min-width: 0;
         height: 28px;
         padding: 0 10px;
-        border-radius: 10px;
         color: var(--x-nt-subtext, #6b7280);
         display: inline-flex;
         align-items: center;
@@ -4755,6 +4766,10 @@
         color: var(--x-nt-text, #111827);
         font-weight: 500;
       }
+      .x-nt-segmented-tabs-indicator,
+      .x-nt-segmented-tab {
+        border-radius: var(--x-nt-segmented-tabs-inner-radius);
+      }
       .x-nt-effect-slider-control {
         min-width: 0;
         display: flex;
@@ -4767,6 +4782,12 @@
         transition: opacity 160ms ease,
           transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
         will-change: opacity, transform;
+      }
+      .x-nt-effect-ink-tone-control {
+        margin-top: var(--x-nt-effect-control-gap);
+      }
+      .x-nt-effect-ink-tone-options {
+        margin-top: 0;
       }
       .x-nt-effect-slider-control[data-visible="false"] {
         display: none;

@@ -836,6 +836,36 @@ function bindTextTooltip(
   });
 }
 
+function getSuggestionUrlLineText(
+  options: NormalizedOptions,
+  suggestion: Suggestion
+): string {
+  const rawUrl = String(suggestion.url || '').trim();
+  if (!rawUrl) {
+    return '';
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return options.getUrlDisplay(rawUrl);
+    }
+    const hostname = parsed.hostname.replace(/^www\./i, '');
+    const host = parsed.port ? `${hostname}:${parsed.port}` : hostname;
+    let pathname = parsed.pathname || '/';
+    try {
+      pathname = decodeURI(pathname);
+    } catch {
+      // Keep encoded paths when they cannot be decoded safely.
+    }
+    const displayPath = pathname === '/'
+      ? ''
+      : (pathname.replace(/\/+$/, '') || '');
+    return `${host}${displayPath}`;
+  } catch {
+    return options.getUrlDisplay(rawUrl);
+  }
+}
+
 function isLocalUrlSuggestion(
   options: NormalizedOptions,
   suggestion: Suggestion
@@ -1937,11 +1967,6 @@ function SearchSuggestionRowComponent({
   );
   const command = Boolean(suggestion.commandText);
   const shouldSwitchMatchedTab =
-    isPrimary &&
-    (
-      primaryHighlightReason === 'openTab' ||
-      primaryHighlightReason === 'currentOpenTab'
-    ) &&
     options.shouldSwitchMatchedTabSuggestion(
       suggestion,
       index
@@ -2222,6 +2247,7 @@ function SearchSuggestionRowComponent({
   const showUrl =
     (suggestion.type === 'history' && !suggestion.isTopSite) ||
     isTopSite(suggestion);
+  const urlLineText = getSuggestionUrlLineText(options, suggestion);
 
   return (
     <div
@@ -2326,9 +2352,7 @@ function SearchSuggestionRowComponent({
             >
               <HighlightedText
                 options={options}
-                text={simpleMode
-                  ? options.getUrlDisplay(String(suggestion.url || ''))
-                  : String(suggestion.url || '')}
+                text={urlLineText}
                 queryStore={queryStore}
                 simpleMode={simpleMode}
               />

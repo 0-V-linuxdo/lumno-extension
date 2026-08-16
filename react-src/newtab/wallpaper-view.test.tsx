@@ -32,6 +32,10 @@ describe('New Tab React wallpaper view', () => {
             { type: 'none', fallback: 'Off' },
             { type: 'grain', fallback: 'Grain' }
           ],
+          effectInkTones: [
+            { tone: 'dark', fallback: 'Shadows' },
+            { tone: 'light', fallback: 'Highlights' }
+          ],
           favicons: [{ id: 'default', previewUrl: '/favicon.png' }],
           icons: {},
           moreSettingsUrl: '/options#appearance',
@@ -61,8 +65,24 @@ describe('New Tab React wallpaper view', () => {
       controller.control.querySelector('[data-wallpaper-id="coast"]')
     ).not.toBeNull();
     expect(
-      controller.control.querySelectorAll('.x-nt-effect-option')
+      controller.control.querySelectorAll('[data-wallpaper-effect-type]')
     ).toHaveLength(2);
+    expect(
+      controller.control.querySelectorAll('[data-wallpaper-effect-ink-tone]')
+    ).toHaveLength(2);
+    expect(controller.getRefs().effectInkToneControl).toBeTruthy();
+    const segmentedGroups = [
+      controller.getRefs().effectOptions,
+      controller.getRefs().effectInkToneOptions
+    ];
+    segmentedGroups.forEach((group) => {
+      expect(group?.classList.contains('x-nt-segmented-tabs')).toBe(true);
+      expect(group?.querySelector('.x-nt-segmented-tabs-indicator')).not.toBeNull();
+      group?.querySelectorAll('button').forEach((button) => {
+        expect(button.classList.contains('x-nt-segmented-tab')).toBe(true);
+      });
+    });
+    expect(controller.getRefs().effectInkToneIndicator).toBeTruthy();
     const topContentGroup = controller.getRefs().topContentTabs;
     expect(topContentGroup?.getAttribute('role')).toBe('group');
     const topContentButtons = topContentGroup?.querySelectorAll('button');

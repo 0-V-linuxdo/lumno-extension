@@ -883,11 +883,26 @@
   "newtab_wallpaper_effect_halftone": {
     "message": "Halftone"
   },
+  "newtab_wallpaper_effect_dither": {
+    "message": "Dither"
+  },
   "newtab_wallpaper_effect_ascii": {
     "message": "ASCII"
   },
   "newtab_wallpaper_effect_select_label": {
     "message": "Use {effect} wallpaper filter"
+  },
+  "newtab_wallpaper_effect_ink_title": {
+    "message": "Sample tones"
+  },
+  "newtab_wallpaper_effect_ink_dark": {
+    "message": "Shadows"
+  },
+  "newtab_wallpaper_effect_ink_light": {
+    "message": "Highlights"
+  },
+  "newtab_wallpaper_effect_ink_select_label": {
+    "message": "Sample {tone} for dots or characters"
   },
   "newtab_wallpaper_save_error": {
     "message": "Failed to save wallpaper"

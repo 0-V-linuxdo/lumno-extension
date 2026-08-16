@@ -46,7 +46,7 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 - 智能搜索结果：整合书签、历史记录、常用网站、浏览器建议和当前已打开标签页，支持结果来源筛选、首位结果优先级、访问选择权重、拼音匹配和黑名单过滤。
 - 站内搜索 / AI 搜索：内置 YouTube、Bilibili、GitHub、Google、Bing、Baidu、Zhihu、Douban、Juejin、Taobao、X、Reddit、Wikipedia 等快捷前缀；同时支持 ChatGPT、Gemini、豆包、千问、元宝、MiniMax、DeepSeek、Kimi 等 AI 入口。你也可以添加自定义模板和别名。
 - 新标签页：提供搜索框、最近/最常访问站点卡片、书签网格/文件夹级联菜单、书签分页、最近站点固定与隐藏、反馈入口和可调内容宽度。
-- 外观与壁纸：支持系统/浅色/深色主题，全局或仅新标签页生效；新标签页内置多套壁纸，支持本地壁纸、遮罩透明度、颗粒/半调/ASCII 滤镜、搜索框宽度和 Lumno 字标开关。
+- 外观与壁纸：支持系统/浅色/深色主题，全局或仅新标签页生效；新标签页内置多套壁纸，支持本地壁纸、遮罩透明度、颗粒/半调/抖色/ASCII 滤镜、搜索框宽度和 Lumno 字标开关。
 - 网页剪裁 PiP：在支持 Document Picture-in-Picture 的 HTTPS 顶层页面中选择页面局部内容，放入悬浮窗口用于参考和对照。
 - 视频自动画中画：在 YouTube、Bilibili、Youku、腾讯视频、抖音、TikTok、Netflix、Vimeo、Prime Video、Disney+、Twitch 等站点切换标签页时，尝试自动进入视频 PiP。
 - 标签页与浏览器增强：支持重启后恢复置顶网页标签页、受限页面回退到新标签页、复制当前页面链接、打开扩展快捷键页和扩展详情页。

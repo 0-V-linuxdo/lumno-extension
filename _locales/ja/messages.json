@@ -883,11 +883,26 @@
   "newtab_wallpaper_effect_halftone": {
     "message": "網点"
   },
+  "newtab_wallpaper_effect_dither": {
+    "message": "ディザ"
+  },
   "newtab_wallpaper_effect_ascii": {
     "message": "ASCII"
   },
   "newtab_wallpaper_effect_select_label": {
     "message": "{effect} を使用"
+  },
+  "newtab_wallpaper_effect_ink_title": {
+    "message": "サンプル領域"
+  },
+  "newtab_wallpaper_effect_ink_dark": {
+    "message": "暗部"
+  },
+  "newtab_wallpaper_effect_ink_light": {
+    "message": "明部"
+  },
+  "newtab_wallpaper_effect_ink_select_label": {
+    "message": "{tone}からドット・文字をサンプリング"
   },
   "newtab_wallpaper_save_error": {
     "message": "壁紙を保存できませんでした"

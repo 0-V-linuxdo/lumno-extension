@@ -144,6 +144,22 @@
         : null;
   }
 
+  function getLayoutShiftDelta(beforeRect, afterRect, options) {
+    const beforeLeft = Number(beforeRect && beforeRect.left);
+    const beforeTop = Number(beforeRect && beforeRect.top);
+    const afterLeft = Number(afterRect && afterRect.left);
+    const afterTop = Number(afterRect && afterRect.top);
+    if (!Number.isFinite(beforeLeft) || !Number.isFinite(beforeTop) ||
+        !Number.isFinite(afterLeft) || !Number.isFinite(afterTop)) {
+      return null;
+    }
+    const config = options && typeof options === 'object' ? options : {};
+    return {
+      dx: beforeLeft - afterLeft,
+      dy: config.horizontalOnly === true ? 0 : beforeTop - afterTop
+    };
+  }
+
   function resetPreviewFolderVisual(state, preview, options) {
     if (!state || !state.isFolder || !preview ||
         typeof preview.querySelector !== 'function') {
@@ -375,6 +391,11 @@
     const hitZonePx = Number.isFinite(Number(config.hitZonePx))
       ? Math.max(0, Number(config.hitZonePx))
       : DEFAULT_GRID_INSERTION_HIT_ZONE_PX;
+    const markerVerticalInsetPx = Number.isFinite(
+      Number(config.markerVerticalInsetPx)
+    )
+      ? Math.max(0, Number(config.markerVerticalInsetPx))
+      : 8;
     const horizontalHitPadding = (columnGap / 2) + hitZonePx;
     if (pointerX < gridRect.left - horizontalHitPadding ||
         pointerX > gridRect.right + horizontalHitPadding ||
@@ -391,8 +412,11 @@
         markerElement: gridElement,
         markerPosition: 'before',
         markerOffsetPx: 4,
-        markerTopPx: 8,
-        markerHeightPx: Math.max(2, gridRect.height - 16),
+        markerTopPx: markerVerticalInsetPx,
+        markerHeightPx: Math.max(
+          2,
+          gridRect.height - (markerVerticalInsetPx * 2)
+        ),
         surface: 'grid'
       };
     }
@@ -485,8 +509,11 @@
       markerElement: gridElement,
       markerPosition,
       markerOffsetPx: nearestBoundary.x - gridRect.left,
-      markerTopPx: anchorItem.rect.top - gridRect.top + 8,
-      markerHeightPx: Math.max(2, anchorItem.rect.height - 16),
+      markerTopPx: anchorItem.rect.top - gridRect.top + markerVerticalInsetPx,
+      markerHeightPx: Math.max(
+        2,
+        anchorItem.rect.height - (markerVerticalInsetPx * 2)
+      ),
       isPageStartBoundary,
       preservePageSlot: isCrossPageDrag,
       surface: 'grid'
@@ -502,6 +529,7 @@
     getFolderSwitchTarget,
     getFloatingPreviewPosition,
     getGridInsertionTarget,
+    getLayoutShiftDelta,
     getVisualElement,
     isPointInsideElement,
     removePreview,

@@ -70,6 +70,12 @@ function createChromeStub(options) {
       windowId: 1,
       title: 'Digital Experience Testing Cloud | TestMu AI (Formerly LambdaTest) Enterprise Cloud',
       url: 'https://app.testmu.com/enterprise-cloud'
+    },
+    {
+      id: 26,
+      windowId: 1,
+      title: '小红书 - 你的生活兴趣社区',
+      url: 'https://www.xiaohongshu.com/explore/6a4dcb39000000001'
     }
   ];
   const historyItems = [
@@ -84,6 +90,34 @@ function createChromeStub(options) {
       title: 'GitHub Lumno Repo',
       url: 'https://github.com/kubai087/lumno-extension',
       visitCount: 7,
+      typedCount: 1,
+      lastVisitTime: now - 2000
+    },
+    {
+      title: '小红书',
+      url: 'https://mall.xiaohongshu.com/finance/cashier/web',
+      visitCount: 80,
+      typedCount: 4,
+      lastVisitTime: now - 500
+    },
+    {
+      title: '小红书 - 你的生活兴趣社区',
+      url: 'https://www.xiaohongshu.com/explore?channel_id=homefeed',
+      visitCount: 40,
+      typedCount: 2,
+      lastVisitTime: now - 1000
+    },
+    {
+      title: '小红书创作服务平台',
+      url: 'https://creator.xiaohongshu.com/',
+      visitCount: 20,
+      typedCount: 1,
+      lastVisitTime: now - 1500
+    },
+    {
+      title: '小红书 - 你的生活兴趣社区',
+      url: 'https://www.xiaohongshu.com/explore/6a4dcb39000000001',
+      visitCount: 30,
       typedCount: 1,
       lastVisitTime: now - 2000
     },
@@ -521,6 +555,22 @@ async function run() {
           ]
         };
       }
+      if (
+        parsedUrl.hostname === 'suggestqueries.google.com' &&
+        parsedUrl.searchParams.get('q') === '小红书'
+      ) {
+        return {
+          ok: true,
+          json: async () => [
+            '小红书',
+            [
+              '小红书薯币购买',
+              '小红书薯条购买',
+              '小红书网页版'
+            ]
+          ]
+        };
+      }
       throw new Error('network disabled in background search test');
     }
   });
@@ -576,6 +626,32 @@ async function run() {
   assert.ok(
     suggestions.some((item) => item && (item.type === 'bookmark' || item.type === 'history' || item.type === 'topSite')),
     'background search suggestions should include at least one enabled local source type'
+  );
+
+  const xiaohongshuLocalSuggestions = await context.__testGetSearchSuggestions('小红书');
+  assert.strictEqual(
+    xiaohongshuLocalSuggestions[0] && xiaohongshuLocalSuggestions[0].url,
+    'https://www.xiaohongshu.com/',
+    'a configured brand alias should produce a stable official representative ahead of deep history pages'
+  );
+  assert.ok(
+    xiaohongshuLocalSuggestions.filter((item) => {
+      try {
+        return new URL(item.url).hostname.endsWith('xiaohongshu.com');
+      } catch (error) {
+        return false;
+      }
+    }).length <= 3,
+    'one brand family should not occupy more than three local result slots for a pure brand query'
+  );
+  assert.notStrictEqual(
+    xiaohongshuLocalSuggestions[0] && xiaohongshuLocalSuggestions[0].url,
+    'https://mall.xiaohongshu.com/finance/cashier/web',
+    'a frequently visited cashier page should not take over the pure brand query'
+  );
+  assert.ok(
+    xiaohongshuLocalSuggestions.some((item) => item && item._xMatchedTabId === 26),
+    'brand-family composition should retain one already-open matching tab'
   );
 
   const multiTermSuggestions = await context.__testGetSearchSuggestions('codex 最爱', {
@@ -645,6 +721,38 @@ async function run() {
   assert.ok(
     firstMixedLocalSuggestionIndex >= 0 && firstMixedEngineSuggestionIndex > firstMixedLocalSuggestionIndex,
     'the remote merge should keep local results ahead of a supplemental search-engine suggestion'
+  );
+  const lastMixedLocalSuggestionIndex = mergedMixedSuggestions.reduce((lastIndex, item, index) => (
+    item && item.type !== 'googleSuggest' ? index : lastIndex
+  ), -1);
+  assert.ok(
+    firstMixedEngineSuggestionIndex > lastMixedLocalSuggestionIndex,
+    'the remote merge should keep webpage results contiguous before search-engine suggestions'
+  );
+  const mergedXiaohongshuSuggestions = await context.__testGetSearchEngineSuggestions(
+    '小红书',
+    xiaohongshuLocalSuggestions,
+    { context: 'newtab' }
+  );
+  assert.strictEqual(
+    mergedXiaohongshuSuggestions[1] && mergedXiaohongshuSuggestions[1]._xMatchedTabId,
+    26,
+    'brand result composition should keep an already-open matching tab near the top'
+  );
+  assert.strictEqual(
+    mergedXiaohongshuSuggestions[0] && mergedXiaohongshuSuggestions[0].url,
+    'https://www.xiaohongshu.com/',
+    'reserving a search-suggestion slot should keep the official brand representative first'
+  );
+  const firstXiaohongshuEngineIndex = mergedXiaohongshuSuggestions.findIndex((item) => (
+    item && item.type === 'googleSuggest'
+  ));
+  const lastXiaohongshuLocalIndex = mergedXiaohongshuSuggestions.reduce((lastIndex, item, index) => (
+    item && item.type !== 'googleSuggest' ? index : lastIndex
+  ), -1);
+  assert.ok(
+    firstXiaohongshuEngineIndex > lastXiaohongshuLocalIndex,
+    'brand result composition should place all webpages before the contiguous search-suggestion block'
   );
   const localKeywordSuggestions = await context.__testGetSearchSuggestions('什么东西');
   assert.strictEqual(

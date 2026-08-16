@@ -15,6 +15,38 @@ const effects = sandbox.LumnoNewtabWallpaperEffects;
 assert.ok(effects, 'wallpaper effects module should initialize');
 assert.strictEqual(typeof effects.analyzeImageData, 'function');
 assert.strictEqual(typeof effects.getEffectCanvasScale, 'function');
+assert.ok(effects.EFFECT_TYPES.includes('dither'), 'Dither should be a supported wallpaper effect');
+assert.strictEqual(typeof effects.quantizeDitherColor, 'function');
+assert.strictEqual(typeof effects.liftSampleColor, 'function');
+
+const warmSample = effects.liftSampleColor(
+  { red: 180, green: 90, blue: 30 },
+  0.4,
+  0.2
+);
+assert.ok(
+  warmSample.red > 180 && warmSample.red > warmSample.green && warmSample.green > warmSample.blue,
+  'sampled warm hues should stay warm while becoming brighter'
+);
+const coolSample = effects.liftSampleColor(
+  { red: 40, green: 90, blue: 160 },
+  0.4,
+  0.2
+);
+assert.ok(
+  coolSample.blue > 160 && coolSample.blue > coolSample.green && coolSample.green > coolSample.red,
+  'sampled cool hues should stay cool while becoming brighter'
+);
+const neutralSample = effects.liftSampleColor(
+  { red: 80, green: 80, blue: 80 },
+  0.4,
+  0.2
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(neutralSample)),
+  { red: 150, green: 150, blue: 150 },
+  'neutral wallpaper samples should brighten without gaining a color cast'
+);
 
 const darkProfile = effects.analyzeImageData([
   10, 20, 30, 255,
@@ -81,6 +113,7 @@ assert.strictEqual(
 
 const normalized = effects.normalizePrefs({
   type: 'ascii',
+  inkTone: 'light',
   strength: 140,
   size: -4,
   spacing: 60,
@@ -90,12 +123,53 @@ const normalized = effects.normalizePrefs({
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(normalized)),
   {
-    version: 3,
+    version: 4,
     type: 'ascii',
+    inkTone: 'light',
     strength: 100,
     size: 0,
     spacing: 60
   }
+);
+assert.strictEqual(effects.resolveUseDarkInk('dark', { useDarkInk: false }), true);
+assert.strictEqual(effects.resolveUseDarkInk('light', { useDarkInk: true }), false);
+assert.strictEqual(
+  effects.resolveUseDarkInk('auto', { useDarkInk: true }),
+  true,
+  'legacy automatic tone should continue following wallpaper luminance'
+);
+assert.strictEqual(
+  effects.normalizePrefs({ inkTone: 'unknown' }).inkTone,
+  'auto',
+  'unknown stored ink tones should fall back to the legacy automatic behavior'
+);
+
+const brightDitherSample = effects.quantizeDitherColor(
+  { red: 100, green: 150, blue: 200 },
+  0.1,
+  4,
+  1
+);
+const darkDitherSample = effects.quantizeDitherColor(
+  { red: 100, green: 150, blue: 200 },
+  0.9,
+  4,
+  1
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(brightDitherSample)),
+  { red: 170, green: 170, blue: 255 },
+  'low Bayer thresholds should promote channels to the next palette level'
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(darkDitherSample)),
+  { red: 85, green: 85, blue: 170 },
+  'high Bayer thresholds should retain the lower palette level'
+);
+assert.strictEqual(
+  effects.normalizePrefs({ type: 'dither' }).type,
+  'dither',
+  'stored Dither preferences should survive normalization'
 );
 
 const newtabHtml = fs.readFileSync('src/newtab/newtab.html', 'utf8');
@@ -145,8 +219,8 @@ assert.deepStrictEqual(
   JSON.parse(JSON.stringify(wallpaper.normalizeWallpaperEffectStoragePrefs(legacyEffectPrefs))),
   {
     version: 4,
-    light: legacyEffectPrefs,
-    dark: legacyEffectPrefs
+    light: { version: 4, type: 'grain', inkTone: 'auto', strength: 64, size: 35, spacing: 72 },
+    dark: { version: 4, type: 'grain', inkTone: 'auto', strength: 64, size: 35, spacing: 72 }
   },
   'legacy shared wallpaper effects should migrate to identical light and dark preferences'
 );
@@ -158,8 +232,8 @@ assert.deepStrictEqual(
   }))),
   {
     version: 4,
-    light: { version: 3, type: 'halftone', strength: 31, size: 42, spacing: 53 },
-    dark: { version: 3, type: 'ascii', strength: 82, size: 73, spacing: 64 }
+    light: { version: 4, type: 'halftone', inkTone: 'auto', strength: 31, size: 42, spacing: 53 },
+    dark: { version: 4, type: 'ascii', inkTone: 'auto', strength: 82, size: 73, spacing: 64 }
   },
   'mode-aware wallpaper effects should preserve independent light and dark values'
 );
@@ -167,6 +241,36 @@ assert.match(
   effectsSource,
   /function drawCachedLayeredEffect\([\s\S]*?effectBaseCacheKey !== cacheKey[\s\S]*?drawLayer\(context,[\s\S]*?effectBaseCacheKey = cacheKey;/,
   'layered wallpaper filters should cache their high-resolution static canvas'
+);
+assert.match(
+  effectsSource,
+  /function drawDitherLayer\([\s\S]*?BAYER_4X4[\s\S]*?quantizeDitherColor[\s\S]*?putImageData/,
+  'Dither should use a deterministic Bayer matrix and palette quantization'
+);
+assert.match(
+  effectsSource,
+  /function drawHalftoneLayer\([\s\S]*?liftSampleColor\(/,
+  'halftone dots should retain locally sampled wallpaper hues'
+);
+assert.match(
+  effectsSource,
+  /function drawAsciiLayer\([\s\S]*?liftSampleColor\(/,
+  'ASCII glyphs should retain locally sampled wallpaper hues'
+);
+assert.doesNotMatch(
+  effectsSource,
+  /shiftSampleColor|getCurvedEffectColor/,
+  'halftone and ASCII colors should not be pushed toward monochrome ink'
+);
+assert.match(
+  effectsSource,
+  /shouldCrossfadeResize\s*=\s*Boolean\([\s\S]*?normalized\.type === 'dither'/,
+  'Dither should crossfade its cached canvas after viewport resizing'
+);
+assert.match(
+  effectsSource,
+  /previousPrefs\.inkTone !== prefs\.inkTone/,
+  'changing dot or ASCII color should invalidate and rerender the cached effect layer'
 );
 assert.match(
   effectsSource,

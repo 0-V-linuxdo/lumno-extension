@@ -274,7 +274,9 @@
       "key": "xhs",
       "aliases": ["rednote", "小红书"],
       "name": "Xiaohongshu",
-      "template": "https://www.xiaohongshu.com/search_result?keyword={query}"
+      "template": "https://www.xiaohongshu.com/search_result?keyword={query}",
+      "directNavigationUrl": "https://www.xiaohongshu.com/",
+      "directNavigationTitle": "小红书"
     },
     {
       "key": "dy",

@@ -82,7 +82,11 @@ assert.match(
 assert.match(suggestionsSource, /data-simple-mode=\{simpleMode \? 'true' : 'false'\}/);
 assert.match(suggestionsSource, /if \(simpleMode\) \{\s*return options\.sanitizeDisplayText\(text\);/);
 assert.match(suggestionsSource, /showSourceTags = !item\._xSimpleMode && !item\._xHasSwitchAction/);
-assert.match(suggestionsSource, /simpleMode\s*\? options\.getUrlDisplay/);
+assert.match(
+  suggestionsSource,
+  /function getSuggestionUrlLineText[\s\S]*?parsed\.hostname[\s\S]*?parsed\.pathname[\s\S]*?text=\{urlLineText\}/,
+  'all search modes should share the compact host-and-path URL presentation'
+);
 assert.match(newtabHtml, /data-simple-mode="true"[^}]*x-nt-suggestion-url-line[\s\S]*?max-width: none;[\s\S]*?flex: 1 4 auto/);
 assert.match(overlayCss, /data-simple-mode="true"[^}]*x-ov-suggestion-url-line[\s\S]*?max-width: none;[\s\S]*?flex: 1 4 auto/);
 assert.match(

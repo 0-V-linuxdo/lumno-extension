@@ -5,6 +5,7 @@ const vm = require('vm');
 const WALLPAPER_STORAGE_KEY = '_x_extension_newtab_wallpaper_2026_unique_';
 const LOCAL_WALLPAPER_STORAGE_KEY = '_x_extension_newtab_local_wallpaper_2026_unique_';
 const WALLPAPER_OVERLAY_STORAGE_KEY = '_x_extension_newtab_wallpaper_overlay_2026_unique_';
+const WALLPAPER_EFFECT_STORAGE_KEY = '_x_extension_newtab_wallpaper_effect_2026_unique_';
 const NEWTAB_FAVICON_STORAGE_KEY = '_x_extension_newtab_favicon_2026_unique_';
 const NEWTAB_FAVICON_PRELOAD_STORAGE_KEY = '_x_extension_newtab_favicon_preload_2026_unique_';
 const WALLPAPER_PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
@@ -417,22 +418,28 @@ function createFakeWallpaperViewController(config) {
   const modeTabs = add(
     body,
     'div',
-    'x-nt-wallpaper-tabs x-nt-wallpaper-mode-tabs',
+    'x-nt-segmented-tabs x-nt-wallpaper-tabs x-nt-wallpaper-mode-tabs',
     { 'data-visible': 'false' },
     'modeTabs'
   );
-  add(modeTabs, 'span', 'x-nt-wallpaper-tabs-indicator', {}, 'modeTabsIndicator');
+  add(
+    modeTabs,
+    'span',
+    'x-nt-segmented-tabs-indicator x-nt-wallpaper-tabs-indicator',
+    {},
+    'modeTabsIndicator'
+  );
   add(
     modeTabs,
     'button',
-    'x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
+    'x-nt-segmented-tab x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
     { 'data-wallpaper-mode': 'light', 'data-active': 'false' },
     'lightModeTab'
   );
   add(
     modeTabs,
     'button',
-    'x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
+    'x-nt-segmented-tab x-nt-wallpaper-tab x-nt-wallpaper-mode-tab',
     { 'data-wallpaper-mode': 'dark', 'data-active': 'false' },
     'darkModeTab'
   );
@@ -443,19 +450,25 @@ function createFakeWallpaperViewController(config) {
     { 'data-visible': 'false' },
     'modeHint'
   );
-  const tabs = add(body, 'div', 'x-nt-wallpaper-tabs', {}, 'tabs');
-  add(tabs, 'span', 'x-nt-wallpaper-tabs-indicator', {}, 'tabsIndicator');
+  const tabs = add(body, 'div', 'x-nt-segmented-tabs x-nt-wallpaper-tabs', {}, 'tabs');
+  add(
+    tabs,
+    'span',
+    'x-nt-segmented-tabs-indicator x-nt-wallpaper-tabs-indicator',
+    {},
+    'tabsIndicator'
+  );
   add(
     tabs,
     'button',
-    'x-nt-wallpaper-tab',
+    'x-nt-segmented-tab x-nt-wallpaper-tab',
     { 'data-wallpaper-tab': 'built-in', 'data-active': 'false' },
     'builtInTab'
   );
   add(
     tabs,
     'button',
-    'x-nt-wallpaper-tab',
+    'x-nt-segmented-tab x-nt-wallpaper-tab',
     { 'data-wallpaper-tab': 'local', 'data-active': 'false' },
     'localTab'
   );
@@ -503,16 +516,50 @@ function createFakeWallpaperViewController(config) {
   const effectOptions = add(
     effectControl,
     'div',
-    'x-nt-effect-options',
+    'x-nt-segmented-tabs x-nt-effect-options',
     {},
     'effectOptions'
   );
-  add(effectOptions, 'span', 'x-nt-effect-indicator', {}, 'effectTabsIndicator');
+  add(
+    effectOptions,
+    'span',
+    'x-nt-segmented-tabs-indicator x-nt-effect-indicator',
+    {},
+    'effectTabsIndicator'
+  );
   (model.effectTypes || []).forEach((item) => {
-    add(effectOptions, 'button', 'x-nt-effect-option', {
+    add(effectOptions, 'button', 'x-nt-segmented-tab x-nt-effect-option', {
       'data-wallpaper-effect-type': item.type,
       'data-active': 'false',
       'data-selected': 'false'
+    });
+  });
+  const effectInkToneControl = add(
+    effectControl,
+    'div',
+    'x-nt-effect-slider-control x-nt-effect-ink-tone-control',
+    { 'data-visible': 'false', 'aria-hidden': 'true' },
+    'effectInkToneControl'
+  );
+  const effectInkToneOptions = add(
+    effectInkToneControl,
+    'div',
+    'x-nt-segmented-tabs x-nt-effect-options x-nt-effect-ink-tone-options',
+    {},
+    'effectInkToneOptions'
+  );
+  add(
+    effectInkToneOptions,
+    'span',
+    'x-nt-segmented-tabs-indicator x-nt-effect-indicator',
+    {},
+    'effectInkToneIndicator'
+  );
+  (model.effectInkTones || []).forEach((item) => {
+    add(effectInkToneOptions, 'button', 'x-nt-segmented-tab x-nt-effect-option x-nt-effect-ink-tone-option', {
+      'data-wallpaper-effect-ink-tone': item.tone,
+      'data-active': 'false',
+      'aria-pressed': 'false'
     });
   });
   add(effectControl, 'span', 'x-nt-effect-label', {}, 'effectLabel');
@@ -538,14 +585,14 @@ function createFakeWallpaperViewController(config) {
   const topContentTabs = add(
     topContentHeader,
     'div',
-    'x-nt-wallpaper-tabs x-nt-top-content-tabs',
+    'x-nt-segmented-tabs x-nt-wallpaper-tabs x-nt-top-content-tabs',
     {},
     'topContentTabs'
   );
   add(
     topContentTabs,
     'span',
-    'x-nt-wallpaper-tabs-indicator',
+    'x-nt-segmented-tabs-indicator x-nt-wallpaper-tabs-indicator',
     {},
     'topContentTabsIndicator'
   );
@@ -553,7 +600,7 @@ function createFakeWallpaperViewController(config) {
     add(
       topContentTabs,
       'button',
-      'x-nt-wallpaper-tab x-nt-top-content-tab',
+      'x-nt-segmented-tab x-nt-wallpaper-tab x-nt-top-content-tab',
       {
         'data-newtab-top-content': item.value,
         'data-active': item.value === 'brand' ? 'true' : 'false'
@@ -935,6 +982,25 @@ function assertSquareFaviconOptionCss(filePath) {
   assert.ok(selectedRule, `${filePath} should define selected favicon outline alignment`);
   assert.match(selectedRule[0], /inset:\s*0;/, `${filePath} selected favicon outline should not have inner spacing`);
   assert.match(selectedRule[0], /border-radius:\s*inherit;/, `${filePath} selected favicon outline should inherit thumb radius`);
+}
+
+function assertSegmentedTabRadiusCss(filePath) {
+  const source = fs.readFileSync(filePath, 'utf8');
+  const tokensRule = source.match(/\.x-nt-segmented-tabs\s*\{[\s\S]*?\n\s*\}/);
+  assert.ok(tokensRule, `${filePath} should define shared segmented-tab radius tokens`);
+  assert.match(tokensRule[0], /--x-nt-segmented-tabs-radius:\s*10px;/);
+  assert.match(tokensRule[0], /--x-nt-segmented-tabs-border-width:\s*1px;/);
+  assert.match(tokensRule[0], /--x-nt-segmented-tabs-inset:\s*2px;/);
+  assert.match(
+    tokensRule[0],
+    /--x-nt-segmented-tabs-inner-radius:\s*calc\([\s\S]*?radius\)[\s\S]*?border-width\)[\s\S]*?inset\)/,
+    `${filePath} should derive the inner radius from the full visual inset`
+  );
+  assert.match(
+    source,
+    /\.x-nt-segmented-tabs-indicator,\s*\n\s*\.x-nt-segmented-tab\s*\{\s*border-radius:\s*var\(--x-nt-segmented-tabs-inner-radius\);/,
+    `${filePath} should apply one inner radius to indicators and buttons`
+  );
 }
 
 function readLocaleMessages(locale) {
@@ -2265,11 +2331,96 @@ async function testNewtabFaviconThemeBroadcastRefreshesBackgroundTabs() {
   );
 }
 
+async function testWallpaperEffectInkToneControlPersistsAndFollowsEffectType() {
+  const storageArea = createMemoryStorage({
+    [WALLPAPER_EFFECT_STORAGE_KEY]: {
+      version: 4,
+      light: {
+        version: 4,
+        type: 'halftone',
+        inkTone: 'auto',
+        strength: 50,
+        size: 50,
+        spacing: 50
+      },
+      dark: {
+        version: 4,
+        type: 'halftone',
+        inkTone: 'auto',
+        strength: 50,
+        size: 50,
+        spacing: 50
+      }
+    }
+  });
+  const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } =
+    createWallpaperSandbox();
+  const testRuntime = testSandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: testDocument,
+    windowObj: testWindow,
+    storageArea,
+    storageKeys: { effect: WALLPAPER_EFFECT_STORAGE_KEY },
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+
+  testRuntime.createControls();
+  testRuntime.getControlElement().children[1].click();
+  await testRuntime.bootstrapInitialWallpaperEffect();
+  const control = testRuntime.getControlElement();
+  const inkToneControl = getDescendantByClassName(control, 'x-nt-effect-ink-tone-control');
+  const darkButton = getDescendantByAttribute(control, 'data-wallpaper-effect-ink-tone', 'dark');
+  const lightButton = getDescendantByAttribute(control, 'data-wallpaper-effect-ink-tone', 'light');
+  const ditherButton = getDescendantByAttribute(control, 'data-wallpaper-effect-type', 'dither');
+
+  assert.strictEqual(
+    inkToneControl.getAttribute('data-visible'),
+    'true',
+    'halftone should show the shadow/highlight sampling picker beneath the effect tabs'
+  );
+  assert.strictEqual(
+    darkButton.getAttribute('aria-pressed'),
+    'true',
+    'legacy automatic tone should present the expected dark default for the light wallpaper mode'
+  );
+
+  lightButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.strictEqual(lightButton.getAttribute('aria-pressed'), 'true');
+  assert.strictEqual(darkButton.getAttribute('aria-pressed'), 'false');
+  assert.strictEqual(storageArea.data[WALLPAPER_EFFECT_STORAGE_KEY].light.inkTone, 'light');
+  assert.strictEqual(
+    storageArea.data[WALLPAPER_EFFECT_STORAGE_KEY].dark.inkTone,
+    'light',
+    'shared wallpaper modes should persist the chosen ink tone consistently'
+  );
+
+  getDescendantByAttribute(control, 'data-wallpaper-effect-type', 'ascii').click();
+  assert.strictEqual(
+    inkToneControl.getAttribute('data-visible'),
+    'true',
+    'ASCII should keep the shadow/highlight sampling picker visible'
+  );
+  ditherButton.click();
+  assert.strictEqual(
+    inkToneControl.getAttribute('data-visible'),
+    'false',
+    'Dither should use the wallpaper palette instead of the dot or character ink picker'
+  );
+  getDescendantByAttribute(control, 'data-wallpaper-effect-type', 'grain').click();
+  assert.strictEqual(
+    inkToneControl.getAttribute('data-visible'),
+    'false',
+    'grain should hide the ink tone picker because it has no dots or characters'
+  );
+}
+
 Promise.resolve()
   .then(() => {
     assertBrandMarkCopy();
     assertThemeAwareAlternateFaviconAsset();
     assertSquareFaviconOptionCss('src/newtab/newtab.html');
+    assertSegmentedTabRadiusCss('src/newtab/newtab.html');
     assertWallpaperBootstrapWaitsForTheme();
     assertInitialWallpaperToneStartsBeforeDeferredRefresh();
   })
@@ -2286,6 +2437,7 @@ Promise.resolve()
   .then(testSplitLocalWallpaperSelectionStaysLocalOnly)
   .then(testNewtabFaviconOptionsRenderBelowLogoAndPersistSelection)
   .then(testNewtabFaviconThemeBroadcastRefreshesBackgroundTabs)
+  .then(testWallpaperEffectInkToneControlPersistsAndFollowsEffectType)
   .then(() => {
     console.log('newtab wallpaper panel tests passed');
   })

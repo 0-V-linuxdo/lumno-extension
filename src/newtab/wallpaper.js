@@ -16,8 +16,9 @@
   const PRELOAD_STORAGE_VERSION = 4;
   const WALLPAPER_EFFECT_MODE_STORAGE_VERSION = 4;
   const FALLBACK_WALLPAPER_EFFECT_PREFS = {
-    version: 3,
+    version: 4,
     type: 'none',
+    inkTone: 'auto',
     strength: 50,
     size: 50,
     spacing: 50
@@ -28,7 +29,7 @@
       return WALLPAPER_EFFECTS.normalizePrefs(value);
     }
     const source = value && typeof value === 'object' ? value : {};
-    const type = ['none', 'grain', 'halftone', 'ascii'].includes(source.type)
+    const type = ['none', 'grain', 'halftone', 'dither', 'ascii'].includes(source.type)
       ? source.type
       : FALLBACK_WALLPAPER_EFFECT_PREFS.type;
     const normalizePercent = (raw, fallback) => {
@@ -41,6 +42,9 @@
     return {
       version: FALLBACK_WALLPAPER_EFFECT_PREFS.version,
       type,
+      inkTone: ['auto', 'dark', 'light'].includes(source.inkTone)
+        ? source.inkTone
+        : FALLBACK_WALLPAPER_EFFECT_PREFS.inkTone,
       strength: normalizePercent(source.strength, FALLBACK_WALLPAPER_EFFECT_PREFS.strength),
       size: normalizePercent(rawSize, FALLBACK_WALLPAPER_EFFECT_PREFS.size),
       spacing: normalizePercent(source.spacing, FALLBACK_WALLPAPER_EFFECT_PREFS.spacing)
@@ -306,8 +310,9 @@
       dark: { top: 44, mid: 20, bottom: 50 }
     };
     const NEWTAB_WALLPAPER_EFFECT_DEFAULTS = WALLPAPER_EFFECTS.DEFAULT_PREFS || {
-      version: 3,
+      version: 4,
       type: 'none',
+      inkTone: 'auto',
       strength: 50,
       size: 50,
       spacing: 50
@@ -316,7 +321,12 @@
       { type: 'none', labelKey: 'newtab_wallpaper_effect_none', fallback: 'Off' },
       { type: 'grain', labelKey: 'newtab_wallpaper_effect_grain', fallback: 'Grain' },
       { type: 'halftone', labelKey: 'newtab_wallpaper_effect_halftone', fallback: 'Halftone' },
+      { type: 'dither', labelKey: 'newtab_wallpaper_effect_dither', fallback: 'Dither' },
       { type: 'ascii', labelKey: 'newtab_wallpaper_effect_ascii', fallback: 'ASCII' }
+    ];
+    const NEWTAB_WALLPAPER_EFFECT_INK_TONES = [
+      { tone: 'dark', labelKey: 'newtab_wallpaper_effect_ink_dark', fallback: 'Shadows' },
+      { tone: 'light', labelKey: 'newtab_wallpaper_effect_ink_light', fallback: 'Highlights' }
     ];
     const NEWTAB_FAVICON_DEFAULT_ID = 'default';
     const NEWTAB_FAVICON_OPTIONS = [
@@ -408,6 +418,9 @@
     let wallpaperEffectLabel = null;
     let wallpaperEffectOptions = null;
     let wallpaperEffectTabsIndicator = null;
+    let wallpaperEffectInkToneControl = null;
+    let wallpaperEffectInkToneOptions = null;
+    let wallpaperEffectInkToneIndicator = null;
     let wallpaperEffectStrengthControl = null;
     let wallpaperEffectStrengthLabel = null;
     let wallpaperEffectSlider = null;
@@ -2057,11 +2070,28 @@
     }
 
     function doesWallpaperEffectSupportSize(type) {
-      return type === 'halftone' || type === 'ascii';
+      return type === 'halftone' || type === 'dither' || type === 'ascii';
     }
 
     function doesWallpaperEffectSupportSpacing(type) {
+      return type === 'halftone' || type === 'dither' || type === 'ascii';
+    }
+
+    function doesWallpaperEffectSupportInkTone(type) {
       return type === 'halftone' || type === 'ascii';
+    }
+
+    function getWallpaperEffectInkToneForUi(prefs) {
+      if (prefs && (prefs.inkTone === 'dark' || prefs.inkTone === 'light')) {
+        return prefs.inkTone;
+      }
+      return getWallpaperEffectEditMode() === NEWTAB_WALLPAPER_MODE_DARK ? 'light' : 'dark';
+    }
+
+    function getWallpaperEffectInkToneLabel(tone) {
+      const item = NEWTAB_WALLPAPER_EFFECT_INK_TONES.find((option) => option.tone === tone) ||
+        NEWTAB_WALLPAPER_EFFECT_INK_TONES[0];
+      return t(item.labelKey, item.fallback);
     }
 
     function getWallpaperEffectLabel(type) {
@@ -2071,28 +2101,16 @@
     }
 
     function updateWallpaperEffectTabsIndicator() {
-      if (!wallpaperEffectOptions || !wallpaperEffectTabsIndicator) {
-        return;
-      }
-      const activeButton = wallpaperEffectOptions.querySelector('button[data-wallpaper-effect-type][data-active="true"]');
-      if (!activeButton) {
-        wallpaperEffectTabsIndicator.style.width = '0px';
-        return;
-      }
-      const containerRect = wallpaperEffectOptions.getBoundingClientRect();
-      const buttonRect = activeButton.getBoundingClientRect();
-      if (containerRect.width <= 0 || buttonRect.width <= 0) {
-        return;
-      }
-      const scaleX = wallpaperEffectOptions.offsetWidth > 0
-        ? containerRect.width / wallpaperEffectOptions.offsetWidth
-        : 1;
-      const normalizedScaleX = scaleX > 0 ? scaleX : 1;
-      const inset = 2;
-      const borderLeft = Number.parseFloat(window.getComputedStyle(wallpaperEffectOptions).borderLeftWidth) || 0;
-      const offset = Math.round(((buttonRect.left - containerRect.left) / normalizedScaleX) - inset - borderLeft);
-      wallpaperEffectTabsIndicator.style.width = `${Math.round(buttonRect.width / normalizedScaleX)}px`;
-      wallpaperEffectTabsIndicator.style.transform = `translateX(${offset}px)`;
+      updateWallpaperTabsIndicatorFor(
+        wallpaperEffectOptions,
+        wallpaperEffectTabsIndicator,
+        'button[data-wallpaper-effect-type][data-active="true"]'
+      );
+      updateWallpaperTabsIndicatorFor(
+        wallpaperEffectInkToneOptions,
+        wallpaperEffectInkToneIndicator,
+        'button[data-wallpaper-effect-ink-tone][data-active="true"]'
+      );
     }
 
     function scheduleWallpaperEffectTabsIndicatorRefresh() {
@@ -2125,9 +2143,12 @@
         ? containerRect.width / tabs.offsetWidth
         : 1;
       const normalizedScaleX = scaleX > 0 ? scaleX : 1;
-      const inset = 2;
-      const borderLeft = Number.parseFloat(window.getComputedStyle(tabs).borderLeftWidth) || 0;
-      const offset = Math.round(((buttonRect.left - containerRect.left) / normalizedScaleX) - inset - borderLeft);
+      const tabStyles = window.getComputedStyle(tabs);
+      const indicatorInset = Number.parseFloat(window.getComputedStyle(indicator).left) || 0;
+      const borderLeft = Number.parseFloat(tabStyles.borderLeftWidth) || 0;
+      const offset = Math.round(
+        ((buttonRect.left - containerRect.left) / normalizedScaleX) - indicatorInset - borderLeft
+      );
       indicator.style.width = `${Math.round(buttonRect.width / normalizedScaleX)}px`;
       indicator.style.transform = `translateX(${offset}px)`;
     }
@@ -2536,6 +2557,7 @@
 
     function getWallpaperEffectControlVisibility(prefs) {
       return {
+        inkTone: doesWallpaperEffectSupportInkTone(prefs.type),
         strength: prefs.type !== 'none',
         size: doesWallpaperEffectSupportSize(prefs.type),
         spacing: doesWallpaperEffectSupportSpacing(prefs.type)
@@ -2549,11 +2571,13 @@
 
     function updateWallpaperEffectControlsVisibility(visibility) {
       const changed = [
+        [wallpaperEffectInkToneControl, visibility.inkTone],
         [wallpaperEffectStrengthControl, visibility.strength],
         [wallpaperEffectSizeControl, visibility.size],
         [wallpaperEffectSpacingControl, visibility.spacing]
       ].some((item) => isWallpaperEffectControlVisibilityChanged(item[0], item[1]));
       const applyVisibility = () => {
+        setWallpaperEffectSliderControlVisible(wallpaperEffectInkToneControl, visibility.inkTone);
         setWallpaperEffectSliderControlVisible(wallpaperEffectStrengthControl, visibility.strength);
         setWallpaperEffectSliderControlVisible(wallpaperEffectSizeControl, visibility.size);
         setWallpaperEffectSliderControlVisible(wallpaperEffectSpacingControl, visibility.spacing);
@@ -2584,6 +2608,31 @@
         wallpaperEffectOptions.setAttribute('aria-label', t('newtab_wallpaper_effect_title', 'Wallpaper filter'));
         scheduleWallpaperEffectTabsIndicatorRefresh();
       }
+    }
+
+    function updateWallpaperEffectInkToneUi(prefs) {
+      if (!wallpaperEffectInkToneOptions) {
+        return;
+      }
+      const selectedTone = getWallpaperEffectInkToneForUi(prefs);
+      wallpaperEffectInkToneOptions.querySelectorAll('[data-wallpaper-effect-ink-tone]').forEach((button) => {
+        const tone = button.getAttribute('data-wallpaper-effect-ink-tone') || 'dark';
+        const selected = tone === selectedTone;
+        const label = getWallpaperEffectInkToneLabel(tone);
+        button.textContent = label;
+        button.setAttribute('data-active', selected ? 'true' : 'false');
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        button.setAttribute(
+          'aria-label',
+          formatMessage('newtab_wallpaper_effect_ink_select_label', 'Sample {tone} for dots or characters', {
+            tone: label
+          })
+        );
+      });
+      wallpaperEffectInkToneOptions.setAttribute(
+        'aria-label',
+        t('newtab_wallpaper_effect_ink_title', 'Sample tones')
+      );
     }
 
     function updateWallpaperEffectSlidersUi(prefs, visibility) {
@@ -2627,6 +2676,7 @@
       const visibility = getWallpaperEffectControlVisibility(prefs);
       updateWallpaperEffectControlsVisibility(visibility);
       updateWallpaperEffectOptionsUi(prefs);
+      updateWallpaperEffectInkToneUi(prefs);
       updateWallpaperEffectSlidersUi(prefs, visibility);
       updateWallpaperEffectTextUi();
     }
@@ -3982,6 +4032,7 @@
           { mode: 'dark', imageUrl: getRuntimeAssetUrl('assets/images/dark.svg') }
         ],
         effectTypes: NEWTAB_WALLPAPER_EFFECT_TYPES,
+        effectInkTones: NEWTAB_WALLPAPER_EFFECT_INK_TONES,
         favicons: NEWTAB_FAVICON_OPTIONS.map((item) => ({
           id: item.id,
           inlineSvg: item.preview === 'inlineSvg' ? faviconInlineSvg : '',
@@ -4045,6 +4096,9 @@
       wallpaperEffectLabel = refs.effectLabel;
       wallpaperEffectOptions = refs.effectOptions;
       wallpaperEffectTabsIndicator = refs.effectTabsIndicator;
+      wallpaperEffectInkToneControl = refs.effectInkToneControl;
+      wallpaperEffectInkToneOptions = refs.effectInkToneOptions;
+      wallpaperEffectInkToneIndicator = refs.effectInkToneIndicator;
       wallpaperEffectStrengthControl = refs.effectStrengthControl;
       wallpaperEffectStrengthLabel = refs.effectStrengthLabel;
       wallpaperEffectSlider = refs.effectStrengthSlider;
@@ -4190,6 +4244,13 @@
         button.addEventListener('click', () => {
           persistWallpaperEffectPrefs({
             type: button.getAttribute('data-wallpaper-effect-type')
+          });
+        });
+      });
+      wallpaperEffectInkToneOptions.querySelectorAll('[data-wallpaper-effect-ink-tone]').forEach((button) => {
+        button.addEventListener('click', () => {
+          persistWallpaperEffectPrefs({
+            inkTone: button.getAttribute('data-wallpaper-effect-ink-tone')
           });
         });
       });

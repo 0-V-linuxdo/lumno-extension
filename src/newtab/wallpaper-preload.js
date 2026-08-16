@@ -56,10 +56,13 @@
         : fallback;
     };
     return {
-      version: 3,
-      type: ['none', 'grain', 'halftone', 'ascii'].includes(source.type)
+      version: 4,
+      type: ['none', 'grain', 'halftone', 'dither', 'ascii'].includes(source.type)
         ? source.type
         : 'none',
+      inkTone: ['auto', 'dark', 'light'].includes(source.inkTone)
+        ? source.inkTone
+        : 'auto',
       strength: normalizePercent(source.strength, 50),
       size: normalizePercent(source.size, 50),
       spacing: normalizePercent(source.spacing, 50)

@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { RangeSlider } from '../shared/range-slider';
 
 type WallpaperItem = {
@@ -20,7 +20,57 @@ type TopContentItem = {
   value: 'brand' | 'time' | 'off';
 };
 
+type EffectInkToneItem = {
+  fallback: string;
+  tone: 'dark' | 'light';
+};
+
+const DEFAULT_EFFECT_INK_TONES: EffectInkToneItem[] = [
+  { tone: 'dark', fallback: 'Dark' },
+  { tone: 'light', fallback: 'Light' }
+];
+
 const ref = (name: string) => ({ 'data-wallpaper-ref': name });
+
+function SegmentedTabs({
+  ariaHidden,
+  ariaLabel,
+  children,
+  className,
+  dataVisible,
+  indicatorClassName,
+  indicatorRef,
+  name,
+  role
+}: {
+  ariaHidden?: boolean | 'false' | 'true';
+  ariaLabel?: string;
+  children: ReactNode;
+  className: string;
+  dataVisible?: 'false' | 'true';
+  indicatorClassName: string;
+  indicatorRef: string;
+  name: string;
+  role: 'group' | 'tablist';
+}) {
+  return (
+    <div
+      {...ref(name)}
+      aria-hidden={ariaHidden}
+      aria-label={ariaLabel}
+      className={`x-nt-segmented-tabs ${className}`}
+      data-visible={dataVisible}
+      role={role}
+    >
+      <span
+        {...ref(indicatorRef)}
+        aria-hidden="true"
+        className={`x-nt-segmented-tabs-indicator ${indicatorClassName}`}
+      />
+      {children}
+    </div>
+  );
+}
 
 function Switch({
   ariaLabel,
@@ -222,6 +272,9 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
         { value: 'time', label: 'Time' },
         { value: 'off', label: 'Hide' }
       ];
+  const effectInkTones: EffectInkToneItem[] = Array.isArray(model.effectInkTones)
+    ? model.effectInkTones
+    : DEFAULT_EFFECT_INK_TONES;
   return (
     <>
       <div
@@ -388,23 +441,20 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                 <Switch name="modeSyncToggle" />
               </div>
               <div className="x-nt-wallpaper-tab-group">
-                <div
-                  {...ref('modeTabs')}
-                  aria-hidden="true"
+                <SegmentedTabs
+                  ariaHidden="true"
                   className="x-nt-wallpaper-tabs x-nt-wallpaper-mode-tabs"
-                  data-visible="false"
+                  dataVisible="false"
+                  indicatorClassName="x-nt-wallpaper-tabs-indicator x-nt-wallpaper-mode-tabs-indicator"
+                  indicatorRef="modeTabsIndicator"
+                  name="modeTabs"
                   role="tablist"
                 >
-                  <span
-                    {...ref('modeTabsIndicator')}
-                    aria-hidden="true"
-                    className="x-nt-wallpaper-tabs-indicator x-nt-wallpaper-mode-tabs-indicator"
-                  />
                   {['light', 'dark'].map((mode) => (
                     <button
                       {...ref(mode === 'light' ? 'lightModeTab' : 'darkModeTab')}
                       aria-selected="false"
-                      className="x-nt-wallpaper-tab x-nt-wallpaper-mode-tab"
+                      className="x-nt-segmented-tab x-nt-wallpaper-tab x-nt-wallpaper-mode-tab"
                       data-active="false"
                       data-wallpaper-mode={mode}
                       key={mode}
@@ -414,28 +464,25 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                       {mode === 'light' ? 'Light' : 'Dark'}
                     </button>
                   ))}
-                </div>
+                </SegmentedTabs>
                 <div
                   {...ref('modeHint')}
                   aria-hidden="true"
                   className="x-nt-wallpaper-mode-hint"
                   data-visible="false"
                 />
-                <div
-                  {...ref('tabs')}
+                <SegmentedTabs
                   className="x-nt-wallpaper-tabs"
+                  indicatorClassName="x-nt-wallpaper-tabs-indicator"
+                  indicatorRef="tabsIndicator"
+                  name="tabs"
                   role="tablist"
                 >
-                  <span
-                    {...ref('tabsIndicator')}
-                    aria-hidden="true"
-                    className="x-nt-wallpaper-tabs-indicator"
-                  />
                   {['built-in', 'local'].map((tab) => (
                     <button
                       {...ref(tab === 'built-in' ? 'builtInTab' : 'localTab')}
                       aria-selected="false"
-                      className="x-nt-wallpaper-tab"
+                      className="x-nt-segmented-tab x-nt-wallpaper-tab"
                       data-active="false"
                       data-wallpaper-tab={tab}
                       key={tab}
@@ -445,7 +492,7 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                       {tab === 'built-in' ? 'Built-in' : 'Local'}
                     </button>
                   ))}
-                </div>
+                </SegmentedTabs>
               </div>
               <div
                 {...ref('builtInGrid')}
@@ -517,21 +564,18 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                     className="x-nt-effect-label"
                   />
                 </div>
-                <div
-                  {...ref('effectOptions')}
+                <SegmentedTabs
                   className="x-nt-effect-options"
+                  indicatorClassName="x-nt-effect-indicator"
+                  indicatorRef="effectTabsIndicator"
+                  name="effectOptions"
                   role="tablist"
                 >
-                  <span
-                    {...ref('effectTabsIndicator')}
-                    aria-hidden="true"
-                    className="x-nt-effect-indicator"
-                  />
                   {model.effectTypes.map(
                     (item: { fallback: string; type: string }) => (
                       <button
                         aria-pressed="false"
-                        className="x-nt-effect-option"
+                        className="x-nt-segmented-tab x-nt-effect-option"
                         data-active="false"
                         data-selected="false"
                         data-wallpaper-effect-type={item.type}
@@ -542,6 +586,35 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                       </button>
                     )
                   )}
+                </SegmentedTabs>
+                <div
+                  {...ref('effectInkToneControl')}
+                  aria-hidden="true"
+                  className="x-nt-effect-slider-control x-nt-effect-ink-tone-control"
+                  data-visible="false"
+                >
+                  <SegmentedTabs
+                    className="x-nt-effect-options x-nt-effect-ink-tone-options"
+                    indicatorClassName="x-nt-effect-indicator"
+                    indicatorRef="effectInkToneIndicator"
+                    name="effectInkToneOptions"
+                    role="group"
+                  >
+                    {effectInkTones.map(
+                      (item) => (
+                        <button
+                          aria-pressed="false"
+                          className="x-nt-segmented-tab x-nt-effect-option x-nt-effect-ink-tone-option"
+                          data-active="false"
+                          data-wallpaper-effect-ink-tone={item.tone}
+                          key={item.tone}
+                          type="button"
+                        >
+                          {item.fallback}
+                        </button>
+                      )
+                    )}
+                  </SegmentedTabs>
                 </div>
                 <SliderControl
                   controlRef="effectStrengthControl"
@@ -571,17 +644,14 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                 {...ref('topContentTitle')}
                 className="x-nt-wallpaper-panel-title"
               />
-              <div
-                {...ref('topContentTabs')}
-                aria-label="Content above the search bar"
+              <SegmentedTabs
+                ariaLabel="Content above the search bar"
                 className="x-nt-wallpaper-tabs x-nt-top-content-tabs"
+                indicatorClassName="x-nt-wallpaper-tabs-indicator"
+                indicatorRef="topContentTabsIndicator"
+                name="topContentTabs"
                 role="group"
               >
-                <span
-                  {...ref('topContentTabsIndicator')}
-                  aria-hidden="true"
-                  className="x-nt-wallpaper-tabs-indicator"
-                />
                 {topContentOptions.map((item) => (
                   <button
                     {...ref(
@@ -592,7 +662,7 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                           : 'topContentOffTab'
                     )}
                     aria-pressed={item.value === 'brand'}
-                    className="x-nt-wallpaper-tab x-nt-top-content-tab"
+                    className="x-nt-segmented-tab x-nt-wallpaper-tab x-nt-top-content-tab"
                     data-active={item.value === 'brand' ? 'true' : 'false'}
                     data-newtab-top-content={item.value}
                     key={item.value}
@@ -601,7 +671,7 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                     {item.label}
                   </button>
                 ))}
-              </div>
+              </SegmentedTabs>
             </div>
             <div className="x-nt-favicon-group">
               <div

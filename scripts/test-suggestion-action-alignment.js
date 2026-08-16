@@ -19,6 +19,10 @@ const suggestionsReact = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/suggestions.tsx'),
   'utf8'
 );
+const newtabSource = fs.readFileSync(
+  path.join(repoRoot, 'src/newtab/newtab.js'),
+  'utf8'
+);
 
 function getCssRuleBlock(source, selector) {
   const start = source.indexOf(`${selector} {`);
@@ -157,6 +161,16 @@ assert.match(
   suggestionsReact,
   /const visible = Boolean\(item\._xIsHovering\);[\s\S]*?slot\.setAttribute\('data-visible', visible \? 'true' : 'false'\);[\s\S]*?button\.setAttribute\('data-visible', visible \? 'true' : 'false'\);/,
   'shared React rows should continue revealing utility slots and buttons together on hover'
+);
+assert.match(
+  newtabSource,
+  /function shouldSwitchMatchedTabSuggestion\(suggestion\)[\s\S]*?typeof suggestion\._xMatchedTabId !== 'number'[\s\S]*?openTabQuickSwitchEnabled[\s\S]*?return true;/,
+  'a selected matching open-tab result should switch even when it is not the first row'
+);
+assert.match(
+  newtabSource,
+  /groupSearchSuggestionsByKind\(defaultSuggestions,\s*\{\s*searchFirst: searchResultPriorityMode === 'search'\s*\}\)/,
+  'the rendered list should group webpages and keyword-search suggestions instead of interleaving them'
 );
 
 console.log('suggestion action alignment tests passed');
