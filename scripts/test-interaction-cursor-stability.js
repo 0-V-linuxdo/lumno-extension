@@ -101,6 +101,14 @@ assert.match(
   /cursor:\s*grabbing;/,
   'bookmark cards should use a grabbing cursor during drag sessions'
 );
+assert.match(
+  getRule(
+    newtabHtml,
+    'body[data-bookmark-drag-active="true"],\n      body[data-bookmark-drag-active="true"] *'
+  ),
+  /cursor:\s*grabbing\s*!important;/,
+  'bookmark drags should keep a grabbing cursor over every underlying page target'
+);
 assertStableHoverTarget(newtabHtml, '.x-nt-recent-card:hover');
 assert.match(
   getRule(

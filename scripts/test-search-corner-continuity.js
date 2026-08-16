@@ -20,11 +20,14 @@ function readPxToken(source, token) {
 }
 
 const newtabOuterRadius = readPxToken(newtabSource, '--x-nt-search-shell-radius');
+const newtabRestingRadius = readPxToken(newtabSource, '--x-nt-search-resting-radius');
 const newtabBorderWidth = readPxToken(newtabSource, '--x-nt-search-shell-border-width');
 const newtabShellPadding = readPxToken(newtabSource, '--x-nt-search-shell-padding');
 const newtabResultInset = readPxToken(newtabSource, '--x-nt-search-results-padding-inline');
 
+assert.equal(newtabRestingRadius, 28);
 assert.equal(newtabOuterRadius - newtabBorderWidth - newtabShellPadding, 27);
+assert.equal(newtabRestingRadius - newtabBorderWidth - newtabShellPadding, 23);
 assert.equal(newtabOuterRadius - newtabBorderWidth - newtabShellPadding - newtabResultInset, 19);
 assert.match(
   newtabSource,
@@ -33,6 +36,22 @@ assert.match(
 assert.match(
   newtabSource,
   /--x-nt-search-result-radius:\s*calc\(\s*var\(--x-nt-search-content-radius\) - var\(--x-nt-search-results-padding-inline\)\s*\);/
+);
+assert.match(
+  newtabSource,
+  /--x-nt-search-resting-content-radius:\s*calc\(\s*var\(--x-nt-search-resting-radius\) - var\(--x-nt-search-content-inset\)\s*\);/
+);
+assert.match(
+  newtabSource,
+  /body\[data-nt-suggestions-open="true"\]\s+#_x_extension_newtab_search_layer_2024_unique_\s*\{[\s\S]*?border-radius:\s*var\(--x-nt-search-resting-content-radius,\s*23px\)\s*var\(--x-nt-search-resting-content-radius,\s*23px\)\s*0\s*0;/
+);
+assert.match(
+  newtabSource,
+  /#_x_extension_newtab_suggestions_surface_2026_unique_\s*\{[\s\S]*?border-radius:\s*var\(--x-nt-search-resting-radius,\s*28px\)\s*var\(--x-nt-search-resting-radius,\s*28px\)\s*var\(--x-nt-search-shell-radius,\s*32px\)\s*var\(--x-nt-search-shell-radius,\s*32px\);/
+);
+assert.match(
+  newtabSource,
+  /#_x_extension_newtab_suggestions_outline_2026_unique_\s*\{[\s\S]*?border-radius:\s*var\(--x-nt-search-resting-radius,\s*28px\)\s*var\(--x-nt-search-resting-radius,\s*28px\)\s*var\(--x-nt-search-shell-radius,\s*32px\)\s*var\(--x-nt-search-shell-radius,\s*32px\);/
 );
 assert.match(
   newtabSource,

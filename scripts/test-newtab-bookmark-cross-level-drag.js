@@ -270,6 +270,10 @@ const startBookmarkDragSource = newtabJs.slice(
   newtabJs.indexOf('function startBookmarkDrag('),
   newtabJs.indexOf('function clearBookmarkDragCardVisual(')
 );
+const finishBookmarkDragSource = newtabJs.slice(
+  newtabJs.indexOf('function finishBookmarkDrag('),
+  newtabJs.indexOf('function beginBookmarkDragPointerTracking(')
+);
 assert.ok(
   beginPointerTrackingSource &&
     !beginPointerTrackingSource.includes('setPointerCapture') &&
@@ -282,6 +286,15 @@ assert.ok(
     beginPointerTrackingSource.includes('if (sourceKind !== \'cascade\' && !isOpenCascadeAnchor)') &&
     startBookmarkDragSource.includes('closeBookmarkCascadeMenu();'),
   'pressing an already-open folder should keep its cascade mounted until a real drag starts'
+);
+assert.ok(
+  startBookmarkDragSource.includes(
+    "document.body.setAttribute('data-bookmark-drag-active', 'true');"
+  ) &&
+    finishBookmarkDragSource.includes(
+      "document.body.removeAttribute('data-bookmark-drag-active');"
+    ),
+  'bookmark drag sessions should hold a page-wide grabbing cursor until pointer release'
 );
 assert.ok(
   /state\.keepCascadeOpenAfterDrop[\s\S]*?if \(state\.isDragging\) \{[\s\S]*?if \(shouldKeepCascadeOpen && bookmarkCascadeRuntime &&[\s\S]*?closeBookmarkCascadeMenu\(\);/.test(newtabJs),

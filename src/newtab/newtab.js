@@ -10870,6 +10870,9 @@
       return;
     }
     bookmarkDragState.isDragging = true;
+    if (document.body) {
+      document.body.setAttribute('data-bookmark-drag-active', 'true');
+    }
     hideCursorTooltip();
     const activeElement = document.activeElement;
     if (activeElement &&
@@ -10957,6 +10960,9 @@
     }
     if (event && bookmarkDragState.pointerId !== event.pointerId) {
       return;
+    }
+    if (document.body) {
+      document.body.removeAttribute('data-bookmark-drag-active');
     }
     const state = bookmarkDragState;
     detachBookmarkDragDocumentListeners();
