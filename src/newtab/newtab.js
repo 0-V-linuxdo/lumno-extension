@@ -12,11 +12,39 @@
   const providerStorageRuntime = typeof settingsRuntimeApi.createProviderStorageRuntime === 'function'
     ? settingsRuntimeApi.createProviderStorageRuntime(chrome)
     : null;
-  const storageArea = providerStorageRuntime
+  const rawStorageArea = providerStorageRuntime
     ? providerStorageRuntime.area
     : ((chrome && chrome.storage && chrome.storage.sync)
         ? chrome.storage.sync
         : (chrome && chrome.storage ? chrome.storage.local : null));
+  const startupStorageReadBatch = rawStorageArea &&
+      typeof settingsRuntimeApi.createStorageReadBatch === 'function'
+    ? settingsRuntimeApi.createStorageReadBatch(rawStorageArea)
+    : null;
+  const storageArea = startupStorageReadBatch
+    ? startupStorageReadBatch.area
+    : rawStorageArea;
+  if (startupStorageReadBatch) {
+    startupStorageReadBatch.ready.then((metrics) => {
+      if (!document.documentElement) {
+        return;
+      }
+      document.documentElement.setAttribute(
+        'data-lumno-newtab-bootstrap-storage-reads',
+        String(Number(metrics && metrics.underlyingReadCount) || 0)
+      );
+      document.documentElement.setAttribute(
+        'data-lumno-newtab-bootstrap-storage-requests',
+        String(Number(metrics && metrics.requestCount) || 0)
+      );
+      document.documentElement.setAttribute(
+        'data-lumno-newtab-bootstrap-storage-keys',
+        metrics && metrics.keyCount === null
+          ? 'all'
+          : String(Number(metrics && metrics.keyCount) || 0)
+      );
+    });
+  }
   const localStorageArea = (chrome && chrome.storage && chrome.storage.local)
     ? chrome.storage.local
     : storageArea;
@@ -25,12 +53,10 @@
       ? chrome.storage.local
       : null;
   const recentSitesStorageArea = storageArea || localStorageArea;
-  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (storageArea
-    ? (storageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
+  const storageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (rawStorageArea
+    ? (rawStorageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
     : null);
-  const recentSitesStorageAreaName = providerStorageRuntime ? providerStorageRuntime.name : (recentSitesStorageArea
-    ? (recentSitesStorageArea === (chrome && chrome.storage ? chrome.storage.sync : null) ? 'sync' : 'local')
-    : null);
+  const recentSitesStorageAreaName = storageAreaName || (recentSitesStorageArea ? 'local' : null);
   function isPrimaryStorageAreaName(areaName) {
     return providerStorageRuntime
       ? providerStorageRuntime.isActiveAreaName(areaName)
@@ -503,6 +529,9 @@
   let newtabShortcutsVisible = true;
   let newtabShortcutAddVisible = true;
   let newtabShortcutDockMagnificationEnabled = true;
+  let shortcutDockPointerFrame = 0;
+  let shortcutDockPendingTile = null;
+  let shortcutDockPendingPointerX = Number.NaN;
   let shortcutDragState = null;
   const shortcutTiles = [];
   const SHORTCUT_DIALOG_MODE_EDIT = NEWTAB_SHORTCUT_DIALOG.MODE_EDIT || 'edit';
@@ -728,7 +757,7 @@
     }
     const expectedRevision = bookmarkViewModeRevision;
     const readLocalFallback = () => {
-      if (!localStorageArea || localStorageArea === storageArea ||
+      if (!localStorageArea || isPrimaryStorageAreaName('local') ||
           typeof localStorageArea.get !== 'function') {
         applyInitialBookmarkViewModeValue(undefined, 'primary', expectedRevision);
         return;
@@ -751,7 +780,7 @@
     try {
       storageArea.get([BOOKMARK_VIEW_MODE_STORAGE_KEY], (result) => {
         const stored = result ? result[BOOKMARK_VIEW_MODE_STORAGE_KEY] : undefined;
-        if (typeof stored === 'undefined' && localStorageArea !== storageArea) {
+        if (typeof stored === 'undefined' && !isPrimaryStorageAreaName('local')) {
           readLocalFallback();
           return;
         }
@@ -2087,7 +2116,7 @@
     if (!storageArea || !chrome || !chrome.storage || !chrome.storage.local) {
       return;
     }
-    if (storageArea === chrome.storage.local) {
+    if (isPrimaryStorageAreaName('local')) {
       return;
     }
     chrome.storage.local.get(keys, (localResult) => {
@@ -7275,7 +7304,37 @@
     icon.style.setProperty('--x-nt-shortcut-dock-rise', `${Math.round(-6 * eased)}px`);
   }
 
+  function cancelShortcutDockPointerFrame() {
+    if (shortcutDockPointerFrame) {
+      window.cancelAnimationFrame(shortcutDockPointerFrame);
+      shortcutDockPointerFrame = 0;
+    }
+    shortcutDockPendingTile = null;
+    shortcutDockPendingPointerX = Number.NaN;
+  }
+
+  function scheduleShortcutDockPointerStyles(tile, pointerX) {
+    shortcutDockPendingTile = tile || null;
+    shortcutDockPendingPointerX = Number(pointerX);
+    if (shortcutDockPointerFrame) {
+      return;
+    }
+    shortcutDockPointerFrame = window.requestAnimationFrame(() => {
+      shortcutDockPointerFrame = 0;
+      const pendingTile = shortcutDockPendingTile;
+      const pendingPointerX = shortcutDockPendingPointerX;
+      shortcutDockPendingTile = null;
+      shortcutDockPendingPointerX = Number.NaN;
+      if (!pendingTile || !pendingTile.isConnected ||
+          (shortcutDragState && shortcutDragState.isDragging)) {
+        return;
+      }
+      setShortcutDockHover(pendingTile, pendingPointerX);
+    });
+  }
+
   function resetShortcutDockHover() {
+    cancelShortcutDockPointerFrame();
     if (!shortcutGrid) {
       return;
     }
@@ -7326,6 +7385,7 @@
     }
     const tile = getShortcutTileFromNode(event.target);
     if (tile) {
+      cancelShortcutDockPointerFrame();
       setShortcutDockHover(tile, getShortcutDockPointerX(event));
     }
   }
@@ -7336,7 +7396,7 @@
     }
     const tile = getShortcutTileFromNode(event.target);
     if (tile) {
-      setShortcutDockHover(tile, getShortcutDockPointerX(event));
+      scheduleShortcutDockPointerStyles(tile, getShortcutDockPointerX(event));
     }
   }
 
@@ -8251,6 +8311,64 @@
     }
   }
 
+  function cancelShortcutDragMoveFrame(state) {
+    if (!state || !state.moveFrameId) {
+      return;
+    }
+    window.cancelAnimationFrame(state.moveFrameId);
+    state.moveFrameId = 0;
+  }
+
+  function applyShortcutDragMove(state, pointerX, pointerY) {
+    if (!state || state !== shortcutDragState || !state.isDragging ||
+        !Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
+      return;
+    }
+    setShortcutDragTileTransform(state, pointerX, pointerY);
+    const targetIndex = getShortcutDragInsertionIndex(pointerX, pointerY);
+    if (targetIndex < 0 || targetIndex === getShortcutTileInsertionIndex(state.tile)) {
+      return;
+    }
+    const beforeRects = getShortcutTileRectMap();
+    if (moveShortcutItem(state.shortcutId, targetIndex) &&
+        moveShortcutTileElement(state.tile, targetIndex)) {
+      animateShortcutLayoutShift(beforeRects, state.tile);
+      setShortcutDragTileTransform(state, pointerX, pointerY);
+      state.hasReordered = true;
+    }
+  }
+
+  function flushShortcutDragMove(state) {
+    if (!state) {
+      return;
+    }
+    cancelShortcutDragMoveFrame(state);
+    applyShortcutDragMove(
+      state,
+      Number(state.pendingPointerX),
+      Number(state.pendingPointerY)
+    );
+  }
+
+  function scheduleShortcutDragMove(state, pointerX, pointerY) {
+    if (!state) {
+      return;
+    }
+    state.pendingPointerX = pointerX;
+    state.pendingPointerY = pointerY;
+    if (state.moveFrameId) {
+      return;
+    }
+    state.moveFrameId = window.requestAnimationFrame(() => {
+      state.moveFrameId = 0;
+      applyShortcutDragMove(
+        state,
+        Number(state.pendingPointerX),
+        Number(state.pendingPointerY)
+      );
+    });
+  }
+
   function finishShortcutDrag(event, options) {
     if (!shortcutDragState) {
       return;
@@ -8259,6 +8377,9 @@
       return;
     }
     const state = shortcutDragState;
+    if (state.isDragging) {
+      flushShortcutDragMove(state);
+    }
     shortcutDragState = null;
     const tile = state.tile;
     if (shortcutGrid) {
@@ -8322,6 +8443,9 @@
       grabOffsetY: 0,
       translateX: 0,
       translateY: 0,
+      pendingPointerX: Number(event.clientX),
+      pendingPointerY: Number(event.clientY),
+      moveFrameId: 0,
       isDragging: false,
       hasReordered: false
     };
@@ -8361,18 +8485,7 @@
       return;
     }
     event.preventDefault();
-    setShortcutDragTileTransform(shortcutDragState, pointerX, pointerY);
-    const targetIndex = getShortcutDragInsertionIndex(pointerX, pointerY);
-    if (targetIndex < 0 || targetIndex === getShortcutTileInsertionIndex(shortcutDragState.tile)) {
-      return;
-    }
-    const beforeRects = getShortcutTileRectMap();
-    if (moveShortcutItem(shortcutDragState.shortcutId, targetIndex) &&
-        moveShortcutTileElement(shortcutDragState.tile, targetIndex)) {
-      animateShortcutLayoutShift(beforeRects, shortcutDragState.tile);
-      setShortcutDragTileTransform(shortcutDragState, pointerX, pointerY);
-      shortcutDragState.hasReordered = true;
-    }
+    scheduleShortcutDragMove(shortcutDragState, pointerX, pointerY);
   }
 
   function handleShortcutDragPointerUp(event) {
@@ -9322,7 +9435,7 @@
     const direction = targetPage > bookmarkCurrentPage ? 1 : -1;
     const offsetPx = 34;
     const durationMs = 220;
-    const fadeBlurDurationMs = 150;
+    const fadeDurationMs = 150;
     const colStaggerMs = 24;
     const rowStaggerMs = 10;
     const randomJitterRangeMs = 6;
@@ -9345,7 +9458,6 @@
         card.style.removeProperty('transition');
         card.style.removeProperty('transform');
         card.style.removeProperty('opacity');
-        card.style.removeProperty('filter');
         card.style.removeProperty('will-change');
       });
     };
@@ -9365,10 +9477,9 @@
         return;
       }
       nextCards.forEach((card, index) => {
-        card.style.setProperty('will-change', 'transform, opacity, filter');
+        card.style.setProperty('will-change', 'transform, opacity');
         card.style.setProperty('transition', 'none');
         card.style.setProperty('opacity', '0');
-        card.style.setProperty('filter', 'blur(5px)');
         card.style.setProperty('transform', `translateX(${direction * offsetPx}px)`);
       });
       void bookmarkGrid.offsetHeight;
@@ -9380,10 +9491,9 @@
         }
         card.style.setProperty(
           'transition',
-          `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeBlurDurationMs}ms ${easing} ${delay}ms, filter ${fadeBlurDurationMs}ms ${easing} ${delay}ms`
+          `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeDurationMs}ms ${easing} ${delay}ms`
         );
         card.style.setProperty('opacity', '1');
-        card.style.setProperty('filter', 'blur(0px)');
         card.style.setProperty('transform', 'translateX(0)');
       });
       const inTotalMs = durationMs + maxInDelay;
@@ -9401,13 +9511,12 @@
       if (delay > maxOutDelay) {
         maxOutDelay = delay;
       }
-      card.style.setProperty('will-change', 'transform, opacity, filter');
+      card.style.setProperty('will-change', 'transform, opacity');
       card.style.setProperty(
         'transition',
-        `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeBlurDurationMs}ms ${easing} ${delay}ms, filter ${fadeBlurDurationMs}ms ${easing} ${delay}ms`
+        `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeDurationMs}ms ${easing} ${delay}ms`
       );
       card.style.setProperty('opacity', '0');
-      card.style.setProperty('filter', 'blur(5px)');
       card.style.setProperty('transform', `translateX(${direction * -offsetPx}px)`);
     });
     const outTotalMs = durationMs + maxOutDelay;

@@ -4059,19 +4059,16 @@
         pointer-events: none;
         opacity: 0;
         visibility: hidden;
-        filter: blur(6px);
         transform: translateY(8px) scale(0.98);
         transform-origin: right bottom;
         transition: opacity 160ms ease, visibility 160ms ease,
-          transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-          filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
-        will-change: transform, opacity, filter;
+          transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform, opacity;
       }
       .x-nt-wallpaper-panel[data-open="true"] {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
-        filter: blur(0);
         transform: translateY(0) scale(1);
       }
       body[data-theme="dark"] .x-nt-wallpaper-panel {
@@ -4079,7 +4076,6 @@
       }
       @media (prefers-reduced-motion: reduce) {
         .x-nt-wallpaper-panel {
-          filter: none;
           transform: translateY(0) scale(1);
           transition: opacity 120ms ease, visibility 120ms ease;
           will-change: auto;

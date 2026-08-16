@@ -3627,7 +3627,6 @@
         motionElement.style.removeProperty('transition');
         motionElement.style.removeProperty('transform');
         motionElement.style.removeProperty('opacity');
-        motionElement.style.removeProperty('filter');
         motionElement.style.removeProperty('will-change');
       });
       if (wallpaperAppearanceOptions) {
@@ -3686,7 +3685,7 @@
       const direction = getAppearanceScopeDirection(targetScope);
       const offsetPx = 24;
       const durationMs = 220;
-      const fadeBlurDurationMs = 140;
+      const fadeDurationMs = 140;
       const handoffOverlapMs = 70;
       const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
       wallpaperAppearanceModeLabelsHeld = true;
@@ -3703,13 +3702,12 @@
         }
         const delay = getAppearanceOptionDelay(index, buttons.length, direction);
         maxOutDelay = Math.max(maxOutDelay, delay);
-        motionElement.style.setProperty('will-change', 'transform, opacity, filter');
+        motionElement.style.setProperty('will-change', 'transform, opacity');
         motionElement.style.setProperty(
           'transition',
-          `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeBlurDurationMs}ms ${easing} ${delay}ms, filter ${fadeBlurDurationMs}ms ${easing} ${delay}ms`
+          `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeDurationMs}ms ${easing} ${delay}ms`
         );
         motionElement.style.setProperty('opacity', '0');
-        motionElement.style.setProperty('filter', 'blur(3px)');
         motionElement.style.setProperty('transform', `translate3d(${direction * -offsetPx}px, 0, 0)`);
       });
 
@@ -3727,7 +3725,6 @@
           }
           motionElement.style.setProperty('transition', 'none');
           motionElement.style.setProperty('opacity', '0');
-          motionElement.style.setProperty('filter', 'blur(3px)');
           motionElement.style.setProperty('transform', `translate3d(${direction * offsetPx}px, 0, 0)`);
         });
         if (wallpaperAppearanceOptions) {
@@ -3743,10 +3740,9 @@
           maxInDelay = Math.max(maxInDelay, delay);
           motionElement.style.setProperty(
             'transition',
-            `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeBlurDurationMs}ms ${easing} ${delay}ms, filter ${fadeBlurDurationMs}ms ${easing} ${delay}ms`
+            `transform ${durationMs}ms ${easing} ${delay}ms, opacity ${fadeDurationMs}ms ${easing} ${delay}ms`
           );
           motionElement.style.setProperty('opacity', '1');
-          motionElement.style.setProperty('filter', 'blur(0px)');
           motionElement.style.setProperty('transform', 'translate3d(0, 0, 0)');
         });
         const cleanupTimer = window.setTimeout(() => {

@@ -1430,6 +1430,95 @@ assertContains(
 );
 
 assertContains(
+  getFunctionSource(newtabJs, 'handleShortcutDragPointerMove'),
+  'scheduleShortcutDragMove(shortcutDragState, pointerX, pointerY);',
+  'shortcut drag pointer work should be coalesced to one layout update per frame'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'finishShortcutDrag'),
+  'flushShortcutDragMove(state);',
+  'shortcut drag release should apply the latest queued pointer position before persistence'
+);
+
+{
+  const queuedFrames = new Map();
+  let nextFrameId = 1;
+  const transformCalls = [];
+  const schedulerFactory = new Function(
+    'window',
+    'setShortcutDragTileTransform',
+    'getShortcutDragInsertionIndex',
+    'getShortcutTileInsertionIndex',
+    'getShortcutTileRectMap',
+    'moveShortcutItem',
+    'moveShortcutTileElement',
+    'animateShortcutLayoutShift',
+    `let shortcutDragState = null;
+    ${getFunctionSource(newtabJs, 'cancelShortcutDragMoveFrame')}
+    ${getFunctionSource(newtabJs, 'applyShortcutDragMove')}
+    ${getFunctionSource(newtabJs, 'flushShortcutDragMove')}
+    ${getFunctionSource(newtabJs, 'scheduleShortcutDragMove')}
+    return {
+      flushShortcutDragMove,
+      scheduleShortcutDragMove,
+      setState(state) { shortcutDragState = state; }
+    };`
+  );
+  const scheduler = schedulerFactory(
+    {
+      requestAnimationFrame(callback) {
+        const frameId = nextFrameId++;
+        queuedFrames.set(frameId, callback);
+        return frameId;
+      },
+      cancelAnimationFrame(frameId) {
+        queuedFrames.delete(frameId);
+      }
+    },
+    (_state, pointerX, pointerY) => transformCalls.push([pointerX, pointerY]),
+    () => 0,
+    () => 0,
+    () => new Map(),
+    () => false,
+    () => false,
+    () => {}
+  );
+  const state = {
+    hasReordered: false,
+    isDragging: true,
+    moveFrameId: 0,
+    pendingPointerX: 0,
+    pendingPointerY: 0,
+    shortcutId: 'shortcut-1',
+    tile: {}
+  };
+  scheduler.setState(state);
+  for (let index = 0; index < 240; index += 1) {
+    scheduler.scheduleShortcutDragMove(state, index, index + 1000);
+  }
+  assert.strictEqual(queuedFrames.size, 1, 'rapid shortcut pointer moves should share one frame');
+  assert.deepStrictEqual(transformCalls, [], 'layout work should wait for the scheduled frame');
+  const frameCallback = Array.from(queuedFrames.values())[0];
+  queuedFrames.clear();
+  frameCallback();
+  assert.deepStrictEqual(
+    transformCalls,
+    [[239, 1239]],
+    'the frame should apply only the latest shortcut pointer coordinates'
+  );
+  scheduler.scheduleShortcutDragMove(state, 70, 80);
+  scheduler.scheduleShortcutDragMove(state, 90, 100);
+  scheduler.flushShortcutDragMove(state);
+  assert.strictEqual(queuedFrames.size, 0, 'release should cancel the queued shortcut frame');
+  assert.deepStrictEqual(
+    transformCalls[transformCalls.length - 1],
+    [90, 100],
+    'release should synchronously apply the latest queued shortcut position'
+  );
+}
+
+assertContains(
   newtabJs,
   "state.tile.style.transform = `translate3d(${nextX}px, ${nextY}px, 0)`;",
   'dragged shortcut tiles should use direct transform updates for cursor tracking'
@@ -1449,7 +1538,7 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'animateShortcutLayoutShift(beforeRects, shortcutDragState.tile);',
+  'animateShortcutLayoutShift(beforeRects, state.tile);',
   'shortcut drag reordering should use FLIP animation after each insertion move'
 );
 

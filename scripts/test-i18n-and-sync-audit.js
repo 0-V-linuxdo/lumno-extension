@@ -458,6 +458,7 @@ localeNames.forEach((locale) => {
   const createMigration = new Function(
     'storageArea',
     'chrome',
+    'isPrimaryStorageAreaName',
     `${getFunctionSource(newtabSource, 'migrateStorageIfNeeded')}
     return migrateStorageIfNeeded;`
   );
@@ -466,7 +467,7 @@ localeNames.forEach((locale) => {
       local: localArea,
       sync: syncArea
     }
-  });
+  }, (areaName) => areaName === 'sync');
   migrateStorageIfNeeded([key]);
   assert.deepStrictEqual(
     writes,

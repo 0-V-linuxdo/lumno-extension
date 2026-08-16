@@ -5,6 +5,11 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const optionsJs = fs.readFileSync(path.join(repoRoot, 'src/options/options.js'), 'utf8');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const newtabWallpaperJs = fs.readFileSync(
+  path.join(repoRoot, 'src/newtab/wallpaper.js'),
+  'utf8'
+);
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
 const overlaySearchPanelJs = fs.readFileSync(
   path.join(repoRoot, 'src/overlay/search-panel.js'),
   'utf8'
@@ -67,6 +72,31 @@ assertMatches(
   newtabJs,
   /function scheduleBookmarkReloadIfVisible\(\) \{[\s\S]*?clearTimeout\(bookmarkExternalChangeTimer\)[\s\S]*?setTimeout\([\s\S]*?NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS/,
   'bookmark external changes should be debounced'
+);
+assertMatches(
+  newtabJs,
+  /const startupStorageReadBatch = rawStorageArea[\s\S]*?settingsRuntimeApi\.createStorageReadBatch\(rawStorageArea\)[\s\S]*?const storageArea = startupStorageReadBatch[\s\S]*?startupStorageReadBatch\.area/,
+  'new tab should coalesce same-task startup settings reads'
+);
+assertMatches(
+  newtabJs,
+  /startupStorageReadBatch\.ready\.then\([\s\S]*?data-lumno-newtab-bootstrap-storage-reads[\s\S]*?data-lumno-newtab-bootstrap-storage-requests/,
+  'new tab should expose startup storage batching diagnostics'
+);
+assertMatches(
+  newtabJs,
+  /function migrateStorageIfNeeded\(keys\) \{[\s\S]*?isPrimaryStorageAreaName\('local'\)/,
+  'new tab storage migration should identify the wrapped primary area by name'
+);
+assertMatches(
+  newtabJs,
+  /function handleShortcutDockPointerMove\(event\) \{[\s\S]*?scheduleShortcutDockPointerStyles\(tile, getShortcutDockPointerX\(event\)\)/,
+  'shortcut dock magnification should coalesce pointer-move layout work per frame'
+);
+assertMatches(
+  newtabJs,
+  /function handleShortcutDragPointerMove\(event\) \{[\s\S]*?scheduleShortcutDragMove\(shortcutDragState, pointerX, pointerY\)/,
+  'shortcut dragging should coalesce hit testing and FLIP layout work per frame'
 );
 const initialAppearanceBootstrapIndex = newtabJs.indexOf(
   'const initialAppearanceReadyTask = Promise.all(['
@@ -162,6 +192,34 @@ assertMatches(
   newtabJs,
   /document\.documentElement\.style\.colorScheme = resolved/,
   'new tab should synchronize native controls with the resolved theme'
+);
+
+const bookmarkPageMotion = newtabJs.slice(
+  newtabJs.indexOf('function switchBookmarkPage(nextPage)'),
+  newtabJs.indexOf('function getCurrentSearchEntryPaddingTop()')
+);
+assert.doesNotMatch(
+  bookmarkPageMotion,
+  /\bfilter\b|blur\(/,
+  'bookmark paging should animate compositor-friendly transform and opacity only'
+);
+const appearanceScopeMotion = newtabWallpaperJs.slice(
+  newtabWallpaperJs.indexOf('function animateWallpaperAppearanceScopeChange('),
+  newtabWallpaperJs.indexOf('function getWallpaperButtonLabel()')
+);
+assert.doesNotMatch(
+  appearanceScopeMotion,
+  /style\.[^\n]*filter|blur\(/,
+  'appearance scope changes should avoid paint-heavy blur animation'
+);
+const wallpaperPanelCss = newtabHtml.slice(
+  newtabHtml.indexOf('.x-nt-wallpaper-panel {'),
+  newtabHtml.indexOf('.x-nt-wallpaper-panel-scroll {')
+);
+assert.doesNotMatch(
+  wallpaperPanelCss,
+  /(?:^|\n)\s*filter\s*:|will-change:[^;]*filter/,
+  'wallpaper panel entry should avoid animating a full-surface blur filter'
 );
 
 console.log('performance and style stability tests passed');
