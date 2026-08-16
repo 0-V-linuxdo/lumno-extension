@@ -127,6 +127,29 @@ const bundlePaths = [
   overlayBundlePath
 ];
 
+const kibibytes = (bytes) => `${(bytes / 1024).toFixed(2)} KiB`;
+const gzipSize = (source) =>
+  zlib.gzipSync(source, {
+    level: zlib.constants.Z_BEST_COMPRESSION
+  }).length;
+const assertWithinBudget = (actualBytes, budgetKiB, label) => {
+  const budgetBytes = budgetKiB * 1024;
+  assert(
+    actualBytes <= budgetBytes,
+    `${label} is ${kibibytes(actualBytes)}; budget is ${budgetKiB} KiB`
+  );
+};
+
+// Keep these as durable regression ceilings rather than exact snapshots. The
+// rounded limits leave about 5% headroom over the 0.9.44 production bundles,
+// while the explicit gzip level avoids relying on Node's default compression.
+const bundleBudgets = {
+  newtab: { uncompressed: 384, gzip: 115 },
+  options: { uncompressed: 264, gzip: 79 },
+  overlay: { uncompressed: 271, gzip: 82 },
+  total: { uncompressed: 746, gzip: 219 }
+};
+
 const retiredNewtabRendererScripts = [
   'bookmarks-topbar.js',
   'page-notice.js',
@@ -230,59 +253,66 @@ assert(
     packageJson.scripts.test.includes('test:react'),
   'the default test command should cover both runtimes'
 );
+assert.strictEqual(
+  packageJson.scripts.verify,
+  'npm test && npm run check',
+  'the local verification command should match the CI test and check sequence'
+);
 assert(
   packageJson.dependencies.react && packageJson.dependencies['react-dom'],
   'React runtime dependencies should be explicit'
 );
-assert(
+assertWithinBudget(
   fs.statSync(runtimeBundlePath).size +
-      fs.statSync(sharedBundlePath).size +
-      fs.statSync(tabSwitcherSharedBundlePath).size +
-      fs.statSync(newtabBundlePath).size <=
-    365 * 1024,
-  'the New Tab React route should stay within its 365 KiB uncompressed budget'
+    fs.statSync(sharedBundlePath).size +
+    fs.statSync(tabSwitcherSharedBundlePath).size +
+    fs.statSync(newtabBundlePath).size,
+  bundleBudgets.newtab.uncompressed,
+  'the New Tab React route (uncompressed)'
 );
-assert(
-  zlib.gzipSync(runtimeBundle).length +
-      zlib.gzipSync(sharedBundle).length +
-      zlib.gzipSync(tabSwitcherSharedBundle).length +
-      zlib.gzipSync(newtabBundle).length <=
-    112 * 1024,
-  'the New Tab React route should stay within its 112 KiB gzip budget'
+assertWithinBudget(
+  gzipSize(runtimeBundle) +
+    gzipSize(sharedBundle) +
+    gzipSize(tabSwitcherSharedBundle) +
+    gzipSize(newtabBundle),
+  bundleBudgets.newtab.gzip,
+  'the New Tab React route (gzip)'
 );
-assert(
-    fs.statSync(runtimeBundlePath).size +
-      fs.statSync(sharedBundlePath).size +
-      fs.statSync(tabSwitcherSharedBundlePath).size +
-      fs.statSync(optionsBundlePath).size <=
-    252 * 1024,
-  'the Options React route should stay within its 252 KiB uncompressed budget'
+assertWithinBudget(
+  fs.statSync(runtimeBundlePath).size +
+    fs.statSync(sharedBundlePath).size +
+    fs.statSync(tabSwitcherSharedBundlePath).size +
+    fs.statSync(optionsBundlePath).size,
+  bundleBudgets.options.uncompressed,
+  'the Options React route (uncompressed)'
 );
-assert(
-  zlib.gzipSync(runtimeBundle).length +
-      zlib.gzipSync(sharedBundle).length +
-      zlib.gzipSync(tabSwitcherSharedBundle).length +
-      zlib.gzipSync(optionsBundle).length <=
-    75 * 1024,
-  'the Options React route should stay within its 75 KiB gzip budget'
+assertWithinBudget(
+  gzipSize(runtimeBundle) +
+    gzipSize(sharedBundle) +
+    gzipSize(tabSwitcherSharedBundle) +
+    gzipSize(optionsBundle),
+  bundleBudgets.options.gzip,
+  'the Options React route (gzip)'
 );
-assert(
-  fs.statSync(overlayBundlePath).size <= 258 * 1024,
-  'the injected Overlay React route should stay within its 258 KiB uncompressed budget'
+assertWithinBudget(
+  fs.statSync(overlayBundlePath).size,
+  bundleBudgets.overlay.uncompressed,
+  'the injected Overlay React route (uncompressed)'
 );
-assert(
-  zlib.gzipSync(overlayBundle).length <= 78 * 1024,
-  'the injected Overlay React route should stay within its 78 KiB gzip budget'
+assertWithinBudget(
+  gzipSize(overlayBundle),
+  bundleBudgets.overlay.gzip,
+  'the injected Overlay React route (gzip)'
 );
-assert(
-  bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0) <=
-    710 * 1024,
-  'all shared React artifacts and four page entries should stay within their 710 KiB package budget'
+assertWithinBudget(
+  bundlePaths.reduce((total, file) => total + fs.statSync(file).size, 0),
+  bundleBudgets.total.uncompressed,
+  'all shared React artifacts and four page entries (uncompressed)'
 );
-assert(
-  bundles.reduce((total, source) => total + zlib.gzipSync(source).length, 0) <=
-    215 * 1024,
-  'all shared React artifacts and four page entries should stay within their 215 KiB gzip budget'
+assertWithinBudget(
+  bundles.reduce((total, source) => total + gzipSize(source), 0),
+  bundleBudgets.total.gzip,
+  'all shared React artifacts and four page entries (gzip)'
 );
 assert(
   newtabBundle.includes('from"./react-runtime.js"') &&

@@ -83,6 +83,8 @@ To use the command bar on local HTML, PDF, or `file://` pages, enable "Allow acc
 
 ## Development
 
+Development and CI use Node.js 20. If you use `nvm`, run `nvm use` to select the version declared in `.nvmrc`.
+
 The React pages must be built before Chrome can load their generated assets. Before loading the development extension for the first time, and after editing `react-src/`, run:
 
 ```bash
@@ -95,8 +97,7 @@ Then keep Developer mode enabled in `chrome://extensions/` and load the reposito
 Before committing, run:
 
 ```bash
-npm test
-npm run check
+npm run verify
 npm run audit:i18n
 npm run audit:style
 npm run package:store

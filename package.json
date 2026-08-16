@@ -2,10 +2,14 @@
   "name": "lumno-extension",
   "version": "0.9.44",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "build:react": "vite build --config vite.react.config.mjs && vite build --config vite.overlay-react.config.mjs",
     "typecheck:react": "tsc --project tsconfig.react.json --noEmit",
     "test": "npm run build:react && npm run test:legacy && npm run test:react",
+    "verify": "npm test && npm run check",
     "test:legacy": "node scripts/run-tests.js",
     "test:react": "vitest run --config vitest.react.config.ts",
     "check": "npm run check:js && npm run check:bookmarks && npm run typecheck:react && npm run build:react && npm run check:react-bundle && npm run check:manifest",
