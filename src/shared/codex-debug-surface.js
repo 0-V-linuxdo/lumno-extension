@@ -18,6 +18,7 @@
   const SURFACE_PORT_NAME = 'lumno-codex-debug-surface-v1';
   const MAX_QUERY_RESULTS = 50;
   const MAX_LOG_ENTRIES = 200;
+  const MAX_PERFORMANCE_ENTRIES = 200;
   const OFFICIAL_CODEX_EXTENSION_IDS = Object.freeze([
     'hehggadaopoacecdllhhajmbjkdcmajg',
     'lfkehkpjohcoelkpembgemeipeppanef'
@@ -37,6 +38,398 @@
       return stringValue;
     }
     return `${stringValue.slice(0, Math.max(0, maximum - 1))}…`;
+  }
+
+  function roundMetric(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Number(number.toFixed(2)) : 0;
+  }
+
+  function getPerformanceNow(windowObj) {
+    const performanceObj = windowObj && windowObj.performance;
+    return performanceObj && typeof performanceObj.now === 'function'
+      ? performanceObj.now()
+      : Date.now();
+  }
+
+  function getPerformanceEntries(performanceObj, type) {
+    if (!performanceObj || typeof performanceObj.getEntriesByType !== 'function') {
+      return [];
+    }
+    try {
+      return Array.from(performanceObj.getEntriesByType(type) || []);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function sanitizePerformanceResourceName(value) {
+    const rawValue = String(value || '');
+    if (!rawValue) {
+      return '';
+    }
+    if (/^(?:data:|blob:)/i.test(rawValue)) {
+      return '[omitted-url]';
+    }
+    try {
+      const url = new URL(rawValue);
+      return `${url.protocol}//${url.host}${url.pathname}`;
+    } catch (error) {
+      return truncate(rawValue.split(/[?#]/)[0], 1000);
+    }
+  }
+
+  function createPerformanceCollector(windowObj, documentObj, surfaceType) {
+    const performanceObj = windowObj && windowObj.performance;
+    const longTasks = [];
+    const events = [];
+    const layoutShifts = [];
+    const observers = [];
+    const observerSupport = {};
+    const longTaskStats = { count: 0, duration: 0, maxDuration: 0, sequence: 0 };
+    const eventStats = { count: 0, duration: 0, maxDuration: 0, sequence: 0 };
+    let cumulativeLayoutShift = 0;
+    let largestContentfulPaint = null;
+    let readyAtMs = null;
+    let readyObserver = null;
+
+    function appendBounded(list, entry) {
+      list.push(entry);
+      if (list.length > MAX_PERFORMANCE_ENTRIES) {
+        list.splice(0, list.length - MAX_PERFORMANCE_ENTRIES);
+      }
+    }
+
+    function isSurfaceReady() {
+      if (!documentObj) {
+        return false;
+      }
+      if (surfaceType === 'newtab') {
+        return Boolean(documentObj.body &&
+          documentObj.body.getAttribute('data-nt-ready') === '1');
+      }
+      if (surfaceType === 'options') {
+        return Boolean(documentObj.documentElement &&
+          documentObj.documentElement.getAttribute('data-lumno-options-ready') === 'true');
+      }
+      return documentObj.readyState === 'complete';
+    }
+
+    function captureReadyTime() {
+      if (readyAtMs !== null || !isSurfaceReady()) {
+        return false;
+      }
+      readyAtMs = roundMetric(getPerformanceNow(windowObj));
+      if (readyObserver) {
+        readyObserver.disconnect();
+        readyObserver = null;
+      }
+      return true;
+    }
+
+    function observe(type, observeOptions, onEntries) {
+      const PerformanceObserverClass = windowObj && windowObj.PerformanceObserver;
+      if (typeof PerformanceObserverClass !== 'function') {
+        return false;
+      }
+      const supportedTypes = Array.isArray(PerformanceObserverClass.supportedEntryTypes)
+        ? PerformanceObserverClass.supportedEntryTypes
+        : null;
+      if (supportedTypes && !supportedTypes.includes(type)) {
+        return false;
+      }
+      try {
+        const observer = new PerformanceObserverClass((list) => {
+          const entries = list && typeof list.getEntries === 'function'
+            ? list.getEntries()
+            : [];
+          onEntries(Array.from(entries || []));
+        });
+        observer.observe(observeOptions);
+        observers.push(observer);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    observerSupport.longtask = observe('longtask', { type: 'longtask', buffered: true }, (entries) => {
+      entries.forEach((entry) => {
+        const duration = roundMetric(entry.duration);
+        longTaskStats.count += 1;
+        longTaskStats.duration += duration;
+        longTaskStats.maxDuration = Math.max(longTaskStats.maxDuration, duration);
+        longTaskStats.sequence += 1;
+        appendBounded(longTasks, {
+          sequence: longTaskStats.sequence,
+          name: String(entry.name || 'longtask'),
+          startTime: roundMetric(entry.startTime),
+          duration
+        });
+      });
+    });
+    observerSupport.event = observe('event', {
+      type: 'event',
+      buffered: true,
+      durationThreshold: 16
+    }, (entries) => {
+      entries.forEach((entry) => {
+        const duration = roundMetric(entry.duration);
+        eventStats.count += 1;
+        eventStats.duration += duration;
+        eventStats.maxDuration = Math.max(eventStats.maxDuration, duration);
+        eventStats.sequence += 1;
+        appendBounded(events, {
+          sequence: eventStats.sequence,
+          name: String(entry.name || 'event'),
+          startTime: roundMetric(entry.startTime),
+          duration,
+          processingStart: roundMetric(entry.processingStart),
+          processingEnd: roundMetric(entry.processingEnd),
+          interactionId: Number(entry.interactionId) || 0
+        });
+      });
+    });
+    observerSupport.layoutShift = observe('layout-shift', { type: 'layout-shift', buffered: true }, (entries) => {
+      entries.forEach((entry) => {
+        const value = roundMetric(entry.value);
+        const hadRecentInput = Boolean(entry.hadRecentInput);
+        if (!hadRecentInput) {
+          cumulativeLayoutShift += value;
+        }
+        appendBounded(layoutShifts, {
+          startTime: roundMetric(entry.startTime),
+          value,
+          hadRecentInput
+        });
+      });
+    });
+    observerSupport.largestContentfulPaint = observe(
+      'largest-contentful-paint',
+      { type: 'largest-contentful-paint', buffered: true },
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (!entry) {
+          return;
+        }
+        largestContentfulPaint = {
+          startTime: roundMetric(entry.startTime),
+          renderTime: roundMetric(entry.renderTime),
+          loadTime: roundMetric(entry.loadTime),
+          size: roundMetric(entry.size)
+        };
+      }
+    );
+
+    captureReadyTime();
+    const MutationObserverClass = windowObj && windowObj.MutationObserver;
+    if (readyAtMs === null && typeof MutationObserverClass === 'function') {
+      readyObserver = new MutationObserverClass(captureReadyTime);
+      if (documentObj && documentObj.documentElement) {
+        readyObserver.observe(documentObj.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-lumno-options-ready']
+        });
+      }
+      if (documentObj && documentObj.body) {
+        readyObserver.observe(documentObj.body, {
+          attributes: true,
+          attributeFilter: ['data-nt-ready']
+        });
+      }
+    }
+
+    function getBaseline() {
+      return {
+        longTaskCount: longTaskStats.count,
+        longTaskDuration: longTaskStats.duration,
+        longTaskSequence: longTaskStats.sequence,
+        eventCount: eventStats.count,
+        eventDuration: eventStats.duration,
+        eventSequence: eventStats.sequence,
+        cumulativeLayoutShift
+      };
+    }
+
+    function getDelta(baseline) {
+      const start = baseline && typeof baseline === 'object' ? baseline : {};
+      const newLongTasks = longTasks.filter((entry) =>
+        entry.sequence > (Number(start.longTaskSequence) || 0)
+      );
+      const newEvents = events.filter((entry) =>
+        entry.sequence > (Number(start.eventSequence) || 0)
+      );
+      return {
+        longTasks: {
+          count: Math.max(0, longTaskStats.count - (Number(start.longTaskCount) || 0)),
+          totalDurationMs: roundMetric(
+            longTaskStats.duration - (Number(start.longTaskDuration) || 0)
+          ),
+          longestMs: roundMetric(Math.max(0, ...newLongTasks.map((entry) => entry.duration)))
+        },
+        events: {
+          count: Math.max(0, eventStats.count - (Number(start.eventCount) || 0)),
+          totalDurationMs: roundMetric(
+            eventStats.duration - (Number(start.eventDuration) || 0)
+          ),
+          longestMs: roundMetric(Math.max(0, ...newEvents.map((entry) => entry.duration)))
+        },
+        cumulativeLayoutShift: roundMetric(
+          cumulativeLayoutShift - (Number(start.cumulativeLayoutShift) || 0)
+        )
+      };
+    }
+
+    function snapshot(params) {
+      captureReadyTime();
+      const config = params && typeof params === 'object' ? params : {};
+      const maximum = clamp(config.maxEntries, 0, 100, 20);
+      const navigation = getPerformanceEntries(performanceObj, 'navigation')[0] || null;
+      const paintEntries = getPerformanceEntries(performanceObj, 'paint').map((entry) => ({
+        name: String(entry.name || ''),
+        startTime: roundMetric(entry.startTime)
+      }));
+      const resources = getPerformanceEntries(performanceObj, 'resource');
+      const slowestResources = resources
+        .map((entry) => ({
+          name: sanitizePerformanceResourceName(entry.name),
+          initiatorType: String(entry.initiatorType || ''),
+          startTime: roundMetric(entry.startTime),
+          duration: roundMetric(entry.duration),
+          transferSize: Math.max(0, Number(entry.transferSize) || 0)
+        }))
+        .sort((left, right) => right.duration - left.duration)
+        .slice(0, maximum);
+      const userTiming = [
+        ...getPerformanceEntries(performanceObj, 'mark'),
+        ...getPerformanceEntries(performanceObj, 'measure')
+      ].filter((entry) => /^lumno-/i.test(String(entry.name || ''))).map((entry) => ({
+        entryType: String(entry.entryType || ''),
+        name: String(entry.name || ''),
+        startTime: roundMetric(entry.startTime),
+        duration: roundMetric(entry.duration)
+      }));
+      const rootElement = documentObj && documentObj.documentElement;
+      const body = documentObj && documentObj.body;
+      const memory = performanceObj && performanceObj.memory;
+      const result = {
+        surfaceType,
+        capturedAtMs: roundMetric(getPerformanceNow(windowObj)),
+        environment: {
+          hardwareConcurrency: Math.max(0, Number(windowObj.navigator &&
+            windowObj.navigator.hardwareConcurrency) || 0),
+          deviceMemoryGb: Math.max(0, Number(windowObj.navigator &&
+            windowObj.navigator.deviceMemory) || 0),
+          visibilityState: String(documentObj && documentObj.visibilityState || ''),
+          viewport: {
+            width: Number(windowObj.innerWidth) || 0,
+            height: Number(windowObj.innerHeight) || 0,
+            devicePixelRatio: Number(windowObj.devicePixelRatio) || 1
+          }
+        },
+        document: {
+          readyState: String(documentObj && documentObj.readyState || ''),
+          nodeCount: documentObj && typeof documentObj.querySelectorAll === 'function'
+            ? documentObj.querySelectorAll('*').length
+            : 0,
+          bookmarkCards: documentObj && typeof documentObj.querySelectorAll === 'function'
+            ? documentObj.querySelectorAll('.x-nt-bookmark-card').length
+            : 0,
+          shortcutTiles: documentObj && typeof documentObj.querySelectorAll === 'function'
+            ? documentObj.querySelectorAll('.x-nt-shortcut-tile').length
+            : 0,
+          suggestionRows: documentObj && typeof documentObj.querySelectorAll === 'function'
+            ? documentObj.querySelectorAll('.x-nt-suggestion-item, .x-ov-suggestion-item').length
+            : 0
+        },
+        startup: {
+          readyAtMs,
+          ready: isSurfaceReady(),
+          storage: {
+            requests: Number(rootElement && rootElement.getAttribute(
+              'data-lumno-newtab-bootstrap-storage-requests'
+            )) || 0,
+            reads: Number(rootElement && rootElement.getAttribute(
+              'data-lumno-newtab-bootstrap-storage-reads'
+            )) || 0,
+            keys: String(rootElement && rootElement.getAttribute(
+              'data-lumno-newtab-bootstrap-storage-keys'
+            ) || '')
+          },
+          navigation: navigation ? {
+            type: String(navigation.type || ''),
+            duration: roundMetric(navigation.duration),
+            responseEnd: roundMetric(navigation.responseEnd),
+            domInteractive: roundMetric(navigation.domInteractive),
+            domContentLoaded: roundMetric(navigation.domContentLoadedEventEnd),
+            loadEnd: roundMetric(navigation.loadEventEnd)
+          } : null,
+          paints: paintEntries,
+          largestContentfulPaint,
+          userTiming
+        },
+        responsiveness: {
+          longTasks: {
+            count: longTaskStats.count,
+            totalDurationMs: roundMetric(longTaskStats.duration),
+            longestMs: roundMetric(longTaskStats.maxDuration),
+            entries: (maximum > 0 ? longTasks.slice(-maximum) : [])
+              .map(({ sequence, ...entry }) => entry)
+          },
+          events: {
+            count: eventStats.count,
+            totalDurationMs: roundMetric(eventStats.duration),
+            longestMs: roundMetric(eventStats.maxDuration),
+            entries: (maximum > 0 ? events.slice(-maximum) : [])
+              .map(({ sequence, ...entry }) => entry)
+          },
+          observerSupport: { ...observerSupport },
+          cumulativeLayoutShift: roundMetric(cumulativeLayoutShift),
+          layoutShifts: maximum > 0 ? layoutShifts.slice(-maximum) : []
+        },
+        resources: {
+          count: resources.length,
+          totalDurationMs: roundMetric(resources.reduce(
+            (total, entry) => total + (Number(entry.duration) || 0),
+            0
+          )),
+          slowest: slowestResources
+        },
+        memory: memory ? {
+          usedJsHeapBytes: Math.max(0, Number(memory.usedJSHeapSize) || 0),
+          totalJsHeapBytes: Math.max(0, Number(memory.totalJSHeapSize) || 0),
+          jsHeapLimitBytes: Math.max(0, Number(memory.jsHeapSizeLimit) || 0)
+        } : null,
+        pageState: {
+          newtabReady: String(body && body.getAttribute('data-nt-ready') || ''),
+          newtabEntry: String(body && body.getAttribute('data-nt-enter') || '')
+        }
+      };
+      if (config.clear === true) {
+        longTasks.length = 0;
+        events.length = 0;
+        layoutShifts.length = 0;
+        longTaskStats.count = 0;
+        longTaskStats.duration = 0;
+        longTaskStats.maxDuration = 0;
+        eventStats.count = 0;
+        eventStats.duration = 0;
+        eventStats.maxDuration = 0;
+        cumulativeLayoutShift = 0;
+      }
+      return result;
+    }
+
+    function destroy() {
+      observers.forEach((observer) => observer.disconnect());
+      observers.length = 0;
+      if (readyObserver) {
+        readyObserver.disconnect();
+        readyObserver = null;
+      }
+    }
+
+    return Object.freeze({ destroy, getBaseline, getDelta, snapshot });
   }
 
   function getManifest(chromeApi) {
@@ -451,6 +844,7 @@
 
     const surfaceId = createSurfaceId(windowObj);
     const surfaceType = inferSurfaceType(windowObj.location, documentObj);
+    const performanceCollector = createPerformanceCollector(windowObj, documentObj, surfaceType);
     const logs = [];
     let port = null;
     let reconnectTimer = null;
@@ -575,6 +969,103 @@
       });
     }
 
+    function waitForAnimationFrames(params) {
+      const frameCount = clamp(params && params.frames, 1, 4, 2);
+      const timeoutMs = clamp(params && params.timeoutMs, 100, 2000, 750);
+      const startedAt = getPerformanceNow(windowObj);
+      let frameRequestId = null;
+      let cancelPendingFrame = null;
+      let timer = null;
+      let settled = false;
+      let completedFrames = 0;
+      let firstFrameMs = null;
+
+      return new Promise((resolve) => {
+        function finish(timedOut) {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          if (timer !== null) {
+            windowObj.clearTimeout(timer);
+            timer = null;
+          }
+          if (cancelPendingFrame) {
+            cancelPendingFrame();
+            cancelPendingFrame = null;
+            frameRequestId = null;
+          }
+          const elapsedMs = roundMetric(getPerformanceNow(windowObj) - startedAt);
+          resolve({
+            requestedFrames: frameCount,
+            completedFrames,
+            timedOut,
+            elapsedMs,
+            firstFrameMs,
+            averageFrameMs: completedFrames > 0
+              ? roundMetric(elapsedMs / completedFrames)
+              : null
+          });
+        }
+
+        function onFrame() {
+          frameRequestId = null;
+          cancelPendingFrame = null;
+          if (settled) {
+            return;
+          }
+          completedFrames += 1;
+          if (firstFrameMs === null) {
+            firstFrameMs = roundMetric(getPerformanceNow(windowObj) - startedAt);
+          }
+          if (completedFrames >= frameCount) {
+            finish(false);
+            return;
+          }
+          requestFrame();
+        }
+
+        function requestFrame() {
+          if (typeof windowObj.requestAnimationFrame === 'function') {
+            frameRequestId = windowObj.requestAnimationFrame(onFrame);
+            cancelPendingFrame = () => {
+              if (typeof windowObj.cancelAnimationFrame === 'function') {
+                windowObj.cancelAnimationFrame(frameRequestId);
+              }
+            };
+            return;
+          }
+          frameRequestId = windowObj.setTimeout(onFrame, 16);
+          cancelPendingFrame = () => windowObj.clearTimeout(frameRequestId);
+        }
+
+        timer = windowObj.setTimeout(() => finish(true), timeoutMs);
+        requestFrame();
+      });
+    }
+
+    async function profileAction(params) {
+      const baseline = performanceCollector.getBaseline();
+      const startedAt = getPerformanceNow(windowObj);
+      const element = performAction(documentObj, windowObj, params || {});
+      const actionCompletedAt = getPerformanceNow(windowObj);
+      const presentation = await waitForAnimationFrames(params || {});
+      const completedAt = getPerformanceNow(windowObj);
+      const syncDurationMs = roundMetric(actionCompletedAt - startedAt);
+      return {
+        action: String(params && params.action || ''),
+        syncDurationMs,
+        interactionToFirstFrameMs: presentation.firstFrameMs === null
+          ? null
+          : roundMetric(syncDurationMs + presentation.firstFrameMs),
+        interactionToSettledFramesMs: roundMetric(completedAt - startedAt),
+        presentation,
+        performanceDelta: performanceCollector.getDelta(baseline),
+        element,
+        activeElement: describeElement(documentObj.activeElement, windowObj)
+      };
+    }
+
     function executeRequest(method, params) {
       if (method === 'surface.snapshot') {
         return createSnapshot(documentObj, windowObj, params, surfaceType);
@@ -594,6 +1085,12 @@
           element,
           activeElement: describeElement(documentObj.activeElement, windowObj)
         };
+      }
+      if (method === 'surface.profileAction') {
+        return profileAction(params || {});
+      }
+      if (method === 'surface.performance') {
+        return performanceCollector.snapshot(params || {});
       }
       if (method === 'surface.waitFor') {
         return waitFor(params || {});
@@ -677,6 +1174,7 @@
       surfaceType,
       describeElement: (element) => describeElement(element, windowObj),
       executeRequest,
+      getPerformanceSnapshot: (params) => performanceCollector.snapshot(params || {}),
       getLogs: () => logs.slice()
     });
     windowObj.__lumnoCodexDebugSurfaceAgentV1 = agent;
@@ -688,6 +1186,7 @@
     windowObj.addEventListener('load', () => postRegistration('surface.update'), { once: true });
     windowObj.addEventListener('pagehide', () => {
       closed = true;
+      performanceCollector.destroy();
       if (reconnectTimer) {
         windowObj.clearTimeout(reconnectTimer);
         reconnectTimer = null;
@@ -714,6 +1213,7 @@
     VERSION,
     SURFACE_PORT_NAME,
     OFFICIAL_CODEX_EXTENSION_IDS,
+    createPerformanceCollector,
     createSurfaceAgent,
     describeElement,
     inferSurfaceType,

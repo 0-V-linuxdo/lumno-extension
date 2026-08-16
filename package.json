@@ -19,6 +19,7 @@
     "check:manifest": "node scripts/check-manifest-resources.js",
     "audit:style": "node scripts/audit-style-debt.js",
     "audit:i18n": "node scripts/audit-i18n.js",
+    "profile:newtab-data": "node --expose-gc scripts/profile-newtab-data-performance.js",
     "package:store": "npm run build:react && node scripts/package-store.js",
     "test:package-store": "node scripts/test-package-store.js",
     "test:blacklist": "node scripts/test-blacklist.js",

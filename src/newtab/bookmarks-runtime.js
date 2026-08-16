@@ -97,7 +97,10 @@
       if (typeof store.buildBookmarkFolderCache !== 'function') {
         return false;
       }
-      const cache = store.buildBookmarkFolderCache(nodes, { normalizeHost });
+      const cache = store.buildBookmarkFolderCache(nodes, {
+        lazy: true,
+        normalizeHost
+      });
       const rootNode = cache && cache.rootNode ? cache.rootNode : null;
       if (!rootNode) {
         ready = false;
@@ -168,8 +171,17 @@
 
     function getFolderItems(folderId) {
       const id = String(folderId || '');
-      const items = id ? folderItemsCache.get(id) : null;
-      return Array.isArray(items) ? items : [];
+      const cachedItems = id ? folderItemsCache.get(id) : null;
+      if (Array.isArray(cachedItems)) {
+        return cachedItems;
+      }
+      const node = id ? nodeMap.get(id) : null;
+      if (!node || node.url || typeof store.buildBookmarkItemsFromChildren !== 'function') {
+        return [];
+      }
+      const items = store.buildBookmarkItemsFromChildren(node.children, { normalizeHost });
+      folderItemsCache.set(id, items);
+      return items;
     }
 
     function getFolderPath(folderId, rootTitle) {

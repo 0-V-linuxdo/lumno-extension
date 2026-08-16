@@ -19,6 +19,8 @@
     'surface.snapshot',
     'surface.query',
     'surface.action',
+    'surface.profileAction',
+    'surface.performance',
     'surface.waitFor',
     'surface.logs'
   ]);

@@ -108,6 +108,8 @@ async function runBackgroundBridgeTests() {
   assert.strictEqual(describeAsync, false, 'describe response should be synchronous');
   assert.strictEqual(describeResponse.ok, true);
   assert(describeResponse.result.methods.includes('surface.snapshot'));
+  assert(describeResponse.result.methods.includes('surface.performance'));
+  assert(describeResponse.result.methods.includes('surface.profileAction'));
   assert.strictEqual(describeResponse.result.developmentOnly, true);
 
   let listResponse = null;
@@ -179,12 +181,12 @@ async function runBackgroundBridgeTests() {
 async function runSurfaceBridgeTests() {
   const dom = new JSDOM(`<!doctype html>
     <html><head><title>New Tab</title></head><body data-lumno-page="newtab">
-      <button id="action" aria-label="Run action">Run</button>
-      <input id="query" value="before" />
+      <button id="action" class="x-nt-shortcut-tile" aria-label="Run action">Run</button>
+      <input id="query" class="x-nt-suggestion-item" value="before" />
       <input id="secret" type="password" value="do-not-return" />
       <input id="checkbox" type="checkbox" />
       <input id="radio" type="radio" checked />
-      <img id="wallpaper" src="data:image/png;base64,large" />
+      <img id="wallpaper" class="x-nt-bookmark-card" src="data:image/png;base64,large" />
       <script>window.fixtureScript = true;</script>
     </body></html>`, {
     url: 'chrome-extension://kkcjcneagmlhpeaafngjdlpcfjakejgb/src/newtab/newtab.html',
@@ -192,6 +194,88 @@ async function runSurfaceBridgeTests() {
   });
   const port = createPort();
   port.disconnect = () => {};
+  const performanceObservers = new Map();
+  class FixturePerformanceObserver {
+    static supportedEntryTypes = [
+      'longtask',
+      'event',
+      'layout-shift',
+      'largest-contentful-paint'
+    ];
+
+    constructor(callback) {
+      this.callback = callback;
+      this.type = '';
+    }
+
+    observe(options) {
+      this.type = String(options && options.type || '');
+      performanceObservers.set(this.type, this);
+    }
+
+    disconnect() {
+      if (performanceObservers.get(this.type) === this) {
+        performanceObservers.delete(this.type);
+      }
+    }
+
+    emit(entries) {
+      this.callback({ getEntries: () => entries });
+    }
+  }
+  Object.defineProperty(dom.window, 'PerformanceObserver', {
+    configurable: true,
+    value: FixturePerformanceObserver
+  });
+  const performanceEntries = {
+    navigation: [{
+      type: 'navigate',
+      duration: 128.5,
+      responseEnd: 5.2,
+      domInteractive: 91.4,
+      domContentLoadedEventEnd: 103.7,
+      loadEventEnd: 128.5
+    }],
+    paint: [
+      { name: 'first-paint', startTime: 31.2 },
+      { name: 'first-contentful-paint', startTime: 42.6 }
+    ],
+    resource: [{
+      name: 'https://example.com/newtab.js?token=do-not-return#private',
+      initiatorType: 'script',
+      startTime: 6,
+      duration: 61.8,
+      transferSize: 4096
+    }],
+    mark: [{ entryType: 'mark', name: 'lumno-newtab-bootstrap', startTime: 7.5, duration: 0 }],
+    measure: [{ entryType: 'measure', name: 'lumno-newtab-ready', startTime: 7.5, duration: 84.2 }]
+  };
+  Object.defineProperty(dom.window.performance, 'getEntriesByType', {
+    configurable: true,
+    value(type) {
+      return performanceEntries[type] || [];
+    }
+  });
+  Object.defineProperty(dom.window.performance, 'memory', {
+    configurable: true,
+    value: {
+      usedJSHeapSize: 12_000_000,
+      totalJSHeapSize: 24_000_000,
+      jsHeapSizeLimit: 256_000_000
+    }
+  });
+  dom.window.document.documentElement.setAttribute(
+    'data-lumno-newtab-bootstrap-storage-requests',
+    '1'
+  );
+  dom.window.document.documentElement.setAttribute(
+    'data-lumno-newtab-bootstrap-storage-reads',
+    '4'
+  );
+  dom.window.document.documentElement.setAttribute(
+    'data-lumno-newtab-bootstrap-storage-keys',
+    'theme,shortcuts,bookmarks'
+  );
   const chromeApi = createDebugChromeApi({
     connect(connectInfo) {
       assert.strictEqual(connectInfo.name, surfaceBridge.SURFACE_PORT_NAME);
@@ -219,6 +303,70 @@ async function runSurfaceBridgeTests() {
   assert.strictEqual(port.posted[0].type, 'surface.register');
   assert.strictEqual(port.posted[0].pageType, 'newtab');
 
+  performanceObservers.get('longtask').emit([{
+    name: 'self',
+    startTime: 55,
+    duration: 73.4
+  }]);
+  performanceObservers.get('event').emit([{
+    name: 'click',
+    startTime: 140,
+    duration: 42.2,
+    processingStart: 144,
+    processingEnd: 170,
+    interactionId: 7
+  }]);
+  performanceObservers.get('layout-shift').emit([{
+    startTime: 90,
+    value: 0.12,
+    hadRecentInput: false
+  }, {
+    startTime: 190,
+    value: 0.04,
+    hadRecentInput: true
+  }]);
+  performanceObservers.get('largest-contentful-paint').emit([{
+    startTime: 81.5,
+    renderTime: 81.5,
+    loadTime: 0,
+    size: 12000
+  }]);
+  dom.window.document.body.setAttribute('data-nt-ready', '1');
+  await Promise.resolve();
+
+  const performanceSnapshot = agent.executeRequest('surface.performance', { maxEntries: 10 });
+  assert.strictEqual(performanceSnapshot.surfaceType, 'newtab');
+  assert.strictEqual(performanceSnapshot.startup.ready, true);
+  assert.strictEqual(typeof performanceSnapshot.startup.readyAtMs, 'number');
+  assert.strictEqual(performanceSnapshot.startup.storage.requests, 1);
+  assert.strictEqual(performanceSnapshot.startup.storage.reads, 4);
+  assert.strictEqual(performanceSnapshot.startup.storage.keys, 'theme,shortcuts,bookmarks');
+  assert.strictEqual(performanceSnapshot.startup.navigation.domInteractive, 91.4);
+  assert.strictEqual(performanceSnapshot.startup.largestContentfulPaint.startTime, 81.5);
+  assert.strictEqual(performanceSnapshot.responsiveness.longTasks.longestMs, 73.4);
+  assert.strictEqual(performanceSnapshot.responsiveness.events.longestMs, 42.2);
+  assert.strictEqual(performanceSnapshot.responsiveness.cumulativeLayoutShift, 0.12);
+  assert.deepStrictEqual(performanceSnapshot.responsiveness.observerSupport, {
+    longtask: true,
+    event: true,
+    layoutShift: true,
+    largestContentfulPaint: true
+  });
+  assert.strictEqual(performanceSnapshot.document.bookmarkCards, 1);
+  assert.strictEqual(performanceSnapshot.document.shortcutTiles, 1);
+  assert.strictEqual(performanceSnapshot.document.suggestionRows, 1);
+  assert.strictEqual(performanceSnapshot.memory.usedJsHeapBytes, 12_000_000);
+  assert.strictEqual(
+    performanceSnapshot.resources.slowest[0].name,
+    'https://example.com/newtab.js'
+  );
+  assert(!JSON.stringify(performanceSnapshot).includes('do-not-return'));
+  const metricsWithoutEntries = agent.executeRequest('surface.performance', { maxEntries: 0 });
+  assert.deepStrictEqual(metricsWithoutEntries.responsiveness.longTasks.entries, []);
+  assert.deepStrictEqual(metricsWithoutEntries.responsiveness.events.entries, []);
+  assert.deepStrictEqual(metricsWithoutEntries.responsiveness.layoutShifts, []);
+  assert.deepStrictEqual(metricsWithoutEntries.resources.slowest, []);
+
   const queryResult = agent.executeRequest('surface.query', { selector: '#action' });
   assert.strictEqual(queryResult.count, 1);
   assert.strictEqual(queryResult.elements[0].text, 'Run');
@@ -226,6 +374,24 @@ async function runSurfaceBridgeTests() {
 
   agent.executeRequest('surface.action', { selector: '#action', action: 'click' });
   assert.strictEqual(clickCount, 1, 'click action should invoke the real DOM control');
+
+  const profiledAction = await agent.executeRequest('surface.profileAction', {
+    selector: '#action',
+    action: 'click',
+    frames: 2,
+    timeoutMs: 500
+  });
+  assert.strictEqual(clickCount, 2, 'profileAction should invoke the same real DOM control once');
+  assert.strictEqual(profiledAction.action, 'click');
+  assert(profiledAction.syncDurationMs >= 0);
+  assert.strictEqual(profiledAction.presentation.requestedFrames, 2);
+  assert.strictEqual(profiledAction.presentation.completedFrames, 2);
+  assert.strictEqual(profiledAction.presentation.timedOut, false);
+  assert(profiledAction.presentation.elapsedMs >= 0);
+  assert(profiledAction.presentation.firstFrameMs >= 0);
+  assert(profiledAction.interactionToFirstFrameMs >= profiledAction.syncDurationMs);
+  assert(profiledAction.interactionToSettledFramesMs >= profiledAction.interactionToFirstFrameMs);
+  assert.strictEqual(profiledAction.performanceDelta.longTasks.count, 0);
 
   const fillResult = agent.executeRequest('surface.action', {
     selector: '#query',
@@ -329,6 +495,18 @@ async function runSurfaceBridgeTests() {
 
   const storeLikeManifest = { ...manifest };
   delete storeLikeManifest.key;
+  const productionDom = new JSDOM('<!doctype html><body></body>', {
+    url: 'https://example.com/'
+  });
+  let productionObserverConstructions = 0;
+  Object.defineProperty(productionDom.window, 'PerformanceObserver', {
+    configurable: true,
+    value: class ProductionPerformanceObserver {
+      constructor() {
+        productionObserverConstructions += 1;
+      }
+    }
+  });
   const disabledChromeApi = createDebugChromeApi({
     getManifest() {
       return storeLikeManifest;
@@ -338,12 +516,20 @@ async function runSurfaceBridgeTests() {
     }
   });
   const disabledAgent = surfaceBridge.createSurfaceAgent({
-    windowObj: new JSDOM('<!doctype html><body></body>', { url: 'https://example.com/' }).window,
-    documentObj: new JSDOM('<!doctype html><body></body>', { url: 'https://example.com/' }).window.document,
+    windowObj: productionDom.window,
+    documentObj: productionDom.window.document,
     chromeApi: disabledChromeApi
   });
   assert.strictEqual(disabledAgent, null, 'store page should not start a debug surface');
+  assert.strictEqual(
+    productionObserverConstructions,
+    0,
+    'store page should not create performance observers for the development-only probe'
+  );
 
+  dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+  assert.strictEqual(performanceObservers.size, 0, 'page teardown should disconnect performance observers');
+  productionDom.window.close();
   dom.window.close();
 }
 

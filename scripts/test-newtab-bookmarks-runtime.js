@@ -114,12 +114,22 @@ async function run() {
   assert.strictEqual(root.folderId, '10');
   assert.deepStrictEqual(root.items.map((item) => item.id), ['11', '13']);
   assert.strictEqual(calls.getTree, 1);
+  assert.strictEqual(
+    runtime.getSnapshot().folderItemsCache.has('13'),
+    false,
+    'startup should not build unopened bookmark folders'
+  );
 
   const nested = await runtime.readFolder('13', { rootTitle: '书签' });
   assert.deepStrictEqual(nested.path.map((item) => item.title), ['书签', 'Design']);
   assert.deepStrictEqual(nested.items.map((item) => item.id), ['14']);
   assert.strictEqual(runtime.getNode('14').title, 'Figma');
   assert.strictEqual(runtime.getFolderItems('13')[0].parentId, '13');
+  assert.strictEqual(
+    runtime.getSnapshot().folderItemsCache.has('13'),
+    true,
+    'opening a bookmark folder should cache its items for later reads'
+  );
 
   const fallback = await runtime.readFolder('missing', {
     rootTitle: '书签',

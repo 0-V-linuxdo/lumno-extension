@@ -113,6 +113,29 @@ async function testRecentStore() {
   ], options);
   assert.strictEqual(savedHidden.length, 1);
   assert.strictEqual(savedHidden[0].lastVisitTime, 12);
+
+  let sanitizedValueCount = 0;
+  const boundedMerge = recentStore.mergeRecentSitesWithPinned(
+    Array.from({ length: 10_000 }, (_, index) => ({
+      title: `Candidate ${index}`,
+      url: `https://candidate-${index}.example/`
+    })),
+    [],
+    [],
+    8,
+    {
+      sanitizeDisplayText(value) {
+        sanitizedValueCount += 1;
+        return String(value || '').trim();
+      }
+    }
+  );
+  assert.strictEqual(boundedMerge.length, 8);
+  assert.strictEqual(
+    sanitizedValueCount,
+    16,
+    'recent-site merging should stop normalizing candidates once the visible limit is full'
+  );
 }
 
 function testBookmarkStore() {

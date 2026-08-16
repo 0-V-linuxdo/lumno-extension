@@ -211,7 +211,14 @@
     const rootNode = findBookmarksBarNode(nodes);
     const folderItemsCache = new Map();
     if (rootNode) {
-      cacheBookmarkFolderItems(rootNode, folderItemsCache, options);
+      if (options && options.lazy === true) {
+        folderItemsCache.set(
+          String(rootNode.id || '1'),
+          buildBookmarkItemsFromChildren(rootNode.children, options)
+        );
+      } else {
+        cacheBookmarkFolderItems(rootNode, folderItemsCache, options);
+      }
     }
     return {
       rootNode,

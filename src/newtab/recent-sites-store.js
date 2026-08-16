@@ -347,9 +347,15 @@
       normalized._xPinned = Boolean(isPinned);
       merged.push(normalized);
     };
-    normalizePinnedRecentSites(pinned, opts).forEach((item) => appendUnique(item, true));
-    (Array.isArray(items) ? items : []).forEach((item) => appendUnique(item, false));
-    return merged.slice(0, maxItems);
+    const normalizedPinned = normalizePinnedRecentSites(pinned, opts);
+    for (let index = 0; index < normalizedPinned.length && merged.length < maxItems; index += 1) {
+      appendUnique(normalizedPinned[index], true);
+    }
+    const candidates = Array.isArray(items) ? items : [];
+    for (let index = 0; index < candidates.length && merged.length < maxItems; index += 1) {
+      appendUnique(candidates[index], false);
+    }
+    return merged;
   }
 
   function mergeRecentSiteSources(input) {

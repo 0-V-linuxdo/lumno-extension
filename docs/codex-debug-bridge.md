@@ -36,6 +36,8 @@ Available methods:
 | `surface.snapshot` | Return sanitized, bounded markup/text plus page, viewport, and focus state. |
 | `surface.query` | Query a CSS selector and return bounded element descriptors. |
 | `surface.action` | Run an allowlisted DOM action. |
+| `surface.profileAction` | Run the same allowlisted action and report synchronous cost, presentation frames, and new long-task/Event Timing/CLS entries. |
+| `surface.performance` | Return startup, responsiveness, resource, DOM-size, environment, and available JS-heap metrics. |
 | `surface.waitFor` | Wait up to three seconds for `attached`, `detached`, or `visible`. |
 | `surface.logs` | Read captured warnings, errors, and unhandled runtime failures. |
 
@@ -68,6 +70,45 @@ await chrome.runtime.sendMessage(LUMNO_DEVELOPMENT_ID, {
   }
 });
 ```
+
+## New Tab performance sampling
+
+The performance collector is created only after the development bridge allowlist succeeds. A store build does not install its `PerformanceObserver` or `MutationObserver` instances.
+
+Read a bounded cold-start and responsiveness snapshot after opening a fresh New Tab:
+
+```js
+const metrics = await chrome.runtime.sendMessage(LUMNO_DEVELOPMENT_ID, {
+  channel: 'lumno.codex.debug',
+  version: 1,
+  requestId: crypto.randomUUID(),
+  method: 'surface.performance',
+  target: { surfaceId },
+  params: { maxEntries: 20 }
+});
+```
+
+The result includes the New Tab ready marker and startup storage batching diagnostics; navigation, paint, LCP, and Lumno user timing; long tasks, Event Timing, layout shift, and observer support; slow resources with query strings and hashes removed; visible bookmark/shortcut/suggestion counts; and `performance.memory` values when Chromium exposes them. Pass `maxEntries: 0` for aggregates only or `clear: true` to clear transient long-task, event, and layout-shift samples after reading them.
+
+Profile a real allowlisted interaction through two presentation frames:
+
+```js
+const interaction = await chrome.runtime.sendMessage(LUMNO_DEVELOPMENT_ID, {
+  channel: 'lumno.codex.debug',
+  version: 1,
+  requestId: crypto.randomUUID(),
+  method: 'surface.profileAction',
+  target: { surfaceId },
+  params: {
+    action: 'click',
+    selector: '.x-nt-wallpaper-button',
+    frames: 2,
+    timeoutMs: 750
+  }
+});
+```
+
+For strong development machines, run `npm run profile:newtab-data` as a repeatable CPU/data pressure companion. It profiles a 50,002-node bookmark tree, 50,000 history entries plus 5,000 tabs, and 10,000 same-task startup storage reads, then reports local p95 plus 4× and 6× CPU projections. These projections cover JavaScript data work only; layout, paint, compositing, and GPU behavior must come from the live surface probe.
 
 ## Adapter notes
 
