@@ -7,6 +7,21 @@
   if (document.body) {
     document.body.removeAttribute('data-nt-ready');
   }
+  const newtabStartupProfiler = globalThis.__lumnoCodexDebugStartupProfilerV1 || null;
+  function markNewtabStartupMilestone(name) {
+    if (newtabStartupProfiler &&
+        typeof newtabStartupProfiler.markMilestone === 'function') {
+      newtabStartupProfiler.markMilestone(name);
+    }
+  }
+  function observeNewtabStartupTask(name, task) {
+    if (newtabStartupProfiler &&
+        typeof newtabStartupProfiler.observeTask === 'function') {
+      newtabStartupProfiler.observeTask(name, task);
+    }
+    return task;
+  }
+  markNewtabStartupMilestone('script-start');
 
   const settingsRuntimeApi = globalThis.LumnoSettings || {};
   const providerStorageRuntime = typeof settingsRuntimeApi.createProviderStorageRuntime === 'function'
@@ -694,6 +709,7 @@
   let currentRecentGridColumns = 4;
   toastElement = document.getElementById('_x_extension_toast_2024_unique_');
   toastController = NEWTAB_TOAST.createToastController(toastElement, { windowObj: window });
+  markNewtabStartupMilestone('core-runtimes-created');
 
   function normalizeRecentCount(value) {
     return NEWTAB_RECENT_STORE.normalizeRecentCount(value);
@@ -2237,6 +2253,7 @@
     document.body.setAttribute('data-nt-enter', 'done');
     root.setAttribute('data-lumno-search-entry', 'done');
     finishWordmarkEntryAnimation();
+    markNewtabStartupMilestone('ready-visible');
     document.body.setAttribute('data-nt-ready', '1');
     if (resolveNewtabEntryAnimationReady) {
       resolveNewtabEntryAnimationReady();
@@ -2276,6 +2293,7 @@
           scheduleNewtabReadyAfterViewportSettle();
           return;
         }
+        markNewtabStartupMilestone('ready-visible');
         document.body.setAttribute('data-nt-ready', '1');
         startNewtabEntryAnimation();
         rememberSearchEntryViewport();
@@ -2287,6 +2305,7 @@
     if (!document.body) {
       return;
     }
+    markNewtabStartupMilestone('ready-requested');
     newtabReadyRequested = true;
     scheduleNewtabReadyAfterViewportSettle();
   }
@@ -4205,6 +4224,7 @@
   window.addEventListener('pagehide', hideToast);
 
   const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay();
+  observeNewtabStartupTask('wallpaper-overlay', initialWallpaperOverlayReadyTask);
   const initialWallpaperVisualReadyTask = Promise.all([
     bootstrapInitialThemeMode(),
     initialWallpaperOverlayReadyTask.then(() => bootstrapInitialWallpaper()),
@@ -4215,12 +4235,15 @@
   }).then(() => {
     markInitialWallpaperVisualReady();
   });
+  observeNewtabStartupTask('wallpaper-visual', initialWallpaperVisualReadyTask);
   const initialAppearanceReadyTask = Promise.all([
     initialWallpaperVisualReadyTask,
     bootstrapInitialNewtabFavicon()
   ]).catch((error) => {
     console.warn('[Lumno] Initial new tab appearance setup failed.', error);
   });
+  observeNewtabStartupTask('appearance', initialAppearanceReadyTask);
+  markNewtabStartupMilestone('appearance-bootstrap-scheduled');
 
   addStorageChangeListener((changes, areaName) => {
     if (areaName === 'local' && changes[NEWTAB_SHORTCUT_ICONS_STORAGE_KEY]) {
@@ -6623,6 +6646,7 @@
       offsetY: 16
     })
     : null;
+  markNewtabStartupMilestone('page-structure-created');
 
   function showTopActionTooltip(button, text, options) {
     if (!topActionTooltipController || !button || !text) {
@@ -8975,6 +8999,7 @@
 
   createShortcutsSection();
   shortcutDialogController = createShortcutDialogComponent();
+  markNewtabStartupMilestone('shortcut-surface-created');
 
   setContentSectionVisible(bookmarkSection, false);
   const bookmarkHeader = pageStructureRuntime.bookmark.header;
@@ -9256,6 +9281,7 @@
   const bottomDock = bottomDockRuntime.element;
   layoutController = bottomDockRuntime.layoutController;
   applyNewtabWidthMode();
+  markNewtabStartupMilestone('dock-runtime-created');
 
   bookmarkPagerPrevButton.addEventListener('click', () => {
     if (bookmarkCurrentPage <= 0) {
@@ -15296,6 +15322,7 @@
       });
     }
   });
+  markNewtabStartupMilestone('search-input-created');
 
   function isEditableElement(el) {
     if (!el) {
@@ -15978,6 +16005,7 @@
       }
     }).catch(() => {});
   });
+  markNewtabStartupMilestone('search-controller-created');
 
   function updateSiteSearchPrefixLayout() {
     if (inputModeController) {
@@ -16291,6 +16319,7 @@
   }
   createWallpaperControls();
   createFeedbackControls();
+  markNewtabStartupMilestone('auxiliary-controls-created');
   document.addEventListener('pointerdown', function(event) {
     if (!isFeedbackPopoverOpen()) {
       return;
@@ -16378,6 +16407,7 @@
   if (BOOKMARK_CASCADE_DEBUG_UI_ENABLED && bookmarkCascadeRuntime && bookmarkCascadeRuntime.getDebugControl()) {
     document.body.appendChild(bookmarkCascadeRuntime.getDebugControl());
   }
+  markNewtabStartupMilestone('dom-mounted');
 
   let recentExternalChangeTimer = 0;
   let bookmarkExternalChangeTimer = 0;
@@ -16455,7 +16485,9 @@
   }, { passive: true });
   bottomDockRuntime.onScroll(scheduleWallpaperAdaptiveToneUpdate, { passive: true });
   const shortcutPreferencesReadyPromise = loadNewtabShortcutPreferences();
+  observeNewtabStartupTask('shortcut-preferences', shortcutPreferencesReadyPromise);
   const shortcutsReadyPromise = shortcutPreferencesReadyPromise.then(loadVisibleShortcuts);
+  observeNewtabStartupTask('visible-shortcuts', shortcutsReadyPromise);
   const initialShortcutsReadyTask = shortcutsReadyPromise.catch((error) => {
     console.warn('[Lumno] Deferred shortcut loading failed.', error);
     return [];
@@ -16465,7 +16497,9 @@
     loadFaviconRequestBlacklistItems(),
     loadFaviconEnhancedFetchEnabled()
   ]);
+  observeNewtabStartupTask('section-policy', sectionPolicyReadyPromise);
   const initialLanguageReadyTask = bootstrapInitialLanguageMode();
+  observeNewtabStartupTask('language', initialLanguageReadyTask);
   const initialMotionPreferenceReadyTask = globalThis.LumnoMotionPreferenceReady &&
     typeof globalThis.LumnoMotionPreferenceReady.then === 'function'
       ? globalThis.LumnoMotionPreferenceReady
@@ -16489,17 +16523,21 @@
       initialLanguageReadyTask,
       sectionPolicyReadyPromise,
       initialShortcutsReadyTask
-    ]).then(() => Promise.all([
-      loadRecentSites(),
-      loadBookmarks()
-    ])).catch((error) => {
+    ]).then(() => {
+      const recentSitesReadyTask = loadRecentSites();
+      const bookmarksReadyTask = loadBookmarks();
+      observeNewtabStartupTask('recent-sites', recentSitesReadyTask);
+      observeNewtabStartupTask('bookmarks', bookmarksReadyTask);
+      return Promise.all([recentSitesReadyTask, bookmarksReadyTask]);
+    }).catch((error) => {
       console.warn('[Lumno] Motion-free new tab entry setup failed.', error);
     }).then(() => {
       maybeShowFileAccessNotice();
       markNewtabReady();
     });
   });
-  Promise.all([
+  observeNewtabStartupTask('visual-ready', initialVisualReadyPromise);
+  const initialDeferredContentReadyTask = Promise.all([
     initialVisualReadyPromise,
     initialLanguageReadyTask,
     sectionPolicyReadyPromise
@@ -16507,9 +16545,14 @@
     if (initialNewtabSkipsEntryMotion) {
       return;
     }
-    loadRecentSites();
-    loadBookmarks();
+    const recentSitesReadyTask = loadRecentSites();
+    const bookmarksReadyTask = loadBookmarks();
+    observeNewtabStartupTask('recent-sites', recentSitesReadyTask);
+    observeNewtabStartupTask('bookmarks', bookmarksReadyTask);
+    return Promise.all([recentSitesReadyTask, bookmarksReadyTask]);
   });
+  observeNewtabStartupTask('deferred-content', initialDeferredContentReadyTask);
   updateBookmarkSectionPosition();
+  markNewtabStartupMilestone('script-end');
 
 })();

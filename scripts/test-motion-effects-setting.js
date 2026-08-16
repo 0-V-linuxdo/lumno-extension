@@ -121,7 +121,7 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /initialMotionPreferenceReadyTask[\s\S]*initialVisualReadyPromise = Promise\.all\([\s\S]*initialMotionPreferenceReadyTask[\s\S]*initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*if \(!initialNewtabSkipsEntryMotion\)[\s\S]*Promise\.all\(\[\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise,\s*initialShortcutsReadyTask\s*\]\)[\s\S]*loadRecentSites\(\),\s*loadBookmarks\(\)[\s\S]*markNewtabReady\(\)/,
+  /initialMotionPreferenceReadyTask[\s\S]*initialVisualReadyPromise = Promise\.all\([\s\S]*initialMotionPreferenceReadyTask[\s\S]*initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*if \(!initialNewtabSkipsEntryMotion\)[\s\S]*Promise\.all\(\[\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise,\s*initialShortcutsReadyTask\s*\]\)[\s\S]*const recentSitesReadyTask = loadRecentSites\(\);\s*const bookmarksReadyTask = loadBookmarks\(\);[\s\S]*return Promise\.all\(\[recentSitesReadyTask, bookmarksReadyTask\]\);[\s\S]*markNewtabReady\(\)/,
   'motion-free New Tabs should wait for text and visible sections before one atomic reveal'
 );
 

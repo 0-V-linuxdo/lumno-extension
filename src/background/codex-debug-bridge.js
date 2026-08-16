@@ -23,6 +23,7 @@
     'surface.performance',
     'surface.performancePanel',
     'surface.performanceRecording',
+    'surface.startupSamples',
     'surface.waitFor',
     'surface.logs'
   ]);

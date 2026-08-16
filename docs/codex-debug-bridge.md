@@ -40,6 +40,7 @@ Available methods:
 | `surface.performance` | Return startup, responsiveness, resource, DOM-size, environment, and available JS-heap metrics. |
 | `surface.performanceRecording` | Start, stop, inspect, or clear a bounded frame and responsiveness recording. |
 | `surface.performancePanel` | Open, close, toggle, or inspect the development-only New Tab recorder panel. |
+| `surface.startupSamples` | Report, capture, inspect, or clear up to 12 cross-tab New Tab cold-start samples. |
 | `surface.waitFor` | Wait up to three seconds for `attached`, `detached`, or `visible`. |
 | `surface.logs` | Read captured warnings, errors, and unhandled runtime failures. |
 
@@ -115,6 +116,8 @@ For strong development machines, run `npm run profile:newtab-data` as a repeatab
 On a development New Tab, press `Ctrl/⌘ + Alt + Shift + P` to open the recorder panel. Choose Search, Shortcuts, Bookmarks, Wallpaper, or Mixed flow and start a bounded 10, 15, or 30-second recording. The panel may be closed while recording so it does not cover the target controls. Reopen it with the same shortcut to review, copy, or download the sanitized JSON report.
 
 The recorder samples frame intervals only while active and stops automatically at the selected deadline. Its report includes frame p95/max and 20/32/50ms counts, estimated dropped frames against an explicit 60Hz reference budget, long-task/Event Timing/CLS deltas, startup readiness and storage batching, DOM-node change, and available JS-heap change. Event Timing keeps the raw observer entries for diagnosis but also groups entries with the same input start, duration, and interaction id into `eventBursts`, so one pointer transition is not counted once per `pointerout`/`leave`/`over`/`enter` entry. Burst summaries distinguish maximum input delay, JavaScript processing span, and presentation delay; recording maxima stay exact even when the bounded entry list discards older detail rows. Each retained event includes a sanitized element/context marker; it never includes text, input values, tooltip content, URL query strings, or hashes. The panel has no transition, animation, filter, blur, or persistent layer promotion of its own.
+
+For repeatable cold-start diagnosis, clear startup samples once, then open a fresh New Tab 8–12 times, wait about two seconds after each ready state, and close it before opening the next one. Development builds automatically retain up to 12 sanitized samples in extension-scoped `localStorage`, so the series survives closing and replacing the measured tab. Reopen the panel in the final New Tab and choose **Copy startups** to export the navigation-type distribution, p50/p95 ready, LCP, DOM-interactive, total long-task, and longest-task summaries plus the individual startup phase/task measures. Store builds do not install the sampler or profiler.
 
 ## Adapter notes
 

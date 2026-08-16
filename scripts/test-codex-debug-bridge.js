@@ -40,6 +40,21 @@ function createPort(sender) {
   };
 }
 
+function createMemoryStorage() {
+  const values = new Map();
+  return {
+    getItem(key) {
+      return values.has(String(key)) ? values.get(String(key)) : null;
+    },
+    removeItem(key) {
+      values.delete(String(key));
+    },
+    setItem(key, value) {
+      values.set(String(key), String(value));
+    }
+  };
+}
+
 function createDebugChromeApi(runtimeOverrides) {
   return {
     runtime: {
@@ -112,6 +127,7 @@ async function runBackgroundBridgeTests() {
   assert(describeResponse.result.methods.includes('surface.profileAction'));
   assert(describeResponse.result.methods.includes('surface.performancePanel'));
   assert(describeResponse.result.methods.includes('surface.performanceRecording'));
+  assert(describeResponse.result.methods.includes('surface.startupSamples'));
   assert.strictEqual(describeResponse.result.developmentOnly, true);
 
   let listResponse = null;
@@ -196,6 +212,14 @@ async function runSurfaceBridgeTests() {
   });
   const port = createPort();
   port.disconnect = () => {};
+  Object.defineProperty(dom.window, 'localStorage', {
+    configurable: true,
+    value: createMemoryStorage()
+  });
+  Object.defineProperty(dom.window, 'sessionStorage', {
+    configurable: true,
+    value: createMemoryStorage()
+  });
   const performanceObservers = new Map();
   class FixturePerformanceObserver {
     static supportedEntryTypes = [
@@ -256,6 +280,33 @@ async function runSurfaceBridgeTests() {
     configurable: true,
     value(type) {
       return performanceEntries[type] || [];
+    }
+  });
+  Object.defineProperty(dom.window.performance, 'mark', {
+    configurable: true,
+    value(name) {
+      performanceEntries.mark.push({
+        entryType: 'mark',
+        name: String(name),
+        startTime: dom.window.performance.now(),
+        duration: 0
+      });
+    }
+  });
+  Object.defineProperty(dom.window.performance, 'measure', {
+    configurable: true,
+    value(name, startName, endName) {
+      const getLatestMark = (markName) => performanceEntries.mark
+        .filter((entry) => entry.name === markName)
+        .at(-1);
+      const start = getLatestMark(startName);
+      const end = getLatestMark(endName);
+      performanceEntries.measure.push({
+        entryType: 'measure',
+        name: String(name),
+        startTime: start ? start.startTime : 0,
+        duration: Math.max(0, (end ? end.startTime : 0) - (start ? start.startTime : 0))
+      });
     }
   });
   Object.defineProperty(dom.window.performance, 'memory', {
@@ -327,6 +378,21 @@ async function runSurfaceBridgeTests() {
   });
   assert(agent, 'development page should create a debug surface agent');
   assert.strictEqual(agent.surfaceType, 'newtab');
+  assert(agent.startupProfiler, 'development New Tab should install startup phase marks');
+  agent.startupProfiler.markMilestone('fixture-start');
+  agent.startupProfiler.markMilestone('fixture-ready');
+  agent.startupProfiler.observeTask('fixture-task', Promise.resolve(true));
+  await Promise.resolve();
+  assert(
+    performanceEntries.measure.some((entry) =>
+      entry.name === 'lumno-newtab-phase-fixture-start-to-fixture-ready'
+    ),
+    'startup profiler should measure consecutive New Tab milestones'
+  );
+  assert(
+    performanceEntries.measure.some((entry) => entry.name === 'lumno-newtab-task-fixture-task'),
+    'startup profiler should measure asynchronous startup tasks without changing them'
+  );
   assert.strictEqual(dom.window.document.documentElement.dataset.lumnoCodexDebugReady, 'true');
   assert.strictEqual(port.posted[0].type, 'surface.register');
   assert.strictEqual(port.posted[0].pageType, 'newtab');
@@ -375,6 +441,25 @@ async function runSurfaceBridgeTests() {
   }]);
   dom.window.document.body.setAttribute('data-nt-ready', '1');
   await Promise.resolve();
+
+  const startupReport = agent.executeRequest('surface.startupSamples', {
+    action: 'capture'
+  });
+  assert.strictEqual(startupReport.kind, 'cold-start-series');
+  assert.strictEqual(startupReport.sampleCount, 1);
+  assert.strictEqual(startupReport.samples[0].startup.ready, true);
+  assert.strictEqual(startupReport.samples[0].longTasks.longestMs, 73.4);
+  assert.strictEqual(startupReport.summary.readyAtMs.count, 1);
+  assert.deepStrictEqual(startupReport.navigationTypes, { navigate: 1 });
+  assert(
+    dom.window.localStorage.getItem('lumno.codex.newtab.startup-samples.v1'),
+    'startup samples should use extension-wide localStorage so fresh New Tab pages share a series'
+  );
+  assert.strictEqual(
+    dom.window.sessionStorage.getItem('lumno.codex.newtab.startup-samples.v1'),
+    null,
+    'startup samples should not be isolated to a single tab session'
+  );
 
   const performanceSnapshot = agent.executeRequest('surface.performance', { maxEntries: 10 });
   assert.strictEqual(performanceSnapshot.surfaceType, 'newtab');
@@ -572,6 +657,13 @@ async function runSurfaceBridgeTests() {
       .includes('max processing'),
     'panel summary should distinguish event processing from total presentation latency'
   );
+  performancePanelHost.shadowRoot.querySelector('[data-action="copy-startups"]').click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(
+    JSON.parse(copiedPerformanceReport).kind,
+    'cold-start-series',
+    'Copy startups should export the bounded cross-tab startup report'
+  );
   performancePanelHost.shadowRoot.querySelector('[data-action="copy"]').click();
   await new Promise((resolve) => setImmediate(resolve));
   assert.strictEqual(
@@ -722,6 +814,11 @@ async function runSurfaceBridgeTests() {
   });
   assert.strictEqual(disabledAgent, null, 'store page should not start a debug surface');
   assert.strictEqual(
+    productionDom.window.__lumnoCodexDebugStartupProfilerV1,
+    undefined,
+    'store page should not install New Tab startup instrumentation'
+  );
+  assert.strictEqual(
     productionObserverConstructions,
     0,
     'store page should not create performance observers for the development-only probe'
@@ -752,6 +849,69 @@ async function runSurfaceBridgeTests() {
   );
   productionDom.window.close();
   dom.window.close();
+}
+
+function runCrossTabStartupSamplerTests() {
+  const sharedStorage = createMemoryStorage();
+  let sampleRevision = 0;
+  const createSampler = () => {
+    sampleRevision += 1;
+    const revision = sampleRevision;
+    const windowObj = {
+      clearTimeout() {},
+      localStorage: sharedStorage,
+      setTimeout() {
+        return revision;
+      }
+    };
+    const documentObj = {
+      body: {
+        getAttribute() {
+          return null;
+        }
+      }
+    };
+    const performanceCollector = {
+      snapshot() {
+        return {
+          capturedAtMs: 200 + revision,
+          document: { nodeCount: 100 + revision },
+          environment: { hardwareConcurrency: 8 },
+          memory: null,
+          resources: { count: 0, slowest: [], totalDurationMs: 0 },
+          responsiveness: {
+            longTasks: { count: 0, entries: [], longestMs: 0, totalDurationMs: 0 }
+          },
+          startup: {
+            largestContentfulPaint: { startTime: 180 + revision },
+            navigation: { domInteractive: 40 + revision, type: 'navigate' },
+            ready: true,
+            readyAtMs: 120 + revision
+          }
+        };
+      }
+    };
+    return surfaceBridge.createStartupSampler(
+      windowObj,
+      documentObj,
+      performanceCollector,
+      'newtab'
+    );
+  };
+
+  const firstTabSampler = createSampler();
+  firstTabSampler.capture();
+  firstTabSampler.destroy();
+  const secondTabSampler = createSampler();
+  assert.strictEqual(
+    secondTabSampler.getReport().sampleCount,
+    1,
+    'a fresh New Tab should see samples captured by a previously closed New Tab'
+  );
+  secondTabSampler.capture();
+  assert.strictEqual(secondTabSampler.getReport().sampleCount, 2);
+  assert.deepStrictEqual(secondTabSampler.getReport().navigationTypes, { navigate: 2 });
+  secondTabSampler.destroy();
 }
 
 function runWiringTests() {
@@ -794,6 +954,7 @@ function runWiringTests() {
 (async () => {
   await runBackgroundBridgeTests();
   await runSurfaceBridgeTests();
+  runCrossTabStartupSamplerTests();
   runWiringTests();
   console.log('Codex debug bridge tests passed');
 })().catch((error) => {

@@ -19,6 +19,8 @@
   const MAX_QUERY_RESULTS = 50;
   const MAX_LOG_ENTRIES = 200;
   const MAX_PERFORMANCE_ENTRIES = 200;
+  const STARTUP_SAMPLE_STORAGE_KEY = 'lumno.codex.newtab.startup-samples.v1';
+  const MAX_STARTUP_SAMPLES = 12;
   const OFFICIAL_CODEX_EXTENSION_IDS = Object.freeze([
     'hehggadaopoacecdllhhajmbjkdcmajg',
     'lfkehkpjohcoelkpembgemeipeppanef'
@@ -175,6 +177,85 @@
         ? contextDescriptor
         : null
     };
+  }
+
+  function createStartupProfiler(windowObj, surfaceType) {
+    const performanceObj = windowObj && windowObj.performance;
+    if (surfaceType !== 'newtab' || !performanceObj ||
+        typeof performanceObj.mark !== 'function' ||
+        typeof performanceObj.measure !== 'function') {
+      return null;
+    }
+    let previousMilestone = null;
+    const taskCounts = new Map();
+
+    function normalizeLabel(value) {
+      return String(value || 'unknown')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'unknown';
+    }
+
+    function safeMark(name) {
+      try {
+        performanceObj.mark(name);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function safeMeasure(name, startMark, endMark) {
+      try {
+        performanceObj.measure(name, startMark, endMark);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function markMilestone(label) {
+      const normalized = normalizeLabel(label);
+      const markName = `lumno-newtab-milestone-${normalized}`;
+      if (!safeMark(markName)) {
+        return null;
+      }
+      if (previousMilestone) {
+        safeMeasure(
+          `lumno-newtab-phase-${previousMilestone.label}-to-${normalized}`,
+          previousMilestone.markName,
+          markName
+        );
+      }
+      previousMilestone = { label: normalized, markName };
+      return markName;
+    }
+
+    function observeTask(label, task) {
+      const normalized = normalizeLabel(label);
+      const count = (taskCounts.get(normalized) || 0) + 1;
+      taskCounts.set(normalized, count);
+      const suffix = count > 1 ? `-${count}` : '';
+      const startMark = `lumno-newtab-task-${normalized}${suffix}-start`;
+      const endMark = `lumno-newtab-task-${normalized}${suffix}-end`;
+      if (!safeMark(startMark)) {
+        return task;
+      }
+      const finish = () => {
+        if (safeMark(endMark)) {
+          safeMeasure(
+            `lumno-newtab-task-${normalized}${suffix}`,
+            startMark,
+            endMark
+          );
+        }
+      };
+      Promise.resolve(task).then(finish, finish);
+      return task;
+    }
+
+    return Object.freeze({ markMilestone, observeTask });
   }
 
   function createPerformanceCollector(windowObj, documentObj, surfaceType) {
@@ -712,6 +793,226 @@
     return Object.freeze({ destroy, getBaseline, getDelta, snapshot });
   }
 
+  function summarizeStartupMetric(values) {
+    const sorted = Array.isArray(values)
+      ? values.filter((value) => Number.isFinite(value) && value >= 0).slice()
+      : [];
+    sorted.sort((left, right) => left - right);
+    if (sorted.length === 0) {
+      return { count: 0, minMs: 0, medianMs: 0, p95Ms: 0, maxMs: 0 };
+    }
+    const percentile = (ratio) => sorted[
+      Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))
+    ];
+    return {
+      count: sorted.length,
+      minMs: roundMetric(sorted[0]),
+      medianMs: roundMetric(percentile(0.5)),
+      p95Ms: roundMetric(percentile(0.95)),
+      maxMs: roundMetric(sorted[sorted.length - 1])
+    };
+  }
+
+  function createStartupSampler(windowObj, documentObj, performanceCollector, surfaceType) {
+    if (surfaceType !== 'newtab' || !windowObj || !documentObj || !performanceCollector) {
+      return null;
+    }
+    let fallbackSamples = [];
+    let pollTimer = null;
+    let settleTimer = null;
+    let captured = false;
+    let destroyed = false;
+    const pollStartedAt = Date.now();
+
+    function getSharedStartupStorage() {
+      try {
+        return windowObj.localStorage || null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function readSamples() {
+      const storage = getSharedStartupStorage();
+      if (!storage || typeof storage.getItem !== 'function') {
+        return fallbackSamples.slice();
+      }
+      try {
+        const parsed = JSON.parse(storage.getItem(STARTUP_SAMPLE_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.slice(-MAX_STARTUP_SAMPLES) : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function writeSamples(samples) {
+      const bounded = Array.isArray(samples)
+        ? samples.slice(-MAX_STARTUP_SAMPLES)
+        : [];
+      fallbackSamples = bounded;
+      const storage = getSharedStartupStorage();
+      if (!storage || typeof storage.setItem !== 'function') {
+        return false;
+      }
+      try {
+        storage.setItem(STARTUP_SAMPLE_STORAGE_KEY, JSON.stringify(bounded));
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function getLargestContentfulPaintMs(sample) {
+      const lcp = sample && sample.startup && sample.startup.largestContentfulPaint;
+      return lcp && Number.isFinite(Number(lcp.startTime))
+        ? Number(lcp.startTime)
+        : Number.NaN;
+    }
+
+    function getOptionalMetric(value) {
+      return value !== null && value !== undefined && Number.isFinite(Number(value))
+        ? Number(value)
+        : Number.NaN;
+    }
+
+    function getReport() {
+      const samples = readSamples();
+      const navigationTypes = samples.reduce((counts, sample) => {
+        const rawType = sample && sample.startup && sample.startup.navigation
+          ? sample.startup.navigation.type
+          : '';
+        const type = truncate(rawType || 'unknown', 24);
+        counts[type] = (counts[type] || 0) + 1;
+        return counts;
+      }, {});
+      return {
+        version: 1,
+        surfaceType: 'newtab',
+        kind: 'cold-start-series',
+        sampleCount: samples.length,
+        navigationTypes,
+        summary: {
+          readyAtMs: summarizeStartupMetric(samples.map((sample) =>
+            getOptionalMetric(sample.startup && sample.startup.readyAtMs)
+          )),
+          largestContentfulPaintMs: summarizeStartupMetric(
+            samples.map(getLargestContentfulPaintMs)
+          ),
+          domInteractiveMs: summarizeStartupMetric(samples.map((sample) =>
+            getOptionalMetric(sample.startup && sample.startup.navigation &&
+              sample.startup.navigation.domInteractive)
+          )),
+          longTaskTotalMs: summarizeStartupMetric(samples.map((sample) =>
+            getOptionalMetric(sample.longTasks && sample.longTasks.totalDurationMs)
+          )),
+          longestTaskMs: summarizeStartupMetric(samples.map((sample) =>
+            getOptionalMetric(sample.longTasks && sample.longTasks.longestMs)
+          ))
+        },
+        samples
+      };
+    }
+
+    function capture() {
+      if (destroyed || captured) {
+        return null;
+      }
+      const snapshot = performanceCollector.snapshot({ maxEntries: 100 });
+      if (!snapshot.startup.ready) {
+        return null;
+      }
+      captured = true;
+      const longTaskEntries = snapshot.responsiveness.longTasks.entries || [];
+      const longTaskSnapshot = snapshot.responsiveness.longTasks;
+      const sample = {
+        capturedAtUnixMs: Date.now(),
+        capturedAtMs: snapshot.capturedAtMs,
+        environment: snapshot.environment,
+        startup: snapshot.startup,
+        longTasks: {
+          count: longTaskSnapshot.count,
+          totalDurationMs: longTaskSnapshot.totalDurationMs,
+          longestMs: longTaskSnapshot.longestMs,
+          entries: longTaskEntries
+        },
+        document: snapshot.document,
+        resources: snapshot.resources,
+        memory: snapshot.memory
+      };
+      const samples = readSamples();
+      samples.push(sample);
+      writeSamples(samples);
+      return sample;
+    }
+
+    function pollForReady() {
+      pollTimer = null;
+      if (destroyed || captured) {
+        return;
+      }
+      const body = documentObj.body;
+      if (body && body.getAttribute('data-nt-ready') === '1') {
+        settleTimer = windowObj.setTimeout(() => {
+          settleTimer = null;
+          capture();
+        }, 1000);
+        return;
+      }
+      if (Date.now() - pollStartedAt >= 15000) {
+        return;
+      }
+      pollTimer = windowObj.setTimeout(pollForReady, 50);
+    }
+
+    function clear() {
+      fallbackSamples = [];
+      const storage = getSharedStartupStorage();
+      if (storage && typeof storage.removeItem === 'function') {
+        try {
+          storage.removeItem(STARTUP_SAMPLE_STORAGE_KEY);
+        } catch (error) {
+          // The in-memory fallback is already clear.
+        }
+      }
+      return getReport();
+    }
+
+    function execute(params) {
+      const action = String(params && params.action || 'report');
+      if (action === 'report' || action === 'list') {
+        return getReport();
+      }
+      if (action === 'capture') {
+        capture();
+        return getReport();
+      }
+      if (action === 'clear') {
+        return clear();
+      }
+      if (action === 'status') {
+        return { captured, sampleCount: readSamples().length };
+      }
+      const error = new Error('Unsupported startup sample action.');
+      error.code = 'unsupported_startup_sample_action';
+      throw error;
+    }
+
+    function destroy() {
+      destroyed = true;
+      if (pollTimer !== null) {
+        windowObj.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      if (settleTimer !== null) {
+        windowObj.clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+    }
+
+    pollForReady();
+    return Object.freeze({ capture, clear, destroy, execute, getReport });
+  }
+
   function summarizeFrameDurations(values) {
     const durations = Array.isArray(values)
       ? values.filter((value) => Number.isFinite(value) && value >= 0).slice()
@@ -954,7 +1255,8 @@
     windowObj,
     documentObj,
     performanceRecorder,
-    performanceCollector
+    performanceCollector,
+    startupSampler
   ) {
     const scenarioInstructions = Object.freeze({
       mixed: 'Type in search, move across shortcuts, page bookmarks, then open the wallpaper panel.',
@@ -970,7 +1272,10 @@
 
     function formatReport(report) {
       if (!report) {
-        return 'No recording yet.';
+        const startupReport = startupSampler ? startupSampler.getReport() : null;
+        return startupReport
+          ? `No interaction recording yet.\nCold-start samples: ${startupReport.sampleCount}/${MAX_STARTUP_SAMPLES}. Open a fresh New Tab to add a sample, then use “Copy startups”.`
+          : 'No recording yet.';
       }
       const frames = report.frames || {};
       const delta = report.performanceDelta || {};
@@ -1058,12 +1363,11 @@
       renderReport(performanceRecorder.finish('manual'));
     }
 
-    async function copyLatestReport() {
-      const report = latestPanelReport || performanceRecorder.getLatestReport();
-      if (!report) {
+    async function copyJsonValue(payload, copiedStatus) {
+      if (!payload) {
         return false;
       }
-      const value = JSON.stringify(report, null, 2);
+      const value = JSON.stringify(payload, null, 2);
       try {
         if (windowObj.navigator && windowObj.navigator.clipboard &&
             typeof windowObj.navigator.clipboard.writeText === 'function') {
@@ -1084,12 +1388,37 @@
         }
         const statusElement = getElement('[data-role="status"]');
         if (statusElement) {
-          statusElement.textContent = 'Copied';
+          statusElement.textContent = copiedStatus || 'Copied';
         }
         return true;
       } catch (error) {
         return false;
       }
+    }
+
+    async function copyLatestReport() {
+      const report = latestPanelReport || performanceRecorder.getLatestReport();
+      return copyJsonValue(report, 'Copied');
+    }
+
+    async function copyStartupSamples() {
+      if (!startupSampler) {
+        return false;
+      }
+      const report = startupSampler.getReport();
+      const copied = await copyJsonValue(report, `Copied ${report.sampleCount} startups`);
+      if (copied) {
+        const output = getElement('[data-role="output"]');
+        if (output) {
+          output.textContent = [
+            `Cold-start samples: ${report.sampleCount}`,
+            `Ready p50/p95: ${report.summary.readyAtMs.medianMs}/${report.summary.readyAtMs.p95Ms} ms`,
+            `LCP p50/p95: ${report.summary.largestContentfulPaintMs.medianMs}/${report.summary.largestContentfulPaintMs.p95Ms} ms`,
+            `Longest task p50/p95: ${report.summary.longestTaskMs.medianMs}/${report.summary.longestTaskMs.p95Ms} ms`
+          ].join('\n');
+        }
+      }
+      return copied;
     }
 
     function downloadLatestReport() {
@@ -1133,10 +1462,17 @@
         stopRecording();
       } else if (action === 'copy') {
         copyLatestReport();
+      } else if (action === 'copy-startups') {
+        copyStartupSamples();
       } else if (action === 'download') {
         downloadLatestReport();
       } else if (action === 'clear') {
         clearReport();
+      } else if (action === 'clear-startups') {
+        if (startupSampler) {
+          startupSampler.clear();
+          renderReport(latestPanelReport);
+        }
       } else if (action === 'close') {
         close();
       }
@@ -1236,8 +1572,10 @@
             <button class="primary" data-action="start" type="button">Start</button>
             <button data-action="stop" type="button" disabled>Stop</button>
             <button data-action="copy" type="button">Copy JSON</button>
+            <button data-action="copy-startups" type="button">Copy startups</button>
             <button data-action="download" type="button">Download</button>
             <button data-action="clear" type="button">Clear</button>
+            <button data-action="clear-startups" type="button">Clear startups</button>
           </div>
           <pre class="output" data-role="output">No recording yet.</pre>
           <textarea data-role="copy-buffer" hidden aria-hidden="true"></textarea>
@@ -1286,7 +1624,10 @@
       return {
         mounted: Boolean(host),
         open: Boolean(panelOpen && host && !host.hidden),
-        recording: performanceRecorder.getStatus()
+        recording: performanceRecorder.getStatus(),
+        startupSamples: startupSampler
+          ? startupSampler.execute({ action: 'status' })
+          : null
       };
     }
 
@@ -1748,9 +2089,19 @@
 
     const surfaceId = createSurfaceId(windowObj);
     const surfaceType = inferSurfaceType(windowObj.location, documentObj);
+    const startupProfiler = createStartupProfiler(windowObj, surfaceType);
+    if (startupProfiler) {
+      windowObj.__lumnoCodexDebugStartupProfilerV1 = startupProfiler;
+    }
     const performanceCollector = createPerformanceCollector(windowObj, documentObj, surfaceType);
     const performanceRecorder = createPerformanceRecorder(
       windowObj,
+      performanceCollector,
+      surfaceType
+    );
+    const startupSampler = createStartupSampler(
+      windowObj,
+      documentObj,
       performanceCollector,
       surfaceType
     );
@@ -1759,7 +2110,8 @@
         windowObj,
         documentObj,
         performanceRecorder,
-        performanceCollector
+        performanceCollector,
+        startupSampler
       )
       : null;
     const logs = [];
@@ -2012,6 +2364,14 @@
       if (method === 'surface.performanceRecording') {
         return performanceRecorder.execute(params || {});
       }
+      if (method === 'surface.startupSamples') {
+        if (!startupSampler) {
+          const error = new Error('Startup samples are only available on the New Tab surface.');
+          error.code = 'startup_samples_unavailable';
+          throw error;
+        }
+        return startupSampler.execute(params || {});
+      }
       if (method === 'surface.performancePanel') {
         if (!performancePanel) {
           const error = new Error('The performance panel is only available on the New Tab surface.');
@@ -2104,6 +2464,10 @@
       executeRequest,
       getPerformanceSnapshot: (params) => performanceCollector.snapshot(params || {}),
       getPerformanceRecordingStatus: performanceRecorder.getStatus,
+      getStartupPerformanceReport: startupSampler
+        ? startupSampler.getReport
+        : () => null,
+      startupProfiler,
       getLogs: () => logs.slice()
     });
     windowObj.__lumnoCodexDebugSurfaceAgentV1 = agent;
@@ -2119,7 +2483,13 @@
         performancePanel.destroy();
       }
       performanceRecorder.destroy();
+      if (startupSampler) {
+        startupSampler.destroy();
+      }
       performanceCollector.destroy();
+      if (windowObj.__lumnoCodexDebugStartupProfilerV1 === startupProfiler) {
+        delete windowObj.__lumnoCodexDebugStartupProfilerV1;
+      }
       if (reconnectTimer) {
         windowObj.clearTimeout(reconnectTimer);
         reconnectTimer = null;
@@ -2149,6 +2519,8 @@
     createPerformanceCollector,
     createPerformancePanel,
     createPerformanceRecorder,
+    createStartupSampler,
+    createStartupProfiler,
     createSurfaceAgent,
     describeElement,
     inferSurfaceType,
