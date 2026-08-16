@@ -276,18 +276,23 @@
       }
     }
 
-    function pauseForScroll() {
+    function pauseForTransientMutations() {
       const activeState = state;
-      if (!activeState || activeState.paused) {
+      if (!activeState || activeState.resumeTimer || activeState.pauseReason === 'backoff') {
         return;
       }
-      activeState.paused = true;
-      if (activeState.flushTimer) {
-        targetWindow.clearTimeout(activeState.flushTimer);
-        activeState.flushTimer = null;
-      }
-      if (observer) {
-        observer.disconnect();
+      if (!activeState.paused) {
+        activeState.paused = true;
+        activeState.pauseReason = 'transient';
+        if (activeState.flushTimer) {
+          targetWindow.clearTimeout(activeState.flushTimer);
+          activeState.flushTimer = null;
+        }
+        if (observer) {
+          observer.disconnect();
+        }
+      } else if (activeState.pauseReason !== 'transient') {
+        return;
       }
       if (scrollPauseResumeTimer !== null) {
         targetWindow.clearTimeout(scrollPauseResumeTimer);
@@ -295,7 +300,8 @@
       scrollPauseResumeTimer = targetWindow.setTimeout(() => {
         scrollPauseResumeTimer = null;
         const currentState = state;
-        if (!currentState || currentState !== activeState || currentState.resumeTimer) {
+        if (!currentState || currentState !== activeState || currentState.resumeTimer ||
+            currentState.pauseReason !== 'transient') {
           return;
         }
         if (!activeState.root || !activeState.root.isConnected) {
@@ -307,6 +313,7 @@
         activeState.pendingProtectedNodes.clear();
         activeState.pendingNoTranslateRoots.clear();
         activeState.paused = false;
+        activeState.pauseReason = '';
         observeRoot(activeState.root);
       }, SCROLL_PAUSE_MS);
     }
@@ -317,6 +324,7 @@
         return;
       }
       activeState.paused = true;
+      activeState.pauseReason = 'backoff';
       if (activeState.flushTimer) {
         targetWindow.clearTimeout(activeState.flushTimer);
         activeState.flushTimer = null;
@@ -344,6 +352,7 @@
         activeState.mutationCountInWindow = 0;
         activeState.callbackCountInWindow = 0;
         activeState.paused = false;
+        activeState.pauseReason = '';
         observeRoot(activeState.root);
       }, BACKOFF_MS);
       try {
@@ -371,6 +380,7 @@
         mutationCountInWindow: 0,
         callbackCountInWindow: 0,
         paused: false,
+        pauseReason: '',
         resumeTimer: null
       };
       observer = new MutationObserverCtor((mutations) => {
@@ -456,7 +466,8 @@
     }
 
     return Object.freeze({
-      pauseForScroll,
+      pauseForMutationBurst: pauseForTransientMutations,
+      pauseForScroll: pauseForTransientMutations,
       start,
       stop
     });

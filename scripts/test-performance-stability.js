@@ -5,6 +5,14 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const optionsJs = fs.readFileSync(path.join(repoRoot, 'src/options/options.js'), 'utf8');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
+const overlaySearchPanelJs = fs.readFileSync(
+  path.join(repoRoot, 'src/overlay/search-panel.js'),
+  'utf8'
+);
+const overlaySuggestionsCss = fs.readFileSync(
+  path.join(repoRoot, 'src/overlay/suggestions-view.css'),
+  'utf8'
+);
 const htmlFiles = [
   'src/newtab/newtab.html',
   'src/options/options.html',
@@ -93,6 +101,31 @@ assertMatches(
   newtabJs,
   /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?const remoteRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!remoteRequestSent\) \{[\s\S]*?renderSuggestions\(localSuggestions, requestQuery,[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderPendingSuggestions\(requestQuery,/,
   'new tab suggestions should preserve pending local results when the extension runtime is unavailable'
+);
+assertMatches(
+  overlaySearchPanelJs,
+  /openTabSuggestionLimit:\s*1000,[\s\S]*?openTabInitialRenderLimit:\s*24,[\s\S]*?openTabRenderBatchSize:\s*32,/,
+  'overlay open-tab results should mount a bounded first frame and continue in small batches'
+);
+assertMatches(
+  overlaySearchPanelJs,
+  /function renderTabSuggestions\(tabList\) \{\s*pauseOverlayAntiTranslateObserverForMutationBurst\(\);[\s\S]*?reactView\.renderTabs\(list\);/,
+  'open-tab rendering should pause translation observation during owned DOM mutations'
+);
+assertMatches(
+  overlaySearchPanelJs,
+  /pauseOverlayAntiTranslateObserverForMutationBurst\(\);\s*setOpenTabsResultsViewport\(false\);[\s\S]*?reactView\.render\(\{/,
+  'search-result rendering should pause translation observation during owned DOM mutations'
+);
+assertMatches(
+  overlaySuggestionsCss,
+  /\.x-ov-suggestion-item\s*\{[\s\S]*?content-visibility:\s*auto;[\s\S]*?contain-intrinsic-block-size:/,
+  'off-screen overlay result rows should skip unnecessary layout and paint work'
+);
+assert.doesNotMatch(
+  overlaySuggestionsCss,
+  /data-favicon-load-state="(?:priming|loaded)"\][\s\S]*?filter:\s*blur/,
+  'favicon entry motion should not animate paint-heavy blur filters'
 );
 
 htmlFiles.forEach((relativePath) => {

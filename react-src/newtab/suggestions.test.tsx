@@ -911,6 +911,49 @@ describe('Suggestions React island', () => {
     expect(setSuggestionsVisible).toHaveBeenLastCalledWith(true);
   });
 
+  it('keeps large open-tab mounts responsive and cancels stale batches', () => {
+    let nextFrameId = 1;
+    const frameCallbacks = new Map<number, FrameRequestCallback>();
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        const frameId = nextFrameId++;
+        frameCallbacks.set(frameId, callback);
+        return frameId;
+      });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame')
+      .mockImplementation((frameId) => {
+        frameCallbacks.delete(frameId);
+      });
+    const { view, items } = createView({
+      openTabSuggestionLimit: 1000,
+      openTabInitialRenderLimit: 3,
+      openTabRenderBatchSize: 2
+    });
+    const tabs = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      title: `Tab ${index + 1}`,
+      url: `https://example.com/${index + 1}`
+    }));
+
+    act(() => view.renderTabs(tabs));
+    expect(items).toHaveLength(3);
+    expect(requestFrame).toHaveBeenCalledOnce();
+
+    const firstFrame = frameCallbacks.entries().next().value;
+    expect(firstFrame).toBeDefined();
+    frameCallbacks.delete(firstFrame![0]);
+    act(() => firstFrame![1](performance.now()));
+    expect(items).toHaveLength(5);
+
+    act(() => view.renderTabs([tabs[0]]));
+    expect(items).toHaveLength(1);
+    expect(cancelFrame).toHaveBeenCalled();
+    expect(frameCallbacks.size).toBe(0);
+
+    requestFrame.mockRestore();
+    cancelFrame.mockRestore();
+  });
+
   it('keeps history deletion isolated from row activation', () => {
     const onActivateSuggestion = vi.fn();
     const onDeleteHistory = vi.fn();

@@ -297,6 +297,8 @@ export interface SuggestionsViewOptions {
   defaultTheme?: ThemeValue;
   urlHighlightTheme?: ThemeValue;
   openTabSuggestionLimit?: number;
+  openTabInitialRenderLimit?: number;
+  openTabRenderBatchSize?: number;
   enterAction?: string;
   autoHighlightFirstTab?: boolean;
 }
@@ -437,6 +439,8 @@ interface NormalizedOptions {
   defaultTheme: ThemeValue;
   urlHighlightTheme: ThemeValue;
   openTabSuggestionLimit: number;
+  openTabInitialRenderLimit: number;
+  openTabRenderBatchSize: number;
   enterAction: string;
   autoHighlightFirstTab: boolean;
 }
@@ -711,6 +715,18 @@ function normalizeOptions(
       Number(raw.openTabSuggestionLimit) > 0
         ? Number(raw.openTabSuggestionLimit)
         : 3,
+    openTabInitialRenderLimit:
+      Number(raw.openTabInitialRenderLimit) > 0
+        ? Number(raw.openTabInitialRenderLimit)
+        : Number(raw.openTabSuggestionLimit) > 0
+          ? Number(raw.openTabSuggestionLimit)
+          : 3,
+    openTabRenderBatchSize:
+      Number(raw.openTabRenderBatchSize) > 0
+        ? Number(raw.openTabRenderBatchSize)
+        : Number(raw.openTabSuggestionLimit) > 0
+          ? Number(raw.openTabSuggestionLimit)
+          : 3,
     enterAction: String(raw.enterAction || 'go'),
     autoHighlightFirstTab: Boolean(raw.autoHighlightFirstTab)
   };
@@ -2562,7 +2578,7 @@ function SearchSuggestionRowComponent({
 
 const SearchSuggestionRow = memo(SearchSuggestionRowComponent);
 
-function OpenTabRow({
+function OpenTabRowComponent({
   runtime,
   tab,
   index,
@@ -2932,6 +2948,8 @@ function OpenTabRow({
   );
 }
 
+const OpenTabRow = memo(OpenTabRowComponent);
+
 function EmptyState({
   options,
   message
@@ -3089,6 +3107,8 @@ export function createSuggestionsView(
   let lastRenderWasSuggestions = false;
   let lastSimpleModeEnabled = options.isSimpleModeEnabled();
   let suggestionValueRefs = new Map<string, SuggestionValueRef>();
+  let pendingTabRenderFrame: number | null = null;
+  let tabRenderGeneration = 0;
   const runtime: SuggestionsRuntime = {
     options,
     queryStore,
@@ -3102,10 +3122,25 @@ export function createSuggestionsView(
     }
   };
 
+  function cancelPendingTabRender(): void {
+    tabRenderGeneration += 1;
+    if (pendingTabRenderFrame === null) {
+      return;
+    }
+    const windowRef = options.document.defaultView;
+    if (windowRef && typeof windowRef.cancelAnimationFrame === 'function') {
+      windowRef.cancelAnimationFrame(pendingTabRenderFrame);
+    } else if (windowRef) {
+      windowRef.clearTimeout(pendingTabRenderFrame);
+    }
+    pendingTabRenderFrame = null;
+  }
+
   function clear(): void {
     if (destroyed) {
       return;
     }
+    cancelPendingTabRender();
     options.hideTopActionTooltip();
     flushSync(() => root.render(null));
     lastRenderWasSuggestions = false;
@@ -3121,6 +3156,7 @@ export function createSuggestionsView(
     if (destroyed) {
       return;
     }
+    cancelPendingTabRender();
     const suggestions = Array.isArray(payload.suggestions)
       ? payload.suggestions
       : [];
@@ -3217,6 +3253,7 @@ export function createSuggestionsView(
     if (destroyed) {
       return;
     }
+    cancelPendingTabRender();
     suggestionValueRefs.clear();
     const tabs = Array.isArray(tabList)
       ? tabList.slice(
@@ -3225,14 +3262,6 @@ export function createSuggestionsView(
         )
       : [];
     const simpleMode = options.isSimpleModeEnabled();
-    tabs.forEach((tab) => {
-      if (tab.favIconUrl) {
-        options.preloadIcon(
-          String(tab.favIconUrl),
-          String(tab.url || '')
-        );
-      }
-    });
     const renderKeys = getStableRenderKeys(
       tabs,
       (tab) =>
@@ -3242,26 +3271,78 @@ export function createSuggestionsView(
               tab.title || ''
             )}`
     );
-    flushSync(() => {
-      root.render(
-        tabs.map((tab, index) => (
-          <OpenTabRow
-            key={renderKeys[index]}
-            runtime={runtime}
-            tab={tab}
-            index={index}
-            last={index === tabs.length - 1}
-            simpleMode={simpleMode}
-          />
-        ))
-      );
-    });
+    const windowRef = options.document.defaultView;
+    const initialRenderCount = windowRef
+      ? Math.min(
+          tabs.length,
+          Math.max(1, options.openTabInitialRenderLimit)
+        )
+      : tabs.length;
+    let renderedCount = initialRenderCount;
+    const preloadTabRange = (start: number, end: number): void => {
+      tabs.slice(start, end).forEach((tab) => {
+        if (tab.favIconUrl) {
+          options.preloadIcon(
+            String(tab.favIconUrl),
+            String(tab.url || '')
+          );
+        }
+      });
+    };
+    const commitTabRows = (count: number): void => {
+      flushSync(() => {
+        root.render(
+          tabs.slice(0, count).map((tab, index) => (
+            <OpenTabRow
+              key={renderKeys[index]}
+              runtime={runtime}
+              tab={tab}
+              index={index}
+              last={index === count - 1 && count === tabs.length}
+              simpleMode={simpleMode}
+            />
+          ))
+        );
+      });
+      syncItems(options);
+      runtime.updateSelection(options.getSelectedIndex());
+    };
+    options.onSetSelectedIndex(-1);
+    preloadTabRange(0, initialRenderCount);
+    commitTabRows(initialRenderCount);
     lastRenderWasSuggestions = false;
     lastSimpleModeEnabled = simpleMode;
-    syncItems(options);
-    options.onSetSelectedIndex(-1);
-    runtime.updateSelection(-1);
     options.setSuggestionsVisible(tabs.length > 0);
+    if (renderedCount >= tabs.length || !windowRef) {
+      return;
+    }
+    const generation = tabRenderGeneration;
+    const scheduleNextBatch = (): void => {
+      if (generation !== tabRenderGeneration || destroyed) {
+        return;
+      }
+      const renderNextBatch = (): void => {
+        pendingTabRenderFrame = null;
+        if (generation !== tabRenderGeneration || destroyed) {
+          return;
+        }
+        const nextCount = Math.min(
+          tabs.length,
+          renderedCount + Math.max(1, options.openTabRenderBatchSize)
+        );
+        preloadTabRange(renderedCount, nextCount);
+        renderedCount = nextCount;
+        commitTabRows(renderedCount);
+        if (renderedCount < tabs.length) {
+          scheduleNextBatch();
+        }
+      };
+      pendingTabRenderFrame =
+        typeof windowRef.requestAnimationFrame === 'function'
+          ? windowRef.requestAnimationFrame(renderNextBatch)
+          : windowRef.setTimeout(renderNextBatch, 16);
+    };
+    scheduleNextBatch();
   }
 
   function setModifier(
@@ -3296,6 +3377,7 @@ export function createSuggestionsView(
       if (destroyed) {
         return;
       }
+      cancelPendingTabRender();
       options.hideTopActionTooltip();
       flushSync(() => root.unmount());
       destroyed = true;

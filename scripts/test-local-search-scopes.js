@@ -10,6 +10,7 @@ const backgroundSource = readSource('src/background/background.js');
 const inputModeSource = readSource('src/shared/search-input-mode.js');
 const inputModeCss = readSource('src/shared/search-input.css');
 const newtabHtml = readSource('src/newtab/newtab.html');
+const manifestSource = readSource('manifest.json');
 const overlaySuggestionsCss = readSource('src/overlay/suggestions-view.css');
 
 function getFunctionSection(source, functionName, nextFunctionName) {
@@ -340,10 +341,20 @@ assert.match(
   /assets\/vendor\/pinyin-pro\.js[\s\S]*?shared\/search-input-mode\.js/,
   'newtab should load the local pinyin runtime before the shared scope controller'
 );
-assert.match(
+assert.doesNotMatch(
   backgroundSource,
-  /assets\/vendor\/pinyin-pro\.js'[\s\S]*?src\/shared\/search-input-mode\.js'/,
-  'overlay injection should load the local pinyin runtime before the shared scope controller'
+  /const overlayInjectionFiles = \[[\s\S]*?assets\/vendor\/pinyin-pro\.js[\s\S]*?\];/,
+  'overlay injection should not parse the pinyin runtime on the critical open path'
+);
+assert.match(
+  inputModeSource,
+  /import\(chromeApi\.runtime\.getURL\('assets\/vendor\/pinyin-pro\.js'\)\)/,
+  'overlay scope search should lazy-load the pinyin runtime when needed'
+);
+assert.match(
+  manifestSource,
+  /"resources":\s*\[[^\]]*"assets\/vendor\/pinyin-pro\.js"/,
+  'the lazy pinyin runtime should remain web-accessible to the injected scope controller'
 );
 assert.match(
   overlaySource,

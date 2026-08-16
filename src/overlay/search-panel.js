@@ -50,7 +50,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   let overlaySuggestionRequestSeq = 0;
   let overlayRemoteSuggestionDebounceTimer = null;
   let overlayFirstResultRevealTimer = null;
-  const OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS = 240;
+  const OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS = 120;
   let openInCurrentTabModifierActive = false;
   let openSwitchInNewTabModifierActive = false;
   let openInBackgroundTabModifierActive = false;
@@ -587,6 +587,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
   function pauseOverlayAntiTranslateObserverForScroll() {
     overlayAntiTranslateGuard.pauseForScroll();
+  }
+
+  function pauseOverlayAntiTranslateObserverForMutationBurst() {
+    overlayAntiTranslateGuard.pauseForMutationBurst();
   }
 
   function startOverlayAntiTranslateObserver(root) {
@@ -7913,6 +7917,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         defaultTheme,
         urlHighlightTheme,
         openTabSuggestionLimit: 1000,
+        openTabInitialRenderLimit: 24,
+        openTabRenderBatchSize: 32,
         enterAction: 'openNewTab',
         autoHighlightFirstTab: true
       });
@@ -7921,6 +7927,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function renderOverlayEmptyState(message) {
+      pauseOverlayAntiTranslateObserverForMutationBurst();
       ensureOverlaySuggestionsView().render({
         suggestions: [],
         query: latestOverlayQuery,
@@ -7929,6 +7936,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function renderTabSuggestions(tabList) {
+      pauseOverlayAntiTranslateObserverForMutationBurst();
       suggestionsContainer.removeAttribute('data-scope-result-enter');
       const previousHeightState = captureSuggestionsHeightState(suggestionsContainer);
       const reactView = ensureOverlaySuggestionsView();
@@ -7950,11 +7958,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         );
         return;
       }
-      list.forEach((tab) => {
-        if (tab && tab.favIconUrl) {
-          preloadIcon(tab.favIconUrl, tab.url || '');
-        }
-      });
       reactView.renderTabs(list);
       suggestionsContainer.scrollTop = 0;
       setOverlayResultsCollapsed(false, { deferLayoutSync: true });
@@ -8637,6 +8640,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           updateKind === 'highlight' || updateKind === 'content'
             ? null
             : captureSuggestionsHeightState(suggestionsContainer);
+        pauseOverlayAntiTranslateObserverForMutationBurst();
         setOpenTabsResultsViewport(false);
         const reactView = ensureOverlaySuggestionsView();
         currentSuggestions = allSuggestions;
