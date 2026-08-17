@@ -15,6 +15,7 @@
   let showSearchShortcutSpec = null;
   let showSearchShortcutRefreshedAt = 0;
   let armedReleaseKeys = [];
+  const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
 
   function notifyTopFrameDocumentStarted() {
@@ -98,6 +99,7 @@
     if (!event || event.isTrusted !== true || event.isComposing || event.repeat) {
       return;
     }
+    rememberTrustedShortcutKeydown(event);
     refreshShowSearchShortcut(false);
     const descriptor = typeof SHORTCUT_KEY_MATCHER.describeKeyboardEvent === 'function'
       ? SHORTCUT_KEY_MATCHER.describeKeyboardEvent(event)
@@ -163,6 +165,41 @@
     ].filter(Boolean)));
   }
 
+  function getShortcutKeydownCandidates(event) {
+    const candidates = getShortcutReleaseCandidates(event);
+    if (event && event.altKey) {
+      candidates.push('Alt');
+    }
+    if (event && event.ctrlKey) {
+      candidates.push('Control');
+    }
+    if (event && event.metaKey) {
+      candidates.push('Meta');
+    }
+    if (event && event.shiftKey) {
+      candidates.push('Shift');
+    }
+    return Array.from(new Set(candidates));
+  }
+
+  function pruneTrustedShortcutEvents(now) {
+    [recentTrustedKeydownAtByKey, recentTrustedReleaseAtByKey].forEach((eventsByKey) => {
+      eventsByKey.forEach((observedAt, key) => {
+        if ((now - observedAt) > RELEASE_REPLAY_WINDOW_MS) {
+          eventsByKey.delete(key);
+        }
+      });
+    });
+  }
+
+  function rememberTrustedShortcutKeydown(event) {
+    const pressedAt = Date.now();
+    pruneTrustedShortcutEvents(pressedAt);
+    getShortcutKeydownCandidates(event).forEach((key) => {
+      recentTrustedKeydownAtByKey.set(key, pressedAt);
+    });
+  }
+
   function getReleasedShortcutKey(event) {
     return getShortcutReleaseCandidates(event)
       .find((key) => armedReleaseKeys.includes(key)) || '';
@@ -170,11 +207,7 @@
 
   function rememberTrustedShortcutRelease(event) {
     const releasedAt = Date.now();
-    recentTrustedReleaseAtByKey.forEach((observedAt, key) => {
-      if ((releasedAt - observedAt) > RELEASE_REPLAY_WINDOW_MS) {
-        recentTrustedReleaseAtByKey.delete(key);
-      }
-    });
+    pruneTrustedShortcutEvents(releasedAt);
     getShortcutReleaseCandidates(event).forEach((key) => {
       recentTrustedReleaseAtByKey.set(key, releasedAt);
     });
@@ -188,9 +221,18 @@
     const now = Date.now();
     return keys.find((key) => {
       const observedAt = recentTrustedReleaseAtByKey.get(key);
-      return Number.isFinite(observedAt) &&
-        observedAt >= startedAt &&
-        (now - observedAt) <= RELEASE_REPLAY_WINDOW_MS;
+      if (!Number.isFinite(observedAt) ||
+          (now - observedAt) > RELEASE_REPLAY_WINDOW_MS) {
+        return false;
+      }
+      if (observedAt >= startedAt) {
+        return true;
+      }
+      const keydownAt = recentTrustedKeydownAtByKey.get(key);
+      return Number.isFinite(keydownAt) &&
+        keydownAt <= observedAt &&
+        (observedAt - keydownAt) <= RELEASE_REPLAY_WINDOW_MS &&
+        (startedAt - observedAt) <= RELEASE_REPLAY_WINDOW_MS;
     }) || '';
   }
 
@@ -199,6 +241,7 @@
       return;
     }
     armedReleaseKeys = [];
+    recentTrustedKeydownAtByKey.delete(key);
     recentTrustedReleaseAtByKey.delete(key);
     try {
       chrome.runtime.sendMessage({

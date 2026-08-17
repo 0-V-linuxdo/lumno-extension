@@ -233,7 +233,8 @@ async function testDefaultStorageSplitsSixtyShortcutsIntoQuotaSafeChunks() {
   keys.forEach((chunkKey) => {
     assert.strictEqual(storage.data[chunkKey].length, 20);
     assert(
-      Buffer.byteLength(JSON.stringify(storage.data[chunkKey])) < 8192,
+      shortcutsStore.getShortcutStorageItemByteSize(chunkKey, storage.data[chunkKey]) <=
+        shortcutsStore.DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES,
       'each representative shortcut chunk should stay below the Chrome Sync per-item quota'
     );
   });
@@ -252,6 +253,71 @@ async function testDefaultStorageSplitsSixtyShortcutsIntoQuotaSafeChunks() {
   assert.strictEqual(reduced.length, 5, 'saving fewer shortcuts should clear stale chunks');
 }
 
+function testByteAwarePlanMovesOversizedTailToLocalOverflow() {
+  const inputs = Array.from({ length: 60 }, (_, index) => ({
+    id: `long-shortcut-${index + 1}`,
+    title: `Long shortcut ${index + 1} ${'标题'.repeat(16)}`,
+    url: `https://long-${index + 1}.example/path?query=${'x'.repeat(300)}`
+  }));
+  const plan = shortcutsStore.createShortcutStoragePlan(inputs, {
+    maxShortcuts: 60,
+    now: 123
+  });
+
+  assert(plan.syncedItems.length > 0, 'a long shortcut set should still sync a safe prefix');
+  assert(plan.overflowItems.length > 0, 'items beyond the protected byte budget should remain local');
+  assert.strictEqual(
+    plan.syncedItems.length + plan.overflowItems.length,
+    60,
+    'quota planning must preserve every shortcut across sync and local storage'
+  );
+  Object.entries(plan.payload).forEach(([key, value]) => {
+    assert(
+      shortcutsStore.getShortcutStorageItemByteSize(key, value) <=
+        shortcutsStore.DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES,
+      `${key} should stay inside the protected per-item byte budget`
+    );
+  });
+  assert(
+    plan.totalBytes <= shortcutsStore.DEFAULT_SHORTCUTS_SYNC_TOTAL_BUDGET_BYTES,
+    'shortcut sync data should remain inside its dedicated total budget'
+  );
+  assert.deepStrictEqual(
+    shortcutsStore.mergeShortcutLists(plan.syncedItems, plan.overflowItems)
+      .map((item) => item.id),
+    inputs.map((item) => item.id),
+    'loading the synced prefix with local overflow should restore the original order'
+  );
+}
+
+async function testQuotaOverflowAndStorageFailuresAreObservable() {
+  const oversized = [{
+    id: 'oversized',
+    title: 'Oversized',
+    url: `https://oversized.example/path?query=${'x'.repeat(9000)}`
+  }];
+  await assert.rejects(
+    shortcutsStore.saveShortcuts(createMemoryStorage(), oversized),
+    (error) => error && error.code === 'SHORTCUT_SYNC_QUOTA_EXCEEDED',
+    'callers without a local overflow layer should receive a quota error'
+  );
+
+  const writeError = { message: 'QUOTA_BYTES quota exceeded' };
+  await assert.rejects(
+    shortcutsStore.saveShortcuts({
+      set(_value, callback) {
+        callback();
+      }
+    }, createShortcutInputs(1), {
+      getLastError: () => writeError
+    }),
+    (error) => error &&
+      error.code === 'SHORTCUT_STORAGE_WRITE_FAILED' &&
+      error.message === writeError.message,
+    'Chrome callback errors must reject instead of reporting a false save success'
+  );
+}
+
 async function run() {
   testCreatesShortcutFromLooseUrl();
   testFallsBackToHostForEmptyTitle();
@@ -263,6 +329,8 @@ async function run() {
   await testSaveShortcutDoesNotEvictOldestAtMaximumLimit();
   await testSaveShortcutsPreservesExplicitOrder();
   await testDefaultStorageSplitsSixtyShortcutsIntoQuotaSafeChunks();
+  testByteAwarePlanMovesOversizedTailToLocalOverflow();
+  await testQuotaOverflowAndStorageFailuresAreObservable();
 }
 
 run().catch((error) => {

@@ -31,6 +31,13 @@
     const container = document.querySelector('.x-ov-suggestions-container');
     const metrics = document.querySelector('#metrics');
     const items = [];
+    const requestedVisibleResultLimit = Number(
+      new URLSearchParams(window.location.search).get('limit')
+    );
+    const visibleResultLimit = Number.isInteger(requestedVisibleResultLimit) &&
+      requestedVisibleResultLimit >= 5 && requestedVisibleResultLimit <= 10
+      ? requestedVisibleResultLimit
+      : 10;
     const tabs = Array.from({ length: 1000 }, (_, index) => ({
       id: index + 1,
       title: `Performance tab ${index + 1}`,
@@ -51,6 +58,7 @@
       actionModel: window.LumnoSuggestionActionModel,
       openTabSuggestionLimit: 1000,
       openTabInitialRenderLimit: 10,
+      getOpenTabInitialRenderLimit: () => visibleResultLimit,
       openTabRenderBatchSize: 16,
       getHostFromUrl: (url) => new URL(url).hostname,
       getThemeForSuggestion: () => new Promise(() => {}),
@@ -72,6 +80,7 @@
         requestAnimationFrame(() => {
           const result = {
             status: 'complete',
+            visibleResultLimit,
             initialRows,
             initialDurationMs: Number(initialDuration.toFixed(2)),
             totalDurationMs: Number((performance.now() - startedAt).toFixed(2)),

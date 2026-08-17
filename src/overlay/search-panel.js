@@ -1,7 +1,7 @@
 'use strict';
 
 window._x_extension_search_overlay_runtime_version_2026_unique_ =
-  '2026-08-17-fast-reveal-navigation-intent-v9';
+  '2026-08-17-fast-reveal-navigation-intent-v11';
 window._x_extension_search_overlay_open_2026_unique_ = false;
 
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
@@ -7619,8 +7619,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         defaultTheme,
         urlHighlightTheme,
         openTabSuggestionLimit: 1000,
+        // Keep every visible row immediately keyboard-accessible. Rows below
+        // the viewport hydrate during browser idle time; use smaller commits
+        // while the host Document is still spending its own loading budget.
         openTabInitialRenderLimit: 10,
+        getOpenTabInitialRenderLimit: () =>
+          normalizeSearchResultDisplayLimit(overlaySearchResultDisplayLimit),
         openTabRenderBatchSize: 16,
+        getOpenTabRenderBatchSize: () =>
+          loadingSessionTrackingActive || document.readyState === 'loading'
+            ? 8
+            : 16,
         enterAction: 'openNewTab',
         autoHighlightFirstTab: true
       });
@@ -8250,6 +8259,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               primaryHighlightIndex = 0;
               primaryHighlightReason = openTabMatch.reason || 'openTab';
             }
+          }
+          if (preferAutocompleteFirst &&
+              typeof SEARCH_UTILS.pinExactSearchActionSecond === 'function') {
+            allSuggestions = SEARCH_UTILS.pinExactSearchActionSecond(allSuggestions);
           }
           if (query && primaryHighlightIndex < 0 && allSuggestions.length > 0) {
             primaryHighlightIndex = 0;

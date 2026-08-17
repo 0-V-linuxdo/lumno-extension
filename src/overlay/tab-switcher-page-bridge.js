@@ -14,6 +14,7 @@
   let extensionPagePortClosed = false;
   let extensionPageTabId = null;
   let armedReleaseKeys = [];
+  const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
 
   function normalizeTabSwitcherReleaseKey(value) {
@@ -52,6 +53,44 @@
     ].filter(Boolean)));
   }
 
+  function getTabSwitcherShortcutKeydownCandidates(event) {
+    const candidates = getTabSwitcherShortcutReleaseCandidates(event);
+    if (event && event.altKey) {
+      candidates.push('Alt');
+    }
+    if (event && event.ctrlKey) {
+      candidates.push('Control');
+    }
+    if (event && event.metaKey) {
+      candidates.push('Meta');
+    }
+    if (event && event.shiftKey) {
+      candidates.push('Shift');
+    }
+    return Array.from(new Set(candidates));
+  }
+
+  function pruneTrustedTabSwitcherShortcutEvents(now) {
+    [recentTrustedKeydownAtByKey, recentTrustedReleaseAtByKey].forEach((eventsByKey) => {
+      eventsByKey.forEach((observedAt, key) => {
+        if ((now - observedAt) > TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS) {
+          eventsByKey.delete(key);
+        }
+      });
+    });
+  }
+
+  function rememberTrustedTabSwitcherShortcutKeydown(event) {
+    if (!event || event.isTrusted !== true || event.isComposing || event.repeat) {
+      return;
+    }
+    const pressedAt = Date.now();
+    pruneTrustedTabSwitcherShortcutEvents(pressedAt);
+    getTabSwitcherShortcutKeydownCandidates(event).forEach((key) => {
+      recentTrustedKeydownAtByKey.set(key, pressedAt);
+    });
+  }
+
   function getReleasedTabSwitcherShortcutKey(event) {
     return getTabSwitcherShortcutReleaseCandidates(event)
       .find((key) => armedReleaseKeys.includes(key)) || '';
@@ -59,11 +98,7 @@
 
   function rememberTrustedTabSwitcherShortcutRelease(event) {
     const releasedAt = Date.now();
-    recentTrustedReleaseAtByKey.forEach((observedAt, key) => {
-      if ((releasedAt - observedAt) > TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS) {
-        recentTrustedReleaseAtByKey.delete(key);
-      }
-    });
+    pruneTrustedTabSwitcherShortcutEvents(releasedAt);
     getTabSwitcherShortcutReleaseCandidates(event).forEach((key) => {
       recentTrustedReleaseAtByKey.set(key, releasedAt);
     });
@@ -77,9 +112,18 @@
     const now = Date.now();
     return keys.find((key) => {
       const observedAt = recentTrustedReleaseAtByKey.get(key);
-      return Number.isFinite(observedAt) &&
-        observedAt >= startedAt &&
-        (now - observedAt) <= TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS;
+      if (!Number.isFinite(observedAt) ||
+          (now - observedAt) > TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS) {
+        return false;
+      }
+      if (observedAt >= startedAt) {
+        return true;
+      }
+      const keydownAt = recentTrustedKeydownAtByKey.get(key);
+      return Number.isFinite(keydownAt) &&
+        keydownAt <= observedAt &&
+        (observedAt - keydownAt) <= TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS &&
+        (startedAt - observedAt) <= TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS;
     }) || '';
   }
 
@@ -89,6 +133,7 @@
       return;
     }
     armedReleaseKeys = [];
+    recentTrustedKeydownAtByKey.delete(key);
     recentTrustedReleaseAtByKey.delete(key);
     try {
       chromeApi.runtime.sendMessage({
@@ -368,6 +413,7 @@
     relayTabSwitcherShortcutRelease(key);
   }
 
+  window.addEventListener('keydown', rememberTrustedTabSwitcherShortcutKeydown, true);
   window.addEventListener('keyup', notifyTabSwitcherShortcutModifierReleased, true);
 
   window.addEventListener('pagehide', () => {

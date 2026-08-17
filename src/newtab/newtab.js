@@ -346,6 +346,8 @@
   const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
   const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
+  const NEWTAB_SHORTCUTS_LOCAL_OVERFLOW_STORAGE_KEY =
+    '_x_extension_newtab_shortcuts_local_overflow_2026_unique_';
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
@@ -366,6 +368,7 @@
   const MAX_PINNED_RECENT_SITES = 3;
   const MAX_HIDDEN_RECENT_SITES = 60;
   const MAX_NEWTAB_SHORTCUTS = 60;
+  const NEWTAB_SHORTCUTS_CRITICAL_SYNC_RESERVE_BYTES = 64 * 1024;
   const NEWTAB_SHORTCUTS_STORAGE_KEYS = typeof NEWTAB_SHORTCUTS_STORE.getShortcutStorageKeys === 'function'
     ? NEWTAB_SHORTCUTS_STORE.getShortcutStorageKeys({
         key: NEWTAB_SHORTCUTS_STORAGE_KEY,
@@ -550,6 +553,8 @@
   let newtabShortcutsVisible = true;
   let newtabShortcutAddVisible = true;
   let newtabShortcutDockMagnificationEnabled = true;
+  let shortcutStorageReloadTimer = null;
+  let shortcutPersistenceInFlightCount = 0;
   let shortcutDockPointerFrame = 0;
   let shortcutDockPendingTile = null;
   let shortcutDockPendingPointerX = Number.NaN;
@@ -4290,6 +4295,12 @@
         requestSuggestions(latestQuery, { immediate: true });
       }
     }
+    if (areaName === 'local' &&
+        changes[NEWTAB_SHORTCUTS_LOCAL_OVERFLOW_STORAGE_KEY] &&
+        isShortcutSyncStorageActive() &&
+        shortcutPersistenceInFlightCount === 0) {
+      scheduleShortcutStorageReload();
+    }
     handleBookmarkTopbarSurfaceColorStorageChanges(changes, areaName);
     const isPrimaryArea = isPrimaryStorageAreaName(areaName);
     if (!isPrimaryArea) {
@@ -4499,16 +4510,9 @@
       recentRenderSignature = '';
       renderRecentSites(recentSourceItems);
     }
-    if (NEWTAB_SHORTCUTS_STORAGE_KEYS.some((key) => changes[key])) {
-      loadShortcuts().then(() => {
-        pruneShortcutFavicons(newtabShortcuts);
-        const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
-        if (!areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons)) {
-          newtabShortcutIcons = prunedIcons;
-          shortcutIconStore.writeAll(prunedIcons).catch(() => {});
-        }
-        renderShortcuts();
-      });
+    if (shortcutPersistenceInFlightCount === 0 &&
+        NEWTAB_SHORTCUTS_STORAGE_KEYS.some((key) => changes[key])) {
+      scheduleShortcutStorageReload();
     }
   });
 
@@ -6984,6 +6988,171 @@
     };
   }
 
+  function isShortcutSyncStorageActive() {
+    return Boolean(
+      storageAreaName === 'sync' &&
+      chrome && chrome.storage && chrome.storage.sync
+    );
+  }
+
+  function getShortcutOverflowStorageArea() {
+    return isShortcutSyncStorageActive() && chrome.storage.local
+      ? chrome.storage.local
+      : null;
+  }
+
+  function getShortcutStorageLastError() {
+    return chrome && chrome.runtime && chrome.runtime.lastError
+      ? chrome.runtime.lastError
+      : null;
+  }
+
+  function getStorageBytesInUse(area, keys) {
+    return new Promise((resolve, reject) => {
+      if (!area || typeof area.getBytesInUse !== 'function') {
+        reject(new Error('Storage byte usage is unavailable'));
+        return;
+      }
+      try {
+        const maybePromise = area.getBytesInUse(keys, (bytesInUse) => {
+          const runtimeError = getShortcutStorageLastError();
+          if (runtimeError) {
+            reject(new Error(runtimeError.message || 'Could not read sync byte usage'));
+            return;
+          }
+          resolve(Math.max(0, Number(bytesInUse) || 0));
+        });
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then((bytesInUse) => {
+            resolve(Math.max(0, Number(bytesInUse) || 0));
+          }).catch(reject);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  function getShortcutSyncByteBudget() {
+    const defaultBudget = Number(
+      NEWTAB_SHORTCUTS_STORE.DEFAULT_SHORTCUTS_SYNC_TOTAL_BUDGET_BYTES
+    ) || (3 * 7680);
+    if (!isShortcutSyncStorageActive()) {
+      return Promise.resolve(Number.MAX_SAFE_INTEGER);
+    }
+    const syncArea = chrome.storage.sync;
+    const totalQuotaBytes = Math.max(
+      0,
+      Number(syncArea.QUOTA_BYTES) || (100 * 1024)
+    );
+    return Promise.all([
+      getStorageBytesInUse(syncArea, null),
+      getStorageBytesInUse(syncArea, NEWTAB_SHORTCUTS_STORAGE_KEYS)
+    ]).then(([totalBytes, shortcutBytes]) => {
+      const nonShortcutBytes = Math.max(0, totalBytes - shortcutBytes);
+      const protectedBudget = Math.max(
+        0,
+        totalQuotaBytes - NEWTAB_SHORTCUTS_CRITICAL_SYNC_RESERVE_BYTES - nonShortcutBytes
+      );
+      return Math.min(defaultBudget, protectedBudget);
+    }).catch(() => 0);
+  }
+
+  function normalizeShortcutLocalState(value) {
+    if (Array.isArray(value)) {
+      return {
+        authoritative: false,
+        items: NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(
+          value,
+          getShortcutStoreOptions()
+        )
+      };
+    }
+    const source = value && typeof value === 'object' ? value : {};
+    return {
+      authoritative: source.authoritative === true,
+      items: NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(
+        source.items,
+        getShortcutStoreOptions()
+      )
+    };
+  }
+
+  function readShortcutLocalState() {
+    const overflowArea = getShortcutOverflowStorageArea();
+    if (!overflowArea || typeof overflowArea.get !== 'function') {
+      return Promise.resolve(normalizeShortcutLocalState(null));
+    }
+    return new Promise((resolve) => {
+      try {
+        overflowArea.get([NEWTAB_SHORTCUTS_LOCAL_OVERFLOW_STORAGE_KEY], (result) => {
+          if (getShortcutStorageLastError()) {
+            resolve(normalizeShortcutLocalState(null));
+            return;
+          }
+          resolve(normalizeShortcutLocalState(
+            result && result[NEWTAB_SHORTCUTS_LOCAL_OVERFLOW_STORAGE_KEY]
+          ));
+        });
+      } catch (error) {
+        resolve(normalizeShortcutLocalState(null));
+      }
+    });
+  }
+
+  function writeShortcutLocalState(items, authoritative) {
+    const overflowArea = getShortcutOverflowStorageArea();
+    if (!overflowArea || typeof overflowArea.set !== 'function') {
+      return Promise.resolve();
+    }
+    const localState = {
+      version: 1,
+      authoritative: authoritative === true,
+      items: NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(
+        items,
+        getShortcutStoreOptions()
+      ),
+      updatedAt: Date.now()
+    };
+    return new Promise((resolve, reject) => {
+      try {
+        const maybePromise = overflowArea.set({
+          [NEWTAB_SHORTCUTS_LOCAL_OVERFLOW_STORAGE_KEY]: localState
+        }, () => {
+          const runtimeError = getShortcutStorageLastError();
+          if (runtimeError) {
+            reject(new Error(runtimeError.message || 'Could not save local shortcuts'));
+            return;
+          }
+          resolve();
+        });
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(resolve).catch(reject);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  function scheduleShortcutStorageReload() {
+    if (shortcutStorageReloadTimer !== null) {
+      window.clearTimeout(shortcutStorageReloadTimer);
+    }
+    shortcutStorageReloadTimer = window.setTimeout(() => {
+      shortcutStorageReloadTimer = null;
+      loadShortcuts().then(() => {
+        pruneShortcutFavicons(newtabShortcuts);
+        const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
+        if (!areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons)) {
+          newtabShortcutIcons = prunedIcons;
+          shortcutIconStore.writeAll(prunedIcons).catch(() => {});
+        }
+        renderShortcuts();
+      });
+    }, 32);
+  }
+
   function getShortcutIconDataUrl(shortcutId) {
     const id = String(shortcutId || '').trim();
     return id && newtabShortcutIcons[id] ? newtabShortcutIcons[id] : '';
@@ -8569,8 +8738,21 @@
         : [];
       return Promise.resolve(newtabShortcuts);
     }
-    return NEWTAB_SHORTCUTS_STORE.loadShortcuts(storageArea, getShortcutStoreOptions()).then((items) => {
-      newtabShortcuts = Array.isArray(items) ? items : [];
+    return Promise.all([
+      NEWTAB_SHORTCUTS_STORE.loadShortcuts(storageArea, getShortcutStoreOptions()),
+      readShortcutLocalState()
+    ]).then(([syncedItems, localState]) => {
+      if (localState && localState.authoritative === true) {
+        newtabShortcuts = localState.items;
+      } else if (typeof NEWTAB_SHORTCUTS_STORE.mergeShortcutLists === 'function') {
+        newtabShortcuts = NEWTAB_SHORTCUTS_STORE.mergeShortcutLists(
+          syncedItems,
+          localState && localState.items,
+          getShortcutStoreOptions()
+        );
+      } else {
+        newtabShortcuts = Array.isArray(syncedItems) ? syncedItems : [];
+      }
       return newtabShortcuts;
     });
   }
@@ -8716,13 +8898,18 @@
       leftKeys.every((key, index) => key === rightKeys[index] && left[key] === right[key]);
   }
 
-  function persistShortcuts(nextShortcuts, toastMessage, iconChange) {
+  function persistShortcuts(nextShortcuts, toastMessage, iconChange, persistOptions) {
     const options = getShortcutStoreOptions();
+    const settings = persistOptions && typeof persistOptions === 'object'
+      ? persistOptions
+      : {};
     const normalized = NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(nextShortcuts, options);
     const previousIcons = newtabShortcutIcons;
     const nextIcons = getNextShortcutIconMap(normalized, iconChange);
     const iconsChanged = !areShortcutIconMapsEqual(previousIcons, nextIcons);
     let didWriteIcons = false;
+    let didStartItemPersistence = false;
+    const syncBudgetReady = getShortcutSyncByteBudget();
     const iconsReady = iconsChanged
       ? shortcutIconStore.writeAll(nextIcons).then((savedIcons) => {
         didWriteIcons = true;
@@ -8730,26 +8917,86 @@
       })
       : Promise.resolve(nextIcons);
     const persistItems = () => {
+      didStartItemPersistence = true;
+      shortcutPersistenceInFlightCount += 1;
+      const finishTrackedPersistence = (operation) => Promise.resolve(operation).finally(() => {
+        shortcutPersistenceInFlightCount = Math.max(0, shortcutPersistenceInFlightCount - 1);
+      });
       if (!storageArea) {
-        return Promise.resolve(normalized);
+        return finishTrackedPersistence(Promise.resolve({
+          items: normalized,
+          localOnlyIds: [],
+          syncLimited: false
+        }));
       }
-      return NEWTAB_SHORTCUTS_STORE.saveShortcuts(storageArea, normalized, options);
+      if (!isShortcutSyncStorageActive()) {
+        return finishTrackedPersistence(NEWTAB_SHORTCUTS_STORE.saveShortcuts(storageArea, normalized, {
+          ...options,
+          maxItemBytes: Number.MAX_SAFE_INTEGER,
+          maxTotalBytes: Number.MAX_SAFE_INTEGER
+        }).then((items) => ({
+          items,
+          localOnlyIds: [],
+          syncLimited: false
+        })));
+      }
+      return finishTrackedPersistence(syncBudgetReady.then((maxTotalBytes) => {
+        const plan = NEWTAB_SHORTCUTS_STORE.createShortcutStoragePlan(normalized, {
+          ...options,
+          maxTotalBytes
+        });
+        const overflowIds = plan.overflowItems.map((item) => String(item && item.id || ''));
+        return writeShortcutLocalState(plan.overflowItems, false)
+          .then(() => NEWTAB_SHORTCUTS_STORE.saveShortcutStoragePlan(
+            storageArea,
+            plan,
+            {
+              ...options,
+              getLastError: getShortcutStorageLastError
+            }
+          ))
+          .then(() => ({
+            items: normalized,
+            localOnlyIds: overflowIds,
+            syncLimited: overflowIds.length > 0
+          }))
+          .catch((syncError) => {
+            return writeShortcutLocalState(normalized, true).then(() => ({
+              items: normalized,
+              localOnlyIds: normalized.map((item) => String(item && item.id || '')),
+              syncError,
+              syncLimited: true
+            }));
+          });
+      }));
     };
     return iconsReady
       .then((savedIcons) => {
         newtabShortcutIcons = savedIcons;
         return persistItems();
       })
-      .then((items) => {
-        newtabShortcuts = Array.isArray(items) ? items : normalized;
+      .then((result) => {
+        const items = result && Array.isArray(result.items) ? result.items : normalized;
+        newtabShortcuts = items;
         pruneShortcutFavicons(newtabShortcuts);
         renderShortcuts();
-        if (toastMessage) {
+        const overflowShortcutId = String(settings.syncOverflowShortcutId || '');
+        const shouldWarnAboutSyncLimit = Boolean(
+          result && result.syncLimited === true && overflowShortcutId &&
+          Array.isArray(result.localOnlyIds) &&
+          result.localOnlyIds.includes(overflowShortcutId)
+        );
+        if (shouldWarnAboutSyncLimit) {
+          showToast(t(
+            'newtab_shortcuts_sync_limit_reached',
+            'Shortcuts have reached the sync limit. New items will not sync.'
+          ), false, { duration: 3600 });
+        } else if (toastMessage) {
           showToast(toastMessage);
         }
         return true;
       })
-      .catch(async () => {
+      .catch(async (error) => {
         if (didWriteIcons) {
           try {
             await shortcutIconStore.writeAll(previousIcons);
@@ -8759,10 +9006,15 @@
         }
         newtabShortcutIcons = previousIcons;
         renderShortcuts();
-        setShortcutIconError(t(
-          'newtab_shortcuts_icon_storage_error',
-          'The local icon could not be saved. Try another image.'
-        ));
+        if (didStartItemPersistence) {
+          console.warn('[Lumno] Failed to save shortcuts', error);
+          showToast(t('toast_error', 'Operation failed. Please try again.'), true);
+        } else {
+          setShortcutIconError(t(
+            'newtab_shortcuts_icon_storage_error',
+            'The local icon could not be saved. Try another image.'
+          ));
+        }
         return false;
       });
   }
@@ -8791,6 +9043,9 @@
         shortcutId: nextShortcut.id,
         action: iconState && iconState.action,
         dataUrl: iconState && iconState.dataUrl
+      },
+      {
+        syncOverflowShortcutId: nextShortcut.id
       }
     );
   }
@@ -14605,6 +14860,10 @@
             primaryHighlightIndex = 0;
             primaryHighlightReason = openTabMatch.reason || 'openTab';
           }
+        }
+        if (preferAutocompleteFirst &&
+            typeof SEARCH_UTILS.pinExactSearchActionSecond === 'function') {
+          allSuggestions = SEARCH_UTILS.pinExactSearchActionSecond(allSuggestions);
         }
         if (query && primaryHighlightIndex < 0 && allSuggestions.length > 0) {
           primaryHighlightIndex = 0;

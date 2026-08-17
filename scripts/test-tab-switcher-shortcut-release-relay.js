@@ -292,6 +292,37 @@ assert.deepStrictEqual(
   'a trusted shortcut release that beats the async arm message should be replayed for the same command'
 );
 
+keydownHandler({
+  altKey: true,
+  code: 'KeyQ',
+  ctrlKey: false,
+  isComposing: false,
+  isTrusted: true,
+  key: 'q',
+  metaKey: false,
+  preventDefault() {},
+  repeat: false,
+  shiftKey: false,
+  stopPropagation() {},
+  target: window.document.body
+});
+keyupHandler({ isTrusted: true, key: 'Alt', code: 'AltLeft' });
+runtimeMessageListener({
+  action: 'armTabSwitcherShortcutRelease',
+  keys: ['Alt'],
+  commandStartedAt: Date.now() + 1
+}, {}, () => {});
+assert.deepStrictEqual(
+  runtimeMessages.map((message) => ({ ...message })),
+  [
+    { action: 'notifyTabSwitcherShortcutModifierReleased', key: 'Meta' },
+    { action: 'notifyTabSwitcherShortcutModifierReleased', key: 'Control' },
+    { action: 'notifyTabSwitcherShortcutModifierReleased', key: 'Meta' },
+    { action: 'notifyTabSwitcherShortcutModifierReleased', key: 'Alt' }
+  ],
+  'a trusted keydown/keyup pair should survive a cold background command timestamp that arrives just after keyup'
+);
+
 keyupHandler({ isTrusted: true, key: 'Control', code: 'ControlRight' });
 runtimeMessageListener({
   action: 'armTabSwitcherShortcutRelease',
@@ -300,7 +331,7 @@ runtimeMessageListener({
 }, {}, () => {});
 assert.strictEqual(
   runtimeMessages.length,
-  3,
+  4,
   'a release observed before the current command started must not be replayed'
 );
 keyupHandler({ isTrusted: true, key: 'Control', code: 'ControlLeft' });

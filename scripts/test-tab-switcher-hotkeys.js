@@ -151,8 +151,8 @@ assert.match(
 );
 assert.match(
   shortcutReleaseRelaySource,
-  /RUNTIME_KEY[\s\S]*previousRuntime\.cleanup\(\)[\s\S]*RELEASE_REPLAY_WINDOW_MS[\s\S]*function rememberTrustedShortcutRelease\(event\)[\s\S]*function getBufferedReleasedShortcutKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)[\s\S]*removeEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased/,
-  'the document-start observer should relay live releases and replay only trusted releases from the current shortcut command'
+  /RUNTIME_KEY[\s\S]*previousRuntime\.cleanup\(\)[\s\S]*RELEASE_REPLAY_WINDOW_MS[\s\S]*recentTrustedKeydownAtByKey[\s\S]*function rememberTrustedShortcutKeydown\(event\)[\s\S]*function rememberTrustedShortcutRelease\(event\)[\s\S]*function getBufferedReleasedShortcutKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*keydownAt <= observedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keydown',\s*relayShowSearchShortcut,\s*true\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)[\s\S]*removeEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased/,
+  'the document-start observer should correlate trusted keydown/keyup pairs and replay releases from the current shortcut command'
 );
 assert.match(
   backgroundSource,
@@ -190,8 +190,8 @@ assert.match(
 );
 assert.match(
   switcherBridgeSource,
-  /TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS[\s\S]*function rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*function getBufferedTabSwitcherShortcutReleaseKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)/,
-  'extension pages should preserve the same current-command release replay behavior through their persistent bridge'
+  /TAB_SWITCHER_RELEASE_REPLAY_WINDOW_MS[\s\S]*recentTrustedKeydownAtByKey[\s\S]*function rememberTrustedTabSwitcherShortcutKeydown\(event\)[\s\S]*function rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*function getBufferedTabSwitcherShortcutReleaseKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*keydownAt <= observedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedTabSwitcherShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keydown',\s*rememberTrustedTabSwitcherShortcutKeydown,\s*true\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)/,
+  'extension pages should preserve the same trusted keydown/keyup release replay behavior through their persistent bridge'
 );
 assert.match(
   switcherBridgeSource,
@@ -1191,7 +1191,7 @@ assert.match(
 const advanceExistingBlock = getFunctionBlock(
   backgroundSource,
   'function advanceExistingTabSwitcherOnTab(tab, source, callback)',
-  'function triggerTabSwitcherForTab(tab, source)'
+  'function triggerTabSwitcherForTab(tab, source, commandObservedAt)'
 );
 assert.match(
   advanceExistingBlock,
@@ -1260,7 +1260,7 @@ assert.strictEqual(
 );
 assert.match(
   backgroundSource,
-  /function triggerTabSwitcherForTab\(tab,\s*source\)[\s\S]*if \(!tabSwitcherEnabledCache\)[\s\S]*tab-switcher-disabled[\s\S]*return;[\s\S]*advanceExistingTabSwitcherOnTab\(tab,\s*source,\s*\(didAdvance\)/,
+  /function triggerTabSwitcherForTab\(tab,\s*source,\s*commandObservedAt\)[\s\S]*if \(!tabSwitcherEnabledCache\)[\s\S]*tab-switcher-disabled[\s\S]*return;[\s\S]*advanceExistingTabSwitcherOnTab\(tab,\s*source,\s*\(didAdvance\)/,
   'Alt+Q should try the lightweight advance path before rebuilding the switcher payload'
 );
 assert.match(
@@ -1550,7 +1550,7 @@ assert.match(
 );
 const triggerSwitcherBlock = getFunctionBlock(
   backgroundSource,
-  'function triggerTabSwitcherForTab(tab, source)',
+  'function triggerTabSwitcherForTab(tab, source, commandObservedAt)',
   'function detectAnyActiveVideoPiP(callback)'
 );
 assert.match(
@@ -1590,8 +1590,13 @@ assert.match(
 );
 assert.match(
   triggerSwitcherBlock,
-  /const commandStartedAt = Date\.now\(\)[\s\S]*const finishOpeningAndArmShortcutRelease = \(ok\) => \{\s*finishOpening\(ok\);\s*if \(ok === true\) \{\s*armTabSwitcherShortcutReleaseObservers\([\s\S]*commandStartedAt[\s\S]*onOpenComplete:\s*finishOpeningAndArmShortcutRelease/,
-  'release replay should be armed only after the switcher host is mounted and ready to commit'
+  /const observedAt = Number\(commandObservedAt\)[\s\S]*const commandStartedAt = Number\.isFinite\(observedAt\)[\s\S]*const finishOpeningAndArmShortcutRelease = \(ok\) => \{\s*finishOpening\(ok\);\s*if \(ok === true\) \{\s*armTabSwitcherShortcutReleaseObservers\([\s\S]*commandStartedAt[\s\S]*onOpenComplete:\s*finishOpeningAndArmShortcutRelease/,
+  'release replay should retain the command event timestamp until the switcher host is mounted and ready to commit'
+);
+assert.match(
+  backgroundSource,
+  /chrome\.commands\.onCommand\.addListener[\s\S]*const commandObservedAt = Date\.now\(\)[\s\S]*chrome\.tabs\.query[\s\S]*triggerTabSwitcherForTab\(activeTabs\[0\],\s*source,\s*commandObservedAt\)/,
+  'the command timestamp should be captured before the asynchronous active-tab query'
 );
 assert.match(
   switcherSource,

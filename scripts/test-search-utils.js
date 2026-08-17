@@ -79,6 +79,11 @@ function assertKeywordOnlySuggestionsKeepSearchActionFirst(relativePath) {
     /getAutocompleteCandidate\(keywordSuggestionState\.autocompleteSuggestions,/,
     `${relativePath} should use shared autocomplete filtering before primary highlight promotion`
   );
+  assert.match(
+    source,
+    /if \(preferAutocompleteFirst &&[\s\S]*?SEARCH_UTILS\.pinExactSearchActionSecond\(allSuggestions\)/,
+    `${relativePath} should keep an exact-query search action in the second row after primary-result promotion`
+  );
 }
 
 function score(item, query, sourceType = 'history') {
@@ -286,6 +291,43 @@ assert.deepStrictEqual(
   ], { searchFirst: true }).map((item) => item.title),
   ['Search A', 'Search query', 'Page A'],
   'search-first mode should move the whole search block instead of interleaving individual rows'
+);
+const pinnedExactSearchActionSuggestions = search.pinExactSearchActionSecond([
+  { type: 'history', title: 'Local A' },
+  { type: 'history', title: 'Local B' },
+  { type: 'googleSuggest', title: 'query suggestion' },
+  { type: 'newtab', title: 'query', searchQuery: 'query', forceSearch: true }
+]);
+assert.deepStrictEqual(
+  pinnedExactSearchActionSuggestions.map((item) => item.type),
+  ['history', 'newtab', 'history', 'googleSuggest'],
+  'autocomplete-first results should reserve the second row for the exact-query search action'
+);
+assert.deepStrictEqual(
+  {
+    title: pinnedExactSearchActionSuggestions[1].title,
+    searchQuery: pinnedExactSearchActionSuggestions[1].searchQuery,
+    forceSearch: pinnedExactSearchActionSuggestions[1].forceSearch
+  },
+  { title: 'query', searchQuery: 'query', forceSearch: true },
+  'the pinned row should search exactly what the user entered instead of an autocomplete rewrite'
+);
+assert.deepStrictEqual(
+  search.pinExactSearchActionSecond([
+    { type: 'newtab', title: 'query', searchQuery: 'query', forceSearch: true },
+    { type: 'googleSuggest', title: 'query suggestion' }
+  ]).map((item) => item.type),
+  ['newtab', 'googleSuggest'],
+  'keyword-only results should keep the exact-query search action first'
+);
+assert.deepStrictEqual(
+  search.pinExactSearchActionSecond([
+    { type: 'googleSuggest', title: 'query suggestion' },
+    { type: 'newtab', title: 'query', searchQuery: 'query', forceSearch: true },
+    { type: 'bookmark', title: 'Local Bookmark' }
+  ]).map((item) => item.type),
+  ['bookmark', 'newtab', 'googleSuggest'],
+  'the exact-query row should not be displaced by a search-engine autocomplete item'
 );
 
 const selectionNow = 1_800_000_000_000;

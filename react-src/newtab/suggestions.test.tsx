@@ -1023,19 +1023,20 @@ describe('Suggestions React island', () => {
     expect(applyThemeVariables).toHaveBeenLastCalledWith(row, brandTheme);
   });
 
-  it('keeps large open-tab mounts responsive and cancels stale batches', () => {
-    let nextFrameId = 1;
-    const frameCallbacks = new Map<number, FrameRequestCallback>();
-    const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
-      .mockImplementation((callback) => {
-        const frameId = nextFrameId++;
-        frameCallbacks.set(frameId, callback);
-        return frameId;
-      });
-    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame')
-      .mockImplementation((frameId) => {
-        frameCallbacks.delete(frameId);
-      });
+  it('keeps large open-tab mounts off animation frames and cancels stale idle batches', () => {
+    let nextIdleId = 1;
+    const idleCallbacks = new Map<number, IdleRequestCallback>();
+    const requestIdle = vi.fn((callback: IdleRequestCallback) => {
+      const idleId = nextIdleId++;
+      idleCallbacks.set(idleId, callback);
+      return idleId;
+    });
+    const cancelIdle = vi.fn((idleId: number) => {
+      idleCallbacks.delete(idleId);
+    });
+    vi.stubGlobal('requestIdleCallback', requestIdle);
+    vi.stubGlobal('cancelIdleCallback', cancelIdle);
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame');
     const { view, items } = createView({
       openTabSuggestionLimit: 1000,
       openTabInitialRenderLimit: 3,
@@ -1049,21 +1050,93 @@ describe('Suggestions React island', () => {
 
     act(() => view.renderTabs(tabs));
     expect(items).toHaveLength(3);
-    expect(requestFrame).toHaveBeenCalledOnce();
+    expect(requestIdle).toHaveBeenCalledOnce();
+    expect(requestFrame).not.toHaveBeenCalled();
 
-    const firstFrame = frameCallbacks.entries().next().value;
-    expect(firstFrame).toBeDefined();
-    frameCallbacks.delete(firstFrame![0]);
-    act(() => firstFrame![1](performance.now()));
+    const firstIdleTask = idleCallbacks.entries().next().value;
+    expect(firstIdleTask).toBeDefined();
+    idleCallbacks.delete(firstIdleTask![0]);
+    act(() => firstIdleTask![1]({
+      didTimeout: false,
+      timeRemaining: () => 8
+    }));
     expect(items).toHaveLength(5);
 
     act(() => view.renderTabs([tabs[0]]));
     expect(items).toHaveLength(1);
-    expect(cancelFrame).toHaveBeenCalled();
-    expect(frameCallbacks.size).toBe(0);
+    expect(cancelIdle).toHaveBeenCalled();
+    expect(idleCallbacks.size).toBe(0);
 
     requestFrame.mockRestore();
-    cancelFrame.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the current visible-result limit for every initial open-tab render', () => {
+    let visibleResultLimit = 5;
+    const { view, items } = createView({
+      openTabSuggestionLimit: 1000,
+      openTabInitialRenderLimit: 10,
+      getOpenTabInitialRenderLimit: () => visibleResultLimit,
+      openTabRenderBatchSize: 2
+    });
+    const tabs = Array.from({ length: 12 }, (_, index) => ({
+      id: index + 1,
+      title: `Tab ${index + 1}`,
+      url: `https://example.com/${index + 1}`
+    }));
+
+    act(() => view.renderTabs(tabs));
+    expect(items).toHaveLength(5);
+
+    visibleResultLimit = 8;
+    act(() => view.renderTabs(tabs));
+    expect(items).toHaveLength(8);
+  });
+
+  it('reads the current batch size when each deferred open-tab batch runs', () => {
+    let nextIdleId = 1;
+    let batchSize = 2;
+    const idleCallbacks = new Map<number, IdleRequestCallback>();
+    vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback) => {
+      const idleId = nextIdleId++;
+      idleCallbacks.set(idleId, callback);
+      return idleId;
+    });
+    vi.stubGlobal('cancelIdleCallback', (idleId: number) => {
+      idleCallbacks.delete(idleId);
+    });
+    const { view, items } = createView({
+      openTabSuggestionLimit: 1000,
+      openTabInitialRenderLimit: 2,
+      openTabRenderBatchSize: 3,
+      getOpenTabRenderBatchSize: () => batchSize
+    });
+    const tabs = Array.from({ length: 12 }, (_, index) => ({
+      id: index + 1,
+      title: `Tab ${index + 1}`,
+      url: `https://example.com/${index + 1}`
+    }));
+    const runNextIdleBatch = () => {
+      const idleTask = idleCallbacks.entries().next().value;
+      expect(idleTask).toBeDefined();
+      idleCallbacks.delete(idleTask![0]);
+      act(() => idleTask![1]({
+        didTimeout: false,
+        timeRemaining: () => 8
+      }));
+    };
+
+    act(() => view.renderTabs(tabs));
+    expect(items).toHaveLength(2);
+    runNextIdleBatch();
+    expect(items).toHaveLength(4);
+
+    batchSize = 4;
+    runNextIdleBatch();
+    expect(items).toHaveLength(8);
+
+    act(() => view.destroy());
+    vi.unstubAllGlobals();
   });
 
   it('keeps history deletion isolated from row activation', () => {

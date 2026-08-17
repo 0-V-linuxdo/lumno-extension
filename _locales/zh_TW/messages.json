@@ -2008,6 +2008,9 @@
   "newtab_shortcuts_added": {
     "message": "已新增快捷方式"
   },
+  "newtab_shortcuts_sync_limit_reached": {
+    "message": "快捷方式已達同步上限，新增項目將無法同步"
+  },
   "newtab_shortcuts_edited": {
     "message": "已更新快捷方式"
   },

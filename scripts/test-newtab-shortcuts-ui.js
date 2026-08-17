@@ -1139,6 +1139,18 @@ assertContains(
 
 assertContains(
   newtabJs,
+  "'_x_extension_newtab_shortcuts_local_overflow_2026_unique_'",
+  'shortcut items outside the protected sync budget should have a device-local overflow store'
+);
+
+assert.match(
+  getFunctionSource(newtabJs, 'getShortcutSyncByteBudget'),
+  /getStorageBytesInUse\(syncArea, null\)[\s\S]*?getStorageBytesInUse\(syncArea, NEWTAB_SHORTCUTS_STORAGE_KEYS\)[\s\S]*?NEWTAB_SHORTCUTS_CRITICAL_SYNC_RESERVE_BYTES/,
+  'shortcut sync planning should reserve total quota for critical settings'
+);
+
+assertContains(
+  newtabJs,
   'NEWTAB_SHORTCUTS_STORAGE_KEY',
   'newtab runtime should include shortcuts in storage handling'
 );
@@ -2246,8 +2258,14 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'function persistShortcuts(nextShortcuts, toastMessage, iconChange) {',
+  'function persistShortcuts(nextShortcuts, toastMessage, iconChange, persistOptions) {',
   'shortcut edit/remove should share one normalized persistence helper'
+);
+
+assert.match(
+  getFunctionSource(newtabJs, 'persistShortcuts'),
+  /createShortcutStoragePlan\(normalized,[\s\S]*?writeShortcutLocalState\(plan\.overflowItems, false\)[\s\S]*?saveShortcutStoragePlan[\s\S]*?writeShortcutLocalState\(normalized, true\)[\s\S]*?newtab_shortcuts_sync_limit_reached/,
+  'shortcut persistence should keep overflow local, surface sync failures, and show the approved warning'
 );
 
 assertContains(
@@ -2446,6 +2464,7 @@ assertContains(
   'newtab_shortcuts_save',
   'newtab_shortcuts_invalid_url',
   'newtab_shortcuts_added',
+  'newtab_shortcuts_sync_limit_reached',
   'newtab_shortcuts_edited',
   'newtab_shortcuts_removed',
   'newtab_shortcuts_edit_dialog_title',
@@ -2458,6 +2477,12 @@ assertContains(
 ].forEach((key) => {
   locales.forEach(({ locale, messages }) => assertMessage(locale, messages, key));
 });
+assert.strictEqual(
+  locales.find(({ locale }) => locale === 'zh_CN')
+    .messages.newtab_shortcuts_sync_limit_reached.message,
+  '快捷方式已达同步上限，新增项将无法同步',
+  'the sync-limit toast should preserve the approved Simplified Chinese copy'
+);
 
 Promise.all([
   assertDarkWallpaperShortcutAdaptiveTone(),

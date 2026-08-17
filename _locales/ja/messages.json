@@ -2008,6 +2008,9 @@
   "newtab_shortcuts_added": {
     "message": "ショートカットを追加しました"
   },
+  "newtab_shortcuts_sync_limit_reached": {
+    "message": "ショートカットが同期上限に達したため、新しい項目は同期されません"
+  },
   "newtab_shortcuts_edited": {
     "message": "ショートカットを更新しました"
   },

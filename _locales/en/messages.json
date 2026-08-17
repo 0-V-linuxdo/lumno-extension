@@ -2008,6 +2008,9 @@
   "newtab_shortcuts_added": {
     "message": "Shortcut added"
   },
+  "newtab_shortcuts_sync_limit_reached": {
+    "message": "Shortcuts have reached the sync limit. New items will not sync."
+  },
   "newtab_shortcuts_edited": {
     "message": "Shortcut updated"
   },

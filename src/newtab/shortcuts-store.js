@@ -8,6 +8,9 @@
   const DEFAULT_SHORTCUTS_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
   const DEFAULT_MAX_SHORTCUTS = 60;
   const DEFAULT_SHORTCUTS_CHUNK_SIZE = 20;
+  const DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES = 7680;
+  const DEFAULT_SHORTCUTS_SYNC_TOTAL_BUDGET_BYTES =
+    DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES * 3;
   const DEFAULT_SHORTCUTS_CHUNK_KEYS = Object.freeze([
     DEFAULT_SHORTCUTS_KEY,
     '_x_extension_newtab_shortcuts_chunk_2_2026_unique_',
@@ -69,6 +72,48 @@
       keys.push(`${key}_chunk_${keys.length + 1}`);
     }
     return keys.slice(0, chunkCount);
+  }
+
+  function getUtf8ByteLength(value) {
+    let byteLength = 0;
+    for (const character of String(value || '')) {
+      const codePoint = character.codePointAt(0) || 0;
+      if (codePoint <= 0x7f) {
+        byteLength += 1;
+      } else if (codePoint <= 0x7ff) {
+        byteLength += 2;
+      } else if (codePoint <= 0xffff) {
+        byteLength += 3;
+      } else {
+        byteLength += 4;
+      }
+    }
+    return byteLength;
+  }
+
+  function getShortcutStorageItemByteSize(key, value) {
+    return getUtf8ByteLength(key) + getUtf8ByteLength(JSON.stringify(value));
+  }
+
+  function getShortcutStoragePayloadByteSize(payload) {
+    return Object.entries(payload && typeof payload === 'object' ? payload : {})
+      .reduce((total, [key, value]) => (
+        total + getShortcutStorageItemByteSize(key, value)
+      ), 0);
+  }
+
+  function getShortcutStorageItemBudget(options) {
+    const raw = Number(options && options.maxItemBytes);
+    return Number.isFinite(raw) && raw > 0
+      ? Math.max(1, Math.floor(raw))
+      : DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES;
+  }
+
+  function getShortcutStorageTotalBudget(options) {
+    const raw = Number(options && options.maxTotalBytes);
+    return Number.isFinite(raw) && raw >= 0
+      ? Math.max(0, Math.floor(raw))
+      : DEFAULT_SHORTCUTS_SYNC_TOTAL_BUDGET_BYTES;
   }
 
   function stableHashCode(text) {
@@ -195,13 +240,53 @@
     });
   }
 
-  function storageSet(storage, value) {
-    return new Promise((resolve) => {
+  function getStorageLastError(options) {
+    if (options && typeof options.getLastError === 'function') {
+      return options.getLastError() || null;
+    }
+    const chromeApi = typeof globalThis !== 'undefined' ? globalThis.chrome : null;
+    return chromeApi && chromeApi.runtime && chromeApi.runtime.lastError
+      ? chromeApi.runtime.lastError
+      : null;
+  }
+
+  function createStorageError(error, fallbackMessage) {
+    const message = error && error.message
+      ? String(error.message)
+      : String(fallbackMessage || 'Shortcut storage write failed');
+    const storageError = new Error(message);
+    storageError.code = 'SHORTCUT_STORAGE_WRITE_FAILED';
+    return storageError;
+  }
+
+  function storageSet(storage, value, options) {
+    return new Promise((resolve, reject) => {
       if (!storage || typeof storage.set !== 'function') {
         resolve();
         return;
       }
-      storage.set(value, () => resolve());
+      let settled = false;
+      const finish = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (error) {
+          reject(createStorageError(error));
+          return;
+        }
+        resolve();
+      };
+      try {
+        const maybePromise = storage.set(value, () => {
+          finish(getStorageLastError(options));
+        });
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(() => finish(null)).catch(finish);
+        }
+      } catch (error) {
+        finish(error);
+      }
     });
   }
 
@@ -227,22 +312,98 @@
     });
   }
 
-  function createShortcutStoragePayload(items, options) {
+  function createShortcutStoragePlan(items, options) {
     const opts = options && typeof options === 'object' ? options : {};
+    const normalized = normalizeShortcuts(items, opts);
     const keys = getShortcutStorageKeys(opts);
     const chunkSize = getShortcutStorageChunkSize(opts);
-    return keys.reduce((payload, key, index) => {
-      const start = index * chunkSize;
-      payload[key] = items.slice(start, start + chunkSize);
-      return payload;
+    const maxItemBytes = getShortcutStorageItemBudget(opts);
+    const requestedMaxTotalBytes = getShortcutStorageTotalBudget(opts);
+    const payload = keys.reduce((result, key) => {
+      result[key] = [];
+      return result;
     }, {});
+    const emptyPayloadBytes = getShortcutStoragePayloadByteSize(payload);
+    const maxTotalBytes = Math.max(emptyPayloadBytes, requestedMaxTotalBytes);
+    let keyIndex = 0;
+    let overflowStartIndex = normalized.length;
+
+    for (let itemIndex = 0; itemIndex < normalized.length; itemIndex += 1) {
+      const item = normalized[itemIndex];
+      let stored = false;
+      while (keyIndex < keys.length) {
+        const key = keys[keyIndex];
+        const chunk = payload[key];
+        if (chunk.length >= chunkSize) {
+          keyIndex += 1;
+          continue;
+        }
+        const nextChunk = chunk.concat(item);
+        const nextItemBytes = getShortcutStorageItemByteSize(key, nextChunk);
+        const nextTotalBytes = getShortcutStoragePayloadByteSize(payload) -
+          getShortcutStorageItemByteSize(key, chunk) +
+          nextItemBytes;
+        if (nextItemBytes <= maxItemBytes && nextTotalBytes <= maxTotalBytes) {
+          payload[key] = nextChunk;
+          stored = true;
+          break;
+        }
+        keyIndex += 1;
+      }
+      if (!stored) {
+        overflowStartIndex = itemIndex;
+        break;
+      }
+    }
+
+    const syncedItems = keys.reduce((result, key) => {
+      result.push(...payload[key]);
+      return result;
+    }, []);
+    return {
+      payload,
+      syncedItems,
+      overflowItems: normalized.slice(overflowStartIndex),
+      totalBytes: getShortcutStoragePayloadByteSize(payload),
+      maxItemBytes,
+      maxTotalBytes
+    };
+  }
+
+  function createShortcutStoragePayload(items, options) {
+    return createShortcutStoragePlan(items, options).payload;
+  }
+
+  function createShortcutQuotaError(plan) {
+    const error = new Error('Shortcut sync quota exceeded');
+    error.code = 'SHORTCUT_SYNC_QUOTA_EXCEEDED';
+    error.plan = plan;
+    return error;
+  }
+
+  function mergeShortcutLists(primaryItems, overflowItems, options) {
+    return normalizeShortcuts([
+      ...(Array.isArray(primaryItems) ? primaryItems : []),
+      ...(Array.isArray(overflowItems) ? overflowItems : [])
+    ], options);
+  }
+
+  function saveShortcutStoragePlan(storage, plan, options) {
+    const storagePlan = plan && typeof plan === 'object' ? plan : null;
+    if (!storagePlan || !storagePlan.payload) {
+      return Promise.reject(createStorageError(null, 'Invalid shortcut storage plan'));
+    }
+    return storageSet(storage, storagePlan.payload, options).then(() => storagePlan);
   }
 
   function saveShortcuts(storage, items, options) {
     const opts = options && typeof options === 'object' ? options : {};
     const normalized = normalizeShortcuts(items, opts);
-    return storageSet(storage, createShortcutStoragePayload(normalized, opts))
-      .then(() => normalized);
+    const plan = createShortcutStoragePlan(normalized, opts);
+    if (plan.overflowItems.length > 0 && opts.allowOverflow !== true) {
+      return Promise.reject(createShortcutQuotaError(plan));
+    }
+    return saveShortcutStoragePlan(storage, plan, opts).then(() => normalized);
   }
 
   function saveShortcut(storage, input, options) {
@@ -258,8 +419,7 @@
       const savedItems = maxShortcuts > 0 && nextItems.length <= maxShortcuts
         ? nextItems
         : items;
-      return storageSet(storage, createShortcutStoragePayload(savedItems, opts))
-        .then(() => savedItems);
+      return saveShortcuts(storage, savedItems, opts);
     });
   }
 
@@ -268,15 +428,24 @@
     DEFAULT_MAX_SHORTCUTS,
     DEFAULT_SHORTCUTS_CHUNK_SIZE,
     DEFAULT_SHORTCUTS_CHUNK_KEYS,
+    DEFAULT_SHORTCUTS_SYNC_ITEM_BUDGET_BYTES,
+    DEFAULT_SHORTCUTS_SYNC_TOTAL_BUDGET_BYTES,
     DEFAULT_SHORTCUTS,
     getShortcutStorageChunkSize,
     getShortcutStorageKeys,
+    getUtf8ByteLength,
+    getShortcutStorageItemByteSize,
+    getShortcutStoragePayloadByteSize,
     normalizeShortcutUrl,
     normalizeShortcutItem,
     createShortcutRecord,
     normalizeShortcuts,
+    mergeShortcutLists,
     getDefaultShortcuts,
     loadShortcuts,
+    createShortcutStoragePlan,
+    createShortcutStoragePayload,
+    saveShortcutStoragePlan,
     saveShortcuts,
     saveShortcut
   };

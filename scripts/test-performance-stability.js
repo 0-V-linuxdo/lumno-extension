@@ -182,8 +182,8 @@ assertMatches(
 );
 assertMatches(
   overlaySearchPanelJs,
-  /openTabSuggestionLimit:\s*1000,[\s\S]*?openTabInitialRenderLimit:\s*10,[\s\S]*?openTabRenderBatchSize:\s*16,/,
-  'overlay open-tab results should mount a bounded first frame and continue in small batches'
+  /openTabSuggestionLimit:\s*1000,[\s\S]*?openTabInitialRenderLimit:\s*10,[\s\S]*?getOpenTabInitialRenderLimit:\s*\(\) =>[\s\S]*?normalizeSearchResultDisplayLimit\(overlaySearchResultDisplayLimit\),[\s\S]*?openTabRenderBatchSize:\s*16,[\s\S]*?getOpenTabRenderBatchSize:\s*\(\) =>[\s\S]*?loadingSessionTrackingActive \|\| document\.readyState === 'loading'[\s\S]*?\? 8[\s\S]*?: 16,/,
+  'overlay open-tab results should follow current settings and re-read page load state for every background batch'
 );
 assertMatches(
   overlaySearchPanelJs,

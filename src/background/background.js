@@ -1664,7 +1664,7 @@ const TAB_SWITCHER_HOST_STATE_TIMEOUT_MS = 400;
 const tabSwitcherHostTabIdByWindowId = new Map();
 const HOTKEY_DUP_GUARD_MS = 180;
 const OVERLAY_OPENING_GUARD_MS = 5000;
-const OVERLAY_RUNTIME_VERSION = '2026-08-17-fast-reveal-navigation-intent-v9';
+const OVERLAY_RUNTIME_VERSION = '2026-08-17-fast-reveal-navigation-intent-v11';
 const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
 const OVERLAY_NAVIGATION_STATE_STORAGE_PREFIX =
   '_x_extension_overlay_navigation_state_2026_unique_:';
@@ -5375,8 +5375,11 @@ function advanceExistingTabSwitcherOnTab(tab, source, callback) {
   runRuntimeMessageFastPath();
 }
 
-function triggerTabSwitcherForTab(tab, source) {
-  const commandStartedAt = Date.now();
+function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
+  const observedAt = Number(commandObservedAt);
+  const commandStartedAt = Number.isFinite(observedAt) && observedAt > 0
+    ? observedAt
+    : Date.now();
   if (!tabSwitcherEnabledCache) {
     if (tab && typeof tab.windowId === 'number') {
       tabSwitcherHostTabIdByWindowId.delete(tab.windowId);
@@ -5884,6 +5887,7 @@ chrome.commands.onCommand.addListener(function(command) {
   }
   if (command !== SHOW_TAB_SWITCHER_COMMAND_NAME) {
   }
+  const commandObservedAt = Date.now();
   const source = command === SHOW_SEARCH_COMMAND_NAME
     ? 'commands'
     : (command === SHOW_SEARCH_PREFILL_COMMAND_NAME
@@ -5896,7 +5900,7 @@ chrome.commands.onCommand.addListener(function(command) {
       return;
     }
     if (command === SHOW_TAB_SWITCHER_COMMAND_NAME) {
-      triggerTabSwitcherForTab(activeTabs[0], source);
+      triggerTabSwitcherForTab(activeTabs[0], source, commandObservedAt);
       return;
     }
     triggerShowSearchForTab(activeTabs[0], source);

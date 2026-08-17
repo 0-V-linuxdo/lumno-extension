@@ -298,7 +298,9 @@ export interface SuggestionsViewOptions {
   urlHighlightTheme?: ThemeValue;
   openTabSuggestionLimit?: number;
   openTabInitialRenderLimit?: number;
+  getOpenTabInitialRenderLimit?: () => number;
   openTabRenderBatchSize?: number;
+  getOpenTabRenderBatchSize?: () => number;
   enterAction?: string;
   autoHighlightFirstTab?: boolean;
 }
@@ -440,7 +442,9 @@ interface NormalizedOptions {
   urlHighlightTheme: ThemeValue;
   openTabSuggestionLimit: number;
   openTabInitialRenderLimit: number;
+  getOpenTabInitialRenderLimit: () => number;
   openTabRenderBatchSize: number;
+  getOpenTabRenderBatchSize: () => number;
   enterAction: string;
   autoHighlightFirstTab: boolean;
 }
@@ -617,6 +621,44 @@ function normalizeOptions(
         : 'var(--x-nt-hover-bg, #F3F4F6)',
       border: 'transparent'
     }));
+  const openTabSuggestionLimit =
+    Number(raw.openTabSuggestionLimit) > 0
+      ? Number(raw.openTabSuggestionLimit)
+      : 3;
+  const openTabInitialRenderLimit =
+    Number(raw.openTabInitialRenderLimit) > 0
+      ? Number(raw.openTabInitialRenderLimit)
+      : openTabSuggestionLimit;
+  const getOpenTabInitialRenderLimit = (): number => {
+    if (typeof raw.getOpenTabInitialRenderLimit !== 'function') {
+      return openTabInitialRenderLimit;
+    }
+    try {
+      const currentLimit = Number(raw.getOpenTabInitialRenderLimit());
+      return Number.isFinite(currentLimit) && currentLimit > 0
+        ? Math.max(1, Math.trunc(currentLimit))
+        : openTabInitialRenderLimit;
+    } catch {
+      return openTabInitialRenderLimit;
+    }
+  };
+  const openTabRenderBatchSize =
+    Number(raw.openTabRenderBatchSize) > 0
+      ? Number(raw.openTabRenderBatchSize)
+      : openTabSuggestionLimit;
+  const getOpenTabRenderBatchSize = (): number => {
+    if (typeof raw.getOpenTabRenderBatchSize !== 'function') {
+      return openTabRenderBatchSize;
+    }
+    try {
+      const currentBatchSize = Number(raw.getOpenTabRenderBatchSize());
+      return Number.isFinite(currentBatchSize) && currentBatchSize > 0
+        ? Math.max(1, Math.trunc(currentBatchSize))
+        : openTabRenderBatchSize;
+    } catch {
+      return openTabRenderBatchSize;
+    }
+  };
   return {
     surface: raw.surface === 'overlay' ? 'overlay' : 'newtab',
     document: documentRef,
@@ -711,22 +753,11 @@ function normalizeOptions(
     isBrowserInternalUrl,
     defaultTheme,
     urlHighlightTheme: raw.urlHighlightTheme || defaultTheme,
-    openTabSuggestionLimit:
-      Number(raw.openTabSuggestionLimit) > 0
-        ? Number(raw.openTabSuggestionLimit)
-        : 3,
-    openTabInitialRenderLimit:
-      Number(raw.openTabInitialRenderLimit) > 0
-        ? Number(raw.openTabInitialRenderLimit)
-        : Number(raw.openTabSuggestionLimit) > 0
-          ? Number(raw.openTabSuggestionLimit)
-          : 3,
-    openTabRenderBatchSize:
-      Number(raw.openTabRenderBatchSize) > 0
-        ? Number(raw.openTabRenderBatchSize)
-        : Number(raw.openTabSuggestionLimit) > 0
-          ? Number(raw.openTabSuggestionLimit)
-          : 3,
+    openTabSuggestionLimit,
+    openTabInitialRenderLimit,
+    getOpenTabInitialRenderLimit,
+    openTabRenderBatchSize,
+    getOpenTabRenderBatchSize,
     enterAction: String(raw.enterAction || 'go'),
     autoHighlightFirstTab: Boolean(raw.autoHighlightFirstTab)
   };
@@ -3133,7 +3164,10 @@ export function createSuggestionsView(
   let lastRenderWasSuggestions = false;
   let lastSimpleModeEnabled = options.isSimpleModeEnabled();
   let suggestionValueRefs = new Map<string, SuggestionValueRef>();
-  let pendingTabRenderFrame: number | null = null;
+  let pendingTabRenderTask: {
+    id: number;
+    kind: 'idle' | 'timeout';
+  } | null = null;
   let tabRenderGeneration = 0;
   const runtime: SuggestionsRuntime = {
     options,
@@ -3150,16 +3184,21 @@ export function createSuggestionsView(
 
   function cancelPendingTabRender(): void {
     tabRenderGeneration += 1;
-    if (pendingTabRenderFrame === null) {
+    if (pendingTabRenderTask === null) {
       return;
     }
     const windowRef = options.document.defaultView;
-    if (windowRef && typeof windowRef.cancelAnimationFrame === 'function') {
-      windowRef.cancelAnimationFrame(pendingTabRenderFrame);
-    } else if (windowRef) {
-      windowRef.clearTimeout(pendingTabRenderFrame);
+    if (windowRef) {
+      if (
+        pendingTabRenderTask.kind === 'idle' &&
+        typeof windowRef.cancelIdleCallback === 'function'
+      ) {
+        windowRef.cancelIdleCallback(pendingTabRenderTask.id);
+      } else {
+        windowRef.clearTimeout(pendingTabRenderTask.id);
+      }
     }
-    pendingTabRenderFrame = null;
+    pendingTabRenderTask = null;
   }
 
   function clear(): void {
@@ -3298,10 +3337,11 @@ export function createSuggestionsView(
             )}`
     );
     const windowRef = options.document.defaultView;
+    const initialRenderLimit = options.getOpenTabInitialRenderLimit();
     const initialRenderCount = windowRef
       ? Math.min(
           tabs.length,
-          Math.max(1, options.openTabInitialRenderLimit)
+          Math.max(1, initialRenderLimit)
         )
       : tabs.length;
     let renderedCount = initialRenderCount;
@@ -3348,13 +3388,13 @@ export function createSuggestionsView(
         return;
       }
       const renderNextBatch = (): void => {
-        pendingTabRenderFrame = null;
+        pendingTabRenderTask = null;
         if (generation !== tabRenderGeneration || destroyed) {
           return;
         }
         const nextCount = Math.min(
           tabs.length,
-          renderedCount + Math.max(1, options.openTabRenderBatchSize)
+          renderedCount + Math.max(1, options.getOpenTabRenderBatchSize())
         );
         preloadTabRange(renderedCount, nextCount);
         renderedCount = nextCount;
@@ -3363,10 +3403,24 @@ export function createSuggestionsView(
           scheduleNextBatch();
         }
       };
-      pendingTabRenderFrame =
-        typeof windowRef.requestAnimationFrame === 'function'
-          ? windowRef.requestAnimationFrame(renderNextBatch)
-          : windowRef.setTimeout(renderNextBatch, 16);
+      // Rows below the visible viewport are non-critical. Scheduling their
+      // synchronous React commits on animation frames competes directly with
+      // the host page while it is loading, so only fill them when Chromium
+      // reports idle time. The timeout fallback still yields multiple frames
+      // in browsers without requestIdleCallback.
+      if (typeof windowRef.requestIdleCallback === 'function') {
+        pendingTabRenderTask = {
+          id: windowRef.requestIdleCallback(renderNextBatch, {
+            timeout: 500
+          }),
+          kind: 'idle'
+        };
+      } else {
+        pendingTabRenderTask = {
+          id: windowRef.setTimeout(renderNextBatch, 48),
+          kind: 'timeout'
+        };
+      }
     };
     scheduleNextBatch();
   }

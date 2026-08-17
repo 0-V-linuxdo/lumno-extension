@@ -1077,6 +1077,26 @@
       : [...navigationSuggestions, ...keywordSuggestions];
   }
 
+  function pinExactSearchActionSecond(list) {
+    const suggestions = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (suggestions.length < 2) {
+      return suggestions;
+    }
+    const searchActionIndex = suggestions.findIndex(isSearchActionSuggestion);
+    const primaryResultIndex = suggestions.findIndex((suggestion) => (
+      !isKeywordSearchSuggestion(suggestion)
+    ));
+    if (searchActionIndex < 0 || primaryResultIndex < 0) {
+      return suggestions;
+    }
+    const primaryResult = suggestions[primaryResultIndex];
+    const searchAction = suggestions[searchActionIndex];
+    const remainingSuggestions = suggestions.filter((suggestion, index) => (
+      index !== primaryResultIndex && index !== searchActionIndex
+    ));
+    return [primaryResult, searchAction, ...remainingSuggestions];
+  }
+
   function hasLocalResultSuggestion(list) {
     return (Array.isArray(list) ? list : []).some((suggestion) => (
       suggestion && !isKeywordSearchSuggestion(suggestion)
@@ -3160,6 +3180,7 @@
     getSearchSuggestionClusterInfo,
     getSearchSuggestionFamilyKey,
     groupSearchSuggestionsByKind,
+    pinExactSearchActionSecond,
     isSearchOpenTabSuggestion,
     getSearchSuggestionSourceRank,
     getSearchSelectionBoost,
