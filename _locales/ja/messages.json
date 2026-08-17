@@ -512,7 +512,7 @@
     "message": "Web ページの色に合わせてテーマを自動変更"
   },
   "settings_overlay_page_theme_adaptation_tooltip": {
-    "message": "オフの場合：\n• 自動：システムの外観だけに従います\n• ライト：常にライトを使用します\n• ダーク：常にダークを使用します"
+    "message": "「テーマ」が「システムに従う」の場合にのみ表示されます。オフにすると、Web ページのテーマカラーに応じたライト／ダークモードの切り替えを行いません。"
   },
   "recent_mode_latest": {
     "message": "最近のアクセス"
@@ -530,7 +530,7 @@
     "message": "自動または手動でテーマを選択"
   },
   "settings_theme_system": {
-    "message": "自動"
+    "message": "システムに従う"
   },
   "settings_theme_light": {
     "message": "ライト"

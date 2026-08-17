@@ -512,7 +512,7 @@
     "message": "依網頁色彩自動變更主題色"
   },
   "settings_overlay_page_theme_adaptation_tooltip": {
-    "message": "關閉後：\n• 跟隨系統/網站：僅跟隨系統深淺色\n• 淺色：一律使用淺色\n• 深色：一律使用深色"
+    "message": "僅在「深淺色模式」=「跟隨系統」時顯示，關閉後將不再依網頁主題色變更深淺模式。"
   },
   "recent_mode_latest": {
     "message": "最近瀏覽"
@@ -530,7 +530,7 @@
     "message": "跟隨系統或手動選擇主題"
   },
   "settings_theme_system": {
-    "message": "跟隨系統/網站"
+    "message": "跟隨系統"
   },
   "settings_theme_light": {
     "message": "淺色"

@@ -512,7 +512,7 @@
     "message": "Adapt theme colors to each webpage"
   },
   "settings_overlay_page_theme_adaptation_tooltip": {
-    "message": "When turned off:\n• Auto follows only your system appearance\n• Light always stays light\n• Dark always stays dark"
+    "message": "Shown only when Theme mode is set to Follow system. When turned off, light/dark mode will no longer adapt to the webpage theme color."
   },
   "recent_mode_latest": {
     "message": "Show Recent"
@@ -530,7 +530,7 @@
     "message": "Follow system or choose manually"
   },
   "settings_theme_system": {
-    "message": "Auto"
+    "message": "Follow system"
   },
   "settings_theme_light": {
     "message": "Light"

@@ -3587,7 +3587,7 @@
       if (getThemeScope() === 'home') {
         return t('newtab_theme_follow_global', 'Follow "Global"');
       }
-      return t('settings_theme_system', 'Auto');
+      return t('settings_theme_system', 'Follow system');
     }
 
     function updateWallpaperAppearanceModeLabels() {

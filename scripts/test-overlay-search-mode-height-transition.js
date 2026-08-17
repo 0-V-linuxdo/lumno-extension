@@ -31,8 +31,8 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /const requestModeKey = getOverlaySearchModeKey\(\);[\s\S]*?requestQuery !== latestOverlayQuery \|\|[\s\S]*?requestModeKey !== getOverlaySearchModeKey\(\)/,
-  'late open-tab responses should not replace results after the user changes scope'
+  /const requestModeKey = getOverlaySearchModeKey\(\);[\s\S]*?const requestSeq = overlayTabsRequestSeq;[\s\S]*?requestSeq !== overlayTabsRequestSeq[\s\S]*?requestModeKey !== getOverlaySearchModeKey\(\)/,
+  'stale or late open-tab responses should not replace results after a newer request or scope change'
 );
 assert.match(
   overlaySource,

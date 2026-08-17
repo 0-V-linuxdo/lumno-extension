@@ -2766,6 +2766,24 @@ function sortTabsForOverlay(tabs) {
     .map((item) => item.tab);
 }
 
+function createOverlayTabPayload(tab, fetchSeq) {
+  return {
+    id: tab.id,
+    title: typeof tab.title === 'string' ? tab.title : '',
+    url: typeof tab.url === 'string' ? tab.url : '',
+    favIconUrl: typeof tab.favIconUrl === 'string' ? tab.favIconUrl : '',
+    _xTabRankScore: tab._xTabRankScore,
+    _xTabSwitchCount30m: tab._xTabSwitchCount30m,
+    _xTabSwitchCount24h: tab._xTabSwitchCount24h,
+    _xTabDebugEventTotal: tab._xTabDebugEventTotal,
+    _xTabLastAccessedRaw: tab._xTabLastAccessedRaw,
+    _xTabSortAt: tab._xTabSortAt,
+    _xTabRankHighFreq: tab._xTabRankHighFreq,
+    _xTabRankHint: tab._xTabRankHint,
+    _xTabFetchSeq: fetchSeq
+  };
+}
+
 if (storageArea) {
   storageArea.get([
     RESTRICTED_ACTION_STORAGE_KEY,
@@ -3998,7 +4016,7 @@ function openOverlayOnTab(activeTab, tabs, source) {
     'src/react/overlay-islands.js',
     'src/overlay/search-panel.js'
   ];
-  const expectedOverlayRuntimeVersion = '2026-08-12-fast-open-v1';
+  const expectedOverlayRuntimeVersion = '2026-08-17-fast-open-v4';
   const runOverlayScript = (tabZoomFactor) => {
       const prefillQuery = getOverlayPrefillQueryForSource(activeTab, source);
       const prioritizeCurrentPageMatch = source === 'page-hotkey-prefill';
@@ -4120,6 +4138,11 @@ function triggerShowSearchForTab(tab, source) {
   if (!tab || typeof tab.id !== 'number') {
     logHotkeyDebug('no-active-tab', { source: source || '' });
     openNewtabFallback();
+    return;
+  }
+  const activeUrl = getResolvedTabUrl(tab);
+  if (canOpenOverlayOnUrl(activeUrl)) {
+    openOverlayOnTab(tab, [], source);
     return;
   }
   const windowQuery = (typeof tab.windowId === 'number')
@@ -5640,24 +5663,21 @@ function handleTabMessage(request, sender, sendResponse) {
             : requestedCurrentTabId;
           chrome.tabs.query({}, (tabs) => {
             const normalizedTabs = (Array.isArray(tabs) ? tabs : [])
+              .filter((tab) => tab && tab.incognito !== true)
               .map((tab) => {
                 const resolvedUrl = getResolvedTabUrl(tab);
                 return {
-                  ...tab,
-                  url: resolvedUrl || ''
+                  id: tab.id,
+                  title: typeof tab.title === 'string' ? tab.title : '',
+                  url: resolvedUrl || '',
+                  favIconUrl: typeof tab.favIconUrl === 'string' ? tab.favIconUrl : '',
+                  lastAccessed: Number(tab.lastAccessed) || 0
                 };
-              })
-              .filter((tab) => (
-                tab &&
-                tab.incognito !== true
-              ));
+              });
             syncTabSwitchStatsFromTabList(normalizedTabs);
             const sortedTabs = sortTabsForOverlay(normalizedTabs);
             tabOverlayFetchSeq += 1;
-            const withSeq = sortedTabs.map((tab) => ({
-              ...tab,
-              _xTabFetchSeq: tabOverlayFetchSeq
-            }));
+            const withSeq = sortedTabs.map((tab) => createOverlayTabPayload(tab, tabOverlayFetchSeq));
             sendResponse({ tabs: withSeq, currentTabId: currentTabId });
           });
         });

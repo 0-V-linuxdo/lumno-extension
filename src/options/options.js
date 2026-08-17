@@ -96,6 +96,7 @@
   const searchResultSourceTypeGroupHost = document.getElementById('_x_extension_search_result_source_types_2026_unique_');
   const searchResultSourceTypeInputs = Array.from(document.querySelectorAll('input[data-search-result-source-type]'));
   const overlayOpenTabsDefaultVisibleToggle = document.getElementById('_x_extension_overlay_open_tabs_default_visible_toggle_2026_unique_');
+  const overlayPageThemeAdaptationRow = document.getElementById('_x_extension_overlay_page_theme_adaptation_row_2026_unique_');
   const overlayPageThemeAdaptationToggle = document.getElementById('_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_');
   const overlayPageThemeAdaptationInfoHost = document.getElementById('_x_extension_overlay_page_theme_adaptation_info_2026_unique_');
   const restrictedActionInfoHost = document.getElementById('_x_extension_restricted_action_info_2026_unique_');
@@ -816,7 +817,7 @@
       overlayPageThemeAdaptationInfoController.render({
         tooltip: getMessage(
           'settings_overlay_page_theme_adaptation_tooltip',
-          '关闭后：\n• 跟随系统/网站：仅跟随系统深浅色\n• 浅色：始终使用浅色\n• 深色：始终使用深色'
+          '仅在“深浅色模式”=“跟随系统”时显示，关闭后将不再基于网页主题色变更深浅模式。'
         ),
         tooltipKey: 'settings_overlay_page_theme_adaptation_tooltip'
       });
@@ -3894,13 +3895,14 @@
   function updateThemeButtons(mode) {
     const nextMode = mode === 'dark' || mode === 'light' ? mode : 'system';
     currentThemeMode = nextMode;
+    updateOverlayPageThemeAdaptationVisibility(nextMode);
     themePickerController.render({
       activeMode: nextMode,
       options: [
         {
           mode: 'system',
           labelKey: 'settings_theme_system',
-          label: getMessage('settings_theme_system', '跟随系统/网站'),
+          label: getMessage('settings_theme_system', '跟随系统'),
           previewSrc: '../../assets/images/system.svg'
         },
         {
@@ -3918,6 +3920,16 @@
       ]
     });
     requestAnimationFrame(updateThemeIndicator);
+  }
+
+  function updateOverlayPageThemeAdaptationVisibility(mode) {
+    const nextMode = mode === 'dark' || mode === 'light' ? mode : 'system';
+    const visible = nextMode === 'system';
+    document.documentElement.setAttribute('data-options-theme-mode', nextMode);
+    if (!overlayPageThemeAdaptationRow) {
+      return;
+    }
+    overlayPageThemeAdaptationRow.hidden = !visible;
   }
 
   function measureThemeIndicator() {

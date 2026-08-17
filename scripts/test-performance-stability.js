@@ -182,7 +182,7 @@ assertMatches(
 );
 assertMatches(
   overlaySearchPanelJs,
-  /openTabSuggestionLimit:\s*1000,[\s\S]*?openTabInitialRenderLimit:\s*24,[\s\S]*?openTabRenderBatchSize:\s*32,/,
+  /openTabSuggestionLimit:\s*1000,[\s\S]*?openTabInitialRenderLimit:\s*10,[\s\S]*?openTabRenderBatchSize:\s*16,/,
   'overlay open-tab results should mount a bounded first frame and continue in small batches'
 );
 assertMatches(

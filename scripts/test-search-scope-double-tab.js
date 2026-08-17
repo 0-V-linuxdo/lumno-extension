@@ -202,7 +202,7 @@ assert.doesNotMatch(
 );
 assert.match(
   overlayOpenTabsActivationSource,
-  /Array\.isArray\(tabs\) && tabs\.length > 0[\s\S]*?renderTabSuggestions\(filterTabsForOverlay\(tabs, latestOverlayQuery\)\)[\s\S]*?requestTabsAndRender\(latestOverlayQuery\)/,
+  /renderCachedTabsForOverlay\(latestOverlayQuery\)[\s\S]*?requestTabsAndRender\(latestOverlayQuery\)/,
   'overlay first Tab should render the tabs already supplied at launch before refreshing them'
 );
 

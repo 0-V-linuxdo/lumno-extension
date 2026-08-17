@@ -160,6 +160,7 @@ vm.runInNewContext(fs.readFileSync(preloadPath, 'utf8'), sandbox, {
 
 assert.strictEqual(root.getAttribute('data-theme-ready'), 'true');
 assert.strictEqual(root.getAttribute('data-options-preload-theme'), 'dark');
+assert.strictEqual(root.getAttribute('data-options-theme-mode'), 'dark');
 assert.strictEqual(body.getAttribute('data-theme'), 'dark');
 assert.strictEqual(panel.getAttribute('data-theme'), 'dark');
 assert.strictEqual(root.getAttribute('data-options-initial-tab'), 'shortcuts');

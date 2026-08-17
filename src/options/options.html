@@ -473,6 +473,11 @@
         border: none;
         background: transparent;
       }
+      #_x_extension_overlay_page_theme_adaptation_row_2026_unique_[hidden],
+      html[data-options-theme-mode="light"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_,
+      html[data-options-theme-mode="dark"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_ {
+        display: none !important;
+      }
       #_x_extension_settings_panel_2024_unique_[data-theme="dark"] ._x_extension_setting_row_2024_unique_ {
         background: transparent;
       }
@@ -2909,7 +2914,7 @@
                     <i class="ri-icon ri-check-line" aria-hidden="true"></i>
                   </span>
                 </span>
-                <span class="_x_extension_theme_label_2026_unique_" data-i18n="settings_theme_system">跟随系统/网站</span>
+                <span class="_x_extension_theme_label_2026_unique_" data-i18n="settings_theme_system">跟随系统</span>
               </button>
               <button class="_x_extension_theme_option_2024_unique_" data-mode="light" data-active="false" aria-pressed="false" type="button">
                 <span class="_x_extension_theme_preview_2026_unique_" data-preview-mode="light">
@@ -2948,6 +2953,57 @@
             </div>
             <label class="_x_extension_switch_2024_unique_" for="_x_extension_simple_mode_toggle_2026_unique_">
               <input id="_x_extension_simple_mode_toggle_2026_unique_" type="checkbox">
+              <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
+            </label>
+          </div>
+          <div class="_x_extension_setting_divider_wrap_2024_unique_" role="presentation">
+            <div class="_x_extension_setting_divider_2024_unique_"></div>
+          </div>
+          <div class="_x_extension_setting_row_2024_unique_">
+            <p class="_x_extension_section_title_2024_unique_" data-i18n="settings_webpage_focus_overlay_section_title">网页聚焦搜索浮层</p>
+          </div>
+          <div class="_x_extension_setting_row_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_overlay_size_title">尺寸</p>
+            </div>
+            <div class="_x_extension_recent_select_group_2024_unique_">
+              <div id="_x_extension_overlay_size_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="overlay size" data-i18n-aria-label="settings_overlay_size_title">
+                <span class="_x_extension_theme_indicator_2024_unique_"></span>
+                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="compact" data-active="false" aria-pressed="false" type="button">
+                  <span data-i18n="overlay_size_compact">小</span>
+                </button>
+                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="standard" data-active="true" aria-pressed="true" type="button">
+                  <span data-i18n="overlay_size_standard">标准</span>
+                </button>
+                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="large" data-active="false" aria-pressed="false" type="button">
+                  <span data-i18n="overlay_size_large">大</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="_x_extension_setting_row_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_overlay_enter_animation_title">进入动画</p>
+            </div>
+            <div id="_x_extension_overlay_enter_animation_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="group" aria-label="进入动画" data-i18n-aria-label="settings_overlay_enter_animation_title">
+              <span class="_x_extension_theme_indicator_2024_unique_"></span>
+              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="elastic" data-active="true" aria-pressed="true" type="button">
+                <span data-i18n="overlay_enter_animation_elastic">弹性</span>
+              </button>
+              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="fade" data-active="false" aria-pressed="false" type="button">
+                <span data-i18n="overlay_enter_animation_fade">淡入</span>
+              </button>
+            </div>
+          </div>
+          <div id="_x_extension_overlay_page_theme_adaptation_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
+                <span data-i18n="settings_overlay_page_theme_adaptation_title">基于网页色彩自动变更主题色</span>
+                <span id="_x_extension_overlay_page_theme_adaptation_info_2026_unique_"></span>
+              </p>
+            </div>
+            <label class="_x_extension_switch_2024_unique_" for="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_">
+              <input id="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_" type="checkbox" checked>
               <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
             </label>
           </div>
@@ -3089,57 +3145,6 @@
                 </select>
               </div>
             </div>
-          </div>
-          <div class="_x_extension_setting_divider_wrap_2024_unique_" role="presentation">
-            <div class="_x_extension_setting_divider_2024_unique_"></div>
-          </div>
-          <div class="_x_extension_setting_row_2024_unique_">
-            <p class="_x_extension_section_title_2024_unique_" data-i18n="settings_webpage_focus_overlay_section_title">网页聚焦搜索浮层</p>
-          </div>
-          <div class="_x_extension_setting_row_2024_unique_">
-            <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_overlay_size_title">尺寸</p>
-            </div>
-            <div class="_x_extension_recent_select_group_2024_unique_">
-              <div id="_x_extension_overlay_size_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="overlay size" data-i18n-aria-label="settings_overlay_size_title">
-                <span class="_x_extension_theme_indicator_2024_unique_"></span>
-                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="compact" data-active="false" aria-pressed="false" type="button">
-                  <span data-i18n="overlay_size_compact">小</span>
-                </button>
-                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="standard" data-active="true" aria-pressed="true" type="button">
-                  <span data-i18n="overlay_size_standard">标准</span>
-                </button>
-                <button class="_x_extension_theme_option_2024_unique_" data-overlay-size="large" data-active="false" aria-pressed="false" type="button">
-                  <span data-i18n="overlay_size_large">大</span>
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="_x_extension_setting_row_2024_unique_">
-            <div>
-              <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_overlay_enter_animation_title">进入动画</p>
-            </div>
-            <div id="_x_extension_overlay_enter_animation_tabs_wrap_2026_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="group" aria-label="进入动画" data-i18n-aria-label="settings_overlay_enter_animation_title">
-              <span class="_x_extension_theme_indicator_2024_unique_"></span>
-              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="elastic" data-active="true" aria-pressed="true" type="button">
-                <span data-i18n="overlay_enter_animation_elastic">弹性</span>
-              </button>
-              <button class="_x_extension_theme_option_2024_unique_" data-overlay-enter-animation="fade" data-active="false" aria-pressed="false" type="button">
-                <span data-i18n="overlay_enter_animation_fade">淡入</span>
-              </button>
-            </div>
-          </div>
-          <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
-            <div>
-              <p class="_x_extension_setting_title_2024_unique_ _x_extension_setting_title_with_icon_2024_unique_">
-                <span data-i18n="settings_overlay_page_theme_adaptation_title">基于网页色彩自动变更主题色</span>
-                <span id="_x_extension_overlay_page_theme_adaptation_info_2026_unique_"></span>
-              </p>
-            </div>
-            <label class="_x_extension_switch_2024_unique_" for="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_">
-              <input id="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_" type="checkbox" checked>
-              <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
-            </label>
           </div>
         </div>
         <div class="_x_extension_settings_content_2024_unique_" data-content="shortcuts" data-active="false">

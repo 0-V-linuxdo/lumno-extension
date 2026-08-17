@@ -512,7 +512,7 @@
     "message": "基于网页色彩自动变更主题色"
   },
   "settings_overlay_page_theme_adaptation_tooltip": {
-    "message": "关闭后：\n• 跟随系统/网站：仅跟随系统深浅色\n• 浅色：始终使用浅色\n• 深色：始终使用深色"
+    "message": "仅在“深浅色模式”=“跟随系统”时显示，关闭后将不再基于网页主题色变更深浅模式。"
   },
   "recent_mode_latest": {
     "message": "最近访问"
@@ -530,7 +530,7 @@
     "message": "跟随系统或手动选择主题"
   },
   "settings_theme_system": {
-    "message": "跟随系统/网站"
+    "message": "跟随系统"
   },
   "settings_theme_light": {
     "message": "浅色"

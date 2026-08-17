@@ -11,11 +11,11 @@ const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 const overlaySectionStart = optionsHtml.indexOf(
   'data-i18n="settings_webpage_focus_overlay_section_title"'
 );
-const appearanceEnd = optionsHtml.indexOf(
-  'data-content="shortcuts"',
+const newtabSectionStart = optionsHtml.indexOf(
+  'data-i18n="settings_newtab_section_title"',
   overlaySectionStart
 );
-const overlaySection = optionsHtml.slice(overlaySectionStart, appearanceEnd);
+const overlaySection = optionsHtml.slice(overlaySectionStart, newtabSectionStart);
 const sizeIndex = overlaySection.indexOf('data-i18n="settings_overlay_size_title"');
 const animationIndex = overlaySection.indexOf(
   'data-i18n="settings_overlay_enter_animation_title"'
@@ -24,6 +24,10 @@ const adaptationIndex = overlaySection.indexOf(
   'data-i18n="settings_overlay_page_theme_adaptation_title"'
 );
 
+assert(
+  overlaySectionStart >= 0 && newtabSectionStart > overlaySectionStart,
+  'webpage focus overlay settings should appear above New Tab settings'
+);
 assert(sizeIndex >= 0 && animationIndex > sizeIndex, 'overlay appearance controls should exist');
 assert(
   adaptationIndex > animationIndex,
@@ -33,6 +37,16 @@ assert.match(
   overlaySection,
   /id="_x_extension_overlay_page_theme_adaptation_toggle_2026_unique_" type="checkbox" checked/,
   'webpage theme adaptation should default to enabled'
+);
+assert.match(
+  overlaySection,
+  /id="_x_extension_overlay_page_theme_adaptation_row_2026_unique_"/,
+  'webpage theme adaptation should expose a dedicated visibility row'
+);
+assert.match(
+  optionsHtml,
+  /html\[data-options-theme-mode="light"\] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_,[\s\S]*?html\[data-options-theme-mode="dark"\] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_[\s\S]*?display: none !important;/,
+  'explicit light and dark modes should hide webpage adaptation before the main options runtime starts'
 );
 assert.match(
   overlaySection,
@@ -63,6 +77,16 @@ assert.match(
   optionsSource,
   /overlayPageThemeAdaptationToggle\.addEventListener\('change'[\s\S]*?storageArea\.set\(\{ \[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY\]: next \}\)/,
   'options should persist adaptation changes immediately'
+);
+assert.match(
+  optionsSource,
+  /function updateOverlayPageThemeAdaptationVisibility\(mode\)[\s\S]*?const visible = nextMode === 'system';[\s\S]*?overlayPageThemeAdaptationRow\.hidden = !visible;/,
+  'options should hide webpage adaptation outside follow-system-and-website mode'
+);
+assert.match(
+  optionsSource,
+  /function updateThemeButtons\(mode\)[\s\S]*?updateOverlayPageThemeAdaptationVisibility\(nextMode\);/,
+  'theme initialization, clicks, and synchronized updates should all refresh adaptation visibility'
 );
 assert.match(
   optionsSource,
@@ -154,17 +178,35 @@ observationCases.forEach(([input, expected]) => {
 });
 
 const expectedCopy = {
-  en: ['Adapt theme colors to each webpage', 'Auto follows only your system appearance', 'Light always stays light', 'Dark always stays dark'],
-  ja: ['Web ページの色に合わせてテーマを自動変更', 'システムの外観だけに従います', '常にライトを使用します', '常にダークを使用します'],
-  zh_CN: ['基于网页色彩自动变更主题色', '仅跟随系统深浅色', '始终使用浅色', '始终使用深色'],
-  zh_TW: ['依網頁色彩自動變更主題色', '僅跟隨系統深淺色', '一律使用淺色', '一律使用深色']
+  en: {
+    title: 'Adapt theme colors to each webpage',
+    tooltip: 'Shown only when Theme mode is set to Follow system. When turned off, light/dark mode will no longer adapt to the webpage theme color.',
+    systemLabel: 'Follow system'
+  },
+  ja: {
+    title: 'Web ページの色に合わせてテーマを自動変更',
+    tooltip: '「テーマ」が「システムに従う」の場合にのみ表示されます。オフにすると、Web ページのテーマカラーに応じたライト／ダークモードの切り替えを行いません。',
+    systemLabel: 'システムに従う'
+  },
+  zh_CN: {
+    title: '基于网页色彩自动变更主题色',
+    tooltip: '仅在“深浅色模式”=“跟随系统”时显示，关闭后将不再基于网页主题色变更深浅模式。',
+    systemLabel: '跟随系统'
+  },
+  zh_TW: {
+    title: '依網頁色彩自動變更主題色',
+    tooltip: '僅在「深淺色模式」=「跟隨系統」時顯示，關閉後將不再依網頁主題色變更深淺模式。',
+    systemLabel: '跟隨系統'
+  }
 };
-Object.entries(expectedCopy).forEach(([locale, fragments]) => {
+Object.entries(expectedCopy).forEach(([locale, expected]) => {
   const messages = JSON.parse(fs.readFileSync(`_locales/${locale}/messages.json`, 'utf8'));
   const title = messages.settings_overlay_page_theme_adaptation_title.message;
   const tooltip = messages.settings_overlay_page_theme_adaptation_tooltip.message;
-  assert.strictEqual(title, fragments[0]);
-  fragments.slice(1).forEach((fragment) => assert(tooltip.includes(fragment)));
+  const systemLabel = messages.settings_theme_system.message;
+  assert.strictEqual(title, expected.title);
+  assert.strictEqual(tooltip, expected.tooltip);
+  assert.strictEqual(systemLabel, expected.systemLabel);
 });
 
 console.log('overlay page theme adaptation setting tests passed');

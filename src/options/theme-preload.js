@@ -2,6 +2,7 @@
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const THEME_CACHE_KEY = '_x_extension_options_theme_preload_2026_unique_';
   const PRELOAD_THEME_ATTRIBUTE = 'data-options-preload-theme';
+  const PRELOAD_THEME_MODE_ATTRIBUTE = 'data-options-theme-mode';
   const BACKGROUND_PRELOAD_ID = '_x_extension_options_background_preload_2026_unique_';
   const PANEL_ID = '_x_extension_settings_panel_2024_unique_';
   const SETTINGS_TAB_KEYS = ['general', 'account', 'appearance', 'shortcuts', 'blacklist', 'labs'];
@@ -11,6 +12,7 @@
   }
 
   let resolvedTheme = 'light';
+  let currentThemeMode = 'system';
   let bodyObserver = null;
   let routeObserver = null;
 
@@ -129,6 +131,7 @@
   function applyTheme(theme) {
     resolvedTheme = theme === 'dark' ? 'dark' : 'light';
     root.setAttribute(PRELOAD_THEME_ATTRIBUTE, resolvedTheme);
+    root.setAttribute(PRELOAD_THEME_MODE_ATTRIBUTE, currentThemeMode);
     root.setAttribute('data-theme-ready', 'true');
     root.style.colorScheme = resolvedTheme;
     updateBackgroundPreload(resolvedTheme);
@@ -150,7 +153,8 @@
     }
   }
 
-  applyTheme(resolveTheme(readCachedThemeMode()));
+  currentThemeMode = readCachedThemeMode();
+  applyTheme(resolveTheme(currentThemeMode));
   const initialTabApplied = applyInitialTabState();
 
   if ((!document.body || !document.getElementById(PANEL_ID)) &&
@@ -170,6 +174,7 @@
     if (storage && typeof storage.get === 'function') {
       storage.get([THEME_STORAGE_KEY], (result) => {
         const storedMode = normalizeThemeMode(result && result[THEME_STORAGE_KEY]);
+        currentThemeMode = storedMode;
         cacheThemeMode(storedMode);
         applyTheme(resolveTheme(storedMode));
       });

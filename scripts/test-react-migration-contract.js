@@ -361,7 +361,9 @@ assert(
 );
 assert(
   overlaySource.includes(
-    'const overlayMountParent = document.fullscreenElement || document.body;'
+    'const overlayMountParent = document.fullscreenElement ||\n' +
+      '      document.documentElement ||\n' +
+      '      document.body;'
   ) &&
     overlaySource.includes('overlayMountParent.appendChild(overlayHost);') &&
     overlaySource.includes("typeof overlayHost.showPopover === 'function'") &&
@@ -373,7 +375,7 @@ assert(
     !overlaySource.includes(
       'setTimeout(() => searchInput.focus({ preventScroll: true }), 100);'
     ),
-  'the Overlay panel should mount inside the fullscreen subtree, enter the browser top layer, and focus as part of the reveal transaction'
+  'the Overlay panel should avoid hidden body containers, stay inside the fullscreen subtree, enter the browser top layer, and focus as part of the reveal transaction'
 );
 assert(
   newtabBundle.includes('LumnoNewtabShortcutDialogReact') &&

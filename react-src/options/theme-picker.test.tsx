@@ -13,7 +13,7 @@ const model: ThemePickerRenderModel = {
   activeMode: 'system',
   options: [
     {
-      label: '跟随系统/网站',
+      label: '跟随系统',
       labelKey: 'settings_theme_system',
       mode: 'system',
       previewSrc: '../../assets/images/system.svg'
