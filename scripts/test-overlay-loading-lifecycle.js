@@ -398,8 +398,56 @@ const completedInNewDocument = lifecycle.decideRecovery(restoredInNewDocument.re
 }], { now: 1400, complete: true });
 assert.strictEqual(
   completedInNewDocument.action,
+  'keep',
+  'the first completion should retain tracking through immediate chained navigations'
+);
+assert.strictEqual(
+  completedInNewDocument.reason,
+  'complete-awaiting-stability'
+);
+assert.deepStrictEqual(
+  completedInNewDocument.record.session,
+  typedInOldDocument.record.session,
+  'the stability window must retain the draft from the loading Document'
+);
+
+const chainedDocumentAfterFirstCompletion = lifecycle.decideRecovery(
+  completedInNewDocument.record,
+  [{
+    frameId: 0,
+    documentId: 'doc-chained',
+    result: {
+      runtimeReady: false,
+      overlayOpenState: 'unknown',
+      overlayConnected: false
+    }
+  }],
+  { now: 1450, complete: false }
+);
+assert.strictEqual(
+  chainedDocumentAfterFirstCompletion.action,
+  'restore',
+  'a Document committed immediately after the first completion must still restore the Overlay'
+);
+assert.deepStrictEqual(
+  chainedDocumentAfterFirstCompletion.record.session,
+  typedInOldDocument.record.session,
+  'a chained navigation must restore the exact loading draft'
+);
+
+const stableCompletion = lifecycle.decideRecovery(completedInNewDocument.record, [{
+  frameId: 0,
+  documentId: 'doc-new',
+  result: {
+    runtimeReady: true,
+    overlayOpenState: 'open',
+    overlayConnected: true
+  }
+}], { now: 3000, complete: true, stable: true });
+assert.strictEqual(
+  stableCompletion.action,
   'clear',
-  'completion in the restored Document should only clear tracking, never toggle the Overlay again'
+  'tracking should clear only after the connected Document remains stable'
 );
 
 const intentionallyClosed = lifecycle.decideRecovery(openedInOldDocument.record, [{
@@ -449,24 +497,38 @@ assert.strictEqual(
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
 assert.ok(
-  Array.isArray(manifest.permissions) && manifest.permissions.includes('webNavigation'),
-  'the background must receive top-frame navigation start events before tabs.query exposes the target'
+  Array.isArray(manifest.permissions) && !manifest.permissions.includes('webNavigation'),
+  'loading intent tracking should reuse the existing tabs permission'
 );
 const backgroundSource = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'background', 'background.js'),
   'utf8'
 );
 assert.ok(
-  backgroundSource.includes('chrome.webNavigation.onBeforeNavigate.addListener'),
-  'the background should record top-frame navigation before the network response commits'
+  backgroundSource.includes("if (changeInfo.status === 'loading') {\n      rememberOverlayTopFrameNavigation({"),
+  'the tabs loading event should be recorded independently of the stale tabs.query snapshot'
+);
+assert.ok(
+  backgroundSource.includes('markOverlayLoadingRecordUnstable(tabId);'),
+  'a new loading phase should invalidate an earlier completion grace period'
+);
+assert.ok(
+  backgroundSource.includes('scheduleOverlayLoadingStableCompletion(') &&
+    backgroundSource.includes("stable: true"),
+  'a connected first completion should wait for a stable completion probe'
+);
+assert.ok(
+  backgroundSource.includes("case 'notifyTopFrameDocumentStarted':") &&
+    backgroundSource.includes('recoverOverlayAfterTopFrameDocumentStart(request, sender)'),
+  'each newly committed top-frame Document should trigger recovery without site exceptions'
 );
 assert.ok(
   backgroundSource.includes('const cachedNavigationState = overlayNavigationStateByTabId.get(tab.id) || null;'),
   'shortcut dispatch should merge the navigation event with the stale tabs.query snapshot'
 );
 assert.ok(
-  backgroundSource.includes('chrome.webNavigation.onCommitted.addListener'),
-  'the committed Document should trigger recovery without waiting for load completion'
+  backgroundSource.includes("if (changeInfo.status === 'complete') {\n      clearOverlayNavigationState(tabId);"),
+  'the transient navigation state should be cleared when that tab finishes loading'
 );
 
 console.log('overlay loading lifecycle tests passed');

@@ -24,6 +24,12 @@ try {
 }
 
 try {
+  importScripts(chrome.runtime.getURL('src/shared/shortcut-key-matcher.js'));
+} catch (error) {
+  console.warn('Lumno: failed to load shortcut key matcher.', error);
+}
+
+try {
   importScripts(chrome.runtime.getURL('src/shared/favicon-cache.js'));
 } catch (error) {
   console.warn('Lumno: failed to load favicon cache runtime.', error);
@@ -190,6 +196,7 @@ const COMMAND_TARGET_POLICY = globalThis.LumnoCommandTargetPolicy || {};
 const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
 const FAVICON_CACHE = globalThis.LumnoFaviconCache || {};
 const SHORTCUT_FAVICON = globalThis.LumnoShortcutFavicon || {};
+const SHORTCUT_KEY_MATCHER = globalThis.LumnoShortcutKeyMatcher || {};
 const NEWTAB_FAVICON_THEME = globalThis.LumnoNewtabFaviconTheme || {};
 const BACKGROUND_NEWTAB_FALLBACK = globalThis.LumnoBackgroundNewtabFallback || {};
 const BACKGROUND_TAB_GROUPS = globalThis.LumnoBackgroundTabGroups || {};
@@ -887,7 +894,7 @@ function commitOpenTabSwitcherFromShortcutReleaseOnTab(tab) {
   });
 }
 
-function prepareTabSwitcherShortcutReleaseObserver(tab) {
+function prepareShortcutKeyObserver(tab) {
   if (!tab || typeof tab.id !== 'number') {
     return Promise.resolve(false);
   }
@@ -904,7 +911,7 @@ function prepareTabSwitcherShortcutReleaseObserver(tab) {
           tabId: tab.id,
           allFrames: true
         },
-        files: ['src/content/tab-switcher-shortcut-release.js']
+        files: ['src/shared/shortcut-key-matcher.js', 'src/content/shortcut-key-observer.js']
       }, () => {
         const error = chrome.runtime && chrome.runtime.lastError
           ? chrome.runtime.lastError.message || 'unknown'
@@ -930,7 +937,7 @@ function prepareTabSwitcherShortcutReleaseObserver(tab) {
   });
 }
 
-function prepareTabSwitcherShortcutReleaseObserversInOpenTabs() {
+function prepareShortcutKeyObserversInOpenTabs() {
   if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
     return;
   }
@@ -939,7 +946,7 @@ function prepareTabSwitcherShortcutReleaseObserversInOpenTabs() {
       return;
     }
     (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
-      prepareTabSwitcherShortcutReleaseObserver(tab);
+      prepareShortcutKeyObserver(tab);
     });
   });
 }
@@ -1657,7 +1664,7 @@ const TAB_SWITCHER_HOST_STATE_TIMEOUT_MS = 400;
 const tabSwitcherHostTabIdByWindowId = new Map();
 const HOTKEY_DUP_GUARD_MS = 180;
 const OVERLAY_OPENING_GUARD_MS = 5000;
-const OVERLAY_RUNTIME_VERSION = '2026-08-17-fast-reveal-navigation-intent-v9';
+const OVERLAY_RUNTIME_VERSION = '2026-08-17-fast-reveal-navigation-intent-v10';
 const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
 const OVERLAY_NAVIGATION_STATE_STORAGE_PREFIX =
   '_x_extension_overlay_navigation_state_2026_unique_:';
@@ -1673,6 +1680,7 @@ const OVERLAY_LOADING_RECOVERY_MAX_ATTEMPTS = 3;
 const OVERLAY_LOADING_RECOVERY_RETRY_MS = 120;
 const OVERLAY_LOADING_PRE_COMPLETE_RETRY_MAX_ATTEMPTS = 3;
 const OVERLAY_LOADING_PRE_COMPLETE_RETRY_MS = 120;
+const OVERLAY_LOADING_STABLE_COMPLETE_MS = 1500;
 const PAGE_HOTKEY_NEWTAB_RECOVER_MS = 1200;
 const BROWSER_NEWTAB_PROVIDER_DETECTION_MS = 6000;
 const TAB_SWITCHER_LIMIT = 5;
@@ -4123,28 +4131,6 @@ function updateOverlayTopFrameNavigation(details) {
   });
 }
 
-function finishOverlayTopFrameNavigation(details, callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  if (!details || typeof details.tabId !== 'number' || details.frameId !== 0) {
-    done(false);
-    return;
-  }
-  getOverlayNavigationState(details.tabId, (state) => {
-    if (!state) {
-      done(false);
-      return;
-    }
-    const finishedUrl = typeof details.url === 'string' ? details.url.trim() : '';
-    const trackedUrl = typeof state.url === 'string' ? state.url.trim() : '';
-    if (finishedUrl && trackedUrl && finishedUrl !== trackedUrl) {
-      done(false);
-      return;
-    }
-    clearOverlayNavigationState(details.tabId);
-    done(true);
-  });
-}
-
 function getOverlayLoadingRecordStorageKey(tabId) {
   return `${OVERLAY_LOADING_RECORD_STORAGE_PREFIX}${tabId}`;
 }
@@ -4168,9 +4154,29 @@ function setOverlayLoadingRecord(record) {
       (Number(currentSession.revision || 0) === Number(incomingSession.revision || 0) &&
         Number(currentSession.updatedAt || 0) > Number(incomingSession.updatedAt || 0)))
   );
+  const currentStableCompletionToken = Math.max(
+    0,
+    Number(currentRecord && currentRecord.stableCompletionToken) || 0
+  );
+  const incomingStableCompletionToken = Math.max(
+    0,
+    Number(record.stableCompletionToken) || 0
+  );
+  const shouldPreserveCurrentStability = Boolean(
+    currentRecord && currentStableCompletionToken >= incomingStableCompletionToken
+  );
   const nextRecord = {
     ...record,
-    session: shouldPreserveCurrentSession ? currentSession : incomingSession
+    session: shouldPreserveCurrentSession ? currentSession : incomingSession,
+    stableCompletionToken: shouldPreserveCurrentStability
+      ? currentStableCompletionToken
+      : incomingStableCompletionToken,
+    stableCompletionStartedAt: shouldPreserveCurrentStability
+      ? Number(currentRecord.stableCompletionStartedAt) || 0
+      : Number(record.stableCompletionStartedAt) || 0,
+    stableCompletionUrl: shouldPreserveCurrentStability
+      ? String(currentRecord.stableCompletionUrl || '')
+      : String(record.stableCompletionUrl || '')
   };
   overlayLoadingRecordsByTabId.set(record.tabId, nextRecord);
   const sessionArea = getOverlayLoadingRecordStorageArea();
@@ -4347,9 +4353,10 @@ function rememberOverlayPendingNavigationIntent(activeTab, source, pendingUrl) {
 function queueOverlayLoadingUpdate(tabId, changeInfo, tab) {
   const current = overlayLoadingPendingUpdateByTabId.get(tabId) || null;
   const incomingComplete = Boolean(changeInfo && changeInfo.status === 'complete');
+  const incomingDocumentStarted = Boolean(changeInfo && changeInfo.documentStarted === true);
   const currentComplete = Boolean(current && current.changeInfo &&
     current.changeInfo.status === 'complete');
-  if (currentComplete && !incomingComplete) {
+  if (currentComplete && !incomingComplete && !incomingDocumentStarted) {
     return;
   }
   overlayLoadingPendingUpdateByTabId.set(tabId, {
@@ -4376,6 +4383,79 @@ function finishOverlayLoadingOpenAttempt(tabId) {
       pendingUpdate.tab
     );
   }, 0);
+}
+
+function markOverlayLoadingRecordUnstable(tabId, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  getOverlayLoadingRecord(tabId, (record) => {
+    if (!record) {
+      done(null);
+      return;
+    }
+    const nextRecord = {
+      ...record,
+      stableCompletionToken: Math.max(0, Number(record.stableCompletionToken) || 0) + 1,
+      stableCompletionStartedAt: 0,
+      stableCompletionUrl: '',
+      updatedAt: Date.now()
+    };
+    setOverlayLoadingRecord(nextRecord);
+    done(nextRecord);
+  });
+}
+
+function scheduleOverlayLoadingStableCompletion(tab, record) {
+  if (!tab || typeof tab.id !== 'number' || !record) {
+    return;
+  }
+  const currentRecord = overlayLoadingRecordsByTabId.get(tab.id) || record;
+  const stableCompletionToken = Math.max(
+    0,
+    Number(currentRecord.stableCompletionToken) || 0
+  ) + 1;
+  const stableCompletionUrl = getResolvedTabUrl(tab);
+  const nextRecord = {
+    ...currentRecord,
+    stableCompletionToken,
+    stableCompletionStartedAt: Date.now(),
+    stableCompletionUrl,
+    updatedAt: Date.now()
+  };
+  setOverlayLoadingRecord(nextRecord);
+  setTimeout(() => {
+    getOverlayLoadingRecord(tab.id, (latestRecord) => {
+      if (!latestRecord ||
+          Number(latestRecord.stableCompletionToken) !== stableCompletionToken ||
+          latestRecord.stableCompletionUrl !== stableCompletionUrl) {
+        return;
+      }
+      const finalizeWithCurrentTab = (currentTab) => {
+        if (!currentTab || currentTab.status !== 'complete' ||
+            getResolvedTabUrl(currentTab) !== stableCompletionUrl) {
+          return;
+        }
+        recoverOverlayAfterLoadingUpdate(
+          tab.id,
+          {
+            status: 'complete',
+            stable: true,
+            stableCompletionToken
+          },
+          currentTab
+        );
+      };
+      if (chrome.tabs && typeof chrome.tabs.get === 'function') {
+        chrome.tabs.get(tab.id, (currentTab) => {
+          if (chrome.runtime && chrome.runtime.lastError) {
+            return;
+          }
+          finalizeWithCurrentTab(currentTab);
+        });
+        return;
+      }
+      finalizeWithCurrentTab(tab);
+    });
+  }, OVERLAY_LOADING_STABLE_COMPLETE_MS);
 }
 
 function updateOverlayLoadingRecordFromInvocation(activeTab, results) {
@@ -4553,7 +4633,10 @@ function restoreOverlayAfterLoadingDocumentChange(tab, record, complete) {
     onComplete: (ok) => {
       if (complete === true) {
         if (ok) {
-          clearOverlayLoadingRecord(tab.id);
+          const restoredRecord = overlayLoadingRecordsByTabId.get(tab.id) || record;
+          if (!overlayLoadingPendingUpdateByTabId.has(tab.id)) {
+            scheduleOverlayLoadingStableCompletion(tab, restoredRecord);
+          }
         } else {
           scheduleOverlayLoadingRecoveryRetry(tab, record);
         }
@@ -4572,6 +4655,7 @@ function restoreOverlayAfterLoadingDocumentChange(tab, record, complete) {
 
 function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
   const isComplete = Boolean(changeInfo && changeInfo.status === 'complete');
+  const isStableComplete = Boolean(isComplete && changeInfo && changeInfo.stable === true);
   const isCommittedUrl = Boolean(changeInfo && typeof changeInfo.url === 'string');
   if (!isComplete && !isCommittedUrl) {
     return;
@@ -4582,6 +4666,10 @@ function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
   }
   getOverlayLoadingRecord(tabId, (record) => {
     if (!record) {
+      return;
+    }
+    if (isStableComplete &&
+        Number(changeInfo.stableCompletionToken) !== Number(record.stableCompletionToken)) {
       return;
     }
     if (overlayLoadingRecoveryInFlightByTabId.has(tabId)) {
@@ -4619,6 +4707,12 @@ function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
     }
     overlayLoadingRecoveryInFlightByTabId.add(tabId);
     probeOverlayLoadingState(tabId, (results) => {
+      const pendingDocumentStart = overlayLoadingPendingUpdateByTabId.get(tabId);
+      if (pendingDocumentStart && pendingDocumentStart.changeInfo &&
+          pendingDocumentStart.changeInfo.documentStarted === true) {
+        finishOverlayLoadingOpenAttempt(tabId);
+        return;
+      }
       if (chrome.runtime && chrome.runtime.lastError) {
         if (isComplete) {
           restoreOverlayAfterLoadingDocumentChange(resolvedTab, record, true);
@@ -4631,6 +4725,7 @@ function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
       const outcome = typeof OVERLAY_LOADING_LIFECYCLE.decideRecovery === 'function'
         ? OVERLAY_LOADING_LIFECYCLE.decideRecovery(record, results, {
           complete: isComplete,
+          stable: isStableComplete,
           now: Date.now(),
           ttlMs: OVERLAY_LOADING_RECORD_TTL_MS
         })
@@ -4643,7 +4738,14 @@ function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
         setOverlayLoadingRecord(outcome.record);
       }
       if (outcome.action === 'keep') {
+        const hasPendingLoadingUpdate = overlayLoadingPendingUpdateByTabId.has(tabId);
         finishOverlayLoadingOpenAttempt(tabId);
+        if (isComplete && !isStableComplete && !hasPendingLoadingUpdate) {
+          scheduleOverlayLoadingStableCompletion(
+            resolvedTab,
+            outcome.record || record
+          );
+        }
         return;
       }
       restoreOverlayAfterLoadingDocumentChange(
@@ -4653,6 +4755,31 @@ function recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab) {
       );
     });
   });
+}
+
+function recoverOverlayAfterTopFrameDocumentStart(request, sender) {
+  const senderTab = sender && sender.tab ? sender.tab : null;
+  if (!senderTab || typeof senderTab.id !== 'number' ||
+      (typeof sender.frameId === 'number' && sender.frameId !== 0)) {
+    return false;
+  }
+  const documentUrl = request && typeof request.documentUrl === 'string' &&
+    request.documentUrl.trim()
+    ? request.documentUrl.trim()
+    : getResolvedTabUrl(senderTab);
+  const committedTab = {
+    ...senderTab,
+    status: 'loading',
+    url: documentUrl
+  };
+  markOverlayLoadingRecordUnstable(senderTab.id, () => {
+    recoverOverlayAfterLoadingUpdate(
+      senderTab.id,
+      { url: documentUrl, documentStarted: true },
+      committedTab
+    );
+  });
+  return true;
 }
 
 function openOverlayOnTab(activeTab, tabs, source, options) {
@@ -5272,7 +5399,7 @@ function triggerTabSwitcherForTab(tab, source) {
   // were already open when a development extension was reloaded. Start the
   // trusted keyup observer before any async switcher work so a quick physical
   // modifier release can be buffered and replayed after the panel opens.
-  const releaseObserverReady = prepareTabSwitcherShortcutReleaseObserver(tab);
+  const shortcutObserverReady = prepareShortcutKeyObserver(tab);
   clearScheduledSwitcherThumbnailCapture(tab.id);
   advanceExistingTabSwitcherOnTab(tab, source, (didAdvance) => {
     if (didAdvance) {
@@ -5329,7 +5456,7 @@ function triggerTabSwitcherForTab(tab, source) {
         });
       });
     });
-    Promise.all([startupStateReady, tabQueryReady, shortcutReady, releaseObserverReady]).then((results) => {
+    Promise.all([startupStateReady, tabQueryReady, shortcutReady, shortcutObserverReady]).then((results) => {
       const tabQuery = results[1] || { error: 'unknown', tabs: [] };
       const shortcut = typeof results[2] === 'string' && results[2]
         ? results[2]
@@ -5801,8 +5928,8 @@ chrome.tabs.onCreated.addListener((tab) => {
 chrome.runtime.onInstalled.addListener((details) => {
   // Static manifest content scripts only apply to future document loads. A
   // development-extension reload keeps existing tabs alive, so install the
-  // release observer there now instead of waiting for the next shortcut.
-  prepareTabSwitcherShortcutReleaseObserversInOpenTabs();
+  // shortcut observer there now instead of waiting for the next shortcut.
+  prepareShortcutKeyObserversInOpenTabs();
   if (!details) {
     schedulePersistPinnedTabSnapshot();
     return;
@@ -5841,7 +5968,7 @@ function restoreBackgroundStateOnStartup() {
 
 if (chrome && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
-    prepareTabSwitcherShortcutReleaseObserversInOpenTabs();
+    prepareShortcutKeyObserversInOpenTabs();
     restoreBackgroundStateOnStartup();
   });
 }
@@ -5900,61 +6027,6 @@ if (chrome && chrome.windows && chrome.windows.onFocusChanged) {
   });
 }
 
-if (chrome && chrome.webNavigation) {
-  if (chrome.webNavigation.onBeforeNavigate) {
-    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
-      rememberOverlayTopFrameNavigation(details);
-    });
-  }
-  if (chrome.webNavigation.onCommitted) {
-    chrome.webNavigation.onCommitted.addListener((details) => {
-      if (!details || typeof details.tabId !== 'number' || details.frameId !== 0) {
-        return;
-      }
-      updateOverlayTopFrameNavigation(details);
-      if (!chrome.tabs || typeof chrome.tabs.get !== 'function') {
-        return;
-      }
-      chrome.tabs.get(details.tabId, (tab) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          return;
-        }
-        recoverOverlayAfterLoadingUpdate(
-          details.tabId,
-          { url: typeof details.url === 'string' ? details.url : '' },
-          tab
-        );
-      });
-    });
-  }
-  if (chrome.webNavigation.onCompleted) {
-    chrome.webNavigation.onCompleted.addListener((details) => {
-      if (!details || typeof details.tabId !== 'number' || details.frameId !== 0) {
-        return;
-      }
-      finishOverlayTopFrameNavigation(details);
-      if (!chrome.tabs || typeof chrome.tabs.get !== 'function') {
-        return;
-      }
-      chrome.tabs.get(details.tabId, (tab) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          return;
-        }
-        recoverOverlayAfterLoadingUpdate(details.tabId, { status: 'complete' }, tab);
-      });
-    });
-  }
-  if (chrome.webNavigation.onErrorOccurred) {
-    chrome.webNavigation.onErrorOccurred.addListener((details) => {
-      finishOverlayTopFrameNavigation(details, (finished) => {
-        if (finished) {
-          clearOverlayLoadingRecord(details.tabId);
-        }
-      });
-    });
-  }
-}
-
 if (chrome && chrome.tabs && chrome.tabs.onRemoved) {
   chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     const overlayOpening = overlayOpeningByTabId.get(tabId);
@@ -5983,7 +6055,26 @@ if (chrome && chrome.tabs && chrome.tabs.onUpdated) {
     if (!changeInfo) {
       return;
     }
+    if (changeInfo.status === 'loading') {
+      rememberOverlayTopFrameNavigation({
+        tabId,
+        frameId: 0,
+        url: typeof changeInfo.url === 'string'
+          ? changeInfo.url
+          : (tab && typeof tab.pendingUrl === 'string' ? tab.pendingUrl : '')
+      });
+      markOverlayLoadingRecordUnstable(tabId);
+    } else if (typeof changeInfo.url === 'string') {
+      updateOverlayTopFrameNavigation({
+        tabId,
+        frameId: 0,
+        url: changeInfo.url
+      });
+    }
     recoverOverlayAfterLoadingUpdate(tabId, changeInfo, tab);
+    if (changeInfo.status === 'complete') {
+      clearOverlayNavigationState(tabId);
+    }
     if (typeof changeInfo.url === 'string' || changeInfo.status === 'complete') {
       const providerTab = Object.assign({}, tab || {}, {
         id: typeof tabId === 'number' ? tabId : (tab && tab.id),
@@ -6448,6 +6539,7 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
     actions: [
       'switchToTab',
       'reportTabVisible',
+      'notifyTopFrameDocumentStarted',
       'notifyOverlayClosed',
       'updateOverlayLoadingSession',
       'getTabsForOverlay',
@@ -6590,6 +6682,11 @@ function handleTabMessage(request, sender, sendResponse) {
       sendResponse({ ok: true });
       return;
     }
+    case 'notifyTopFrameDocumentStarted': {
+      const accepted = recoverOverlayAfterTopFrameDocumentStart(request, sender);
+      sendResponse({ ok: accepted });
+      return;
+    }
     case 'updateOverlayLoadingSession': {
       updateOverlayLoadingSessionFromMessage(request, sender, sendResponse);
       return true;
@@ -6716,19 +6813,38 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ ok: false });
         return;
       }
-      const shouldPrefillCurrentUrl = Boolean(request && request.prefillCurrentUrl);
-      const triggerSource = shouldPrefillCurrentUrl ? 'page-hotkey-prefill' : 'page-hotkey';
-      logHotkeyDebug('received', {
-        command: SHOW_SEARCH_COMMAND_NAME,
-        source: triggerSource,
-        tabId: senderTab.id,
-        url: senderTab.url || '',
-        pendingUrl: senderTab.pendingUrl || '',
-        prefillCurrentUrl: shouldPrefillCurrentUrl
-      });
-      rememberPageHotkeyContext(senderTab);
-      triggerShowSearchForTab(senderTab, triggerSource);
-      sendResponse({ ok: true });
+      const triggerVerifiedPageHotkey = (shortcut) => {
+        const shouldPrefillCurrentUrl = Boolean(request && request.prefillCurrentUrl);
+        const triggerSource = shouldPrefillCurrentUrl ? 'page-hotkey-prefill' : 'page-hotkey';
+        logHotkeyDebug('received', {
+          command: SHOW_SEARCH_COMMAND_NAME,
+          source: triggerSource,
+          tabId: senderTab.id,
+          url: senderTab.url || '',
+          pendingUrl: senderTab.pendingUrl || '',
+          prefillCurrentUrl: shouldPrefillCurrentUrl,
+          verifiedAfterColdStart: Boolean(request && request.requiresShortcutVerification)
+        });
+        rememberPageHotkeyContext(senderTab);
+        triggerShowSearchForTab(senderTab, triggerSource);
+        sendResponse({ ok: true, shortcut: shortcut || '' });
+      };
+      if (request && request.requiresShortcutVerification === true) {
+        getConfiguredFallbackShortcut((shortcut) => {
+          const spec = typeof SHORTCUT_KEY_MATCHER.parseShortcut === 'function'
+            ? SHORTCUT_KEY_MATCHER.parseShortcut(shortcut)
+            : null;
+          const matched = typeof SHORTCUT_KEY_MATCHER.descriptorMatchesShortcut === 'function' &&
+            SHORTCUT_KEY_MATCHER.descriptorMatchesShortcut(request.observedShortcut, spec);
+          if (!matched) {
+            sendResponse({ ok: false, reason: 'shortcut-mismatch', shortcut: shortcut || '' });
+            return;
+          }
+          triggerVerifiedPageHotkey(shortcut);
+        });
+        return true;
+      }
+      triggerVerifiedPageHotkey('');
       return;
     }
     case 'notifyTabSwitcherShortcutModifierReleased': {
