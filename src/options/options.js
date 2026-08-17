@@ -641,6 +641,10 @@
   const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
   const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
+  const NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY ||
+    '_x_extension_newtab_shortcuts_chunk_2_2026_unique_';
+  const NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY ||
+    '_x_extension_newtab_shortcuts_chunk_3_2026_unique_';
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
@@ -716,6 +720,8 @@
     PINNED_RECENT_SITES_STORAGE_KEY,
     HIDDEN_RECENT_SITES_STORAGE_KEY,
     NEWTAB_SHORTCUTS_STORAGE_KEY,
+    NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY,
+    NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
@@ -4882,6 +4888,16 @@
             payload[key] = data[key];
           }
         });
+        if (Object.prototype.hasOwnProperty.call(data, NEWTAB_SHORTCUTS_STORAGE_KEY)) {
+          [
+            NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY,
+            NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY
+          ].forEach((key) => {
+            if (!Object.prototype.hasOwnProperty.call(data, key)) {
+              payload[key] = [];
+            }
+          });
+        }
         if (Object.keys(payload).length === 0) {
           showToast(getMessage('sync_import_invalid', '配置文件无效'), true);
           syncImportInput.value = '';

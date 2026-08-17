@@ -1169,8 +1169,8 @@ assertContains(
 
 assertContains(
   newtabJs,
-  'const MAX_NEWTAB_SHORTCUTS = 20;',
-  'newtab should allow two full desktop rows of shortcuts'
+  'const MAX_NEWTAB_SHORTCUTS = 60;',
+  'newtab should allow up to sixty shortcuts'
 );
 
 assertContains(

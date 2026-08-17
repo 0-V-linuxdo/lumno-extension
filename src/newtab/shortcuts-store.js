@@ -6,7 +6,13 @@
   root.LumnoNewtabShortcutsStore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   const DEFAULT_SHORTCUTS_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
-  const DEFAULT_MAX_SHORTCUTS = 20;
+  const DEFAULT_MAX_SHORTCUTS = 60;
+  const DEFAULT_SHORTCUTS_CHUNK_SIZE = 20;
+  const DEFAULT_SHORTCUTS_CHUNK_KEYS = Object.freeze([
+    DEFAULT_SHORTCUTS_KEY,
+    '_x_extension_newtab_shortcuts_chunk_2_2026_unique_',
+    '_x_extension_newtab_shortcuts_chunk_3_2026_unique_'
+  ]);
   const DEFAULT_SHORTCUTS = Object.freeze([
     Object.freeze({
       id: 'shortcut-lumno-default',
@@ -35,6 +41,34 @@
   function getMaxShortcuts(options) {
     const raw = Number(options && options.maxShortcuts);
     return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : DEFAULT_MAX_SHORTCUTS;
+  }
+
+  function getShortcutStorageChunkSize(options) {
+    const raw = Number(options && options.chunkSize);
+    return Number.isFinite(raw) && raw > 0
+      ? Math.max(1, Math.floor(raw))
+      : DEFAULT_SHORTCUTS_CHUNK_SIZE;
+  }
+
+  function getShortcutStorageKeys(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const key = opts.key || DEFAULT_SHORTCUTS_KEY;
+    const chunkSize = getShortcutStorageChunkSize(opts);
+    const chunkCount = Math.max(1, Math.ceil(getMaxShortcuts(opts) / chunkSize));
+    const configuredKeys = Array.isArray(opts.chunkKeys)
+      ? opts.chunkKeys
+      : (key === DEFAULT_SHORTCUTS_KEY ? DEFAULT_SHORTCUTS_CHUNK_KEYS : []);
+    const keys = [key];
+    configuredKeys.forEach((configuredKey) => {
+      const normalizedKey = String(configuredKey || '').trim();
+      if (normalizedKey && !keys.includes(normalizedKey)) {
+        keys.push(normalizedKey);
+      }
+    });
+    while (keys.length < chunkCount) {
+      keys.push(`${key}_chunk_${keys.length + 1}`);
+    }
+    return keys.slice(0, chunkCount);
   }
 
   function stableHashCode(text) {
@@ -148,13 +182,14 @@
     return normalizeShortcuts(DEFAULT_SHORTCUTS, opts);
   }
 
-  function storageGet(storage, key) {
+  function storageGet(storage, keys) {
     return new Promise((resolve) => {
       if (!storage || typeof storage.get !== 'function') {
         resolve({});
         return;
       }
-      storage.get([key], (result) => {
+      const requestedKeys = Array.isArray(keys) ? keys : [keys];
+      storage.get(requestedKeys, (result) => {
         resolve(result || {});
       });
     });
@@ -172,29 +207,46 @@
 
   function loadShortcuts(storage, options) {
     const opts = options && typeof options === 'object' ? options : {};
-    const key = opts.key || DEFAULT_SHORTCUTS_KEY;
-    return storageGet(storage, key).then((result) => {
-      const hasStoredValue = Boolean(
+    const keys = getShortcutStorageKeys(opts);
+    return storageGet(storage, keys).then((result) => {
+      const hasStoredValue = keys.some((key) => Boolean(
         result &&
         Object.prototype.hasOwnProperty.call(result, key) &&
         typeof result[key] !== 'undefined'
-      );
-      return hasStoredValue
-        ? normalizeShortcuts(result[key], opts)
-        : getDefaultShortcuts(opts);
+      ));
+      if (!hasStoredValue) {
+        return getDefaultShortcuts(opts);
+      }
+      const items = [];
+      keys.forEach((key) => {
+        if (Array.isArray(result[key])) {
+          items.push(...result[key]);
+        }
+      });
+      return normalizeShortcuts(items, opts);
     });
+  }
+
+  function createShortcutStoragePayload(items, options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const keys = getShortcutStorageKeys(opts);
+    const chunkSize = getShortcutStorageChunkSize(opts);
+    return keys.reduce((payload, key, index) => {
+      const start = index * chunkSize;
+      payload[key] = items.slice(start, start + chunkSize);
+      return payload;
+    }, {});
   }
 
   function saveShortcuts(storage, items, options) {
     const opts = options && typeof options === 'object' ? options : {};
-    const key = opts.key || DEFAULT_SHORTCUTS_KEY;
     const normalized = normalizeShortcuts(items, opts);
-    return storageSet(storage, { [key]: normalized }).then(() => normalized);
+    return storageSet(storage, createShortcutStoragePayload(normalized, opts))
+      .then(() => normalized);
   }
 
   function saveShortcut(storage, input, options) {
     const opts = options && typeof options === 'object' ? options : {};
-    const key = opts.key || DEFAULT_SHORTCUTS_KEY;
     return loadShortcuts(storage, opts).then((items) => {
       const nextShortcut = createShortcutRecord(input, opts);
       if (!nextShortcut) {
@@ -206,14 +258,19 @@
       const savedItems = maxShortcuts > 0 && nextItems.length <= maxShortcuts
         ? nextItems
         : items;
-      return storageSet(storage, { [key]: savedItems }).then(() => savedItems);
+      return storageSet(storage, createShortcutStoragePayload(savedItems, opts))
+        .then(() => savedItems);
     });
   }
 
   return {
     DEFAULT_SHORTCUTS_KEY,
     DEFAULT_MAX_SHORTCUTS,
+    DEFAULT_SHORTCUTS_CHUNK_SIZE,
+    DEFAULT_SHORTCUTS_CHUNK_KEYS,
     DEFAULT_SHORTCUTS,
+    getShortcutStorageChunkSize,
+    getShortcutStorageKeys,
     normalizeShortcutUrl,
     normalizeShortcutItem,
     createShortcutRecord,

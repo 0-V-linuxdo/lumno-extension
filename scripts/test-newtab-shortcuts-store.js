@@ -91,22 +91,27 @@ function testNormalizesAndDeduplicatesShortcuts() {
   );
 }
 
-function testDefaultCapacityKeepsSecondRowShortcuts() {
+function createShortcutInputs(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `shortcut-${index + 1}`,
+    title: `Shortcut ${index + 1}`,
+    url: `https://shortcut-${index + 1}.example/`
+  }));
+}
+
+function testDefaultCapacityAllowsSixtyShortcuts() {
   const shortcuts = shortcutsStore.normalizeShortcuts(
-    Array.from({ length: 11 }, (_, index) => ({
-      id: `shortcut-${index + 1}`,
-      title: `Shortcut ${index + 1}`,
-      url: `https://shortcut-${index + 1}.example/`
-    }))
+    createShortcutInputs(61)
   );
 
-  assert.strictEqual(shortcutsStore.DEFAULT_MAX_SHORTCUTS, 20);
+  assert.strictEqual(shortcutsStore.DEFAULT_MAX_SHORTCUTS, 60);
   assert.strictEqual(
     shortcuts.length,
-    11,
-    'the default capacity should retain the eleventh shortcut for wrapped layouts'
+    60,
+    'the default capacity should retain sixty shortcuts and discard overflow'
   );
   assert.strictEqual(shortcuts[0].id, 'shortcut-1');
+  assert.strictEqual(shortcuts[59].id, 'shortcut-60');
 }
 
 function testDefaultShortcutsContainLumno() {
@@ -208,16 +213,56 @@ async function testSaveShortcutsPreservesExplicitOrder() {
   assert.deepStrictEqual(storage.data[key], saved);
 }
 
+async function testDefaultStorageSplitsSixtyShortcutsIntoQuotaSafeChunks() {
+  const key = '_test_shortcuts_chunked';
+  const storage = createMemoryStorage();
+  const options = {
+    key,
+    maxShortcuts: 60,
+    now: 123
+  };
+  const inputs = createShortcutInputs(60);
+  const saved = await shortcutsStore.saveShortcuts(storage, inputs, options);
+  const keys = shortcutsStore.getShortcutStorageKeys(options);
+
+  assert.deepStrictEqual(
+    keys,
+    [key, `${key}_chunk_2`, `${key}_chunk_3`],
+    'sixty shortcuts should use three storage items'
+  );
+  keys.forEach((chunkKey) => {
+    assert.strictEqual(storage.data[chunkKey].length, 20);
+    assert(
+      Buffer.byteLength(JSON.stringify(storage.data[chunkKey])) < 8192,
+      'each representative shortcut chunk should stay below the Chrome Sync per-item quota'
+    );
+  });
+
+  const loaded = await shortcutsStore.loadShortcuts(storage, options);
+  assert.deepStrictEqual(
+    loaded.map((shortcut) => shortcut.id),
+    saved.map((shortcut) => shortcut.id),
+    'chunked shortcut storage should preserve all sixty shortcuts in order'
+  );
+
+  await shortcutsStore.saveShortcuts(storage, inputs.slice(0, 5), options);
+  assert.deepStrictEqual(storage.data[keys[1]], []);
+  assert.deepStrictEqual(storage.data[keys[2]], []);
+  const reduced = await shortcutsStore.loadShortcuts(storage, options);
+  assert.strictEqual(reduced.length, 5, 'saving fewer shortcuts should clear stale chunks');
+}
+
 async function run() {
   testCreatesShortcutFromLooseUrl();
   testFallsBackToHostForEmptyTitle();
   testRejectsUnsafeOrMissingUrls();
   testNormalizesAndDeduplicatesShortcuts();
-  testDefaultCapacityKeepsSecondRowShortcuts();
+  testDefaultCapacityAllowsSixtyShortcuts();
   testDefaultShortcutsContainLumno();
   await testLoadsDefaultShortcutsOnlyWhenStorageKeyIsMissing();
   await testSaveShortcutDoesNotEvictOldestAtMaximumLimit();
   await testSaveShortcutsPreservesExplicitOrder();
+  await testDefaultStorageSplitsSixtyShortcutsIntoQuotaSafeChunks();
 }
 
 run().catch((error) => {

@@ -571,6 +571,19 @@ assert(
   'New Tab shortcuts should be included in options sync/export/import keys'
 );
 assert(
+  /const SYNC_KEYS = \[[\s\S]*NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY[\s\S]*NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY[\s\S]*\];/.test(optionsSource),
+  'all New Tab shortcut chunks should be included in options sync/export/import keys'
+);
+assert(
+  chromeSyncKeys.includes('_x_extension_newtab_shortcuts_chunk_2_2026_unique_') &&
+    chromeSyncKeys.includes('_x_extension_newtab_shortcuts_chunk_3_2026_unique_'),
+  'all New Tab shortcut chunks should be included in the shared Chrome Sync contract'
+);
+assert(
+  /hasOwnProperty\.call\(data, NEWTAB_SHORTCUTS_STORAGE_KEY\)[\s\S]*NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY[\s\S]*NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY[\s\S]*payload\[key\] = \[\];/.test(optionsSource),
+  'importing a legacy single-key shortcut payload should clear stale shortcut chunks'
+);
+assert(
   optionsMigratesSyncKeys,
   'New Tab shortcuts should be included in options local-to-sync migration'
 );

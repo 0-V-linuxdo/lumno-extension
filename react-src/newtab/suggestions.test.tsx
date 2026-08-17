@@ -956,6 +956,73 @@ describe('Suggestions React island', () => {
     expect(setSuggestionsVisible).toHaveBeenLastCalledWith(true);
   });
 
+  it('refreshes open-tab theme variables after async brand resolution', async () => {
+    const fallbackTheme = {
+      tagBg: 'rgb(210, 224, 246)',
+      tagText: '#111827'
+    };
+    const brandTheme = {
+      _xIsBrand: true,
+      highlightBg: 'rgb(250, 230, 248)',
+      tagBg: 'rgb(248, 217, 244)',
+      tagText: '#111827'
+    };
+    let resolveAsyncTheme: ((theme: typeof brandTheme) => void) | null = null;
+    const asyncTheme = new Promise<typeof brandTheme>((resolve) => {
+      resolveAsyncTheme = resolve;
+    });
+    const applyThemeVariables = vi.fn((
+      item: SuggestionElement,
+      theme: Record<string, unknown> | null
+    ) => {
+      item.style.setProperty(
+        '--x-ext-tag-bg',
+        String(theme?.tagBg || '')
+      );
+      item.style.setProperty(
+        '--x-ext-tag-text',
+        String(theme?.tagText || '')
+      );
+    });
+    const { view, items } = createView({
+      surface: 'overlay',
+      autoHighlightFirstTab: true,
+      getImmediateThemeForSuggestion: () => fallbackTheme,
+      getThemeForSuggestion: () => asyncTheme,
+      getThemeForMode: (theme) => theme || fallbackTheme,
+      getHighlightColors: (theme) => ({
+        bg: String(theme?.highlightBg || '')
+      }),
+      applyThemeVariables
+    });
+
+    act(() => {
+      view.renderTabs([{
+        id: 42,
+        title: 'Dribbble',
+        url: 'https://dribbble.com/',
+        favIconUrl: 'https://dribbble.com/favicon.ico'
+      }]);
+    });
+    const row = items[0];
+    expect(row.querySelector('.x-ov-action-tag')?.textContent)
+      .toBe('切换');
+    expect(row.style.getPropertyValue('--x-ext-tag-bg'))
+      .toBe(fallbackTheme.tagBg);
+
+    await act(async () => {
+      resolveAsyncTheme?.(brandTheme);
+      await asyncTheme;
+    });
+
+    expect(items[0]).toBe(row);
+    expect(row._xTheme).toBe(brandTheme);
+    expect(row.style.getPropertyValue('--x-ext-tag-bg'))
+      .toBe(brandTheme.tagBg);
+    expect(applyThemeVariables).toHaveBeenCalledTimes(2);
+    expect(applyThemeVariables).toHaveBeenLastCalledWith(row, brandTheme);
+  });
+
   it('keeps large open-tab mounts responsive and cancels stale batches', () => {
     let nextFrameId = 1;
     const frameCallbacks = new Map<number, FrameRequestCallback>();

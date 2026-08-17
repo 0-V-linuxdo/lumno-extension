@@ -365,7 +365,13 @@
   };
   const MAX_PINNED_RECENT_SITES = 3;
   const MAX_HIDDEN_RECENT_SITES = 60;
-  const MAX_NEWTAB_SHORTCUTS = 20;
+  const MAX_NEWTAB_SHORTCUTS = 60;
+  const NEWTAB_SHORTCUTS_STORAGE_KEYS = typeof NEWTAB_SHORTCUTS_STORE.getShortcutStorageKeys === 'function'
+    ? NEWTAB_SHORTCUTS_STORE.getShortcutStorageKeys({
+        key: NEWTAB_SHORTCUTS_STORAGE_KEY,
+        maxShortcuts: MAX_NEWTAB_SHORTCUTS
+      })
+    : [NEWTAB_SHORTCUTS_STORAGE_KEY];
   const SHORTCUT_DRAG_START_THRESHOLD_PX = 10;
   const SHORTCUT_REORDER_ANIMATION_MS = 180;
   const SHORTCUT_DROP_ANIMATION_MS = 210;
@@ -4493,18 +4499,16 @@
       recentRenderSignature = '';
       renderRecentSites(recentSourceItems);
     }
-    if (changes[NEWTAB_SHORTCUTS_STORAGE_KEY]) {
-      newtabShortcuts = NEWTAB_SHORTCUTS_STORE.normalizeShortcuts(
-        changes[NEWTAB_SHORTCUTS_STORAGE_KEY].newValue,
-        getShortcutStoreOptions()
-      );
-      pruneShortcutFavicons(newtabShortcuts);
-      const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
-      if (!areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons)) {
-        newtabShortcutIcons = prunedIcons;
-        shortcutIconStore.writeAll(prunedIcons).catch(() => {});
-      }
-      renderShortcuts();
+    if (NEWTAB_SHORTCUTS_STORAGE_KEYS.some((key) => changes[key])) {
+      loadShortcuts().then(() => {
+        pruneShortcutFavicons(newtabShortcuts);
+        const prunedIcons = getNextShortcutIconMap(newtabShortcuts);
+        if (!areShortcutIconMapsEqual(newtabShortcutIcons, prunedIcons)) {
+          newtabShortcutIcons = prunedIcons;
+          shortcutIconStore.writeAll(prunedIcons).catch(() => {});
+        }
+        renderShortcuts();
+      });
     }
   });
 
@@ -5192,7 +5196,7 @@
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
     PINNED_RECENT_SITES_STORAGE_KEY,
     HIDDEN_RECENT_SITES_STORAGE_KEY,
-    NEWTAB_SHORTCUTS_STORAGE_KEY,
+    ...NEWTAB_SHORTCUTS_STORAGE_KEYS,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY

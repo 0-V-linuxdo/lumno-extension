@@ -2736,11 +2736,13 @@ function OpenTabRowComponent({
           if (!active || !item.isConnected) {
             return;
           }
-          item._xTheme = resolveTheme(
+          const nextTheme = resolveTheme(
             options,
             themeSuggestion,
             theme
           );
+          item._xTheme = nextTheme;
+          options.applyThemeVariables(item, nextTheme);
           runtime.updateSelection(options.getSelectedIndex());
         });
     }

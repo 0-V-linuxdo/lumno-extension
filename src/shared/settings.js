@@ -9,6 +9,8 @@
   const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
   const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
+  const NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY = '_x_extension_newtab_shortcuts_chunk_2_2026_unique_';
+  const NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY = '_x_extension_newtab_shortcuts_chunk_3_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
   const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
@@ -61,6 +63,8 @@
     '_x_extension_newtab_pinned_recent_sites_2026_unique_',
     '_x_extension_newtab_hidden_recent_sites_2026_unique_',
     '_x_extension_newtab_shortcuts_2026_unique_',
+    NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY,
+    NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY,
     '_x_extension_newtab_shortcuts_visible_2026_unique_',
     '_x_extension_newtab_shortcut_add_visible_2026_unique_',
     '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_',
@@ -569,6 +573,8 @@
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY,
+    NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
     NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
