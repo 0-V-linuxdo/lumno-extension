@@ -72,6 +72,12 @@ describe('Overlay tab switcher React island', () => {
     expect(
       shadow.querySelector('.x-tab-switcher-host')?.textContent
     ).toBe('first.example');
+    expect(
+      controller.buttons[0].querySelector('.x-tab-switcher-title-favicon')
+    ).not.toBeNull();
+    expect(
+      controller.buttons[0].querySelector('.x-tab-switcher-thumb-favicon')
+    ).toBeNull();
   });
 
   it('updates selection without replacing stable card nodes', () => {
@@ -85,6 +91,9 @@ describe('Overlay tab switcher React island', () => {
     expect(controller.buttons[0]).toBe(first);
     expect(controller.buttons[1]).toBe(second);
     expect(second.dataset.active).toBe('true');
+    expect(
+      first.querySelector('.x-tab-switcher-title-favicon')
+    ).not.toBeNull();
 
     act(() => {
       second.focus();

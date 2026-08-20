@@ -709,6 +709,12 @@
   "newtab_input_auto_focus_title": {
     "message": "Automatically focus input"
   },
+  "newtab_input_auto_focus_help_label": {
+    "message": "Input auto-focus info"
+  },
+  "newtab_input_auto_focus_help": {
+    "message": "If you prefer to use the browser’s native address bar, turn this option off. The extension URL will no longer appear in the address bar."
+  },
   "newtab_input_auto_focus_feature_hint_badge": {
     "message": "Tip"
   },

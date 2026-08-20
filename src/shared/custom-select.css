@@ -181,7 +181,10 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
   top: calc(100% + 6px);
   background: var(--menu-bg, #ffffff);
   border: var(--x-extension-select-menu-border-width, 1px) solid
-    var(--tab-border, rgba(15, 23, 42, 0.08));
+    var(
+      --x-extension-select-menu-border,
+      var(--tab-border, rgba(15, 23, 42, 0.08))
+    );
   border-radius: var(--x-extension-select-menu-radius, 17px);
   padding: var(--x-extension-select-menu-padding, 6px);
   box-sizing: border-box;

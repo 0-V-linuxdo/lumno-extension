@@ -1226,6 +1226,30 @@ function testNewtabUsesDistinctMobileGridColumns() {
 
 testNewtabUsesDistinctMobileGridColumns();
 
+function testBookmarkPagerSharesAdaptiveToneWithItsModeTrigger() {
+  const adaptiveTargetsSource = newtabSource.slice(
+    newtabSource.indexOf('function createWallpaperAdaptiveToneTargets()'),
+    newtabSource.indexOf('  wallpaperRuntime = NEWTAB_WALLPAPER.createWallpaperRuntime({')
+  );
+  assert.doesNotMatch(
+    adaptiveTargetsSource,
+    /element:\s*bookmarkModeMenu\s*&&\s*bookmarkModeMenu\.control/,
+    'bookmark mode trigger should not get an independent wallpaper tone target'
+  );
+  assert.match(
+    adaptiveTargetsSource,
+    /element:\s*bookmarkPager,[\s\S]*?sampleElement:\s*bookmarkPager,[\s\S]*?iconButton:\s*true/,
+    'bookmark pager should remain the shared adaptive tone target for its controls'
+  );
+  assert.match(
+    newtabHtml,
+    /\[data-wallpaper-icon-bg="true"\] \.x-nt-section-mode-select\s+\.\_x_extension_select_trigger_2024_unique_/,
+    'mode trigger should inherit the shared wallpaper tone from its ancestor surface'
+  );
+}
+
+testBookmarkPagerSharesAdaptiveToneWithItsModeTrigger();
+
 function testBookmarkColumnPreferenceRemainsAnAdaptiveMaximum() {
   const config = {
     mobileBreakpointPx: 640,

@@ -580,7 +580,7 @@ assert.match(
 );
 assert.match(
   panelBlock,
-  /--x-tab-switcher-motion-card:\s*180ms cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\);[\s\S]*--x-tab-switcher-motion-fade:\s*150ms ease;[\s\S]*--x-tab-switcher-thumb-stroke-inset:\s*-0\.5px;[\s\S]*--x-tab-switcher-thumb-stroke-radius-offset:\s*0\.5px;[\s\S]*--x-tab-switcher-thumb-stroke-color:\s*rgba\(15,\s*23,\s*42,\s*0\.2\);/,
+  /--x-tab-switcher-motion-card:\s*180ms cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\);[\s\S]*--x-tab-switcher-motion-cover:\s*220ms cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\);[\s\S]*--x-tab-switcher-thumb-stroke-inset:\s*-0\.5px;[\s\S]*--x-tab-switcher-thumb-stroke-radius-offset:\s*0\.5px;[\s\S]*--x-tab-switcher-thumb-stroke-color:\s*rgba\(15,\s*23,\s*42,\s*0\.2\);/,
   'tab switcher visual timing and thumbnail stroke constants should live in panel tokens instead of scattered patch values'
 );
 assert.match(
@@ -700,6 +700,11 @@ assert.match(
 );
 assert.match(
   panelBlock,
+  /border:\s*0;/,
+  'tab switcher panel should not draw an outer border'
+);
+assert.match(
+  panelBlock,
   /background:\s*[\s\S]*radial-gradient\(120% 160% at 12% -24%,[\s\S]*linear-gradient\(135deg,/,
   'tab switcher panel should use layered gradients for a richer floating surface'
 );
@@ -802,7 +807,6 @@ assert.match(
 );
 const thumbBlock = getCssRuleBlock(switcherSource, '.x-tab-switcher-thumb');
 const thumbStrokeBlock = getCssRuleBlock(switcherSource, '.x-tab-switcher-thumb::after');
-const thumbFaviconBlock = getCssRuleBlock(switcherSource, '.x-tab-switcher-thumb-favicon');
 assert.match(
   thumbBlock,
   /border-radius:\s*var\(--x-tab-switcher-radius-thumb\);/,
@@ -849,35 +853,20 @@ assert.strictEqual(
   false,
   'tab switcher selected cards should not tint thumbnail backgrounds separately from inactive cards'
 );
+assert.strictEqual(
+  /x-tab-switcher-thumb-favicon/.test(switcherSource),
+  false,
+  'tab switcher should not duplicate the title favicon inside the screenshot'
+);
 assert.match(
-  thumbFaviconBlock,
-  /position:\s*absolute;[\s\S]*z-index:\s*3;[\s\S]*left:\s*8px;[\s\S]*bottom:\s*8px;[\s\S]*width:\s*24px;[\s\S]*height:\s*24px;[\s\S]*object-fit:\s*cover;[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translate3d\(-2px,\s*4px,\s*0\)\s*scale\(0\.92\);[\s\S]*transition:\s*opacity var\(--x-tab-switcher-motion-fade\),\s*transform var\(--x-tab-switcher-motion-card\);[\s\S]*will-change:\s*opacity,\s*transform;/,
-  'tab switcher should stage the favicon as a plain thumbnail overlay with only opacity and transform motion'
+  switcherSource,
+  /\.x-tab-switcher-title-favicon\s*\{[\s\S]*width:\s*var\(--x-tab-switcher-title-icon-size\);[\s\S]*height:\s*var\(--x-tab-switcher-title-icon-size\);[\s\S]*object-fit:\s*cover;[\s\S]*opacity:\s*1;/,
+  'tab switcher should keep the title favicon in a static title slot'
 );
 assert.strictEqual(
-  /border-radius|box-shadow|background\s*:|filter\s*:/.test(thumbFaviconBlock),
+  /\.x-tab-switcher-card\[data-active="true"\]\s+\.x-tab-switcher-name-row|\.x-tab-switcher-card\[data-active="true"\]\s+\.x-tab-switcher-title-favicon/.test(switcherSource),
   false,
-  'tab switcher thumbnail favicon should not add rounded corners, stroke, background, shadow, or blur'
-);
-assert.match(
-  switcherSource,
-  /\.x-tab-switcher-card\[data-active="true"\]\s+\.x-tab-switcher-thumb-favicon\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*translate3d\(0,\s*0,\s*0\)\s*scale\(1\);[\s\S]*\}/,
-  'tab switcher should reveal the active favicon in the screenshot lower-left corner'
-);
-assert.match(
-  switcherSource,
-  /\.x-tab-switcher-title-favicon\s*\{[\s\S]*width:\s*var\(--x-tab-switcher-title-icon-size\);[\s\S]*height:\s*var\(--x-tab-switcher-title-icon-size\);[\s\S]*opacity:\s*1;[\s\S]*transition:\s*width var\(--x-tab-switcher-motion-card\),\s*opacity var\(--x-tab-switcher-motion-fade\),\s*transform var\(--x-tab-switcher-motion-card\),\s*filter var\(--x-tab-switcher-motion-card\);/,
-  'tab switcher should keep the title favicon for inactive cards with a matching exit transition'
-);
-assert.match(
-  switcherSource,
-  /\.x-tab-switcher-card\[data-active="true"\]\s+\.x-tab-switcher-name-row\s*\{[\s\S]*grid-template-columns:\s*0 minmax\(0,\s*1fr\);[\s\S]*gap:\s*0;/,
-  'tab switcher should let active titles expand into the title favicon space'
-);
-assert.match(
-  switcherSource,
-  /\.x-tab-switcher-card\[data-active="true"\]\s+\.x-tab-switcher-title-favicon\s*\{[\s\S]*width:\s*0;[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translate3d\(-2px,\s*0,\s*0\)\s*scale\(0\.88\);/,
-  'tab switcher should hide the active title favicon while the thumbnail favicon appears'
+  'tab switcher should keep the title favicon in place without active-state motion'
 );
 assert.match(
   switcherSource,
@@ -966,7 +955,7 @@ assert.match(
 );
 assert.match(
   switcherSource,
-  /\.x-tab-switcher-favicon\[data-broken="true"\],[\s\S]*\.x-tab-switcher-thumb-favicon\[data-broken="true"\][\s\S]*visibility:\s*hidden;/,
+  /\.x-tab-switcher-favicon\[data-broken="true"\]\s*\{[\s\S]*visibility:\s*hidden;/,
   'tab switcher broken favicons should hide while preserving layout'
 );
 assert.match(
@@ -1125,8 +1114,13 @@ assert.match(
 );
 assert.match(
   nameRowBlock,
-  /gap:\s*var\(--x-tab-switcher-title-icon-gap\);[\s\S]*transition:\s*grid-template-columns var\(--x-tab-switcher-motion-card\),\s*gap var\(--x-tab-switcher-motion-card\);/,
-  'tab switcher title row should animate when the active title favicon collapses'
+  /gap:\s*var\(--x-tab-switcher-title-icon-gap\);/,
+  'tab switcher title row should keep a fixed title favicon gap'
+);
+assert.strictEqual(
+  /transition\s*:/.test(nameRowBlock),
+  false,
+  'tab switcher title row should not animate the title favicon position'
 );
 assert.match(
   nameBlock,

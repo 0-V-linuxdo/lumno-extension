@@ -399,3 +399,9 @@
           transform: none;
         }
       }
+
+      @supports (corner-shape: superellipse(1.25)) {
+        .x-nt-shortcut-dialog {
+          corner-shape: superellipse(1.25);
+        }
+      }

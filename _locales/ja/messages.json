@@ -709,6 +709,12 @@
   "newtab_input_auto_focus_title": {
     "message": "入力欄を自動フォーカス"
   },
+  "newtab_input_auto_focus_help_label": {
+    "message": "入力欄の自動フォーカスについて"
+  },
+  "newtab_input_auto_focus_help": {
+    "message": "ブラウザ標準のアドレスバーを使いたい場合は、このオプションをオフにしてください。オフにすると、アドレスバーに拡張機能の URL が表示されなくなります。"
+  },
   "newtab_input_auto_focus_feature_hint_badge": {
     "message": "ヒント"
   },

@@ -365,12 +365,24 @@ function createFakeWallpaperViewController(config) {
     'div',
     'x-nt-appearance-setting-row'
   );
-  add(
+  const inputAutoFocusTitleGroup = add(
     inputAutoFocusRow,
+    'span',
+    'x-nt-appearance-setting-title-group'
+  );
+  add(
+    inputAutoFocusTitleGroup,
     'span',
     'x-nt-appearance-setting-title',
     {},
     'inputAutoFocusTitle'
+  );
+  add(
+    inputAutoFocusTitleGroup,
+    'button',
+    'x-nt-appearance-info-button',
+    { type: 'button' },
+    'inputAutoFocusInfoButton'
   );
   addSwitch(inputAutoFocusRow, 'inputAutoFocusToggle');
   const moreSettings = add(
@@ -930,6 +942,40 @@ function createFakeImageClass() {
   };
 }
 
+function createDeferredWallpaperImageHarness() {
+  const requests = [];
+  class DeferredImage {
+    constructor() {
+      this.onload = null;
+      this.onerror = null;
+      this.decoding = '';
+      this._src = '';
+      this.decodePromise = new Promise((resolve) => {
+        this.resolveDecode = resolve;
+      });
+      requests.push(this);
+    }
+
+    set src(value) {
+      this._src = String(value || '');
+      setTimeout(() => {
+        if (typeof this.onload === 'function') {
+          this.onload();
+        }
+      }, 0);
+    }
+
+    get src() {
+      return this._src;
+    }
+
+    decode() {
+      return this.decodePromise;
+    }
+  }
+  return { Image: DeferredImage, requests };
+}
+
 function waitForAsyncWallpaperApply() {
   return new Promise((resolve) => setTimeout(resolve, 20));
 }
@@ -1416,8 +1462,11 @@ function createMemoryStorage(initialData) {
   };
 }
 
-function createLocalWallpaperStoreApi(records) {
+function createLocalWallpaperStoreApi(records, metrics) {
   const items = Array.isArray(records) ? records.slice() : [];
+  const calls = metrics || {};
+  calls.readAll = Number(calls.readAll) || 0;
+  calls.readByIds = Array.isArray(calls.readByIds) ? calls.readByIds : [];
   return {
     CUSTOM_WALLPAPER_ID: 'custom-upload',
     CUSTOM_WALLPAPER_ID_PREFIX,
@@ -1440,7 +1489,17 @@ function createLocalWallpaperStoreApi(records) {
           };
         },
         readAll() {
+          calls.readAll += 1;
           return Promise.resolve(items);
+        },
+        readByIds(ids) {
+          const requestedIds = Array.isArray(ids) ? ids.slice() : [];
+          calls.readByIds.push(requestedIds);
+          return Promise.resolve(items.filter((record) => {
+            const recordId = String(record && record.id || '');
+            return requestedIds.includes(recordId) ||
+              (requestedIds.includes('custom-upload') && recordId === `${CUSTOM_WALLPAPER_ID_PREFIX}legacy`);
+          }));
         },
         write() {
           return Promise.resolve();
@@ -1466,7 +1525,7 @@ function createWallpaperSandbox(options) {
     requestAnimationFrame: testWindow.requestAnimationFrame,
     cancelAnimationFrame: testWindow.cancelAnimationFrame,
     URL,
-    Image: createFakeImageClass(),
+    Image: options && options.Image ? options.Image : createFakeImageClass(),
     globalThis: null,
     document: testDocument,
     window: testWindow,
@@ -1524,6 +1583,7 @@ vm.runInNewContext(fs.readFileSync('src/newtab/wallpaper.js', 'utf8'), sandbox, 
 
 let inputAutoFocusEnabled = false;
 const inputAutoFocusWrites = [];
+const inputAutoFocusTooltips = [];
 const runtime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
   documentObj,
   windowObj,
@@ -1532,6 +1592,9 @@ const runtime = sandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
   setInputAutoFocusEnabled(value) {
     inputAutoFocusEnabled = Boolean(value);
     inputAutoFocusWrites.push(inputAutoFocusEnabled);
+  },
+  showTopActionTooltip(anchor, text) {
+    inputAutoFocusTooltips.push({ anchor, text });
   },
   t: (_key, fallback) => fallback || '',
   getRiSvg: () => ''
@@ -1585,6 +1648,14 @@ const appearanceSection = getChildByClassName(appearanceScrollBody, 'x-nt-appear
 const searchWidthControl = getChildByClassName(appearanceSection, 'x-nt-search-width-control');
 const searchWidthSlider = searchWidthControl.children[1].children[0];
 const inputAutoFocusRow = getChildByClassName(searchWidthControl, 'x-nt-appearance-setting-row');
+const inputAutoFocusTitleGroup = getChildByClassName(
+  inputAutoFocusRow,
+  'x-nt-appearance-setting-title-group'
+);
+const inputAutoFocusInfoButton = getChildByClassName(
+  inputAutoFocusTitleGroup,
+  'x-nt-appearance-info-button'
+);
 const inputAutoFocusToggle = inputAutoFocusRow.children[1].children[0];
 const moreSettingsLink = getChildByClassName(searchWidthControl, 'x-nt-appearance-more-settings');
 
@@ -1596,11 +1667,34 @@ assert.strictEqual(searchWidthSlider.tabIndex, 0, 'global scope search width sli
 assert.strictEqual(inputAutoFocusToggle.checked, false, 'input auto-focus should default to disabled');
 assert.strictEqual(inputAutoFocusToggle.getAttribute('role'), 'switch');
 assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'false');
+assert.strictEqual(
+  inputAutoFocusInfoButton.getAttribute('aria-label'),
+  'Input auto-focus info'
+);
+inputAutoFocusInfoButton._listeners.focus.forEach((listener) => listener());
+assert.strictEqual(inputAutoFocusTooltips.length, 1);
+assert.strictEqual(inputAutoFocusTooltips[0].anchor, inputAutoFocusInfoButton);
+assert.strictEqual(
+  inputAutoFocusTooltips[0].text,
+  'If you prefer to use the browser’s native address bar, turn this option off. The extension URL will no longer appear in the address bar.'
+);
 inputAutoFocusToggle.checked = true;
 inputAutoFocusToggle._listeners.change.forEach((listener) => listener({ target: inputAutoFocusToggle }));
 assert.deepStrictEqual(inputAutoFocusWrites, [true]);
 assert.strictEqual(inputAutoFocusToggle.getAttribute('aria-checked'), 'true');
 assert.strictEqual(moreSettingsLink.tabIndex, 0, 'global scope search width settings link should be tabbable');
+
+const newtabHtml = fs.readFileSync('src/newtab/newtab.html', 'utf8');
+assert.match(
+  newtabHtml,
+  /\.x-nt-appearance-setting-row\s*\{[\s\S]*?margin-top:\s*8px;/,
+  'input auto-focus should have more separation from the search-width slider'
+);
+const zhCNMessages = JSON.parse(fs.readFileSync('_locales/zh_CN/messages.json', 'utf8'));
+assert.strictEqual(
+  zhCNMessages.newtab_input_auto_focus_help.message,
+  '如倾向使用浏览器原生地址栏，可关闭该选项。关闭后地址栏中的插件 url 将不再显示'
+);
 
 async function testInputAutoFocusHintWaitsForFinalFocusRoute() {
   const pendingRoute = createWallpaperSandbox();
@@ -1766,6 +1860,136 @@ assert.strictEqual(
   'search width control should stay visible after switching back to Global scope'
 );
 
+async function testBuiltInWallpaperBootstrapDefersCustomCatalogRead() {
+  const localStoreCalls = {};
+  const localStoreApi = createLocalWallpaperStoreApi([{
+    id: `${CUSTOM_WALLPAPER_ID_PREFIX}unused`,
+    imageDataUrl: 'data:image/webp;base64,unused',
+    thumbnailDataUrl: 'data:image/webp;base64,unused-thumb',
+    updatedAt: 1
+  }], localStoreCalls);
+  const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } =
+    createWallpaperSandbox({ localStoreApi });
+  const testRuntime = testSandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: testDocument,
+    windowObj: testWindow,
+    storageArea: createMemoryStorage({ [WALLPAPER_STORAGE_KEY]: DEFAULT_WALLPAPER_ID }),
+    storageKeys: {
+      wallpaper: WALLPAPER_STORAGE_KEY,
+      localWallpaper: LOCAL_WALLPAPER_STORAGE_KEY
+    },
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+
+  await testRuntime.bootstrapInitialWallpaper();
+
+  assert.strictEqual(localStoreCalls.readAll, 0, 'built-in startup should skip the local wallpaper catalog');
+  assert.deepStrictEqual(localStoreCalls.readByIds, [], 'built-in startup should not query local wallpaper records');
+
+  testRuntime.createControls();
+  const control = testRuntime.getControlElement();
+  control.children[1].click();
+  assert.strictEqual(localStoreCalls.readAll, 0, 'opening the panel on Built-in should keep the catalog deferred');
+
+  getDescendantByAttribute(control.children[0], 'data-wallpaper-tab', 'local').click();
+  assert.strictEqual(localStoreCalls.readAll, 1, 'opening Local should load the full catalog once');
+  await Promise.resolve();
+  getDescendantByAttribute(control.children[0], 'data-wallpaper-tab', 'built-in').click();
+  getDescendantByAttribute(control.children[0], 'data-wallpaper-tab', 'local').click();
+  assert.strictEqual(localStoreCalls.readAll, 1, 'reopening Local should reuse the loaded catalog');
+}
+
+async function testWallpaperTileIntentReusesDecodedImagePromise() {
+  const imageHarness = createDeferredWallpaperImageHarness();
+  const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } =
+    createWallpaperSandbox({ Image: imageHarness.Image });
+  const testRuntime = testSandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: testDocument,
+    windowObj: testWindow,
+    storageArea: createMemoryStorage({ [WALLPAPER_STORAGE_KEY]: DEFAULT_WALLPAPER_ID }),
+    storageKeys: { wallpaper: WALLPAPER_STORAGE_KEY },
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+
+  await testRuntime.bootstrapInitialWallpaper();
+  testRuntime.createControls();
+  const control = testRuntime.getControlElement();
+  control.children[1].click();
+  const targetTile = getDescendantByAttribute(control.children[0], 'data-wallpaper-id', 'white-shanshui');
+
+  assert.strictEqual(targetTile._listeners.pointerenter.length, 1);
+  assert.strictEqual(targetTile._listeners.focus.length, 1);
+  assert.strictEqual(targetTile._listeners.pointerdown.length, 1);
+  targetTile._listeners.pointerenter[0]();
+  targetTile._listeners.focus[0]();
+  targetTile._listeners.pointerdown[0]();
+  assert.strictEqual(imageHarness.requests.length, 1, 'all selection-intent events should share one image request');
+
+  targetTile.click();
+  assert.strictEqual(imageHarness.requests.length, 1, 'click should reuse the image promise primed by selection intent');
+  assert.ok(
+    testDocument.documentElement.style
+      .getPropertyValue('--x-nt-wallpaper-image')
+      .includes('lumno-newtab-monet-coastal-white.webp'),
+    'the previous wallpaper should remain visible while the target image decodes'
+  );
+
+  imageHarness.requests[0].resolveDecode();
+  await waitForAsyncWallpaperApply();
+  assert.ok(
+    testDocument.documentElement.style
+      .getPropertyValue('--x-nt-wallpaper-image')
+      .includes('lumno-newtab-white-shanshui.webp'),
+    'the primed wallpaper should apply after its shared decode promise resolves'
+  );
+}
+
+async function testRapidWallpaperSelectionNeverAppliesStaleDecode() {
+  const imageHarness = createDeferredWallpaperImageHarness();
+  const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } =
+    createWallpaperSandbox({ Image: imageHarness.Image });
+  const testRuntime = testSandbox.LumnoNewtabWallpaper.createWallpaperRuntime({
+    documentObj: testDocument,
+    windowObj: testWindow,
+    storageArea: createMemoryStorage({ [WALLPAPER_STORAGE_KEY]: DEFAULT_WALLPAPER_ID }),
+    storageKeys: { wallpaper: WALLPAPER_STORAGE_KEY },
+    t: (_key, fallback) => fallback || '',
+    getRiSvg: () => ''
+  });
+
+  await testRuntime.bootstrapInitialWallpaper();
+  testRuntime.createControls();
+  const control = testRuntime.getControlElement();
+  control.children[1].click();
+  getDescendantByAttribute(control.children[0], 'data-wallpaper-id', 'white-shanshui').click();
+  getDescendantByAttribute(control.children[0], 'data-wallpaper-id', 'dark-shanshui-moonlit').click();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+
+  const firstRequest = imageHarness.requests.find((request) => request.src.includes('white-shanshui.webp'));
+  const secondRequest = imageHarness.requests.find((request) => request.src.includes('dark-shanshui-moonlit.webp'));
+  assert.ok(firstRequest && secondRequest, 'rapid selections should start both target decodes');
+
+  secondRequest.resolveDecode();
+  await waitForAsyncWallpaperApply();
+  assert.ok(
+    testDocument.documentElement.style
+      .getPropertyValue('--x-nt-wallpaper-image')
+      .includes('lumno-newtab-dark-shanshui-moonlit.webp'),
+    'the latest decoded wallpaper should apply first'
+  );
+
+  firstRequest.resolveDecode();
+  await waitForAsyncWallpaperApply();
+  assert.ok(
+    testDocument.documentElement.style
+      .getPropertyValue('--x-nt-wallpaper-image')
+      .includes('lumno-newtab-dark-shanshui-moonlit.webp'),
+    'a stale decode should never replace the latest wallpaper selection'
+  );
+}
+
 async function testSyncedCustomWallpaperWithoutLocalRecordFallsBackToDefault() {
   const syncStorage = createMemoryStorage({
     [WALLPAPER_STORAGE_KEY]: `${CUSTOM_WALLPAPER_ID_PREFIX}remote-only`
@@ -1805,6 +2029,7 @@ async function testSyncedCustomWallpaperWithoutLocalRecordFallsBackToDefault() {
 
 async function testLegacySyncedCustomWallpaperMigratesToLocalOnlySelection() {
   const customWallpaperId = `${CUSTOM_WALLPAPER_ID_PREFIX}local-record`;
+  const localStoreCalls = {};
   const syncStorage = createMemoryStorage({
     [WALLPAPER_STORAGE_KEY]: customWallpaperId
   });
@@ -1814,7 +2039,7 @@ async function testLegacySyncedCustomWallpaperMigratesToLocalOnlySelection() {
     imageDataUrl: 'data:image/webp;base64,wallpaper',
     thumbnailDataUrl: 'data:image/webp;base64,thumb',
     updatedAt: 1
-  }]);
+  }], localStoreCalls);
   const { documentObj: testDocument, windowObj: testWindow, sandbox: testSandbox } = createWallpaperSandbox({
     localStoreApi
   });
@@ -1848,6 +2073,16 @@ async function testLegacySyncedCustomWallpaperMigratesToLocalOnlySelection() {
     syncStorage.data[WALLPAPER_STORAGE_KEY],
     DEFAULT_WALLPAPER_ID,
     'custom wallpaper ids should not remain in sync storage after migration'
+  );
+  assert.deepStrictEqual(
+    clonePlain(localStoreCalls.readByIds),
+    [[customWallpaperId]],
+    'initial custom wallpaper loading should target only the referenced local record'
+  );
+  assert.strictEqual(
+    localStoreCalls.readAll,
+    0,
+    'initial custom wallpaper loading should not read the full local catalog'
   );
 }
 
@@ -2204,6 +2439,8 @@ async function testSplitLocalWallpaperSelectionStaysLocalOnly() {
   testControl.children[1].click();
   getDescendantByAttribute(testControl.children[0], 'data-wallpaper-mode', 'dark').click();
   getDescendantByAttribute(testControl.children[0], 'data-wallpaper-tab', 'local').click();
+  await Promise.resolve();
+  await Promise.resolve();
   getDescendantByAttribute(testControl.children[0], 'data-wallpaper-id', customWallpaperId).click();
 
   assert.deepStrictEqual(clonePlain(syncStorage.data[WALLPAPER_STORAGE_KEY]), {
@@ -2507,6 +2744,9 @@ Promise.resolve()
   .then(testInputAutoFocusHintWaitsForFinalFocusRoute)
   .then(testNewtabFaviconPreloadAppliesCachedAlternateBeforeMainRuntime)
   .then(testWallpaperPreloadUsesTheCachedResolvedMode)
+  .then(testBuiltInWallpaperBootstrapDefersCustomCatalogRead)
+  .then(testWallpaperTileIntentReusesDecodedImagePromise)
+  .then(testRapidWallpaperSelectionNeverAppliesStaleDecode)
   .then(testSyncedCustomWallpaperWithoutLocalRecordFallsBackToDefault)
   .then(testLegacySyncedCustomWallpaperMigratesToLocalOnlySelection)
   .then(testInitialThemeResolutionDoesNotPaintFallbackBeforeCustomWallpaper)

@@ -244,8 +244,8 @@ assert.match(
 );
 assert.match(
   overlaySource,
-  /function getCurrentPageSiteSearchModeProvider\(providers\)[\s\S]*?getUrlHost\(initialContextTabUrl\)[\s\S]*?!isSearchEngineSiteSearchProvider\(provider\)[\s\S]*?!isAiSiteSearchProvider\(provider\)[\s\S]*?siteSearchHostsMatch/,
-  'overlay should match the current page only against real site-search providers'
+  /function getCurrentPageSiteSearchModeProvider\(providers\)[\s\S]*?findSiteSearchProviderForPageUrl\(\s*initialContextTabUrl,\s*providers\s*\)/,
+  'overlay should use the current-page URL matcher instead of a symmetric host-only match'
 );
 assert.match(
   overlaySource,

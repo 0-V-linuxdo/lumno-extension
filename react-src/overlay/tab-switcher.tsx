@@ -261,13 +261,6 @@ function TabCard({
             )}
           </div>
         )}
-        {favicon && (
-          <PreparedImage
-            className="x-tab-switcher-thumb-favicon"
-            src={favicon}
-            alt=""
-          />
-        )}
       </div>
       <div className="x-tab-switcher-meta">
         <div className="x-tab-switcher-name-row">

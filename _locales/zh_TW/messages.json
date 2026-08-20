@@ -709,6 +709,12 @@
   "newtab_input_auto_focus_title": {
     "message": "輸入框自動聚焦"
   },
+  "newtab_input_auto_focus_help_label": {
+    "message": "輸入框自動聚焦說明"
+  },
+  "newtab_input_auto_focus_help": {
+    "message": "如果偏好使用瀏覽器原生網址列，可關閉此選項。關閉後網址列中的擴充功能 URL 將不再顯示"
+  },
   "newtab_input_auto_focus_feature_hint_badge": {
     "message": "提示"
   },

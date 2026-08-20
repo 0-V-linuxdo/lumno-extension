@@ -437,6 +437,7 @@
     let wallpaperSearchWidthValue = null;
     let wallpaperSearchWidthSlider = null;
     let wallpaperInputAutoFocusTitle = null;
+    let wallpaperInputAutoFocusInfoButton = null;
     let wallpaperInputAutoFocusToggle = null;
     let wallpaperInputAutoFocusHintController = null;
     let inputAutoFocusReadyResolved = false;
@@ -484,6 +485,8 @@
     let wallpaperAppearanceAnimationTimers = [];
     let wallpaperAppearanceModeLabelsHeld = false;
     let customWallpapers = [];
+    let customWallpaperCatalogLoaded = false;
+    let customWallpaperCatalogPromise = null;
     let customWallpaperUploadTile = null;
     let customWallpaperInput = null;
     let customWallpaperImporting = false;
@@ -1507,6 +1510,28 @@
       });
     }
 
+    function getStoredCustomWallpaperIds(storedValues) {
+      const ids = [];
+      (Array.isArray(storedValues) ? storedValues : []).forEach((storedValue) => {
+        if (!storedValue || !storedValue.hasValue) {
+          return;
+        }
+        getWallpaperStorageRawIds(storedValue.value).forEach((id) => {
+          if ((id === NEWTAB_CUSTOM_WALLPAPER_ID || isCustomWallpaperId(id)) && !ids.includes(id)) {
+            ids.push(id);
+          }
+        });
+      });
+      return ids;
+    }
+
+    function hasLoadedStoredCustomWallpaper(id) {
+      if (id === NEWTAB_CUSTOM_WALLPAPER_ID) {
+        return customWallpapers.length > 0;
+      }
+      return Boolean(getCustomWallpaperById(id));
+    }
+
     function getComparableSyncedWallpaperStorageValue(value) {
       if (!value || typeof value !== 'object') {
         return String(getRawWallpaperId(value) || '');
@@ -1866,6 +1891,12 @@
 
     function readCustomWallpaperRecords() {
       return localWallpaperStore ? localWallpaperStore.readAll() : Promise.resolve([]);
+    }
+
+    function readCustomWallpaperRecordsByIds(ids) {
+      return localWallpaperStore && typeof localWallpaperStore.readByIds === 'function'
+        ? localWallpaperStore.readByIds(ids)
+        : Promise.resolve([]);
     }
 
     function writeCustomWallpaperRecord(record) {
@@ -2511,6 +2542,9 @@
       if (isSameTab) {
         updateWallpaperTabSelectionUi(nextTab);
         scheduleWallpaperTabsIndicatorRefresh();
+        if (nextTab === 'local' && isWallpaperPanelOpen()) {
+          loadCustomWallpapers();
+        }
         return;
       }
       animateWallpaperPanelResize(() => {
@@ -2523,6 +2557,9 @@
         );
       });
       scheduleWallpaperTabsIndicatorRefresh();
+      if (nextTab === 'local' && isWallpaperPanelOpen()) {
+        loadCustomWallpapers();
+      }
     }
 
     function syncWallpaperSourceTabToEditMode() {
@@ -3241,7 +3278,28 @@
       }
     }
 
+    function primeWallpaperTileImage(tile) {
+      const wallpaperId = tile && tile.getAttribute
+        ? tile.getAttribute('data-wallpaper-id')
+        : '';
+      const wallpaper = getWallpaperById(wallpaperId);
+      return waitForWallpaperImageReady(wallpaper ? getWallpaperImageUrl(wallpaper) : '');
+    }
+
+    function bindWallpaperTileImagePreload(tile) {
+      if (!tile) {
+        return;
+      }
+      const prime = () => {
+        primeWallpaperTileImage(tile);
+      };
+      tile.addEventListener('pointerenter', prime, { passive: true });
+      tile.addEventListener('focus', prime, { passive: true });
+      tile.addEventListener('pointerdown', prime, { passive: true });
+    }
+
     function bindWallpaperTileActivation(tile, onActivate, shouldIgnoreEvent) {
+      bindWallpaperTileImagePreload(tile);
       const activate = (event) => {
         if (typeof shouldIgnoreEvent === 'function' && shouldIgnoreEvent(event)) {
           return;
@@ -3303,17 +3361,48 @@
     }
 
     function loadCustomWallpapers() {
-      return readCustomWallpaperRecords().then((records) => {
+      if (customWallpaperCatalogLoaded) {
+        return Promise.resolve(customWallpapers);
+      }
+      if (customWallpaperCatalogPromise) {
+        return customWallpaperCatalogPromise;
+      }
+      customWallpaperCatalogPromise = readCustomWallpaperRecords().then((records) => {
         customWallpapers = records;
+        customWallpaperCatalogLoaded = true;
         updateCustomWallpaperUploadTile();
         renderCustomWallpaperTiles();
         return records;
       }).catch(() => {
-        customWallpapers = [];
         updateCustomWallpaperUploadTile();
         renderCustomWallpaperTiles();
-        return [];
+        return customWallpapers;
+      }).finally(() => {
+        customWallpaperCatalogPromise = null;
       });
+      return customWallpaperCatalogPromise;
+    }
+
+    function refreshCustomWallpapers() {
+      customWallpaperCatalogLoaded = false;
+      return loadCustomWallpapers();
+    }
+
+    function mergeCustomWallpaperRecords(records) {
+      const recordsById = new Map();
+      customWallpapers.forEach((record) => {
+        if (record && record.id) {
+          recordsById.set(record.id, record);
+        }
+      });
+      (Array.isArray(records) ? records : []).forEach((record) => {
+        const normalized = normalizeCustomWallpaperRecord(record);
+        if (normalized) {
+          recordsById.set(normalized.id, normalized);
+        }
+      });
+      customWallpapers = Array.from(recordsById.values()).sort((a, b) => a.updatedAt - b.updatedAt);
+      return customWallpapers;
     }
 
     function rememberActiveWallpaperId(mode, id) {
@@ -3406,12 +3495,26 @@
       }
     }
 
-    function loadStoredWallpaperState() {
+    function loadStoredWallpaperState(options) {
+      const config = options || {};
       return Promise.all([
         readStorageValue(storageArea, NEWTAB_WALLPAPER_STORAGE_KEY),
         readStorageValue(localWallpaperStorageArea, NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY)
       ]).then((results) => {
-        applyStoredWallpaperState(results[0], results[1]);
+        const customWallpaperIds = getStoredCustomWallpaperIds(results)
+          .filter((id) => !hasLoadedStoredCustomWallpaper(id));
+        const customWallpaperPromise = customWallpaperIds.length > 0
+          ? readCustomWallpaperRecordsByIds(customWallpaperIds).then((records) => {
+            mergeCustomWallpaperRecords(records);
+          }).catch(() => {})
+          : Promise.resolve();
+        return customWallpaperPromise.then(() => {
+          if (typeof config.shouldApply === 'function' && !config.shouldApply()) {
+            return false;
+          }
+          applyStoredWallpaperState(results[0], results[1]);
+          return true;
+        });
       });
     }
 
@@ -3420,10 +3523,7 @@
         return initialWallpaperReadyPromise;
       }
       hasWallpaperBootstrapStarted = true;
-      const customWallpapersPromise = loadCustomWallpapers();
-      customWallpapersPromise.then(() => {
-        return loadStoredWallpaperState();
-      });
+      loadStoredWallpaperState();
       return initialWallpaperReadyPromise;
     }
 
@@ -3980,6 +4080,12 @@
           'Automatically focus input'
         );
       }
+      if (wallpaperInputAutoFocusInfoButton) {
+        wallpaperInputAutoFocusInfoButton.setAttribute(
+          'aria-label',
+          t('newtab_input_auto_focus_help_label', 'Input auto-focus info')
+        );
+      }
       if (wallpaperInputAutoFocusToggle) {
         wallpaperInputAutoFocusToggle.setAttribute(
           'aria-label',
@@ -4190,6 +4296,7 @@
           check: getRiSvg('ri-check-line', 'ri-size-16'),
           delete: getRiSvg('ri-subtract-line', 'ri-size-14'),
           help: getRiSvg('ri-question-line', 'ri-size-14'),
+          info: getRiSvg('ri-information-line', 'ri-size-14'),
           wallpaper: getRiSvg('ri-t-shirt-2-line', 'ri-size-20')
         },
         moreSettingsUrl: buildAppearanceSettingsUrl(),
@@ -4246,6 +4353,7 @@
       wallpaperSearchWidthValue = refs.searchWidthValue;
       wallpaperSearchWidthSlider = refs.searchWidthSlider;
       wallpaperInputAutoFocusTitle = refs.inputAutoFocusTitle;
+      wallpaperInputAutoFocusInfoButton = refs.inputAutoFocusInfoButton;
       wallpaperInputAutoFocusToggle = refs.inputAutoFocusToggle;
       wallpaperAppearanceMoreSettingsLink = refs.moreSettingsLink;
       wallpaperAppearanceMoreSettingsText = refs.moreSettingsText;
@@ -4339,6 +4447,21 @@
       wallpaperAppearanceInfoButton.addEventListener('mouseleave', hideTopActionTooltip);
       wallpaperAppearanceInfoButton.addEventListener('focus', showAppearanceHelp);
       wallpaperAppearanceInfoButton.addEventListener('blur', hideTopActionTooltip);
+      if (wallpaperInputAutoFocusInfoButton) {
+        const showInputAutoFocusHelp = () => {
+          showTopActionTooltip(
+            wallpaperInputAutoFocusInfoButton,
+            t(
+              'newtab_input_auto_focus_help',
+              'If you prefer to use the browser’s native address bar, turn this option off. The extension URL will no longer appear in the address bar.'
+            )
+          );
+        };
+        wallpaperInputAutoFocusInfoButton.addEventListener('mouseenter', showInputAutoFocusHelp);
+        wallpaperInputAutoFocusInfoButton.addEventListener('mouseleave', hideTopActionTooltip);
+        wallpaperInputAutoFocusInfoButton.addEventListener('focus', showInputAutoFocusHelp);
+        wallpaperInputAutoFocusInfoButton.addEventListener('blur', hideTopActionTooltip);
+      }
       wallpaperAppearanceScopeTabs.querySelectorAll('[data-theme-scope]').forEach((button) => {
         button.addEventListener('click', () => {
           animateWallpaperAppearanceScopeChange(
@@ -4394,6 +4517,7 @@
       });
       bindCustomWallpaperUploadTile(customWallpaperUploadTile);
       wallpaperBuiltInGrid.querySelectorAll('[data-wallpaper-id]').forEach((tile) => {
+        bindWallpaperTileImagePreload(tile);
         tile.addEventListener('click', () => {
           persistNewtabWallpaper(tile.getAttribute('data-wallpaper-id'));
         });
@@ -4492,6 +4616,9 @@
       }
       setWallpaperPanelOpenState(true);
       scheduleWallpaperPanelOpenTabIndicatorsRefresh();
+      if (activeWallpaperTab === 'local') {
+        loadCustomWallpapers();
+      }
     }
 
     function closeWallpaperPanel(options) {
@@ -4593,30 +4720,10 @@
         changes[NEWTAB_WALLPAPER_STORAGE_KEY]
       );
       if (wallpaperStorageChanged) {
-        const changedValues = [
-          changes[NEWTAB_WALLPAPER_STORAGE_KEY] && changes[NEWTAB_WALLPAPER_STORAGE_KEY].newValue,
-          NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY &&
-            changes[NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY] &&
-            changes[NEWTAB_LOCAL_WALLPAPER_STORAGE_KEY].newValue
-        ];
-        const shouldRefreshCustomWallpapers = changedValues.some((raw) => {
-          return shouldWaitForCustomWallpapers(raw) &&
-            getWallpaperStorageRawIds(raw).some((id) => !getWallpaperById(id));
+        const changeSeq = ++wallpaperStorageChangeSeq;
+        loadStoredWallpaperState({
+          shouldApply: () => changeSeq === wallpaperStorageChangeSeq
         });
-        const applyStoredWallpaper = () => {
-          loadStoredWallpaperState();
-        };
-        wallpaperStorageChangeSeq += 1;
-        if (shouldRefreshCustomWallpapers) {
-          const changeSeq = wallpaperStorageChangeSeq;
-          loadCustomWallpapers().then(() => {
-            if (changeSeq === wallpaperStorageChangeSeq) {
-              applyStoredWallpaper();
-            }
-          });
-        } else {
-          applyStoredWallpaper();
-        }
         handled = true;
       }
       if (changes[NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY]) {
@@ -4695,7 +4802,7 @@
       updateTopContentModeUi,
       updateTimeFontWeightUi,
       updateTimeSecondsVisibleUi,
-      refreshCustomWallpapers: loadCustomWallpapers,
+      refreshCustomWallpapers,
       bootstrapInitialWallpaper,
       bootstrapInitialWallpaperOverlay,
       bootstrapInitialWallpaperEffect,

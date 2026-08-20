@@ -765,7 +765,6 @@
         --x-tab-switcher-meta-inline-padding: 3px;
         --x-tab-switcher-visible-scale: 1;
         --x-tab-switcher-motion-card: 180ms cubic-bezier(0.22, 1, 0.36, 1);
-        --x-tab-switcher-motion-fade: 150ms ease;
         --x-tab-switcher-motion-cover: 220ms cubic-bezier(0.22, 1, 0.36, 1);
         --x-tab-switcher-thumb-stroke-inset: -0.5px;
         --x-tab-switcher-thumb-stroke-radius-offset: 0.5px;
@@ -785,7 +784,7 @@
         background:
           radial-gradient(120% 160% at 12% -24%, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.44) 38%, rgba(241, 245, 249, 0.26) 100%),
           linear-gradient(135deg, rgba(255, 255, 255, 0.48), rgba(226, 232, 240, 0.28));
-        border: 1px solid rgba(255, 255, 255, 0.46);
+        border: 0;
         border-radius: var(--x-tab-switcher-radius-panel);
         box-shadow:
           0 26px 82px rgba(15, 23, 42, 0.22),
@@ -902,33 +901,9 @@
         width: 38px;
         height: 38px;
         border-radius: var(--x-tab-switcher-radius-icon);
-        transition: opacity var(--x-tab-switcher-motion-fade), transform var(--x-tab-switcher-motion-card);
       }
-      .x-tab-switcher-favicon[data-broken="true"],
-      .x-tab-switcher-thumb-favicon[data-broken="true"] {
+      .x-tab-switcher-favicon[data-broken="true"] {
         visibility: hidden;
-      }
-      .x-tab-switcher-card[data-active="true"] .x-tab-switcher-fallback .x-tab-switcher-favicon {
-        opacity: 0;
-        transform: scale(0.88);
-      }
-      .x-tab-switcher-thumb-favicon {
-        position: absolute;
-        z-index: 3;
-        left: 8px;
-        bottom: 8px;
-        width: 24px;
-        height: 24px;
-        object-fit: cover;
-        opacity: 0;
-        transform: translate3d(-2px, 4px, 0) scale(0.92);
-        pointer-events: none;
-        transition: opacity var(--x-tab-switcher-motion-fade), transform var(--x-tab-switcher-motion-card);
-        will-change: opacity, transform;
-      }
-      .x-tab-switcher-card[data-active="true"] .x-tab-switcher-thumb-favicon {
-        opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
       }
       .x-tab-switcher-meta {
         min-width: 0;
@@ -942,7 +917,6 @@
         grid-template-columns: var(--x-tab-switcher-title-icon-size) minmax(0, 1fr);
         align-items: center;
         gap: var(--x-tab-switcher-title-icon-gap);
-        transition: grid-template-columns var(--x-tab-switcher-motion-card), gap var(--x-tab-switcher-motion-card);
       }
       .x-tab-switcher-title-favicon {
         width: var(--x-tab-switcher-title-icon-size);
@@ -951,20 +925,6 @@
         border-radius: var(--x-tab-switcher-radius-title-icon);
         object-fit: cover;
         opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
-        filter: blur(0);
-        transition: width var(--x-tab-switcher-motion-card), opacity var(--x-tab-switcher-motion-fade), transform var(--x-tab-switcher-motion-card), filter var(--x-tab-switcher-motion-card);
-        will-change: width, opacity, transform, filter;
-      }
-      .x-tab-switcher-card[data-active="true"] .x-tab-switcher-name-row {
-        grid-template-columns: 0 minmax(0, 1fr);
-        gap: 0;
-      }
-      .x-tab-switcher-card[data-active="true"] .x-tab-switcher-title-favicon {
-        width: 0;
-        opacity: 0;
-        transform: translate3d(-2px, 0, 0) scale(0.88);
-        filter: blur(1px);
       }
       .x-tab-switcher-name {
         min-width: 0;
@@ -1021,12 +981,6 @@
         .x-tab-switcher-meta {
           gap: 0;
         }
-        .x-tab-switcher-thumb-favicon {
-          left: 4px;
-          bottom: 4px;
-          width: 18px;
-          height: 18px;
-        }
         .x-tab-switcher-name {
           font-size: 10.5px;
           line-height: 1.14;
@@ -1042,7 +996,6 @@
         background:
           radial-gradient(120% 150% at 12% -22%, rgba(71, 85, 105, 0.4) 0%, rgba(30, 41, 59, 0.5) 40%, rgba(8, 13, 24, 0.44) 100%),
           linear-gradient(135deg, rgba(30, 41, 59, 0.54), rgba(8, 13, 24, 0.46));
-        border-color: rgba(255, 255, 255, 0.12);
         box-shadow:
           0 26px 82px rgba(0, 0, 0, 0.38),
           0 5px 18px rgba(0, 0, 0, 0.18),

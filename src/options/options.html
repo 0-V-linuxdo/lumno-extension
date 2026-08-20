@@ -115,9 +115,11 @@
         --tab-bg: #e3e8f1;
       }
       #_x_extension_options_root_2024_unique_ {
+        --settings-focus-anchor-reserve: 0px;
         width: 100%;
         max-width: 760px;
         min-width: 760px;
+        margin-bottom: var(--settings-focus-anchor-reserve);
         position: relative;
         z-index: 1;
       }
@@ -178,6 +180,14 @@
         gap: 14px;
         box-sizing: border-box;
         position: relative;
+      }
+      #_x_extension_settings_panel_2024_unique_[data-height-animating="true"] {
+        overflow: clip;
+        overflow-anchor: none;
+        will-change: height;
+      }
+      #_x_extension_settings_panel_2024_unique_[data-height-animating="true"] > * {
+        flex-shrink: 0;
       }
       /* Dark mode subtle noise overlay for panel (tune opacity/URL as needed) */
       #_x_extension_settings_panel_2024_unique_[data-theme="dark"]::before {
@@ -473,9 +483,7 @@
         border: none;
         background: transparent;
       }
-      #_x_extension_overlay_page_theme_adaptation_row_2026_unique_[hidden],
-      #_x_extension_newtab_time_font_weight_row_2026_unique_[hidden],
-      #_x_extension_newtab_time_seconds_row_2026_unique_[hidden],
+      ._x_extension_setting_row_2024_unique_[hidden],
       html[data-options-theme-mode="light"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_,
       html[data-options-theme-mode="dark"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_ {
         display: none !important;
@@ -1982,6 +1990,12 @@
         background: #0b1120;
         color: #e5e7eb;
         border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      @supports (corner-shape: superellipse(1.25)) {
+        ._x_extension_popconfirm_2024_unique_,
+        ._x_extension_confirm_dialog_2024_unique_ {
+          corner-shape: superellipse(1.25);
+        }
       }
       ._x_extension_confirm_message_2024_unique_ {
         font-size: 12.5px;

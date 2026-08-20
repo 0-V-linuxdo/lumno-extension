@@ -48,6 +48,64 @@ function createStore(options) {
   });
 }
 
+function createIndexedDbWindow(records, calls) {
+  const itemsByKey = new Map((records || []).map((record) => [record.key, record]));
+  const metrics = calls || { get: [], getAll: 0, open: 0 };
+  return {
+    indexedDB: {
+      open() {
+        metrics.open += 1;
+        const openRequest = {};
+        setTimeout(() => {
+          const db = {
+            close() {},
+            transaction() {
+              let pending = 0;
+              const transaction = {
+                error: null,
+                objectStore() {
+                  return {
+                    get(key) {
+                      metrics.get.push(key);
+                      pending += 1;
+                      const request = {};
+                      setTimeout(() => {
+                        request.result = itemsByKey.get(key);
+                        if (request.onsuccess) {
+                          request.onsuccess();
+                        }
+                        pending -= 1;
+                        if (pending === 0) {
+                          setTimeout(() => {
+                            if (transaction.oncomplete) {
+                              transaction.oncomplete();
+                            }
+                          }, 0);
+                        }
+                      }, 0);
+                      return request;
+                    },
+                    getAll() {
+                      metrics.getAll += 1;
+                      return {};
+                    }
+                  };
+                }
+              };
+              return transaction;
+            }
+          };
+          openRequest.result = db;
+          if (openRequest.onsuccess) {
+            openRequest.onsuccess();
+          }
+        }, 0);
+        return openRequest;
+      }
+    }
+  };
+}
+
 async function run() {
   assert.strictEqual(wallpaperStoreApi.MAX_SOURCE_BYTES, 25 * 1024 * 1024);
   assert.strictEqual(wallpaperStoreApi.MAX_WALLPAPER_BYTES, 2 * 1024 * 1024);
@@ -88,6 +146,47 @@ async function run() {
     }),
     /source dimensions are too large/
   );
+
+  const selectedId = 'custom-wallpaper-selected';
+  const indexedDbCalls = { get: [], getAll: 0, open: 0 };
+  const indexedDbStore = wallpaperStoreApi.createWallpaperLocalStore({
+    documentObj: {},
+    windowObj: createIndexedDbWindow([{
+      id: selectedId,
+      key: selectedId,
+      imageDataUrl: 'data:image/webp;base64,selected',
+      thumbnailDataUrl: 'data:image/webp;base64,selected-thumb',
+      updatedAt: 2
+    }, {
+      id: 'custom-upload',
+      key: 'custom',
+      imageDataUrl: 'data:image/webp;base64,legacy',
+      thumbnailDataUrl: 'data:image/webp;base64,legacy-thumb',
+      updatedAt: 1
+    }, {
+      id: 'custom-wallpaper-unselected',
+      key: 'custom-wallpaper-unselected',
+      imageDataUrl: 'data:image/webp;base64,unselected',
+      thumbnailDataUrl: 'data:image/webp;base64,unselected-thumb',
+      updatedAt: 3
+    }], indexedDbCalls)
+  });
+  const targetedRecords = await indexedDbStore.readByIds([
+    selectedId,
+    'custom-wallpaper-legacy',
+    'built-in-wallpaper'
+  ]);
+  assert.deepStrictEqual(
+    targetedRecords.map((item) => item.id),
+    ['custom-wallpaper-legacy', selectedId],
+    'targeted reads should return only selected records and support the legacy key'
+  );
+  assert.deepStrictEqual(
+    indexedDbCalls.get,
+    [selectedId, 'custom-wallpaper-legacy', 'custom'],
+    'targeted reads should use object-store get calls for the requested ids'
+  );
+  assert.strictEqual(indexedDbCalls.getAll, 0, 'targeted reads should never scan the full object store');
 
   console.log('newtab wallpaper local store tests passed');
 }

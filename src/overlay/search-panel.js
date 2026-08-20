@@ -1,7 +1,7 @@
 'use strict';
 
 window._x_extension_search_overlay_runtime_version_2026_unique_ =
-  '2026-08-19-natural-suggestions-height-v12';
+  '2026-08-20-current-page-provider-v13';
 window._x_extension_search_overlay_open_2026_unique_ = false;
 
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
@@ -6077,20 +6077,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getCurrentPageSiteSearchModeProvider(providers) {
-      const currentPageHost = typeof SEARCH_UTILS.getUrlHost === 'function'
-        ? SEARCH_UTILS.getUrlHost(initialContextTabUrl)
-        : '';
-      if (!currentPageHost) {
+      if (typeof SEARCH_UTILS.findSiteSearchProviderForPageUrl !== 'function') {
         return null;
       }
-      return (providers || []).find((provider) => (
-        !isSearchEngineSiteSearchProvider(provider) &&
-        !isAiSiteSearchProvider(provider) &&
-        SEARCH_UTILS.siteSearchHostsMatch(
-          currentPageHost,
-          getProviderHost(provider)
-        )
-      )) || null;
+      return SEARCH_UTILS.findSiteSearchProviderForPageUrl(
+        initialContextTabUrl,
+        providers
+      );
     }
 
     function getSearchModeProviders() {

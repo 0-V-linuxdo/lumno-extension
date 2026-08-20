@@ -736,6 +736,47 @@ assert.ok(search.isInteractiveSiteSearchProvider(geminiBase), 'Gemini provider s
 
 const defaultSearchEngines = search.getDefaultSiteSearchProviders()
   .filter(search.isSearchEngineSiteSearchProvider);
+const currentPageProviders = search.getDefaultSiteSearchProviders();
+assert.strictEqual(
+  search.findSiteSearchProviderForPageUrl(
+    'https://www.google.com/search?q=tail+scale+download',
+    currentPageProviders
+  ),
+  null,
+  'a Google results page should not be mistaken for Scholar or Maps'
+);
+assert.strictEqual(
+  search.findSiteSearchProviderForPageUrl(
+    'https://scholar.google.com/scholar?q=interaction+design',
+    currentPageProviders
+  ).key,
+  'gs',
+  'an exact Scholar page should still select Google Scholar'
+);
+assert.strictEqual(
+  search.findSiteSearchProviderForPageUrl(
+    'https://www.google.com/maps/place/Bangkok',
+    currentPageProviders
+  ).key,
+  'maps',
+  'a path-scoped service should match only inside its own Google Maps path'
+);
+assert.strictEqual(
+  search.findSiteSearchProviderForPageUrl(
+    'https://mail.google.com/mail/u/0/',
+    currentPageProviders
+  ),
+  null,
+  'a sibling Google service should not inherit the Maps provider'
+);
+assert.strictEqual(
+  search.findSiteSearchProviderForPageUrl(
+    'https://docs.github.com/en/get-started',
+    currentPageProviders
+  ).key,
+  'gh',
+  'a page below a provider host should still inherit that site-search provider'
+);
 const bundledSiteSearchProviders = JSON.parse(readSource('assets/data/site-search.json')).items;
 assert.deepStrictEqual(
   search.getDefaultSiteSearchProviders(),

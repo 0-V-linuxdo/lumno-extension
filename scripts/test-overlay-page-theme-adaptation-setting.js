@@ -80,7 +80,7 @@ assert.match(
 );
 assert.match(
   optionsSource,
-  /function updateOverlayPageThemeAdaptationVisibility\(mode\)[\s\S]*?const visible = nextMode === 'system';[\s\S]*?overlayPageThemeAdaptationRow\.hidden = !visible;/,
+  /function updateOverlayPageThemeAdaptationVisibility\(mode\)[\s\S]*?const visible = nextMode === 'system';[\s\S]*?animateOptionsPanelHeight\([\s\S]*?setConditionalSettingsElementVisibility\(overlayPageThemeAdaptationRow, visible\)/,
   'options should hide webpage adaptation outside follow-system-and-website mode'
 );
 assert.match(

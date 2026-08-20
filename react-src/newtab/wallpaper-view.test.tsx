@@ -37,7 +37,7 @@ describe('New Tab React wallpaper view', () => {
             { tone: 'light', fallback: 'Highlights' }
           ],
           favicons: [{ id: 'default', previewUrl: '/favicon.png' }],
-          icons: {},
+          icons: { info: '<i class="ri-information-line"></i>' },
           moreSettingsUrl: '/options#appearance',
           searchWidth: {
             min: 720,
@@ -93,6 +93,9 @@ describe('New Tab React wallpaper view', () => {
     expect(inputAutoFocusToggle?.getAttribute('aria-label')).toBe(
       'Automatically focus the search input'
     );
+    const inputAutoFocusInfoButton = controller.getRefs().inputAutoFocusInfoButton;
+    expect(inputAutoFocusInfoButton?.classList.contains('x-nt-appearance-info-button')).toBe(true);
+    expect(inputAutoFocusInfoButton?.querySelector('.ri-information-line')).not.toBeNull();
   });
 
   it('updates custom wallpaper tiles without replacing the panel', () => {

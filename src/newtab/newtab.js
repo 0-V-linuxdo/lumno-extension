@@ -2717,14 +2717,9 @@
         minWidth: 112,
         minHeight: 44
       },
-      {
-        element: bookmarkModeMenu && bookmarkModeMenu.control,
-        sampleElement: bookmarkModeMenu && (bookmarkModeMenu.trigger || bookmarkModeMenu.control),
-        minWidth: 42,
-        minHeight: 42,
-        iconButton: true,
-        disabled: isBookmarkTopbarMode()
-      },
+      // The display-mode trigger is appended to bookmarkPager in the regular
+      // section layout. Keep it on the pager's shared tone target so one
+      // visual toolbar does not split into independently sampled colors.
       {
         element: bookmarkPager,
         sampleElement: bookmarkPager,

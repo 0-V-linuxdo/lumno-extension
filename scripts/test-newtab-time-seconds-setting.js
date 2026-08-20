@@ -104,7 +104,10 @@ assert.match(
   syncOptionsVisibility,
   /\[newtabTimeFontWeightRow, newtabTimeSecondsRow\]/
 );
-assert.match(syncOptionsVisibility, /row\.hidden = !visible/);
+assert.match(
+  syncOptionsVisibility,
+  /animateOptionsPanelHeight\([\s\S]*?setConditionalSettingsElementVisibility\(row, visible\)/
+);
 assert.match(
   getFunctionSource(optionsSource, 'setNewtabTopContentTabState'),
   /syncNewtabTimeSecondsVisibility\(\)/

@@ -2883,6 +2883,71 @@
     return hostA === hostB || hostA.endsWith(`.${hostB}`) || hostB.endsWith(`.${hostA}`);
   }
 
+  function siteSearchPageHostMatchesProvider(pageHost, providerHost) {
+    const normalizedPageHost = normalizeHost(pageHost);
+    const normalizedProviderHost = normalizeHost(providerHost);
+    if (!normalizedPageHost || !normalizedProviderHost) {
+      return false;
+    }
+    return normalizedPageHost === normalizedProviderHost ||
+      normalizedPageHost.endsWith(`.${normalizedProviderHost}`);
+  }
+
+  function getSiteSearchProviderPathScope(provider) {
+    const template = normalizeSiteSearchTemplate(provider && provider.template);
+    if (!template) {
+      return '';
+    }
+    try {
+      const url = new URL(buildSearchUrlFromTemplate(template, 'scope'));
+      const firstPathSegment = url.pathname.split('/').filter(Boolean)[0] || '';
+      return firstPathSegment ? `/${firstPathSegment}` : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function findSiteSearchProviderForPageUrl(pageUrl, providers) {
+    let parsedPageUrl;
+    try {
+      parsedPageUrl = new URL(String(pageUrl || ''));
+    } catch (e) {
+      return null;
+    }
+    const pageHost = normalizeHost(parsedPageUrl.hostname);
+    if (!pageHost) {
+      return null;
+    }
+    const providerItems = Array.isArray(providers) ? providers : [];
+    const searchEngineHosts = new Set(
+      providerItems
+        .filter(isSearchEngineSiteSearchProvider)
+        .map(getSiteSearchProviderHost)
+        .filter(Boolean)
+    );
+    return providerItems.find((provider) => {
+      if (isSearchEngineSiteSearchProvider(provider) || isAiSiteSearchProvider(provider)) {
+        return false;
+      }
+      const providerHost = getSiteSearchProviderHost(provider);
+      if (!siteSearchPageHostMatchesProvider(pageHost, providerHost)) {
+        return false;
+      }
+      if (!searchEngineHosts.has(providerHost)) {
+        return true;
+      }
+      if (pageHost !== providerHost) {
+        return false;
+      }
+      const pathScope = getSiteSearchProviderPathScope(provider);
+      const pagePath = parsedPageUrl.pathname || '/';
+      return Boolean(
+        pathScope &&
+        (pagePath === pathScope || pagePath.startsWith(`${pathScope}/`))
+      );
+    }) || null;
+  }
+
   function findSiteSearchProvider(trigger, providers) {
     const key = String(trigger || '').trim().toLowerCase();
     if (!key) {
@@ -3189,6 +3254,7 @@
     getDirectNavigationUrl,
     getDefaultSiteSearchProviders,
     findSearchOpenTabMatchIndex,
+    findSiteSearchProviderForPageUrl,
     isDirectNavigationMatch,
     getInlineSiteSearchCandidate,
     getSearchSuggestionHost,

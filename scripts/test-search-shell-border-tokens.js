@@ -11,8 +11,16 @@ const newtabHtml = fs.readFileSync(
   path.join(repoRoot, 'src/newtab/newtab.html'),
   'utf8'
 );
+const customSelectCss = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/custom-select.css'),
+  'utf8'
+);
 const overlaySource = fs.readFileSync(
   path.join(repoRoot, 'src/overlay/search-panel.js'),
+  'utf8'
+);
+const searchInputModeSource = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/search-input-mode.js'),
   'utf8'
 );
 const overlayShellSource = fs.readFileSync(
@@ -54,6 +62,37 @@ assert.match(
   newtabHtml,
   /--x-nt-panel-border:\s*rgba\(0, 0, 0, 0\.08\);[\s\S]*?body\[data-theme="dark"\][\s\S]*?--x-nt-panel-border:\s*rgba\(255, 255, 255, 0\.08\);/,
   'unrelated New Tab panels should retain their existing lighter border token'
+);
+assert.match(
+  newtabHtml,
+  /--x-nt-surface-border:\s*var\(\s*--x-lumno-search-shell-border-light,\s*rgba\(0, 0, 0, 0\.14\)\s*\);[\s\S]*?--x-extension-select-menu-border:\s*var\(--x-nt-surface-border\);/,
+  'light New Tab surfaces and select menus should share the command-bar border token'
+);
+assert.match(
+  newtabHtml,
+  /body\[data-theme="dark"\][\s\S]*?--x-nt-surface-border:\s*var\(\s*--x-lumno-search-shell-border-dark,\s*rgba\(255, 255, 255, 0\.16\)\s*\);[\s\S]*?--x-extension-select-menu-border:\s*var\(--x-nt-surface-border\);/,
+  'dark New Tab surfaces and select menus should share the command-bar border token'
+);
+assert.ok(
+  customSelectCss.includes(
+    '--x-extension-select-menu-border,\n      var(--tab-border, rgba(15, 23, 42, 0.08))'
+  ),
+  'custom select menus should allow the New Tab surface border token to override the legacy tab border'
+);
+assert.ok(
+  searchInputModeSource.includes(
+    "panelBorder: 'var(--x-nt-surface-border, var(--x-nt-panel-border, rgba(0, 0, 0, 0.08)))'"
+  ),
+  'the New Tab search mode menu should consume the shared surface border token'
+);
+assert.ok(
+  newtabHtml.includes(
+    '.x-nt-bookmark-cascade-level {\n        position: fixed'
+  ) &&
+    newtabHtml.includes('border: 1px solid var(\n          --x-nt-surface-border,') &&
+    newtabHtml.includes('body[data-theme="dark"] .x-nt-bookmark-cascade-level') &&
+    newtabHtml.includes('body[data-theme="dark"] .x-nt-feedback-popover'),
+  'New Tab outer panels should consume the shared surface border token in both themes'
 );
 
 assert.ok(

@@ -570,6 +570,24 @@ assertContains(
   'shortcut dialog should use a more solid floating panel surface color'
 );
 
+assert.match(
+  shortcutDialogCss,
+  /@supports \(corner-shape: superellipse\(1\.25\)\)[\s\S]*?\.x-nt-shortcut-dialog\s*\{[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'shortcut dialogs should use continuous superellipse corners when supported'
+);
+
+assert.match(
+  newtabHtml,
+  /@supports \(corner-shape: superellipse\(1\.25\)\)[\s\S]*?\.x-nt-wallpaper-panel,[\s\S]*?\.x-nt-feedback-popover,[\s\S]*?\.x-nt-bookmark-cascade-level,[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'New Tab floating panels and bookmark menus should use continuous superellipse corners when supported'
+);
+
+assert.match(
+  optionsHtml,
+  /@supports \(corner-shape: superellipse\(1\.25\)\)[\s\S]*?\._x_extension_popconfirm_2024_unique_,[\s\S]*?\._x_extension_confirm_dialog_2024_unique_[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'Options popups should use continuous superellipse corners when supported'
+);
+
 const wallpaperPanelRule = getCssRuleBlock(newtabHtml, '.x-nt-wallpaper-panel');
 const shortcutDialogRule = getCssRuleBlock(shortcutDialogCss, '.x-nt-shortcut-dialog');
 const settingsPanelRule = getCssRuleBlock(optionsHtml, '#_x_extension_settings_panel_2024_unique_');

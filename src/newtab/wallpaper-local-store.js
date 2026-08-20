@@ -130,6 +130,79 @@
       });
     }
 
+    function readByIds(ids) {
+      const recordKeys = [];
+      const addRecordKey = (key) => {
+        const normalizedKey = String(key || '').trim();
+        if (normalizedKey && !recordKeys.includes(normalizedKey)) {
+          recordKeys.push(normalizedKey);
+        }
+      };
+      (Array.isArray(ids) ? ids : []).forEach((value) => {
+        const id = String(value || '').trim();
+        if (id === CUSTOM_WALLPAPER_ID) {
+          addRecordKey(LEGACY_RECORD_KEY);
+          return;
+        }
+        if (!isCustomWallpaperId(id)) {
+          return;
+        }
+        addRecordKey(id);
+        if (id === `${CUSTOM_WALLPAPER_ID_PREFIX}legacy`) {
+          addRecordKey(LEGACY_RECORD_KEY);
+        }
+      });
+      if (recordKeys.length === 0) {
+        return Promise.resolve([]);
+      }
+      return openDb().then((db) => {
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction(STORE_NAME, 'readonly');
+          const store = transaction.objectStore(STORE_NAME);
+          if (typeof store.get !== 'function') {
+            db.close();
+            reject(new Error('Wallpaper database does not support targeted reads.'));
+            return;
+          }
+          const records = [];
+          let failed = false;
+          const fail = (error) => {
+            if (failed) {
+              return;
+            }
+            failed = true;
+            reject(error);
+          };
+          recordKeys.forEach((key) => {
+            const request = store.get(key);
+            request.onerror = () => {
+              fail(request.error || new Error('Failed to read wallpaper.'));
+            };
+            request.onsuccess = () => {
+              if (request.result) {
+                records.push(request.result);
+              }
+            };
+          });
+          transaction.oncomplete = () => {
+            db.close();
+            if (failed) {
+              return;
+            }
+            const normalizedById = new Map();
+            records.map(normalizeRecord).filter(Boolean).forEach((record) => {
+              normalizedById.set(record.id, record);
+            });
+            resolve(Array.from(normalizedById.values()).sort((a, b) => a.updatedAt - b.updatedAt));
+          };
+          transaction.onerror = () => {
+            db.close();
+            fail(transaction.error || new Error('Failed to read wallpapers.'));
+          };
+        });
+      });
+    }
+
     function write(record) {
       return openDb().then((db) => {
         return new Promise((resolve, reject) => {
@@ -321,6 +394,7 @@
       isCustomWallpaperId,
       normalizeRecord,
       readAll,
+      readByIds,
       remove,
       write
     };

@@ -367,7 +367,7 @@
       : {
         tagBg: 'var(--x-nt-tag-bg, #F3F4F6)',
         tagText: 'var(--x-nt-tag-text, #6B7280)',
-        panelBorder: 'var(--x-nt-panel-border, rgba(0, 0, 0, 0.08))',
+        panelBorder: 'var(--x-nt-surface-border, var(--x-nt-panel-border, rgba(0, 0, 0, 0.08)))',
         panelBg: 'var(--x-nt-mode-menu-bg, #FFFFFF)',
         panelText: 'var(--x-nt-text, #111827)',
         panelShadow: 'var(--x-nt-panel-shadow-focus, 0 16px 40px rgba(15, 23, 42, 0.13))',

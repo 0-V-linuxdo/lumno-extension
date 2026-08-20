@@ -34,6 +34,12 @@ assertContains(
   'feedback popover should use the same opening motion as menu surfaces'
 );
 
+assert.match(
+  newtabHtml,
+  /@supports \(corner-shape: superellipse\(1\.25\)\)[\s\S]*?\.x-nt-feedback-popover,[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'feedback popover should use continuous superellipse corners when supported'
+);
+
 assertContains(
   newtabHtml,
   'width: 170px;',

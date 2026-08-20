@@ -709,6 +709,12 @@
   "newtab_input_auto_focus_title": {
     "message": "输入框自动聚焦"
   },
+  "newtab_input_auto_focus_help_label": {
+    "message": "输入框自动聚焦说明"
+  },
+  "newtab_input_auto_focus_help": {
+    "message": "如倾向使用浏览器原生地址栏，可关闭该选项。关闭后地址栏中的插件 url 将不再显示"
+  },
   "newtab_input_auto_focus_feature_hint_badge": {
     "message": "提示"
   },
