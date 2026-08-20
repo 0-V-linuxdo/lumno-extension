@@ -290,8 +290,8 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function applyInstantSuggestionsHeightLayout\(container\)[\s\S]*?removeAttribute\('data-height-clipped'\)[\s\S]*?'height'[\s\S]*?'padding-top'[\s\S]*?'transition'[\s\S]*?setProperty\('transition', 'none', 'important'\)/,
-  'overlay results should clear fixed-height styles and explicitly disable container transitions'
+  /SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\(\s*suggestionsContainer\s*\)/,
+  'overlay results should delegate fixed-height cleanup to the shared layout policy'
 );
 assert.match(
   searchPanelSource,
@@ -300,7 +300,7 @@ assert.match(
 );
 assert.match(
   searchPanelSource,
-  /function commitSuggestionsNaturalHeightAfterRender\(\) \{\s*applyInstantSuggestionsHeightLayout\(suggestionsContainer\);\s*syncSearchModeMenuResultOffset\(\);/,
+  /function commitSuggestionsNaturalHeightAfterRender\(\) \{\s*SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\(\s*suggestionsContainer\s*\);\s*syncSearchModeMenuResultOffset\(\);/,
   'the scope-menu offset should synchronize with the same direct height commit'
 );
 assert.doesNotMatch(

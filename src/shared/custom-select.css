@@ -109,13 +109,14 @@
 }
 
 ._x_extension_select_trigger_2024_unique_ {
+  --x-extension-select-trigger-radius: 10px;
   all: unset;
   box-sizing: border-box;
   width: 100%;
   min-width: 180px;
   height: 36px;
   padding: 8px 32px 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--x-extension-select-trigger-radius, 10px);
   border: 1px solid var(--tab-border, rgba(15, 23, 42, 0.08));
   background: var(--control-bg, rgba(255, 255, 255, 0.86));
   color: var(--panel-text, #111827);
@@ -166,14 +167,23 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
 }
 
 ._x_extension_select_menu_2024_unique_ {
+  --x-extension-select-menu-radius: 17px;
+  --x-extension-select-menu-border-width: 1px;
+  --x-extension-select-menu-padding: 6px;
+  --x-extension-select-option-radius: calc(
+    var(--x-extension-select-menu-radius) -
+    var(--x-extension-select-menu-border-width) -
+    var(--x-extension-select-menu-padding)
+  );
   position: absolute;
   left: 0;
   right: 0;
   top: calc(100% + 6px);
   background: var(--menu-bg, #ffffff);
-  border: 1px solid var(--tab-border, rgba(15, 23, 42, 0.08));
-  border-radius: 12px;
-  padding: 6px;
+  border: var(--x-extension-select-menu-border-width, 1px) solid
+    var(--tab-border, rgba(15, 23, 42, 0.08));
+  border-radius: var(--x-extension-select-menu-radius, 17px);
+  padding: var(--x-extension-select-menu-padding, 6px);
   box-sizing: border-box;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   transform-origin: top center;
@@ -182,7 +192,7 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
 
 ._x_extension_select_option_2024_unique_ {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--x-extension-select-option-radius, 10px);
   font-size: 13px;
   font-weight: 500;
   color: var(--panel-text, #111827);
@@ -270,8 +280,11 @@ body[data-theme="dark"] ._x_extension_select_wrap_2024_unique_[data-open="true"]
 }
 
 @supports (corner-shape: superellipse(1.25)) {
+  ._x_extension_select_trigger_2024_unique_,
+  ._x_extension_select_value_icon_2026_unique_,
   ._x_extension_select_menu_2024_unique_,
-  ._x_extension_select_option_2024_unique_ {
+  ._x_extension_select_option_2024_unique_,
+  ._x_extension_select_option_icon_2026_unique_ {
     corner-shape: superellipse(1.25);
   }
 }

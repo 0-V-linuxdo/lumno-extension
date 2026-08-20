@@ -136,18 +136,18 @@ const overlaySource = readSource('src/overlay/search-panel.js');
 
 assert.match(
   newtabSource,
-  /\(updateKind === 'append' \|\| updateKind === 'structure' \|\|\s*searchModeResultTransitionPending\)[\s\S]*?holdSuggestionsInputHeight\(\)/,
-  'New Tab should lock height only for append, structure, or a pending mode transition'
+  /suggestionsView\.render\(\{[\s\S]*?if \(updateKind !== 'highlight'\) \{[\s\S]*?setSuggestionsVisible\(true\);/,
+  'New Tab should publish rendered result rows without a height-interpolation phase'
 );
 assert.match(
   overlaySource,
-  /function commitSuggestionsNaturalHeightAfterRender\(\) \{[\s\S]*?applyInstantSuggestionsHeightLayout\(suggestionsContainer\);[\s\S]*?syncSearchModeMenuResultOffset\(\);/,
+  /function commitSuggestionsNaturalHeightAfterRender\(\) \{[\s\S]*?SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\([\s\S]*?suggestionsContainer[\s\S]*?syncSearchModeMenuResultOffset\(\);/,
   'Overlay result commits should adopt natural height and publish the final menu offset synchronously'
 );
 assert.doesNotMatch(
-  overlaySource,
-  /captureSuggestionsHeightState|deferCappedShrink|animateSuggestionsHeight/,
-  'Overlay should not capture, defer, or animate result height for any update kind'
+  `${newtabSource}\n${newtabLayoutSource}\n${overlaySource}`,
+  /captureSuggestionsHeightState|deferCappedShrink|animateSuggestionsHeight|beginSuggestionsInputSession|captureSuggestionsResizeState|animateSuggestionsResize|holdSuggestionsInputHeight|settleHeightAfterRemoteMix/,
+  'New Tab and Overlay should not capture, lock, defer, or animate result height'
 );
 assert.match(
   newtabHtml,
@@ -185,19 +185,14 @@ assert.match(
   'Overlay should update a direct URL preview without arming a height deferral'
 );
 assert.match(
-  newtabSource,
-  /function requestSuggestions\(query, options\)[\s\S]*?beginSuggestionsInputSession\(\{\s*autoSettle: false\s*\}\)[\s\S]*?settleHeightAfterRemoteMix: waitForRemoteMixHeight/,
-  'New Tab should bind its stable-height session to remote suggestion settlement instead of the typing timer'
-);
-assert.match(
-  newtabSource,
-  /function renderSuggestions\(suggestions, query, options\)[\s\S]*?const settleHeightAfterRemoteMix =[\s\S]*?suggestionsView\.render\([\s\S]*?finishSuggestionsInputSession\(\)/,
-  'New Tab should release the held height only after the final suggestion rows render'
-);
-assert.match(
   newtabLayoutSource,
-  /function beginSuggestionsInputSession\(options\)[\s\S]*?if \(beginOptions\.autoSettle === false\) \{\s*clearSuggestionsInputSettleTimer\(\);/,
-  'the shared New Tab layout controller should support request-bound height sessions without a wall-clock settle'
+  /function commitSuggestionsNaturalHeightAfterRender\(\) \{[\s\S]*?SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\([\s\S]*?suggestionsContainer/,
+  'New Tab should delegate its final result height to the shared natural-height helper'
+);
+assert.match(
+  newtabSource,
+  /function requestSuggestions\(query, options\)[\s\S]*?renderSuggestions\(localSuggestions, requestQuery\);[\s\S]*?renderSuggestions\(remoteResponse\.suggestions, requestQuery\);/,
+  'local and remote New Tab stages should each use the same ordinary render commit'
 );
 
 console.log('suggestion render stability tests passed');

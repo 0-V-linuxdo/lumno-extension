@@ -46,15 +46,10 @@ function createOptions(
     isPinned: () => false,
     getPinnedCount: () => 0,
     getMaxPinnedCount: () => 3,
-    canDismiss: () => true,
-    getDismissTooltip: () => 'Dismiss',
     updatePinButton: (button, pinned, limitReached) => {
       button.dataset.pinned = String(pinned);
       button.dataset.limitReached = String(limitReached);
       button.setAttribute('aria-label', pinned ? 'Unpin' : 'Pin');
-    },
-    updateDismissButton: (button) => {
-      button.setAttribute('aria-label', 'Dismiss');
     },
     showToast: () => {},
     showTopActionTooltip: () => {},
@@ -63,7 +58,7 @@ function createOptions(
     bindCursorTooltip: () => null,
     openUrl: () => {},
     togglePinned: () => Promise.resolve(null),
-    hideTemporarily: () => Promise.resolve(null),
+    onItemContextMenu: () => {},
     ...overrides
   };
 }
@@ -153,7 +148,7 @@ describe('Recent Sites React island', () => {
     expect(card?._xTitleText).toBe('Example Docs');
     expect(card?._xActionText?.textContent).toBe('前往');
     expect(card?._xPinButton).toBeInstanceOf(HTMLButtonElement);
-    expect(card?._xDismissButton).toBeInstanceOf(HTMLButtonElement);
+    expect(card?.querySelector('.x-nt-recent-dismiss')).toBeNull();
     expect(
       card?.querySelector('.x-nt-recent-card-visual')
     ).toBeInstanceOf(HTMLDivElement);
@@ -356,6 +351,43 @@ describe('Recent Sites React island', () => {
       false,
       true
     );
+  });
+
+  it('routes right-click through the shared New Tab context-menu callback', () => {
+    const onItemContextMenu = vi.fn((payload) => {
+      payload.event.preventDefault();
+      payload.event.stopPropagation();
+    });
+    const opened = vi.fn();
+    const item = {
+      title: 'Example',
+      url: 'https://example.com/'
+    };
+    const { view } = createView({
+      openUrl: opened,
+      onItemContextMenu
+    });
+    renderItems(view, [item]);
+    const card = view.getCards()[0];
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 120,
+      clientY: 80
+    });
+
+    act(() => {
+      card.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onItemContextMenu).toHaveBeenCalledWith({
+      event,
+      item,
+      element: card
+    });
+    expect(opened).not.toHaveBeenCalled();
   });
 
   it('coalesces rapid pin actions while persistence is pending', async () => {

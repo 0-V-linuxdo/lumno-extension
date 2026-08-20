@@ -56,6 +56,9 @@ assert.doesNotMatch(overlaySource,
 assert.match(overlaySource,
   /function setOpenTabsResultsViewport\(active, itemCount\)[\s\S]*?getComputedStyle\(suggestionsContainer\)[\s\S]*?getVisibleRowsViewportHeight\([\s\S]*?--x-ov-suggestion-row-height[\s\S]*?--x-ov-suggestion-row-gap/,
   'overlay should derive the opened-tab viewport from the rendered CSS row tokens');
+assert.match(overlaySource,
+  /function setOpenTabsResultsViewport\(active, itemCount\)[\s\S]*?const normalizedItemCount = Math\.max\(0, Math\.floor\(Number\(itemCount\) \|\| 0\)\);[\s\S]*?if \(normalizedItemCount <= visibleRowLimit\) \{[\s\S]*?removeProperty\('--x-ov-suggestions-max-height'\)[\s\S]*?removeProperty\('--x-ov-open-tabs-scrollbar-gutter'\)[\s\S]*?removeAttribute\('data-open-tabs-visible-row-limit'\)[\s\S]*?return;[\s\S]*?setAttribute\([\s\S]*?data-open-tabs-visible-row-limit/,
+  'a complete opened-tab result set should keep natural height without reserving a scrollbar');
 assert.match(overlaySuggestionsStyles,
   /\.x-ov-suggestions-container\[data-open-tabs-visible-row-limit\] \{[\s\S]*?scrollbar-width:\s*thin;[\s\S]*?scrollbar-color:/,
   'the scrollable opened-tab viewport should restore its visible scrollbar');

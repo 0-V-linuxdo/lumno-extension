@@ -50,7 +50,7 @@
   const recentModeTabsIndicator = recentModeTabsWrap
     ? recentModeTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
-  const recentCountSelect = document.getElementById('_x_extension_recent_count_select_2024_unique_');
+  const recentCountControlHost = document.getElementById('_x_extension_recent_count_control_2026_unique_');
   const newtabWidthSelect = document.getElementById('_x_extension_newtab_width_select_2026_unique_');
   const newtabWidthTabsWrap = document.getElementById('_x_extension_newtab_width_tabs_wrap_2026_unique_');
   const newtabWidthTabButtons = Array.from(document.querySelectorAll('button[data-newtab-width]'));
@@ -85,6 +85,10 @@
   const newtabTopContentTabsIndicator = newtabTopContentTabsWrap
     ? newtabTopContentTabsWrap.querySelector('._x_extension_theme_indicator_2024_unique_')
     : null;
+  const newtabTimeFontWeightRow = document.getElementById('_x_extension_newtab_time_font_weight_row_2026_unique_');
+  const newtabTimeFontWeightControlHost = document.getElementById('_x_extension_newtab_time_font_weight_control_2026_unique_');
+  const newtabTimeSecondsRow = document.getElementById('_x_extension_newtab_time_seconds_row_2026_unique_');
+  const newtabTimeSecondsToggle = document.getElementById('_x_extension_newtab_time_seconds_toggle_2026_unique_');
   const newtabInputAutoFocusToggle = document.getElementById('_x_extension_newtab_input_auto_focus_toggle_2026_unique_');
   const newtabShortcutsToggle = document.getElementById('_x_extension_newtab_shortcuts_toggle_2026_unique_');
   const newtabShortcutAddRow = document.getElementById('_x_extension_newtab_shortcut_add_row_2026_unique_');
@@ -359,6 +363,7 @@
     [overlayOpenTabsDefaultVisibleToggle, 'overlay-open-tabs-default-visible'],
     [bookmarkFolderIconsVisibleToggle, 'bookmark-folder-icons-visible'],
     [overlayTabQuickSwitchToggle, 'overlay-tab-quick-switch'],
+    [newtabTimeSecondsToggle, 'newtab-time-seconds'],
     [newtabInputAutoFocusToggle, 'newtab-input-auto-focus'],
     [newtabShortcutsToggle, 'newtab-shortcuts'],
     [newtabShortcutAddToggle, 'newtab-shortcut-add'],
@@ -671,6 +676,15 @@
   const OVERLAY_TAB_PRIORITY_STORAGE_KEY = '_x_extension_overlay_tab_priority_2024_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
+  const NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY =
+    SETTINGS.NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY ||
+    '_x_extension_newtab_time_font_weight_2026_unique_';
+  const NEWTAB_TIME_FONT_WEIGHT_MIN = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MIN) || 300;
+  const NEWTAB_TIME_FONT_WEIGHT_MAX = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MAX) || 800;
+  const NEWTAB_TIME_FONT_WEIGHT_DEFAULT = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_DEFAULT) || 320;
+  const NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY =
+    SETTINGS.NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY ||
+    '_x_extension_newtab_time_seconds_visible_2026_unique_';
   const RESTRICTED_ACTION_STORAGE_KEY = '_x_extension_restricted_action_2024_unique_';
   const RESTRICTED_ACTION_AUTO_BROWSER_SETTING_DONE_STORAGE_KEY = '_x_extension_restricted_action_auto_browser_setting_done_2026_unique_';
   const SEARCH_RESULT_PRIORITY_STORAGE_KEY = '_x_extension_search_result_priority_2026_unique_';
@@ -739,6 +753,8 @@
     SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
     OVERLAY_TAB_PRIORITY_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+    NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+    NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
     RESTRICTED_ACTION_STORAGE_KEY,
     SEARCH_RESULT_PRIORITY_STORAGE_KEY,
     SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY,
@@ -843,9 +859,11 @@
   let currentRestrictedAction = 'default';
   let currentSearchResultPriority = 'autocomplete';
   let currentSearchResultDisplayLimit = 10;
+  let currentRecentCount = 4;
   let currentBookmarkCount = 8;
   let currentBookmarkColumns = 6;
   let currentNewtabTopContentMode = 'brand';
+  let currentNewtabTimeFontWeight = NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
   let currentActiveSettingsTab = 'general';
   const optionsSelectControlRecords = new Map();
   function registerOptionsSelectControl(select, kind) {
@@ -905,7 +923,6 @@
   }
   [
     [languageSelect, 'language'],
-    [recentCountSelect, 'recent-count'],
     [selectionQuickActionsProviderSelect, 'selection-quick-actions-provider']
   ].forEach(([select, kind]) => {
     const record = registerOptionsSelectControl(select, kind);
@@ -913,6 +930,41 @@
       renderOptionsSelectControl(select);
     }
   });
+  const newtabTimeFontWeightController =
+    typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
+      ? optionsSettingsControlsApi.createRangeSliderControlController(
+          newtabTimeFontWeightControlHost,
+          {
+            kind: 'newtab-time-font-weight',
+            onInput(value) {
+              const nextWeight = normalizeNewtabTimeFontWeight(value);
+              currentNewtabTimeFontWeight = nextWeight;
+              if (storageArea) {
+                storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: nextWeight });
+              }
+            }
+          }
+        )
+      : null;
+  function renderNewtabTimeFontWeightControl(value) {
+    if (!newtabTimeFontWeightController) {
+      return;
+    }
+    currentNewtabTimeFontWeight = normalizeNewtabTimeFontWeight(value);
+    newtabTimeFontWeightController.render({
+      ariaLabel: getMessage('newtab_time_font_weight_title', 'Time font weight'),
+      id: '_x_extension_newtab_time_font_weight_slider_2026_unique_',
+      min: NEWTAB_TIME_FONT_WEIGHT_MIN,
+      max: NEWTAB_TIME_FONT_WEIGHT_MAX,
+      step: 1,
+      ticks: [
+        { align: 'start', label: String(NEWTAB_TIME_FONT_WEIGHT_MIN) },
+        { label: String(Math.round((NEWTAB_TIME_FONT_WEIGHT_MIN + NEWTAB_TIME_FONT_WEIGHT_MAX) / 2)) },
+        { align: 'end', label: String(NEWTAB_TIME_FONT_WEIGHT_MAX) }
+      ],
+      value: currentNewtabTimeFontWeight
+    });
+  }
   const bookmarkRowsController =
     typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
       ? optionsSettingsControlsApi.createRangeSliderControlController(
@@ -949,6 +1001,44 @@
         { align: 'end', label: '8' }
       ],
       value: currentBookmarkCount / 4
+    });
+  }
+  const recentCountController =
+    typeof optionsSettingsControlsApi.createRangeSliderControlController === 'function'
+      ? optionsSettingsControlsApi.createRangeSliderControlController(
+          recentCountControlHost,
+          {
+            kind: 'recent-count',
+            onInput(value) {
+              const nextCount = normalizeRecentCount(Math.round(Number(value)) * 4);
+              currentRecentCount = nextCount;
+              updateRecentModeTabsVisibility(nextCount);
+              if (!storageArea) {
+                return;
+              }
+              storageArea.set({ [RECENT_COUNT_STORAGE_KEY]: nextCount });
+              notifyNewtabSectionsRefresh('recent');
+            }
+          }
+        )
+      : null;
+  function renderRecentCountControl(value) {
+    if (!recentCountController) {
+      return;
+    }
+    currentRecentCount = normalizeRecentCount(value);
+    recentCountController.render({
+      ariaLabel: getMessage('settings_recent_sites_title', 'Recent site cards'),
+      id: '_x_extension_recent_count_slider_2026_unique_',
+      min: 0,
+      max: 2,
+      step: 1,
+      ticks: [
+        { align: 'start', label: '0' },
+        { label: '1' },
+        { align: 'end', label: '2' }
+      ],
+      value: currentRecentCount / 4
     });
   }
   const bookmarkColumnsController =
@@ -1021,6 +1111,8 @@
       value: currentSearchResultDisplayLimit
     });
   }
+  renderNewtabTimeFontWeightControl(NEWTAB_TIME_FONT_WEIGHT_DEFAULT);
+  renderRecentCountControl(4);
   renderBookmarkRowsControl(8);
   renderBookmarkColumnsControl(6);
   renderSearchResultDisplayLimitControl(10);
@@ -1685,6 +1777,26 @@
     return value === 'off' || value === false ? 'off' : 'brand';
   }
 
+  function normalizeNewtabTimeSecondsVisible(value) {
+    return typeof SETTINGS.normalizeNewtabTimeSecondsVisible === 'function'
+      ? SETTINGS.normalizeNewtabTimeSecondsVisible(value)
+      : value === true;
+  }
+
+  function normalizeNewtabTimeFontWeight(value) {
+    if (typeof SETTINGS.normalizeNewtabTimeFontWeight === 'function') {
+      return SETTINGS.normalizeNewtabTimeFontWeight(value);
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
+    }
+    return Math.min(
+      NEWTAB_TIME_FONT_WEIGHT_MAX,
+      Math.max(NEWTAB_TIME_FONT_WEIGHT_MIN, Math.round(number))
+    );
+  }
+
   function normalizeNewtabInputAutoFocusEnabled(value) {
     return typeof SETTINGS.normalizeNewtabInputAutoFocusEnabled === 'function'
       ? SETTINGS.normalizeNewtabInputAutoFocusEnabled(value)
@@ -2045,14 +2157,12 @@
           {
             value: 'latest',
             labelKey: 'recent_mode_latest',
-            label: getMessage('recent_mode_latest', '最近访问'),
-            iconClass: 'ri-icon ri-size-14 ri-time-line'
+            label: getMessage('recent_mode_latest', '最近访问')
           },
           {
             value: 'most',
             labelKey: 'recent_mode_most',
-            label: getMessage('recent_mode_most', '最常访问'),
-            iconClass: 'ri-icon ri-size-14 ri-vip-diamond-line'
+            label: getMessage('recent_mode_most', '最常访问')
           }
         ],
         select: {
@@ -2182,7 +2292,19 @@
         ]
       }
     );
+    syncNewtabTimeSecondsVisibility();
     requestAnimationFrame(updateNewtabTopContentTabsIndicator);
+  }
+
+  function syncNewtabTimeSecondsVisibility() {
+    const visible = currentNewtabTopContentMode === 'time';
+    [newtabTimeFontWeightRow, newtabTimeSecondsRow].forEach((row) => {
+      if (!row) {
+        return;
+      }
+      row.hidden = !visible;
+      row.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    });
   }
 
   function updateRecentModeTabsVisibility(countValue) {
@@ -3088,6 +3210,8 @@
       setRecentModeTabState(currentRecentMode);
       setRestrictedActionTabState(currentRestrictedAction);
       setNewtabTopContentTabState(currentNewtabTopContentMode);
+      renderNewtabTimeFontWeightControl(currentNewtabTimeFontWeight);
+      renderRecentCountControl(currentRecentCount);
       renderBookmarkRowsControl(currentBookmarkCount);
       renderBookmarkColumnsControl(currentBookmarkColumns);
       renderSearchResultDisplayLimitControl(currentSearchResultDisplayLimit);
@@ -4350,17 +4474,6 @@
     });
   }
 
-  if (recentCountSelect) {
-    recentCountSelect.addEventListener('change', () => {
-      const nextCount = normalizeRecentCount(recentCountSelect.value);
-      updateRecentModeTabsVisibility(nextCount);
-      if (!storageArea) {
-        return;
-      }
-      storageArea.set({ [RECENT_COUNT_STORAGE_KEY]: nextCount });
-      notifyNewtabSectionsRefresh('recent');
-    });
-  }
   if (newtabWidthSelect) {
     newtabWidthSelect.addEventListener('change', () => {
       handleNewtabWidthSelection(newtabWidthSelect.value);
@@ -4468,6 +4581,16 @@
         return;
       }
       storageArea.set({ [OVERLAY_TAB_PRIORITY_STORAGE_KEY]: next });
+    });
+  }
+  if (newtabTimeSecondsToggle) {
+    newtabTimeSecondsToggle.addEventListener('change', () => {
+      const next = normalizeNewtabTimeSecondsVisible(newtabTimeSecondsToggle.checked);
+      setOptionsToggleState(newtabTimeSecondsToggle, next);
+      if (!storageArea) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: next });
     });
   }
   if (newtabInputAutoFocusToggle) {
@@ -4988,9 +5111,7 @@
     storageArea.get([RECENT_COUNT_STORAGE_KEY], (result) => {
       const stored = result[RECENT_COUNT_STORAGE_KEY];
       const count = normalizeRecentCount(stored);
-      if (recentCountSelect) {
-        setOptionsSelectState(recentCountSelect, String(count));
-      }
+      renderRecentCountControl(count);
       updateRecentModeTabsVisibility(count);
       if (stored !== count) {
         storageArea.set({ [RECENT_COUNT_STORAGE_KEY]: count });
@@ -5145,6 +5266,24 @@
         storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: stored });
       }
       refreshCustomSelects();
+    });
+    storageArea.get([NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY];
+      const stored = normalizeNewtabTimeFontWeight(rawValue);
+      renderNewtabTimeFontWeightControl(stored);
+      if (rawValue !== stored) {
+        storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: stored });
+      }
+    });
+    storageArea.get([NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY], (result) => {
+      const rawValue = result[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY];
+      const stored = normalizeNewtabTimeSecondsVisible(rawValue);
+      if (newtabTimeSecondsToggle) {
+        setOptionsToggleState(newtabTimeSecondsToggle, stored);
+      }
+      if (rawValue !== stored) {
+        storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: stored });
+      }
     });
     storageArea.get([NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY], (result) => {
       const rawValue = result[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY];
@@ -6317,11 +6456,10 @@
     if (changes[LANGUAGE_STORAGE_KEY]) {
       applyLanguageMode(changes[LANGUAGE_STORAGE_KEY].newValue || 'system');
     }
-    if (changes[RECENT_COUNT_STORAGE_KEY] && recentCountSelect) {
+    if (changes[RECENT_COUNT_STORAGE_KEY]) {
       const count = normalizeRecentCount(changes[RECENT_COUNT_STORAGE_KEY].newValue);
-      setOptionsSelectState(recentCountSelect, String(count));
+      renderRecentCountControl(count);
       updateRecentModeTabsVisibility(count);
-      refreshCustomSelects();
     }
     if (changes[NEWTAB_WIDTH_MODE_STORAGE_KEY] && newtabWidthSelect) {
       const mode = normalizeNewtabWidthMode(changes[NEWTAB_WIDTH_MODE_STORAGE_KEY].newValue);
@@ -6425,6 +6563,22 @@
         storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: next });
       }
       refreshCustomSelects();
+    }
+    if (changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY].newValue;
+      const next = normalizeNewtabTimeFontWeight(raw);
+      renderNewtabTimeFontWeightControl(next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: next });
+      }
+    }
+    if (changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY] && newtabTimeSecondsToggle) {
+      const raw = changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY].newValue;
+      const next = normalizeNewtabTimeSecondsVisible(raw);
+      setOptionsToggleState(newtabTimeSecondsToggle, next);
+      if (raw !== next && storageArea) {
+        storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: next });
+      }
     }
     if (changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY] && newtabInputAutoFocusToggle) {
       const raw = changes[NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY].newValue;

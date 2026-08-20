@@ -10,11 +10,18 @@
     effect: '_x_extension_newtab_wallpaper_effect_2026_unique_',
     topContentMode: SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
       '_x_extension_newtab_wordmark_visible_2026_unique_',
+    timeFontWeight: SETTINGS.NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY ||
+      '_x_extension_newtab_time_font_weight_2026_unique_',
+    timeSecondsVisible: SETTINGS.NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY ||
+      '_x_extension_newtab_time_seconds_visible_2026_unique_',
     favicon: '_x_extension_newtab_favicon_2026_unique_'
   };
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
   const PRELOAD_STORAGE_VERSION = 4;
   const WALLPAPER_EFFECT_MODE_STORAGE_VERSION = 4;
+  const NEWTAB_TIME_FONT_WEIGHT_MIN = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MIN) || 300;
+  const NEWTAB_TIME_FONT_WEIGHT_MAX = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MAX) || 800;
+  const NEWTAB_TIME_FONT_WEIGHT_DEFAULT = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_DEFAULT) || 320;
   const FALLBACK_WALLPAPER_EFFECT_PREFS = {
     version: 4,
     type: 'none',
@@ -83,6 +90,8 @@
     const NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY = storageKeys.overlay;
     const NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY = storageKeys.effect;
     const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = storageKeys.topContentMode;
+    const NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY = storageKeys.timeFontWeight;
+    const NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY = storageKeys.timeSecondsVisible;
     const NEWTAB_FAVICON_STORAGE_KEY = storageKeys.favicon;
     const t = typeof options.t === 'function'
       ? options.t
@@ -169,6 +178,20 @@
       : function() { return 'brand'; };
     const setTopContentMode = typeof options.setTopContentMode === 'function'
       ? options.setTopContentMode
+      : function() {};
+    const hasTimeFontWeightGetter = typeof options.getTimeFontWeight === 'function';
+    const getTimeFontWeight = hasTimeFontWeightGetter
+      ? options.getTimeFontWeight
+      : function() { return NEWTAB_TIME_FONT_WEIGHT_DEFAULT; };
+    const setTimeFontWeight = typeof options.setTimeFontWeight === 'function'
+      ? options.setTimeFontWeight
+      : function() {};
+    const hasTimeSecondsVisibleGetter = typeof options.getTimeSecondsVisible === 'function';
+    const getTimeSecondsVisible = hasTimeSecondsVisibleGetter
+      ? options.getTimeSecondsVisible
+      : function() { return false; };
+    const setTimeSecondsVisible = typeof options.setTimeSecondsVisible === 'function'
+      ? options.setTimeSecondsVisible
       : function() {};
     const getAdaptiveToneTargets = typeof options.getAdaptiveToneTargets === 'function'
       ? options.getAdaptiveToneTargets
@@ -398,6 +421,13 @@
     let topContentBrandTab = null;
     let topContentTimeTab = null;
     let topContentOffTab = null;
+    let topContentWeightControl = null;
+    let topContentWeightTitle = null;
+    let topContentWeightValue = null;
+    let topContentWeightSlider = null;
+    let topContentSecondsRow = null;
+    let topContentSecondsTitle = null;
+    let topContentSecondsToggle = null;
     let wallpaperAppearanceTitle = null;
     let wallpaperAppearanceInfoButton = null;
     let wallpaperAppearanceScopeTabs = null;
@@ -727,6 +757,8 @@
       dark: ''
     };
     let currentTopContentMode = normalizeNewtabTopContentMode(getTopContentMode());
+    let currentTimeFontWeight = normalizeNewtabTimeFontWeight(getTimeFontWeight());
+    let currentTimeSecondsVisible = normalizeNewtabTimeSecondsVisible(getTimeSecondsVisible());
     let currentNewtabFaviconId = NEWTAB_FAVICON_DEFAULT_ID;
 
     function normalizeWallpaperMode(mode) {
@@ -820,6 +852,26 @@
         return 'time';
       }
       return value === 'off' || value === false ? 'off' : 'brand';
+    }
+
+    function normalizeNewtabTimeSecondsVisible(value) {
+      return typeof SETTINGS.normalizeNewtabTimeSecondsVisible === 'function'
+        ? SETTINGS.normalizeNewtabTimeSecondsVisible(value)
+        : value === true;
+    }
+
+    function normalizeNewtabTimeFontWeight(value) {
+      if (typeof SETTINGS.normalizeNewtabTimeFontWeight === 'function') {
+        return SETTINGS.normalizeNewtabTimeFontWeight(value);
+      }
+      const number = Number(value);
+      if (!Number.isFinite(number)) {
+        return NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
+      }
+      return Math.min(
+        NEWTAB_TIME_FONT_WEIGHT_MAX,
+        Math.max(NEWTAB_TIME_FONT_WEIGHT_MIN, Math.round(number))
+      );
     }
 
     function getNewtabFaviconById(id) {
@@ -2812,7 +2864,57 @@
         button.setAttribute('data-active', active ? 'true' : 'false');
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
+      updateTimeFontWeightUi();
+      updateTimeSecondsVisibleUi();
       scheduleTopContentTabsIndicatorRefresh();
+    }
+
+    function updateTimeFontWeightUi() {
+      if (hasTimeFontWeightGetter) {
+        currentTimeFontWeight = normalizeNewtabTimeFontWeight(getTimeFontWeight());
+      }
+      const visible = currentTopContentMode === 'time';
+      if (topContentWeightControl) {
+        topContentWeightControl.hidden = !visible;
+        topContentWeightControl.setAttribute('data-visible', visible ? 'true' : 'false');
+        topContentWeightControl.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      }
+      if (topContentWeightValue) {
+        topContentWeightValue.textContent = String(currentTimeFontWeight);
+      }
+      if (topContentWeightSlider) {
+        const percent = (currentTimeFontWeight - NEWTAB_TIME_FONT_WEIGHT_MIN) /
+          (NEWTAB_TIME_FONT_WEIGHT_MAX - NEWTAB_TIME_FONT_WEIGHT_MIN) * 100;
+        topContentWeightSlider.min = String(NEWTAB_TIME_FONT_WEIGHT_MIN);
+        topContentWeightSlider.max = String(NEWTAB_TIME_FONT_WEIGHT_MAX);
+        topContentWeightSlider.step = '1';
+        topContentWeightSlider.value = String(currentTimeFontWeight);
+        topContentWeightSlider.style.setProperty(
+          '--x-nt-overlay-slider-percent',
+          `${Math.max(0, Math.min(100, percent))}%`
+        );
+        topContentWeightSlider.setAttribute('aria-valuenow', String(currentTimeFontWeight));
+        topContentWeightSlider.setAttribute('aria-valuetext', String(currentTimeFontWeight));
+      }
+    }
+
+    function updateTimeSecondsVisibleUi() {
+      if (hasTimeSecondsVisibleGetter) {
+        currentTimeSecondsVisible = normalizeNewtabTimeSecondsVisible(getTimeSecondsVisible());
+      }
+      const visible = currentTopContentMode === 'time';
+      if (topContentSecondsRow) {
+        topContentSecondsRow.hidden = !visible;
+        topContentSecondsRow.setAttribute('data-visible', visible ? 'true' : 'false');
+        topContentSecondsRow.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      }
+      if (topContentSecondsToggle) {
+        topContentSecondsToggle.checked = currentTimeSecondsVisible;
+        topContentSecondsToggle.setAttribute(
+          'aria-checked',
+          currentTimeSecondsVisible ? 'true' : 'false'
+        );
+      }
     }
 
     function applyTopContentMode(value) {
@@ -2828,6 +2930,36 @@
         return;
       }
       storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
+    }
+
+    function applyTimeFontWeight(value) {
+      currentTimeFontWeight = normalizeNewtabTimeFontWeight(value);
+      setTimeFontWeight(currentTimeFontWeight);
+      updateTimeFontWeightUi();
+    }
+
+    function persistTimeFontWeight(value) {
+      const nextValue = normalizeNewtabTimeFontWeight(value);
+      applyTimeFontWeight(nextValue);
+      if (!storageArea || !NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: nextValue });
+    }
+
+    function applyTimeSecondsVisible(value) {
+      currentTimeSecondsVisible = normalizeNewtabTimeSecondsVisible(value);
+      setTimeSecondsVisible(currentTimeSecondsVisible);
+      updateTimeSecondsVisibleUi();
+    }
+
+    function persistTimeSecondsVisible(value) {
+      const nextValue = normalizeNewtabTimeSecondsVisible(value);
+      applyTimeSecondsVisible(nextValue);
+      if (!storageArea || !NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY) {
+        return;
+      }
+      storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: nextValue });
     }
 
     function getNewtabFaviconOptionButtons() {
@@ -3923,6 +4055,24 @@
         topContentOffTab.textContent = label;
         topContentOffTab.setAttribute('aria-label', label);
       }
+      if (topContentWeightTitle || topContentWeightSlider) {
+        const label = t('newtab_time_font_weight_title', 'Time font weight');
+        if (topContentWeightTitle) {
+          topContentWeightTitle.textContent = label;
+        }
+        if (topContentWeightSlider) {
+          topContentWeightSlider.setAttribute('aria-label', label);
+        }
+      }
+      if (topContentSecondsTitle || topContentSecondsToggle) {
+        const label = t('newtab_time_show_seconds_title', 'Show seconds');
+        if (topContentSecondsTitle) {
+          topContentSecondsTitle.textContent = label;
+        }
+        if (topContentSecondsToggle) {
+          topContentSecondsToggle.setAttribute('aria-label', label);
+        }
+      }
       scheduleTopContentTabsIndicatorRefresh();
       updateWallpaperModeControlsUi({ animate: false });
     }
@@ -4048,6 +4198,11 @@
           { value: 'time', label: t('newtab_top_content_time', 'Time') },
           { value: 'off', label: t('newtab_top_content_off', 'Hide') }
         ],
+        timeFontWeight: {
+          min: NEWTAB_TIME_FONT_WEIGHT_MIN,
+          max: NEWTAB_TIME_FONT_WEIGHT_MAX,
+          defaultValue: NEWTAB_TIME_FONT_WEIGHT_DEFAULT
+        },
         searchWidth: {
           min: getSearchWidthMin(),
           max: getSearchWidthMax(),
@@ -4075,6 +4230,13 @@
       topContentBrandTab = refs.topContentBrandTab;
       topContentTimeTab = refs.topContentTimeTab;
       topContentOffTab = refs.topContentOffTab;
+      topContentWeightControl = refs.topContentWeightControl;
+      topContentWeightTitle = refs.topContentWeightTitle;
+      topContentWeightValue = refs.topContentWeightValue;
+      topContentWeightSlider = refs.topContentWeightSlider;
+      topContentSecondsRow = refs.topContentSecondsRow;
+      topContentSecondsTitle = refs.topContentSecondsTitle;
+      topContentSecondsToggle = refs.topContentSecondsToggle;
       wallpaperAppearanceTitle = refs.appearanceTitle;
       wallpaperAppearanceInfoButton = refs.appearanceInfoButton;
       wallpaperAppearanceScopeTabs = refs.appearanceScopeTabs;
@@ -4280,6 +4442,17 @@
           persistNewtabFavicon(tile.getAttribute('data-newtab-favicon-id'));
         });
       });
+      if (topContentWeightSlider) {
+        topContentWeightSlider.addEventListener('input', () => {
+          persistTimeFontWeight(topContentWeightSlider.value);
+        });
+        bindWallpaperSliderValueBubble(topContentWeightSlider);
+      }
+      if (topContentSecondsToggle) {
+        topContentSecondsToggle.addEventListener('change', () => {
+          persistTimeSecondsVisible(topContentSecondsToggle.checked);
+        });
+      }
       topContentTabs.querySelectorAll('[data-newtab-top-content]').forEach((button) => {
         button.addEventListener('click', () => {
           persistTopContentMode(button.getAttribute('data-newtab-top-content'));
@@ -4467,6 +4640,26 @@
         }
         handled = true;
       }
+      if (NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY &&
+          changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]) {
+        const raw = changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY].newValue;
+        const nextValue = normalizeNewtabTimeFontWeight(raw);
+        applyTimeFontWeight(nextValue);
+        if (storageArea && raw !== nextValue) {
+          storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: nextValue });
+        }
+        handled = true;
+      }
+      if (NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY &&
+          changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]) {
+        const raw = changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY].newValue;
+        const nextValue = normalizeNewtabTimeSecondsVisible(raw);
+        applyTimeSecondsVisible(nextValue);
+        if (storageArea && raw !== nextValue) {
+          storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: nextValue });
+        }
+        handled = true;
+      }
       if (NEWTAB_FAVICON_STORAGE_KEY && changes[NEWTAB_FAVICON_STORAGE_KEY]) {
         const raw = changes[NEWTAB_FAVICON_STORAGE_KEY].newValue;
         const nextId = normalizeNewtabFaviconId(raw);
@@ -4500,6 +4693,8 @@
       updateSearchWidthUi: updateWallpaperSearchWidthControlUi,
       updateInputAutoFocusUi,
       updateTopContentModeUi,
+      updateTimeFontWeightUi,
+      updateTimeSecondsVisibleUi,
       refreshCustomWallpapers: loadCustomWallpapers,
       bootstrapInitialWallpaper,
       bootstrapInitialWallpaperOverlay,

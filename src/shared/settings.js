@@ -82,6 +82,8 @@
     '_x_extension_selection_quick_actions_group_enabled_2026_unique_',
     '_x_extension_overlay_tab_priority_2024_unique_',
     '_x_extension_newtab_wordmark_visible_2026_unique_',
+    '_x_extension_newtab_time_font_weight_2026_unique_',
+    '_x_extension_newtab_time_seconds_visible_2026_unique_',
     '_x_extension_restricted_action_2024_unique_',
     '_x_extension_search_result_priority_2026_unique_',
     '_x_extension_search_result_source_types_2026_unique_',
@@ -110,6 +112,13 @@
   const NEWTAB_TOP_CONTENT_BRAND = 'brand';
   const NEWTAB_TOP_CONTENT_TIME = 'time';
   const NEWTAB_TOP_CONTENT_OFF = 'off';
+  const NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY =
+    '_x_extension_newtab_time_font_weight_2026_unique_';
+  const NEWTAB_TIME_FONT_WEIGHT_MIN = 300;
+  const NEWTAB_TIME_FONT_WEIGHT_MAX = 800;
+  const NEWTAB_TIME_FONT_WEIGHT_DEFAULT = 320;
+  const NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY =
+    '_x_extension_newtab_time_seconds_visible_2026_unique_';
 
   function normalizeLocale(locale) {
     const raw = String(locale || '').trim();
@@ -172,6 +181,21 @@
 
   function normalizeNewtabWordmarkVisible(value) {
     return normalizeNewtabTopContentMode(value) !== NEWTAB_TOP_CONTENT_OFF;
+  }
+
+  function normalizeNewtabTimeSecondsVisible(value) {
+    return value === true;
+  }
+
+  function normalizeNewtabTimeFontWeight(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
+    }
+    return Math.min(
+      NEWTAB_TIME_FONT_WEIGHT_MAX,
+      Math.max(NEWTAB_TIME_FONT_WEIGHT_MIN, Math.round(number))
+    );
   }
 
   function normalizeNewtabShortcutsVisible(value) {
@@ -599,12 +623,19 @@
     NEWTAB_TOP_CONTENT_BRAND,
     NEWTAB_TOP_CONTENT_TIME,
     NEWTAB_TOP_CONTENT_OFF,
+    NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+    NEWTAB_TIME_FONT_WEIGHT_MIN,
+    NEWTAB_TIME_FONT_WEIGHT_MAX,
+    NEWTAB_TIME_FONT_WEIGHT_DEFAULT,
+    NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
     normalizeLocale,
     localeToHtmlLang,
     normalizeNewtabWidthMode,
     normalizeNewtabSearchWidth,
     normalizeNewtabTopContentMode,
     normalizeNewtabWordmarkVisible,
+    normalizeNewtabTimeFontWeight,
+    normalizeNewtabTimeSecondsVisible,
     normalizeNewtabShortcutsVisible,
     normalizeNewtabShortcutAddVisible,
     normalizeNewtabShortcutDockMagnificationEnabled,

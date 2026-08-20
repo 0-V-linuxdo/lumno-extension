@@ -272,6 +272,16 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
         { value: 'time', label: 'Time' },
         { value: 'off', label: 'Hide' }
       ];
+  const timeFontWeightMin = Number(model.timeFontWeight?.min) || 300;
+  const timeFontWeightMax = Number(model.timeFontWeight?.max) || 800;
+  const timeFontWeightDefault = Number(model.timeFontWeight?.defaultValue) || 320;
+  const timeFontWeightTicks: RangeSliderTick[] = [
+    { align: 'start', label: String(timeFontWeightMin) },
+    {
+      label: String(Math.round((timeFontWeightMin + timeFontWeightMax) / 2))
+    },
+    { align: 'end', label: String(timeFontWeightMax) }
+  ];
   const effectInkTones: EffectInkToneItem[] = Array.isArray(model.effectInkTones)
     ? model.effectInkTones
     : DEFAULT_EFFECT_INK_TONES;
@@ -672,6 +682,52 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                   </button>
                 ))}
               </SegmentedTabs>
+            </div>
+            <div
+              {...ref('topContentWeightControl')}
+              aria-hidden="true"
+              className="x-nt-time-weight-control"
+              data-visible="false"
+              hidden
+            >
+              <div className="x-nt-overlay-control-header">
+                <span {...ref('topContentWeightTitle')}>Time font weight</span>
+                <span
+                  {...ref('topContentWeightValue')}
+                  className="x-nt-overlay-value"
+                >
+                  {timeFontWeightDefault}
+                </span>
+              </div>
+              <RangeSlider
+                {...ref('topContentWeightSlider')}
+                className="x-nt-overlay-slider-wrap x-nt-time-weight-slider-wrap"
+                inputClass="x-nt-overlay-slider x-nt-time-weight-slider"
+                max={String(timeFontWeightMax)}
+                min={String(timeFontWeightMin)}
+                step="1"
+                defaultValue={String(timeFontWeightDefault)}
+              >
+                <Scale ticks={timeFontWeightTicks} />
+              </RangeSlider>
+            </div>
+            <div
+              {...ref('topContentSecondsRow')}
+              aria-hidden="true"
+              className="x-nt-top-content-seconds-row"
+              data-visible="false"
+              hidden
+            >
+              <span
+                {...ref('topContentSecondsTitle')}
+                className="x-nt-top-content-seconds-title"
+              >
+                Show seconds
+              </span>
+              <Switch
+                ariaLabel="Show seconds"
+                name="topContentSecondsToggle"
+              />
             </div>
             <div className="x-nt-favicon-group">
               <div

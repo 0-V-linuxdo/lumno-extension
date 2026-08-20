@@ -1,6 +1,5 @@
 const assert = require('assert');
 const fs = require('fs');
-const vm = require('vm');
 
 const overlaySource = fs.readFileSync('src/overlay/search-panel.js', 'utf8');
 
@@ -141,71 +140,20 @@ assert.match(
   );
 });
 
-const instantLayoutStart = overlaySource.indexOf(
-  'function applyInstantSuggestionsHeightLayout(container) {'
-);
-const instantLayoutEnd = overlaySource.indexOf(
-  'function commitSuggestionsNaturalHeightAfterRender()',
-  instantLayoutStart
-);
-const instantLayoutSource = overlaySource.slice(
-  instantLayoutStart,
-  instantLayoutEnd
-);
-const instantStyles = new Map([
-  ['flex', { value: '0 0 auto', priority: 'important' }],
-  ['height', { value: '580px', priority: 'important' }],
-  ['overflow-y', { value: 'hidden', priority: 'important' }],
-  ['padding-top', { value: '12px', priority: 'important' }],
-  ['transition', { value: 'height 180ms ease-in-out', priority: 'important' }],
-  ['will-change', { value: 'height', priority: 'important' }]
-]);
-const instantAttributes = new Map([['data-height-clipped', 'true']]);
-const instantContainer = {
-  removeAttribute(name) {
-    instantAttributes.delete(name);
-  },
-  style: {
-    removeProperty(name) {
-      instantStyles.delete(name);
-    },
-    setProperty(name, value, priority) {
-      instantStyles.set(name, { value, priority });
-    }
-  }
-};
-const instantLayoutRuntimeContext = vm.createContext({});
-vm.runInContext(
-  `${instantLayoutSource}\nthis.applyInstantSuggestionsHeightLayoutForTest = applyInstantSuggestionsHeightLayout;`,
-  instantLayoutRuntimeContext,
-  { filename: 'overlay-instant-suggestions-height.js' }
-);
-instantLayoutRuntimeContext.applyInstantSuggestionsHeightLayoutForTest(
-  instantContainer
-);
-assert.strictEqual(instantAttributes.has('data-height-clipped'), false);
-['flex', 'height', 'overflow-y', 'padding-top', 'will-change'].forEach((property) => {
-  assert.strictEqual(
-    instantStyles.has(property),
-    false,
-    `${property} should not constrain the final natural-height layout`
-  );
-});
-assert.deepStrictEqual(
-  instantStyles.get('transition'),
-  { value: 'none', priority: 'important' },
-  'the result container should explicitly reject page-provided transitions'
-);
-
 assert.match(
   overlaySource,
-  /function commitSuggestionsNaturalHeightAfterRender\(\) \{\s*applyInstantSuggestionsHeightLayout\(suggestionsContainer\);\s*syncSearchModeMenuResultOffset\(\);\s*\}/,
+  /function commitSuggestionsNaturalHeightAfterRender\(\) \{\s*SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\(\s*suggestionsContainer\s*\);\s*syncSearchModeMenuResultOffset\(\);\s*\}/,
   'the final menu offset should be synchronized in the same direct layout commit'
 );
 assert.match(
   overlaySource,
-  /if \(shouldCollapse\) \{\s*applyInstantSuggestionsHeightLayout\(suggestionsContainer\);[\s\S]*?return;\s*\}\s*applyInstantSuggestionsHeightLayout\(suggestionsContainer\);/,
+  /if \(shouldCollapse\) \{\s*SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\([\s\S]*?suggestionsContainer[\s\S]*?return;\s*\}\s*SUGGESTIONS_HEIGHT_LAYOUT\.applyNaturalSuggestionsHeightLayout\([\s\S]*?suggestionsContainer/,
   'collapse and reveal should both clear any stale height interpolation styles'
+);
+assert.doesNotMatch(
+  overlaySource,
+  /function applyInstantSuggestionsHeightLayout/,
+  'Overlay should not retain a private copy of the shared height-layout policy'
 );
 
 console.log('overlay instant result height tests passed');

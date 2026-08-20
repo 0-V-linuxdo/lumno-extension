@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-07-scope-focus-toggle-v33';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-19-natural-result-height-v34';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -393,7 +393,6 @@
     let modeMenuRequestId = 0;
     let modeMenuRevealFrame = 0;
     let modeMenuRevealFrameKind = '';
-    let modeMenuResultTransitionActive = false;
     let modeMenuFilterQuery = '';
     let renderedModeMenuEntries = [];
     let renderedModeMenuGroups = [];
@@ -3217,57 +3216,6 @@
       return Boolean(!destroyed && modeMenuOpen && !modeMenu.hidden);
     }
 
-    function clearModeMenuResultTransitionStyles() {
-      modeMenuResultTransitionActive = false;
-      modeMenu.removeAttribute('data-results-layout-transition');
-      removeStyle(modeMenu, 'transition');
-      removeStyle(modeMenu, 'will-change');
-    }
-
-    function beginModeMenuResultTransition(transition) {
-      if (!isModeMenuVisible()) {
-        return false;
-      }
-      cancelModeMenuRevealFrame();
-      clearModeMenuResultTransitionStyles();
-      modeMenuResultTransitionActive = true;
-      modeMenu.setAttribute('data-results-layout-transition', 'true');
-      modeMenu.style.setProperty('transition', 'none', 'important');
-      modeMenu.style.setProperty('will-change', 'transform', 'important');
-      setModeMenuResultOffset(transition && transition.fromOffset);
-      return true;
-    }
-
-    function targetModeMenuResultTransition(transition) {
-      if (!modeMenuResultTransitionActive || !isModeMenuVisible()) {
-        return false;
-      }
-      const duration = Math.max(0, Number(transition && transition.duration) || 0);
-      const easing = String(
-        (transition && transition.easing) || 'cubic-bezier(0.22, 1, 0.36, 1)'
-      );
-      modeMenu.style.setProperty(
-        'transition',
-        `opacity 170ms ease, transform ${duration}ms ${easing}`,
-        'important'
-      );
-      setModeMenuResultOffset(transition && transition.toOffset);
-      if (modeMenu.getAttribute('data-open') !== 'true') {
-        modeMenu.setAttribute('data-open', 'true');
-      }
-      return true;
-    }
-
-    function finishModeMenuResultTransition() {
-      const wasActive = modeMenuResultTransitionActive;
-      clearModeMenuResultTransitionStyles();
-      if (wasActive && isModeMenuVisible() &&
-          modeMenu.getAttribute('data-open') !== 'true') {
-        revealModeMenuSurface();
-      }
-      return wasActive;
-    }
-
     function revealModeMenuSurface() {
       const guardedFrame = (callback) => requestModeMenuRevealFrame(() => {
         if (modeMenuOpen && !modeMenu.hidden) {
@@ -3428,7 +3376,6 @@
       resetModeTagRemovalConfirmation();
       modeMenu.removeAttribute('aria-busy');
       cancelModeMenuRevealFrame();
-      clearModeMenuResultTransitionStyles();
       if (modeMenuCursorTooltipController &&
           typeof modeMenuCursorTooltipController.hide === 'function') {
         modeMenuCursorTooltipController.hide();
@@ -3635,7 +3582,6 @@
       modeMenuRequestId += 1;
       modeMenuPending = false;
       cancelModeMenuRevealFrame();
-      clearModeMenuResultTransitionStyles();
       resetModeMenuDoubleTab();
       resetModeTagRemovalConfirmation();
       cancelInputModePrefixAnimation();
@@ -3692,10 +3638,8 @@
       setProviderPrefix,
       setPrefixText,
       clearProviderPrefix,
-      beginModeMenuResultTransition,
       closeModeMenu,
       fitModeMenuWithinViewport,
-      finishModeMenuResultTransition,
       isModeMenuVisible,
       menuElement: modeMenu,
       getModeMenuFilterQuery: () => modeMenuFilterQuery,
@@ -3705,7 +3649,6 @@
       resetModeMenuDoubleTab,
       resetModeTagRemovalConfirmation,
       setModeMenuResultOffset,
-      targetModeMenuResultTransition,
       setTabHintVisible,
       shouldCompleteModeMenuDoubleTab,
       handleModeMenuTabFocusToggle,

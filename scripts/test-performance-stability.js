@@ -177,7 +177,7 @@ assertMatches(
 );
 assertMatches(
   newtabJs,
-  /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?const remoteRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!remoteRequestSent\) \{[\s\S]*?renderSuggestions\(localSuggestions, requestQuery,[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderPendingSuggestions\(requestQuery,/,
+  /function requestSuggestions\(query, options\) \{[\s\S]*?const localRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchSuggestions'[\s\S]*?const remoteRequestSent = sendRuntimeMessage\(\{[\s\S]*?action: 'getSearchEngineSuggestions'[\s\S]*?if \(!remoteRequestSent\) \{[\s\S]*?renderSuggestions\(localSuggestions, requestQuery\);[\s\S]*?if \(!localRequestSent\) \{[\s\S]*?renderPendingSuggestions\(requestQuery\);/,
   'new tab suggestions should preserve pending local results when the extension runtime is unavailable'
 );
 assertMatches(

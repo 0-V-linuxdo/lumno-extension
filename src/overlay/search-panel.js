@@ -1,7 +1,7 @@
 'use strict';
 
 window._x_extension_search_overlay_runtime_version_2026_unique_ =
-  '2026-08-17-fast-reveal-navigation-intent-v11';
+  '2026-08-19-natural-suggestions-height-v12';
 window._x_extension_search_overlay_open_2026_unique_ = false;
 
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
@@ -79,6 +79,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const SHORTCUT_FAVICON = window.LumnoShortcutFavicon || {};
   const SUGGESTION_ACTION_MODEL = window.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = window.LumnoSuggestionNavigation || {};
+  const SUGGESTIONS_HEIGHT_LAYOUT = window.LumnoSuggestionsHeightLayout || {};
   const SEARCH_INPUT_HISTORY = window.LumnoSearchInputHistory || {};
   const OVERLAY_SUGGESTIONS_VIEW = window.LumnoOverlaySuggestionsView || {};
   const OVERLAY_TOAST = window.LumnoToast || {};
@@ -110,6 +111,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   if (typeof SUGGESTION_NAVIGATION.scrollItemIntoView !== 'function' ||
       typeof SUGGESTION_NAVIGATION.getVisibleRowsViewportHeight !== 'function') {
     console.warn('Lumno: suggestion navigation helper not available.');
+    return;
+  }
+  if (typeof SUGGESTIONS_HEIGHT_LAYOUT.applyNaturalSuggestionsHeightLayout !== 'function') {
+    console.warn('Lumno: suggestions height layout helper not available.');
     return;
   }
   if (typeof SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity !== 'function' ||
@@ -2529,6 +2534,17 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       const visibleRowLimit = normalizeSearchResultDisplayLimit(
         overlaySearchResultDisplayLimit
       );
+      const normalizedItemCount = Math.max(0, Math.floor(Number(itemCount) || 0));
+      // A complete result set should keep its natural height. Only reserve a
+      // scrollbar and cap the viewport when there are rows that actually need
+      // to scroll; otherwise one opened tab can look clipped by an empty
+      // scrollbar gutter.
+      if (normalizedItemCount <= visibleRowLimit) {
+        suggestionsContainer.style.removeProperty('--x-ov-suggestions-max-height');
+        suggestionsContainer.style.removeProperty('--x-ov-open-tabs-scrollbar-gutter');
+        suggestionsContainer.removeAttribute('data-open-tabs-visible-row-limit');
+        return;
+      }
       suggestionsContainer.setAttribute(
         'data-open-tabs-visible-row-limit',
         String(visibleRowLimit)
@@ -2635,7 +2651,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           : 'var(--x-ov-content-radius, 27px) var(--x-ov-content-radius, 27px) 0 0'
       );
       if (shouldCollapse) {
-        applyInstantSuggestionsHeightLayout(suggestionsContainer);
+        SUGGESTIONS_HEIGHT_LAYOUT.applyNaturalSuggestionsHeightLayout(
+          suggestionsContainer
+        );
         suggestionsContainer.style.setProperty('max-height', '0px', inputUsesIsolatedStyles ? '' : 'important');
         suggestionsContainer.style.setProperty('min-height', '0px', inputUsesIsolatedStyles ? '' : 'important');
         suggestionsContainer.style.setProperty('padding-top', '0px', inputUsesIsolatedStyles ? '' : 'important');
@@ -2647,7 +2665,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         syncSearchModeMenuResultOffset();
         return;
       }
-      applyInstantSuggestionsHeightLayout(suggestionsContainer);
+      SUGGESTIONS_HEIGHT_LAYOUT.applyNaturalSuggestionsHeightLayout(
+        suggestionsContainer
+      );
       if (!wasCollapsed) {
         setInputDividerVisible(true);
         if (shouldSyncLayout) {
@@ -3283,7 +3303,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       light: {
         bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.95) 100%)',
         modeMenuBg: '#FFFFFF',
-        border: 'rgba(0, 0, 0, 0.14)',
+        border: 'var(--x-lumno-search-shell-border-light, rgba(0, 0, 0, 0.14))',
         shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 2px 5px -2px rgba(15, 23, 42, 0.11), 0 16px 42px -12px rgba(15, 23, 42, 0.17), 0 48px 112px -30px rgba(15, 23, 42, 0.19)',
         text: '#111827',
         subtext: '#6B7280',
@@ -3306,7 +3326,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         bg: 'rgba(20, 20, 20, 0.62)',
         lightPageBg: 'rgba(20, 20, 20, 0.82)',
         modeMenuBg: '#141414',
-        border: 'rgba(255, 255, 255, 0.16)',
+        border: 'var(--x-lumno-search-shell-border-dark, rgba(255, 255, 255, 0.16))',
         shadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.28), 0 18px 48px -14px rgba(0, 0, 0, 0.42), 0 52px 124px -34px rgba(0, 0, 0, 0.52)',
         text: '#E5E7EB',
         subtext: '#9CA3AF',
@@ -7374,29 +7394,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return menu && !menu.hidden ? menu : null;
     }
 
-    function applyInstantSuggestionsHeightLayout(container) {
-      if (!container) {
-        return;
-      }
-      container.removeAttribute('data-height-clipped');
-      [
-        'flex',
-        'height',
-        'overflow',
-        'overflow-x',
-        'overflow-y',
-        'padding-top',
-        'padding-bottom',
-        'transition',
-        'will-change'
-      ].forEach((property) => container.style.removeProperty(property));
-      // Results adopt their natural height in the same render commit. Keep an
-      // explicit guard so page styles cannot reintroduce a container tween.
-      container.style.setProperty('transition', 'none', 'important');
-    }
-
     function commitSuggestionsNaturalHeightAfterRender() {
-      applyInstantSuggestionsHeightLayout(suggestionsContainer);
+      SUGGESTIONS_HEIGHT_LAYOUT.applyNaturalSuggestionsHeightLayout(
+        suggestionsContainer
+      );
       syncSearchModeMenuResultOffset();
     }
 

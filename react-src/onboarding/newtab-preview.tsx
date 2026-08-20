@@ -477,9 +477,6 @@ function RecentCard({
             item={item}
           />
           <div className="x-nt-recent-name">{String(item.siteName || '')}</div>
-          <button className="x-nt-recent-dismiss" tabIndex={-1} type="button">
-            <Icon className="ri-subtract-line" />
-          </button>
         </div>
         <span className="x-nt-recent-title">{title}</span>
       </div>

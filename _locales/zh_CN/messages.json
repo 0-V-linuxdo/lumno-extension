@@ -550,6 +550,12 @@
   "newtab_top_content_off": {
     "message": "隐藏"
   },
+  "newtab_time_font_weight_title": {
+    "message": "时间字重"
+  },
+  "newtab_time_show_seconds_title": {
+    "message": "显示秒数"
+  },
   "settings_newtab_shortcuts_title": {
     "message": "快捷方式"
   },
@@ -1797,6 +1803,9 @@
   },
   "recent_dismiss_pinned_toast": {
     "message": "已取消置顶并移除"
+  },
+  "recent_context_menu_label": {
+    "message": "最近访问操作"
   },
   "tab_switcher_title": {
     "message": "最近标签页"

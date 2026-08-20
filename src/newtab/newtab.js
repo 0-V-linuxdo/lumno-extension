@@ -168,6 +168,15 @@
     '_x_extension_simple_mode_enabled_2026_unique_';
   const NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY = SETTINGS.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY ||
     '_x_extension_newtab_wordmark_visible_2026_unique_';
+  const NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY =
+    SETTINGS.NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY ||
+    '_x_extension_newtab_time_font_weight_2026_unique_';
+  const NEWTAB_TIME_FONT_WEIGHT_MIN = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MIN) || 300;
+  const NEWTAB_TIME_FONT_WEIGHT_MAX = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MAX) || 800;
+  const NEWTAB_TIME_FONT_WEIGHT_DEFAULT = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_DEFAULT) || 320;
+  const NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY =
+    SETTINGS.NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY ||
+    '_x_extension_newtab_time_seconds_visible_2026_unique_';
   const NEWTAB_ZEN_MODE_STORAGE_KEY = '_x_extension_newtab_zen_mode_2026_unique_';
   const NEWTAB_THEME_MODE_STORAGE_KEY = '_x_extension_newtab_theme_mode_2026_unique_';
   const NEWTAB_THEME_SCOPE_STORAGE_KEY = '_x_extension_newtab_theme_scope_2026_unique_';
@@ -214,6 +223,7 @@
   const SITE_SEARCH_STORE = globalThis.LumnoSiteSearchStore || {};
   const SUGGESTION_ACTION_MODEL = globalThis.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = globalThis.LumnoSuggestionNavigation || {};
+  const SUGGESTIONS_HEIGHT_LAYOUT = globalThis.LumnoSuggestionsHeightLayout || {};
   const SEARCH_INPUT_HISTORY = globalThis.LumnoSearchInputHistory || {};
   const SEARCH_INPUT_MODE = globalThis.LumnoSearchInputMode || {};
   const FEATURE_HINTS = globalThis.LumnoFeatureHints || {};
@@ -314,6 +324,7 @@
       typeof SUGGESTION_ACTION_MODEL.getSuggestionStructureIdentity !== 'function' ||
       typeof SUGGESTION_ACTION_MODEL.getSuggestionPresentationFingerprint !== 'function' ||
       typeof SUGGESTION_ACTION_MODEL.getSuggestionUpdateKind !== 'function' ||
+      typeof SUGGESTIONS_HEIGHT_LAYOUT.applyNaturalSuggestionsHeightLayout !== 'function' ||
       typeof NEWTAB_SHORTCUT_DIALOG.createShortcutDialog !== 'function' ||
       typeof NEWTAB_SHORTCUTS_VIEW.createShortcutsView !== 'function' ||
       typeof NEWTAB_WALLPAPER_LOCAL_STORE.createWallpaperLocalStore !== 'function' ||
@@ -435,7 +446,6 @@
   let localSearchScopeTriggerState = null;
   let lastRenderedQuery = '';
   let lastRenderedActionContextKey = '';
-  let searchModeResultTransitionQuery = '';
   let suggestionsView = null;
   let recentSourceItems = [];
   let pinnedRecentSites = [];
@@ -448,7 +458,6 @@
   let toastElement = null;
   let toastController = null;
   let layoutController = null;
-  let searchModeMenuResultResizeActive = false;
   let faviconViewRuntime = null;
   let searchEntryRestoreLayoutLockUntil = 0;
   let newtabResizeLayoutLocked = false;
@@ -501,6 +510,8 @@
   let engagementNoticeController = null;
   let pageNoticeController = null;
   let newtabTopContentMode = 'brand';
+  let newtabTimeFontWeight = NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
+  let newtabTimeSecondsVisible = false;
   let newtabInputAutoFocusEnabled = false;
   let numberShortcutInstantEnabled = false;
   let macosCtrlSuggestionNavigationEnabled = false;
@@ -534,6 +545,8 @@
   let bookmarkMoveHistoryBusy = false;
   let bookmarkContextMenu = null;
   let bookmarkContextMenuTarget = null;
+  let recentContextMenu = null;
+  let recentContextMenuTarget = null;
   let bookmarkPendingLayoutAnimation = null;
   let bookmarkWheelLastAt = 0;
   let recentMouseInsideSection = false;
@@ -647,6 +660,16 @@
       },
       getViewportTopInset: getNewtabViewportTopPaddingPx
     });
+  const recentContextMenuSelectController =
+    NEWTAB_SELECT_MENU.createController({
+      documentObj: document,
+      windowObj: window,
+      onBeforeOpen: () => {
+        hideCursorTooltip();
+        hideTopActionTooltip();
+      },
+      getViewportTopInset: getNewtabViewportTopPaddingPx
+    });
   const BOOKMARK_WHEEL_SWITCH_COOLDOWN_MS = 220;
   const BOOKMARK_HOVER_DELAY_FROM_RECENT_MS = 56;
   const BOOKMARK_HOVER_RECENT_TRANSFER_WINDOW_MS = 220;
@@ -665,6 +688,11 @@
   const BOOKMARK_CONTEXT_MENU_MAX_WIDTH_PX = 240;
   const BOOKMARK_CONTEXT_MENU_PORTAL_Z_INDEX = 10060;
   const BOOKMARK_CONTEXT_MENU_PORTAL_OFFSET_PX = -6;
+  const RECENT_CONTEXT_MENU_REMOVE_VALUE = 'remove';
+  const RECENT_CONTEXT_MENU_MIN_WIDTH_PX = 124;
+  const RECENT_CONTEXT_MENU_MAX_WIDTH_PX = 180;
+  const RECENT_CONTEXT_MENU_PORTAL_Z_INDEX = 10050;
+  const RECENT_CONTEXT_MENU_PORTAL_OFFSET_PX = -6;
   const SEARCH_LAYOUT_MIN_TOP_PX = 28;
   const SEARCH_LAYOUT_MIN_BOTTOM_PX = 20;
   const SEARCH_LAYOUT_UPSHIFT_RATIO = 0.06;
@@ -1269,6 +1297,26 @@
     return value === 'off' || value === false ? 'off' : 'brand';
   }
 
+  function normalizeNewtabTimeSecondsVisible(value) {
+    return typeof SETTINGS.normalizeNewtabTimeSecondsVisible === 'function'
+      ? SETTINGS.normalizeNewtabTimeSecondsVisible(value)
+      : value === true;
+  }
+
+  function normalizeNewtabTimeFontWeight(value) {
+    if (typeof SETTINGS.normalizeNewtabTimeFontWeight === 'function') {
+      return SETTINGS.normalizeNewtabTimeFontWeight(value);
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
+    }
+    return Math.min(
+      NEWTAB_TIME_FONT_WEIGHT_MAX,
+      Math.max(NEWTAB_TIME_FONT_WEIGHT_MIN, Math.round(number))
+    );
+  }
+
   function normalizeNewtabShortcutsVisible(value) {
     return typeof SETTINGS.normalizeNewtabShortcutsVisible === 'function'
       ? SETTINGS.normalizeNewtabShortcutsVisible(value)
@@ -1768,9 +1816,11 @@
     topContentController.render({
       animateEntry: Boolean(animateEntry),
       ariaLabel: 'Lumno Chrome Web Store',
+      fontWeight: newtabTimeFontWeight,
       imageSrc: '../../assets/images/lumno-wordmark.svg',
       locale: document.documentElement ? document.documentElement.lang : undefined,
-      mode: newtabTopContentMode === 'time' ? 'time' : 'brand'
+      mode: newtabTopContentMode === 'time' ? 'time' : 'brand',
+      showSeconds: newtabTimeSecondsVisible
     });
     wordmarkImageEl = topContentController.getImage();
     wordmarkSolidEl = topContentController.getSolid();
@@ -1790,6 +1840,40 @@
       renderNewtabTopContent(false);
     }
     applyNewtabTopContentVisibility({ contentChanged, fromLayout });
+  }
+
+  function updateNewtabTimeSecondsVisibleUi() {
+    if (wallpaperRuntime && typeof wallpaperRuntime.updateTimeSecondsVisibleUi === 'function') {
+      wallpaperRuntime.updateTimeSecondsVisibleUi();
+    }
+  }
+
+  function updateNewtabTimeFontWeightUi() {
+    if (wallpaperRuntime && typeof wallpaperRuntime.updateTimeFontWeightUi === 'function') {
+      wallpaperRuntime.updateTimeFontWeightUi();
+    }
+  }
+
+  function setNewtabTimeFontWeight(value) {
+    const nextValue = normalizeNewtabTimeFontWeight(value);
+    const changed = nextValue !== newtabTimeFontWeight;
+    newtabTimeFontWeight = nextValue;
+    if (changed && newtabTopContentMode === 'time') {
+      renderNewtabTopContent(false);
+    }
+    updateNewtabTimeFontWeightUi();
+    return nextValue;
+  }
+
+  function setNewtabTimeSecondsVisible(value) {
+    const nextValue = normalizeNewtabTimeSecondsVisible(value);
+    const changed = nextValue !== newtabTimeSecondsVisible;
+    newtabTimeSecondsVisible = nextValue;
+    if (changed && newtabTopContentMode === 'time') {
+      renderNewtabTopContent(false);
+    }
+    updateNewtabTimeSecondsVisibleUi();
+    return nextValue;
   }
 
   function formatTabRankDebugText(tab) {
@@ -2691,6 +2775,8 @@
       overlay: NEWTAB_WALLPAPER_OVERLAY_STORAGE_KEY,
       effect: NEWTAB_WALLPAPER_EFFECT_STORAGE_KEY,
       topContentMode: NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+      timeFontWeight: NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+      timeSecondsVisible: NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
       favicon: NEWTAB_FAVICON_STORAGE_KEY
     },
     searchWidthConfig: NEWTAB_SEARCH_WIDTH_CONFIG,
@@ -2710,6 +2796,10 @@
     setTopContentMode: (value) => {
       setNewtabTopContentMode(value);
     },
+    getTimeFontWeight: () => newtabTimeFontWeight,
+    setTimeFontWeight: setNewtabTimeFontWeight,
+    getTimeSecondsVisible: () => newtabTimeSecondsVisible,
+    setTimeSecondsVisible: setNewtabTimeSecondsVisible,
     getSearchWidth: getEffectiveNewtabSearchWidth,
     setSearchWidth: (value, options) => {
       setNewtabSearchWidth(value, options);
@@ -4401,6 +4491,22 @@
       }
       setNewtabTopContentMode(nextValue);
     }
+    if (changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabTimeFontWeight(raw);
+      if (storageArea && raw !== nextValue) {
+        storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: nextValue });
+      }
+      setNewtabTimeFontWeight(nextValue);
+    }
+    if (changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabTimeSecondsVisible(raw);
+      if (storageArea && raw !== nextValue) {
+        storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: nextValue });
+      }
+      setNewtabTimeSecondsVisible(nextValue);
+    }
     if (changes[NEWTAB_ZEN_MODE_STORAGE_KEY]) {
       zenModeEnabled = normalizeZenModeEnabled(changes[NEWTAB_ZEN_MODE_STORAGE_KEY].newValue);
       applyZenMode();
@@ -4599,12 +4705,28 @@
       updateBookmarkGridHeightLock();
       updateBookmarkSectionPosition();
     });
-    storageArea.get([NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY], (result) => {
+    storageArea.get([
+      NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+      NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+      NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY
+    ], (result) => {
       const raw = result[NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY];
       const nextValue = normalizeNewtabTopContentMode(raw);
+      const rawFontWeight = result[NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY];
+      const nextFontWeight = normalizeNewtabTimeFontWeight(rawFontWeight);
+      const rawSecondsVisible = result[NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY];
+      const nextSecondsVisible = normalizeNewtabTimeSecondsVisible(rawSecondsVisible);
       if (raw !== nextValue) {
         storageArea.set({ [NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY]: nextValue });
       }
+      if (rawFontWeight !== nextFontWeight) {
+        storageArea.set({ [NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY]: nextFontWeight });
+      }
+      if (rawSecondsVisible !== nextSecondsVisible) {
+        storageArea.set({ [NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY]: nextSecondsVisible });
+      }
+      setNewtabTimeFontWeight(nextFontWeight);
+      setNewtabTimeSecondsVisible(nextSecondsVisible);
       setNewtabTopContentMode(nextValue);
       if (wallpaperRuntime && typeof wallpaperRuntime.updateTopContentModeUi === 'function') {
         wallpaperRuntime.updateTopContentModeUi();
@@ -4899,6 +5021,7 @@
     if (zenModeEnabled) {
       closeBookmarkCascadeMenu();
       closeShortcutContextMenu();
+      closeRecentContextMenu();
       closeShortcutDialog();
       closeWallpaperPanel();
       closeFeedbackPopover();
@@ -5176,6 +5299,8 @@
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
     NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
+    NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+    NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
     NEWTAB_THEME_SCOPE_STORAGE_KEY,
     NEWTAB_ZEN_MODE_STORAGE_KEY,
@@ -6955,6 +7080,9 @@
     }
     section.setAttribute('data-content-visible', visible ? 'true' : 'false');
     section.setAttribute('data-visible', visible && !zenModeEnabled ? 'true' : 'false');
+    if (section === recentSection && (!visible || zenModeEnabled)) {
+      closeRecentContextMenu();
+    }
     scheduleWallpaperAdaptiveToneUpdate();
   }
 
@@ -7365,6 +7493,25 @@
     }
   }
 
+  function updateRecentContextMenuLanguageStrings() {
+    if (!recentContextMenu || !recentContextMenuSelectController) {
+      return;
+    }
+    if (recentContextMenu.trigger) {
+      recentContextMenu.trigger.setAttribute(
+        'aria-label',
+        t('recent_context_menu_label', 'Recent site actions')
+      );
+    }
+    if (typeof recentContextMenuSelectController.setOptions === 'function') {
+      recentContextMenuSelectController.setOptions(
+        recentContextMenu.control,
+        getRecentContextMenuOptions(recentContextMenuTarget),
+        RECENT_CONTEXT_MENU_REMOVE_VALUE
+      );
+    }
+  }
+
   function updateShortcutLanguageStrings() {
     if (shortcutSection) {
       shortcutSection.setAttribute('aria-label', t('newtab_shortcuts_section_label', 'Shortcuts'));
@@ -7383,6 +7530,7 @@
     }
     updateShortcutContextMenuLanguageStrings();
     updateBookmarkContextMenuLanguageStrings();
+    updateRecentContextMenuLanguageStrings();
   }
 
   function closeShortcutDialog(options) {
@@ -7883,6 +8031,7 @@
     if (!shortcutContextMenu || !shortcutContextMenuSelectController) {
       return;
     }
+    closeRecentContextMenu();
     hideShortcutTooltip();
     resetShortcutDockHover();
     shortcutContextMenuTarget = target;
@@ -8126,6 +8275,7 @@
       return;
     }
     closeShortcutContextMenu();
+    closeRecentContextMenu();
     closeBookmarkContextMenu();
     bookmarkContextMenuTarget = target;
     if (target.element && typeof target.element.setAttribute === 'function') {
@@ -8164,6 +8314,229 @@
       sourceKind: payload.sourceKind === 'cascade' ? 'cascade' : 'card',
       element
     }, event);
+  }
+
+  function getRecentContextMenuOptions(target) {
+    return [
+      {
+        action: RECENT_CONTEXT_MENU_REMOVE_VALUE,
+        value: RECENT_CONTEXT_MENU_REMOVE_VALUE,
+        label: target && target.item
+          ? getRecentDismissTooltip(target.item)
+          : t('recent_dismiss_tooltip', 'Remove')
+      }
+    ];
+  }
+
+  function isRecentContextMenuOpen() {
+    return Boolean(
+      recentContextMenu &&
+      recentContextMenuSelectController &&
+      recentContextMenuSelectController.isOpen(recentContextMenu.control)
+    );
+  }
+
+  function isRecentContextMenuNode(node) {
+    if (!node || !recentContextMenu) {
+      return false;
+    }
+    const { control, menu } = recentContextMenu;
+    return Boolean(
+      (control && (node === control || (typeof control.contains === 'function' && control.contains(node)))) ||
+      (menu && (node === menu || (typeof menu.contains === 'function' && menu.contains(node))))
+    );
+  }
+
+  function clearRecentContextMenuTargetVisual() {
+    const element = recentContextMenuTarget && recentContextMenuTarget.element;
+    if (element && typeof element.removeAttribute === 'function') {
+      element.removeAttribute('data-recent-context-menu-open');
+    }
+  }
+
+  function closeRecentContextMenu() {
+    clearRecentContextMenuTargetVisual();
+    if (recentContextMenu && recentContextMenuSelectController) {
+      recentContextMenuSelectController.setOpen(recentContextMenu.control, false);
+    }
+    recentContextMenuTarget = null;
+  }
+
+  function getRecentContextMenuPoint(target, event) {
+    const clientX = Number(event && event.clientX);
+    const clientY = Number(event && event.clientY);
+    if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+      return { x: clientX, y: clientY };
+    }
+    const element = target && target.element;
+    if (element && typeof element.getBoundingClientRect === 'function') {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + (rect.width / 2),
+        y: rect.bottom
+      };
+    }
+    return { x: 0, y: 0 };
+  }
+
+  function setRecentContextMenuPosition(target, event) {
+    if (!recentContextMenu || !recentContextMenu.control) {
+      return;
+    }
+    const point = getRecentContextMenuPoint(target, event);
+    recentContextMenu.control.style.left = `${Math.round(point.x)}px`;
+    recentContextMenu.control.style.top = `${Math.round(point.y)}px`;
+  }
+
+  function removeRecentSiteFromContextMenu(item) {
+    return Promise.resolve(hideRecentSiteTemporarily(item)).then((result) => {
+      if (!result || !result.hidden) {
+        return;
+      }
+      showToast(
+        result.wasPinned
+          ? t(
+            'recent_dismiss_pinned_toast',
+            '已取消置顶并从最近访问移除，再次访问后会重新出现'
+          )
+          : t(
+            'recent_dismiss_toast',
+            '已从最近访问移除，再次访问后会重新出现'
+          ),
+        false
+      );
+    }).catch(() => {
+      showToast(t('toast_error', '操作失败，请重试'), true);
+    });
+  }
+
+  function handleRecentContextMenuAction(actionValue) {
+    const action = String(actionValue || '');
+    const target = recentContextMenuTarget;
+    closeRecentContextMenu();
+    if (!target || !target.item || action !== RECENT_CONTEXT_MENU_REMOVE_VALUE) {
+      return;
+    }
+    removeRecentSiteFromContextMenu(target.item);
+  }
+
+  function handleRecentContextMenuActionClick(event) {
+    const target = event && event.target;
+    const option = target && typeof target.closest === 'function'
+      ? target.closest('._x_extension_select_option_2024_unique_')
+      : null;
+    if (!option || !recentContextMenu || !recentContextMenu.menu ||
+        !recentContextMenu.menu.contains(option)) {
+      return;
+    }
+    event.stopPropagation();
+    handleRecentContextMenuAction(option.getAttribute('data-value'));
+  }
+
+  function handleRecentContextMenuDocumentPointerDown(event) {
+    if (!recentContextMenuTarget || isRecentContextMenuNode(event.target)) {
+      return;
+    }
+    closeRecentContextMenu();
+  }
+
+  function handleRecentContextMenuDocumentKeyDown(event) {
+    if (event && event.key === 'Escape' &&
+        (recentContextMenuTarget || isRecentContextMenuOpen())) {
+      closeRecentContextMenu();
+    }
+  }
+
+  function createRecentContextMenu() {
+    if (!recentContextMenuSelectController ||
+        typeof recentContextMenuSelectController.createSelect !== 'function') {
+      return null;
+    }
+    const created = recentContextMenuSelectController.createSelect({
+      id: '_x_extension_newtab_recent_context_menu_2026_unique_',
+      selectId: '_x_extension_newtab_recent_context_menu_select_2026_unique_',
+      className: 'x-nt-shortcut-context-menu x-nt-recent-context-menu',
+      iconOnly: true,
+      triggerIconClass: 'ri-more-line',
+      menuClassName: 'x-nt-shortcut-context-menu-portal x-nt-recent-context-menu-portal',
+      menuAlign: 'middle',
+      menuWidth: 'content',
+      menuMinWidth: RECENT_CONTEXT_MENU_MIN_WIDTH_PX,
+      menuMaxWidth: RECENT_CONTEXT_MENU_MAX_WIDTH_PX,
+      menuPortal: true,
+      menuPortalZIndex: RECENT_CONTEXT_MENU_PORTAL_Z_INDEX,
+      menuPortalOffset: RECENT_CONTEXT_MENU_PORTAL_OFFSET_PX,
+      value: RECENT_CONTEXT_MENU_REMOVE_VALUE,
+      ariaLabel: t('recent_context_menu_label', 'Recent site actions'),
+      options: getRecentContextMenuOptions(),
+      onAction(payload) {
+        handleRecentContextMenuAction(payload && payload.action);
+      }
+    });
+    const control = created.wrapper;
+    const select = created.select;
+    const trigger = created.trigger;
+    const menu = created.menu;
+    if (!control || !select || !trigger || !menu) {
+      return null;
+    }
+    trigger.tabIndex = -1;
+    const stopContextMenuEvent = (event) => {
+      event.stopPropagation();
+    };
+    [control, trigger, menu].forEach((element) => {
+      element.addEventListener('pointerdown', stopContextMenuEvent);
+      element.addEventListener('click', stopContextMenuEvent);
+      element.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    });
+    menu.addEventListener('click', handleRecentContextMenuActionClick);
+    document.addEventListener('pointerdown', handleRecentContextMenuDocumentPointerDown, true);
+    document.addEventListener('keydown', handleRecentContextMenuDocumentKeyDown, true);
+    (document.body || document.documentElement).appendChild(control);
+    return { control, select, trigger, menu };
+  }
+
+  function openRecentContextMenu(target, event) {
+    if (!target || !target.item || !target.element) {
+      return;
+    }
+    if (!recentContextMenu) {
+      recentContextMenu = createRecentContextMenu();
+    }
+    if (!recentContextMenu || !recentContextMenuSelectController) {
+      return;
+    }
+    closeShortcutContextMenu();
+    closeBookmarkContextMenu();
+    closeRecentContextMenu();
+    recentContextMenuTarget = target;
+    target.element.setAttribute('data-recent-context-menu-open', 'true');
+    setRecentContextMenuPosition(target, event);
+    if (typeof recentContextMenuSelectController.setOptions === 'function') {
+      recentContextMenuSelectController.setOptions(
+        recentContextMenu.control,
+        getRecentContextMenuOptions(target),
+        RECENT_CONTEXT_MENU_REMOVE_VALUE
+      );
+    }
+    recentContextMenuSelectController.setOpen(recentContextMenu.control, true);
+  }
+
+  function handleRecentCardContextMenu(payload) {
+    const event = payload && payload.event;
+    const item = payload && payload.item;
+    const element = payload && payload.element;
+    if (!event || !item || !element || !canDismissRecentCard()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    hideCursorTooltip();
+    hideTopActionTooltip();
+    openRecentContextMenu({ item, element }, event);
   }
 
   function requestBookmarkFolderTabGroup(folderId, title) {
@@ -9484,10 +9857,7 @@
     isPinned: isRecentSitePinned,
     getPinnedCount: () => pinnedRecentSites.length,
     getMaxPinnedCount: () => MAX_PINNED_RECENT_SITES,
-    canDismiss: canDismissRecentCard,
-    getDismissTooltip: getRecentDismissTooltip,
     updatePinButton: updateRecentPinButton,
-    updateDismissButton: updateRecentDismissButton,
     showToast,
     showTopActionTooltip,
     hideTopActionTooltip,
@@ -9496,7 +9866,7 @@
     hideCursorTooltip,
     openUrl: openUrlFromNewtabCard,
     togglePinned: togglePinnedRecentSite,
-    hideTemporarily: hideRecentSiteTemporarily
+    onItemContextMenu: handleRecentCardContextMenu
   });
   if (recentModeMenu) {
     recentHeader.appendChild(recentModeMenu.control);
@@ -12006,25 +12376,6 @@
     }
   }
 
-  function updateRecentDismissButton(button, item) {
-    if (!button) {
-      return;
-    }
-    const enabled = canDismissRecentCard();
-    const label = getRecentDismissTooltip(item);
-    button.setAttribute('aria-label', label);
-    button.setAttribute('data-tooltip', label);
-    button.removeAttribute('title');
-    const icon = button.querySelector('[data-recent-dismiss-icon]');
-    if (icon) {
-      icon.className = 'ri-icon ri-size-16 ri-subtract-line';
-    }
-    button.disabled = !enabled;
-    button.tabIndex = enabled ? 0 : -1;
-    button.setAttribute('aria-hidden', enabled ? 'false' : 'true');
-    button.style.setProperty('display', enabled ? 'inline-flex' : 'none');
-  }
-
   function hideToast() {
     if (toastController && typeof toastController.hide === 'function') {
       toastController.hide();
@@ -12138,51 +12489,9 @@
     return Math.max(0, Number(rect && rect.height) || 0);
   }
 
-  function clearSearchModeMenuResultResize() {
-    searchModeMenuResultResizeActive = false;
-    if (inputModeController &&
-        typeof inputModeController.finishModeMenuResultTransition === 'function') {
-      inputModeController.finishModeMenuResultTransition();
-    }
-  }
-
-  function beginSearchModeMenuResultResize(transition) {
-    clearSearchModeMenuResultResize();
-    if (!inputModeController ||
-        typeof inputModeController.beginModeMenuResultTransition !== 'function') {
-      return;
-    }
-    searchModeMenuResultResizeActive = inputModeController.beginModeMenuResultTransition({
-      fromOffset: transition.fromHeight
-    });
-  }
-
-  function targetSearchModeMenuResultResize(transition) {
-    if (!searchModeMenuResultResizeActive || !inputModeController ||
-        typeof inputModeController.targetModeMenuResultTransition !== 'function') {
-      return;
-    }
-    inputModeController.targetModeMenuResultTransition({
-      duration: transition.duration,
-      easing: transition.easing,
-      toOffset: transition.toHeight
-    });
-  }
-
-  function finishSearchModeMenuResultResize() {
-    const wasActive = searchModeMenuResultResizeActive;
-    clearSearchModeMenuResultResize();
-    if (wasActive) {
-      syncSearchModeMenuResultOffset();
-    }
-  }
-
   function syncSearchModeMenuResultOffset() {
     if (!inputModeController ||
         typeof inputModeController.setModeMenuResultOffset !== 'function') {
-      return;
-    }
-    if (searchModeMenuResultResizeActive) {
       return;
     }
     const fitMaxHeightProperty =
@@ -13807,8 +14116,9 @@
         return false;
       }
       if (expectedInputValue.trim()) {
-        beginSearchModeResultTransition(expectedInputValue);
-        activateSiteSearch(provider, { preserveResults: true });
+        activateSiteSearch(provider, {
+          preserveResults: shouldPreserveSearchModeResults(expectedInputValue)
+        });
         restoreSearchModeQuery(expectedInputValue);
       } else {
         activateSiteSearch(provider);
@@ -13833,39 +14143,8 @@
     inputParts.input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function beginSearchModeResultTransition(rawQuery) {
-    const query = String(rawQuery || '').trim();
-    if (!query) {
-      return false;
-    }
-    searchModeResultTransitionQuery = query;
-    if (layoutController &&
-        typeof layoutController.beginSuggestionsInputSession === 'function') {
-      layoutController.beginSuggestionsInputSession({
-        allowFromZero: true,
-        autoSettle: false
-      });
-    }
-    return true;
-  }
-
-  function isSearchModeResultTransitionPending(query) {
-    return Boolean(
-      searchModeResultTransitionQuery &&
-      searchModeResultTransitionQuery === String(query || '').trim()
-    );
-  }
-
-  function finishSearchModeResultTransition(query) {
-    if (!isSearchModeResultTransitionPending(query)) {
-      return false;
-    }
-    searchModeResultTransitionQuery = '';
-    if (layoutController &&
-        typeof layoutController.finishSuggestionsInputSession === 'function') {
-      layoutController.finishSuggestionsInputSession();
-    }
-    return true;
+  function shouldPreserveSearchModeResults(rawQuery) {
+    return Boolean(String(rawQuery || '').trim());
   }
 
   function selectSearchModeMenuItem(item) {
@@ -13873,7 +14152,7 @@
       return;
     }
     const rawQuery = inputParts.input.value || '';
-    const preserveResults = beginSearchModeResultTransition(rawQuery);
+    const preserveResults = shouldPreserveSearchModeResults(rawQuery);
     if (item.kind === 'local') {
       activateLocalSearchScope(
         { sourceType: item.sourceType },
@@ -14601,11 +14880,6 @@
 
   function clearSearchSuggestions() {
     directNavigationSettleController.cancel();
-    searchModeResultTransitionQuery = '';
-    if (layoutController &&
-        typeof layoutController.finishSuggestionsInputSession === 'function') {
-      layoutController.finishSuggestionsInputSession({ animate: false });
-    }
     inlineSearchState = null;
     siteSearchTriggerState = null;
     localSearchScopeTriggerState = null;
@@ -14618,14 +14892,11 @@
     lastRenderedActionContextKey = '';
   }
 
-  function renderSuggestions(suggestions, query, options) {
+  function renderSuggestions(suggestions, query) {
     if (!query) {
       clearSearchSuggestions();
       return;
     }
-    const renderOptions = options && typeof options === 'object' ? options : {};
-    const settleHeightAfterRemoteMix =
-      renderOptions.settleHeightAfterRemoteMix === true;
     lastSuggestionResponse = Array.isArray(suggestions) ? suggestions : [];
 
     getShortcutRules().then((rules) => {
@@ -14971,17 +15242,6 @@
       });
       const canAppend = updateKind === 'append';
       const startIndex = canAppend ? currentSuggestions.length : 0;
-      const shouldAnimateSuggestionsResize = Boolean(
-        canAppend &&
-        startIndex > 0 &&
-        startIndex < allSuggestions.length &&
-        layoutController &&
-        typeof layoutController.captureSuggestionsResizeState === 'function' &&
-        typeof layoutController.animateSuggestionsResize === 'function'
-      );
-      const previousSuggestionsResizeState = shouldAnimateSuggestionsResize
-        ? layoutController.captureSuggestionsResizeState()
-        : null;
 
       currentSuggestions = allSuggestions;
       lastRenderedQuery = query;
@@ -15007,24 +15267,6 @@
       if (updateKind !== 'highlight') {
         updateSelection();
         setSuggestionsVisible(true);
-      }
-      const searchModeResultTransitionPending =
-        isSearchModeResultTransitionPending(query);
-      if ((updateKind === 'append' || updateKind === 'structure' ||
-          searchModeResultTransitionPending) &&
-          layoutController &&
-          typeof layoutController.holdSuggestionsInputHeight === 'function') {
-        layoutController.holdSuggestionsInputHeight();
-      }
-      if (searchModeResultTransitionPending) {
-        finishSearchModeResultTransition(query);
-      }
-      if (previousSuggestionsResizeState) {
-        layoutController.animateSuggestionsResize(previousSuggestionsResizeState);
-      }
-      if (settleHeightAfterRemoteMix && layoutController &&
-          typeof layoutController.finishSuggestionsInputSession === 'function') {
-        layoutController.finishSuggestionsInputSession();
       }
     });
   }
@@ -15067,13 +15309,6 @@
         requestSeq
       });
     }
-    const waitForRemoteMixHeight = Boolean(
-      !requestLocalSearchScope && !siteSearchState && layoutController &&
-      typeof layoutController.beginSuggestionsInputSession === 'function'
-    );
-    if (waitForRemoteMixHeight) {
-      layoutController.beginSuggestionsInputSession({ autoSettle: false });
-    }
     if (remoteSuggestionDebounceTimer) {
       clearTimeout(remoteSuggestionDebounceTimer);
       remoteSuggestionDebounceTimer = null;
@@ -15090,9 +15325,7 @@
         requestSuggestions(requestQuery, { immediate: true, retryCount: retryCount + 1 });
         return;
       }
-      renderPendingSuggestions(requestQuery, {
-        settleHeightAfterRemoteMix: waitForRemoteMixHeight
-      });
+      renderPendingSuggestions(requestQuery);
     }, immediate ? 1200 : 1300);
     const localRequestSent = sendRuntimeMessage({
       action: 'getSearchSuggestions',
@@ -15110,9 +15343,7 @@
       }
       directNavigationSettleController.cancel();
       if (chrome.runtime && chrome.runtime.lastError) {
-        renderPendingSuggestions(requestQuery, {
-          settleHeightAfterRemoteMix: waitForRemoteMixHeight
-        });
+        renderPendingSuggestions(requestQuery);
         return;
       }
       const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
@@ -15137,28 +15368,20 @@
             return;
           }
           if (chrome.runtime && chrome.runtime.lastError) {
-            renderSuggestions(localSuggestions, requestQuery, {
-              settleHeightAfterRemoteMix: waitForRemoteMixHeight
-            });
+            renderSuggestions(localSuggestions, requestQuery);
             return;
           }
           if (!remoteResponse ||
               remoteResponse.aborted === true ||
               remoteResponse.hasRemoteSuggestions !== true ||
               !Array.isArray(remoteResponse.suggestions)) {
-            renderSuggestions(localSuggestions, requestQuery, {
-              settleHeightAfterRemoteMix: waitForRemoteMixHeight
-            });
+            renderSuggestions(localSuggestions, requestQuery);
             return;
           }
-          renderSuggestions(remoteResponse.suggestions, requestQuery, {
-            settleHeightAfterRemoteMix: waitForRemoteMixHeight
-          });
+          renderSuggestions(remoteResponse.suggestions, requestQuery);
         });
         if (!remoteRequestSent) {
-          renderSuggestions(localSuggestions, requestQuery, {
-            settleHeightAfterRemoteMix: waitForRemoteMixHeight
-          });
+          renderSuggestions(localSuggestions, requestQuery);
         }
       }, remoteDelay);
     });
@@ -15169,9 +15392,7 @@
       }
       if (requestSeq === suggestionRequestSeq && requestQuery === latestQuery) {
         directNavigationSettleController.cancel();
-        renderPendingSuggestions(requestQuery, {
-          settleHeightAfterRemoteMix: waitForRemoteMixHeight
-        });
+        renderPendingSuggestions(requestQuery);
       }
     }
   }
@@ -15267,12 +15488,6 @@
       }
       latestRawQuery = rawValue;
       clearAutocomplete();
-      if (layoutController &&
-          typeof layoutController.beginSuggestionsInputSession === 'function') {
-        layoutController.beginSuggestionsInputSession({
-          autoSettle: !isSearchModeResultTransitionPending(query)
-        });
-      }
       if (!localSearchScopeState && isSlashCommandInput(query)) {
         latestQuery = query;
         renderSuggestions([], query);
@@ -16246,14 +16461,6 @@
     onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
-  if (layoutController &&
-      typeof layoutController.setSuggestionsResizeLifecycle === 'function') {
-    layoutController.setSuggestionsResizeLifecycle({
-      onStart: beginSearchModeMenuResultResize,
-      onTarget: targetSearchModeMenuResultResize,
-      onEnd: finishSearchModeMenuResultResize
-    });
-  }
   syncSearchModeMenuResultOffset();
   if (typeof window.ResizeObserver === 'function') {
     const searchModeMenuResultResizeObserver = new window.ResizeObserver(
@@ -16562,10 +16769,6 @@
       }
       clearSearchSuggestions();
       return;
-    }
-    if (layoutController &&
-        typeof layoutController.beginSuggestionsInputSession === 'function') {
-      layoutController.beginSuggestionsInputSession();
     }
     const directUrlSuggestion = getDirectUrlSuggestion(query);
     if (directUrlSuggestion) {

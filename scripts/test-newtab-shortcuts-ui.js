@@ -1972,27 +1972,58 @@ assertContains(
 );
 
 const shortcutContextMenuPortalRule = getCssRuleBlock(newtabHtml, '.x-nt-shortcut-context-menu-portal');
+const readContextMenuPxToken = (token) => {
+  const match = shortcutContextMenuPortalRule.match(new RegExp(`${token}: (\\d+)px;`));
+  assert.ok(match, `shortcut context menu should define ${token}`);
+  return Number(match[1]);
+};
+const contextMenuRadius = readContextMenuPxToken('--x-nt-context-menu-radius');
+const contextMenuBorderWidth = readContextMenuPxToken('--x-nt-context-menu-border-width');
+const contextMenuPadding = readContextMenuPxToken('--x-nt-context-menu-padding');
+
+assert.equal(
+  contextMenuRadius - contextMenuBorderWidth - contextMenuPadding,
+  10,
+  'context menu outer radius minus its full inset should equal the 10px option radius'
+);
+
 assertContains(
   shortcutContextMenuPortalRule,
-  '--x-nt-shortcut-context-menu-radius: 12px;',
+  '--x-nt-context-menu-radius: 17px;',
   'shortcut context menu should name its outer corner radius'
 );
 
 assertContains(
   shortcutContextMenuPortalRule,
-  '--x-nt-shortcut-context-menu-padding: 6px;',
+  '--x-nt-context-menu-border-width: 1px;',
+  'shortcut context menu should include its border in the nested corner inset'
+);
+
+assertContains(
+  shortcutContextMenuPortalRule,
+  '--x-nt-context-menu-padding: 6px;',
   'shortcut context menu should name its inner padding'
 );
 
 assertContains(
   shortcutContextMenuPortalRule,
-  'border-radius: var(--x-nt-shortcut-context-menu-radius, 12px);',
+  `--x-nt-context-menu-option-radius: calc(
+          var(--x-nt-context-menu-radius) -
+          var(--x-nt-context-menu-border-width) -
+          var(--x-nt-context-menu-padding)
+        );`,
+  'shortcut context menu inner radius should be derived from its outer radius and full inset'
+);
+
+assertContains(
+  shortcutContextMenuPortalRule,
+  'border-radius: var(--x-nt-context-menu-radius, 17px);',
   'shortcut context menu outer radius should be driven by the named radius token'
 );
 
 assertContains(
   shortcutContextMenuPortalRule,
-  'padding: var(--x-nt-shortcut-context-menu-padding, 6px);',
+  'padding: var(--x-nt-context-menu-padding, 6px);',
   'shortcut context menu padding should be driven by the named padding token'
 );
 
@@ -2024,11 +2055,39 @@ assertContains(
   'shortcut context menu should use a solid dark background'
 );
 
-assertNotContains(
+assertContains(
   newtabHtml,
   '.x-nt-shortcut-context-menu-portal ._x_extension_select_option_2024_unique_',
-  'shortcut context menu options should inherit the shared custom select option radius'
+  'all New Tab context menu options should share a context-specific inner radius'
 );
+
+const shortcutContextMenuOptionRule = getCssRuleBlock(
+  newtabHtml,
+  '.x-nt-shortcut-context-menu-portal ._x_extension_select_option_2024_unique_'
+);
+assertContains(
+  shortcutContextMenuOptionRule,
+  'border-radius: var(--x-nt-context-menu-option-radius, 10px);',
+  'context menu option radius should use the concentric inner radius token'
+);
+
+assert.match(
+  newtabHtml,
+  /@supports \(corner-shape: superellipse\(1\.25\)\)[\s\S]*?\.x-nt-shortcut-context-menu-portal,[\s\S]*?\.x-nt-shortcut-context-menu-portal \._x_extension_select_option_2024_unique_[\s\S]*?corner-shape:\s*superellipse\(1\.25\);/,
+  'New Tab context menu shells and options should use continuous superellipse corners when supported'
+);
+
+[
+  "menuClassName: 'x-nt-shortcut-context-menu-portal',",
+  "menuClassName: 'x-nt-shortcut-context-menu-portal x-nt-bookmark-context-menu-portal',",
+  "menuClassName: 'x-nt-shortcut-context-menu-portal x-nt-recent-context-menu-portal',"
+].forEach((menuClassName) => {
+  assertContains(
+    newtabJs,
+    menuClassName,
+    'every New Tab context menu should inherit the shared concentric corner surface'
+  );
+});
 
 assertContains(
   newtabHtml,

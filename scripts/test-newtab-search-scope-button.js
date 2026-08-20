@@ -29,7 +29,7 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /function openSearchModeMenuFromDoubleTab\(\) \{[\s\S]*?const expectedInputValue = String\(inputParts\.input\.value \|\| ''\);[\s\S]*?beginSearchModeResultTransition\(expectedInputValue\);[\s\S]*?activateSiteSearch\(provider, \{ preserveResults: true \}\);[\s\S]*?restoreSearchModeQuery\(expectedInputValue\);/,
+  /function openSearchModeMenuFromDoubleTab\(\) \{[\s\S]*?const expectedInputValue = String\(inputParts\.input\.value \|\| ''\);[\s\S]*?activateSiteSearch\(provider, \{[\s\S]*?preserveResults: shouldPreserveSearchModeResults\(expectedInputValue\)[\s\S]*?\}\);[\s\S]*?restoreSearchModeQuery\(expectedInputValue\);/,
   'the search action should open the scope panel without discarding an existing query or result list'
 );
 assert.match(

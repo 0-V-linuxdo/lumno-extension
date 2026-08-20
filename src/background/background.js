@@ -1664,7 +1664,7 @@ const TAB_SWITCHER_HOST_STATE_TIMEOUT_MS = 400;
 const tabSwitcherHostTabIdByWindowId = new Map();
 const HOTKEY_DUP_GUARD_MS = 180;
 const OVERLAY_OPENING_GUARD_MS = 5000;
-const OVERLAY_RUNTIME_VERSION = '2026-08-17-fast-reveal-navigation-intent-v11';
+const OVERLAY_RUNTIME_VERSION = '2026-08-19-natural-suggestions-height-v12';
 const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
 const OVERLAY_NAVIGATION_STATE_STORAGE_PREFIX =
   '_x_extension_overlay_navigation_state_2026_unique_:';
@@ -4898,6 +4898,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     'src/shared/site-search-store.js',
     'src/shared/suggestion-action-model.js',
     'src/shared/suggestion-navigation.js',
+    'src/shared/suggestions-height-layout.js',
     'src/shared/ime-key-guard.js',
     'src/shared/search-input-history.js',
     'src/shared/toast.js',

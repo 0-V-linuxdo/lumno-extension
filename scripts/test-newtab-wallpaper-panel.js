@@ -612,6 +612,71 @@ function createFakeWallpaperViewController(config) {
           : 'topContentOffTab'
     );
   });
+  const topContentWeightControl = add(
+    brandSection,
+    'div',
+    'x-nt-time-weight-control',
+    { 'data-visible': 'false', 'aria-hidden': 'true', hidden: '' },
+    'topContentWeightControl'
+  );
+  const topContentWeightHeader = add(
+    topContentWeightControl,
+    'div',
+    'x-nt-overlay-control-header'
+  );
+  add(
+    topContentWeightHeader,
+    'span',
+    '',
+    {},
+    'topContentWeightTitle'
+  );
+  add(
+    topContentWeightHeader,
+    'span',
+    'x-nt-overlay-value',
+    {},
+    'topContentWeightValue'
+  );
+  const topContentWeightWrap = add(
+    topContentWeightControl,
+    'div',
+    'x-nt-overlay-slider-wrap x-nt-time-weight-slider-wrap'
+  );
+  add(
+    topContentWeightWrap,
+    'input',
+    'x-nt-overlay-slider x-nt-time-weight-slider',
+    { type: 'range', min: '300', max: '800', step: '1', value: '320' },
+    'topContentWeightSlider'
+  );
+  const topContentSecondsRow = add(
+    brandSection,
+    'div',
+    'x-nt-top-content-seconds-row',
+    { 'data-visible': 'false', 'aria-hidden': 'true', hidden: '' },
+    'topContentSecondsRow'
+  );
+  add(
+    topContentSecondsRow,
+    'span',
+    'x-nt-top-content-seconds-title',
+    {},
+    'topContentSecondsTitle'
+  );
+  const topContentSecondsSwitch = add(
+    topContentSecondsRow,
+    'label',
+    'x-nt-wallpaper-switch'
+  );
+  add(
+    topContentSecondsSwitch,
+    'input',
+    '',
+    { type: 'checkbox', role: 'switch' },
+    'topContentSecondsToggle'
+  );
+  add(topContentSecondsSwitch, 'span', 'x-nt-wallpaper-switch-slider');
   const faviconGroup = add(brandSection, 'div', 'x-nt-favicon-group');
   add(
     faviconGroup,
@@ -1013,25 +1078,33 @@ function assertBrandMarkCopy() {
       title: '搜索框上方内容',
       brand: '品牌标识',
       time: '时间',
-      off: '隐藏'
+      off: '隐藏',
+      weight: '时间字重',
+      seconds: '显示秒数'
     },
     zh_TW: {
       title: '搜尋框上方內容',
       brand: '品牌標識',
       time: '時間',
-      off: '隱藏'
+      off: '隱藏',
+      weight: '時間字重',
+      seconds: '顯示秒數'
     },
     en: {
       title: 'Content above the search bar',
       brand: 'Brand',
       time: 'Time',
-      off: 'Hide'
+      off: 'Hide',
+      weight: 'Time font weight',
+      seconds: 'Show seconds'
     },
     ja: {
       title: '検索ボックス上のコンテンツ',
       brand: 'ブランド',
       time: '時刻',
-      off: '非表示'
+      off: '非表示',
+      weight: '時刻の文字の太さ',
+      seconds: '秒を表示'
     }
   };
   Object.keys(expected).forEach((locale) => {
@@ -1040,6 +1113,8 @@ function assertBrandMarkCopy() {
     assert.strictEqual(messages.newtab_top_content_brand.message, expected[locale].brand);
     assert.strictEqual(messages.newtab_top_content_time.message, expected[locale].time);
     assert.strictEqual(messages.newtab_top_content_off.message, expected[locale].off);
+    assert.strictEqual(messages.newtab_time_font_weight_title.message, expected[locale].weight);
+    assert.strictEqual(messages.newtab_time_show_seconds_title.message, expected[locale].seconds);
   });
 
   const wallpaperSource = fs.readFileSync('src/newtab/wallpaper.js', 'utf8');
@@ -1048,10 +1123,15 @@ function assertBrandMarkCopy() {
     /t\('settings_newtab_wordmark_title', 'Content above the search bar'\)/
   );
   assert.match(wallpaperSource, /data-newtab-top-content/);
+  assert.match(wallpaperSource, /newtab_time_font_weight_title/);
+  assert.match(wallpaperSource, /newtab_time_show_seconds_title/);
   const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
   assert.match(optionsHtml, /data-newtab-top-content="brand"/);
   assert.match(optionsHtml, /data-newtab-top-content="time"/);
   assert.match(optionsHtml, /data-newtab-top-content="off"/);
+  assert.match(optionsHtml, /_x_extension_newtab_time_font_weight_row_2026_unique_/);
+  assert.match(optionsHtml, /_x_extension_newtab_time_seconds_row_2026_unique_/);
+  assert.match(optionsHtml, /_x_extension_newtab_time_seconds_toggle_2026_unique_/);
 }
 
 function assertThemeAwareAlternateFaviconAsset() {

@@ -474,6 +474,8 @@
         background: transparent;
       }
       #_x_extension_overlay_page_theme_adaptation_row_2026_unique_[hidden],
+      #_x_extension_newtab_time_font_weight_row_2026_unique_[hidden],
+      #_x_extension_newtab_time_seconds_row_2026_unique_[hidden],
       html[data-options-theme-mode="light"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_,
       html[data-options-theme-mode="dark"] #_x_extension_overlay_page_theme_adaptation_row_2026_unique_ {
         display: none !important;
@@ -1118,6 +1120,8 @@
       }
       #_x_extension_bookmark_rows_control_2026_unique_,
       #_x_extension_bookmark_columns_control_2026_unique_,
+      #_x_extension_newtab_time_font_weight_control_2026_unique_,
+      #_x_extension_recent_count_control_2026_unique_,
       #_x_extension_search_result_display_limit_control_2026_unique_ {
         width: 210px;
         min-width: 170px;
@@ -2485,12 +2489,15 @@
       @media (max-width: 480px) {
         #_x_extension_bookmark_rows_setting_row_2026_unique_,
         #_x_extension_bookmark_columns_setting_row_2026_unique_,
+        #_x_extension_newtab_time_font_weight_row_2026_unique_,
         #_x_extension_search_result_display_limit_setting_row_2026_unique_ {
           align-items: flex-start;
           flex-direction: column;
         }
         #_x_extension_bookmark_rows_control_2026_unique_,
         #_x_extension_bookmark_columns_control_2026_unique_,
+        #_x_extension_newtab_time_font_weight_control_2026_unique_,
+        #_x_extension_recent_count_control_2026_unique_,
         #_x_extension_search_result_display_limit_control_2026_unique_ {
           min-width: 0;
           width: 100%;
@@ -3030,6 +3037,21 @@
               </button>
             </div>
           </div>
+          <div id="_x_extension_newtab_time_font_weight_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_setting_subrow_2026_unique_" aria-hidden="true" hidden>
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="newtab_time_font_weight_title">时间字重</p>
+            </div>
+            <div id="_x_extension_newtab_time_font_weight_control_2026_unique_"></div>
+          </div>
+          <div id="_x_extension_newtab_time_seconds_row_2026_unique_" class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_ _x_extension_setting_subrow_2026_unique_" aria-hidden="true" hidden>
+            <div>
+              <p class="_x_extension_setting_title_2024_unique_" data-i18n="newtab_time_show_seconds_title">显示秒数</p>
+            </div>
+            <label class="_x_extension_switch_2024_unique_" for="_x_extension_newtab_time_seconds_toggle_2026_unique_">
+              <input id="_x_extension_newtab_time_seconds_toggle_2026_unique_" type="checkbox" aria-label="显示秒数" data-i18n-aria-label="newtab_time_show_seconds_title">
+              <span class="_x_extension_switch_slider_2024_unique_" aria-hidden="true"></span>
+            </label>
+          </div>
           <div class="_x_extension_setting_row_2024_unique_ _x_extension_setting_row_compact_2024_unique_">
             <div>
               <p class="_x_extension_setting_title_2024_unique_" data-i18n="newtab_input_auto_focus_title">输入框自动聚焦</p>
@@ -3098,31 +3120,19 @@
               <p class="_x_extension_setting_title_2024_unique_" data-i18n="settings_recent_sites_title">站点卡片</p>
             </div>
             <div class="_x_extension_recent_select_group_2024_unique_">
+              <div id="_x_extension_recent_count_control_2026_unique_"></div>
               <div id="_x_extension_recent_mode_tabs_wrap_2024_unique_" class="_x_extension_theme_picker_2024_unique_ _x_extension_inline_tabs_2024_unique_" role="tablist" aria-label="recent mode" data-i18n-aria-label="settings_recent_sites_title">
                 <span class="_x_extension_theme_indicator_2024_unique_"></span>
                 <button class="_x_extension_theme_option_2024_unique_" data-recent-mode="latest" data-active="false" aria-pressed="false" type="button">
-                  <i class="ri-icon ri-size-14 ri-time-line" aria-hidden="true"></i>
                   <span data-i18n="recent_mode_latest">最近访问</span>
                 </button>
                 <button class="_x_extension_theme_option_2024_unique_" data-recent-mode="most" data-active="true" aria-pressed="true" type="button">
-                  <i class="ri-icon ri-size-14 ri-vip-diamond-line" aria-hidden="true"></i>
                   <span data-i18n="recent_mode_most">最常访问</span>
                 </button>
                 <select id="_x_extension_recent_mode_select_2024_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true" style="display:none;">
                   <option value="latest" data-i18n="recent_mode_latest">最近访问</option>
                   <option value="most" data-i18n="recent_mode_most" selected>最常访问</option>
                 </select>
-              </div>
-              <div class="_x_extension_select_wrap_2024_unique_ _x_extension_custom_select_2024_unique_ _x_extension_select_wrap_auto_2024_unique_ _x_extension_select_align_right_2024_unique_" data-select="_x_extension_recent_count_select_2024_unique_">
-                <select id="_x_extension_recent_count_select_2024_unique_" class="_x_extension_select_2024_unique_" tabindex="-1" aria-hidden="true">
-                  <option value="0" data-i18n="recent_count_off">不显示</option>
-                  <option value="4" data-i18n="recent_count_4">显示 1 行</option>
-                  <option value="8" data-i18n="recent_count_8">显示 2 行</option>
-                </select>
-                <button class="_x_extension_select_trigger_2024_unique_" type="button" aria-haspopup="listbox" aria-expanded="false">
-                  <i class="_x_extension_select_icon_2024_unique_ ri-icon ri-size-16 ri-arrow-down-s-line" aria-hidden="true"></i>
-                </button>
-                <div class="_x_extension_select_menu_2024_unique_" role="listbox"></div>
               </div>
             </div>
           </div>

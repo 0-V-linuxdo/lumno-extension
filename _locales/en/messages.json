@@ -550,6 +550,12 @@
   "newtab_top_content_off": {
     "message": "Hide"
   },
+  "newtab_time_font_weight_title": {
+    "message": "Time font weight"
+  },
+  "newtab_time_show_seconds_title": {
+    "message": "Show seconds"
+  },
   "settings_newtab_shortcuts_title": {
     "message": "Shortcuts"
   },
@@ -1797,6 +1803,9 @@
   },
   "recent_dismiss_pinned_toast": {
     "message": "Unpinned and removed"
+  },
+  "recent_context_menu_label": {
+    "message": "Recent site actions"
   },
   "tab_switcher_title": {
     "message": "Recent tabs"

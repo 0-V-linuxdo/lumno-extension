@@ -2,16 +2,18 @@ import NumberFlow, { NumberFlowGroup } from '@number-flow/react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CSSProperties } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 export type NewtabTopContentMode = 'brand' | 'time';
 
 export interface TopContentModel {
   animateEntry: boolean;
   ariaLabel: string;
+  fontWeight?: number;
   imageSrc: string;
   locale?: string;
   mode: NewtabTopContentMode;
+  showSeconds?: boolean;
 }
 
 export interface TopContentControllerOptions {
@@ -66,9 +68,7 @@ const clockStyle: CSSProperties = {
   fontSize: 'clamp(42px, 4.2vw, 54px)',
   fontStretch: '86%',
   fontVariantNumeric: 'tabular-nums',
-  fontWeight: 320,
   justifyContent: 'center',
-  letterSpacing: '-0.055em',
   lineHeight: 0.86,
   pointerEvents: 'none',
   position: 'relative',
@@ -94,32 +94,108 @@ const twoDigitFormat = Object.freeze({
 
 const hourDigits = Object.freeze({ 1: Object.freeze({ max: 2 }) });
 const minuteDigits = Object.freeze({ 1: Object.freeze({ max: 5 }) });
+const CLOCK_LETTER_SPACING_BASE_EM = -0.055;
+const CLOCK_LETTER_SPACING_STEP_EM = 0.004;
+const CLOCK_LETTER_SPACING_MIN_WEIGHT = 300;
+const CLOCK_LETTER_SPACING_WEIGHT_STEP = 100;
+const CLOCK_LETTER_SPACING_MAX_STEPS = 5;
 
-function getCurrentMinute() {
+function getClockLetterSpacing(fontWeight: number) {
+  const spacingSteps = Math.min(
+    CLOCK_LETTER_SPACING_MAX_STEPS,
+    Math.max(
+      0,
+      Math.floor(
+        (fontWeight - CLOCK_LETTER_SPACING_MIN_WEIGHT) /
+          CLOCK_LETTER_SPACING_WEIGHT_STEP
+      )
+    )
+  );
+  return `${(
+    CLOCK_LETTER_SPACING_BASE_EM +
+    spacingSteps * CLOCK_LETTER_SPACING_STEP_EM
+  ).toFixed(3)}em`;
+}
+
+function getCurrentTime() {
   const now = new Date();
   return {
-    dateTime: `${String(now.getHours()).padStart(2, '0')}:${String(
-      now.getMinutes()
-    ).padStart(2, '0')}`,
     hours: now.getHours(),
-    minutes: now.getMinutes()
+    minutes: now.getMinutes(),
+    seconds: now.getSeconds()
   };
 }
 
-function getLocalizedTimeLabel(locale: string | undefined, dateTime: string) {
-  const [hours, minutes] = dateTime.split(':').map(Number);
-  const value = new Date();
-  value.setHours(hours, minutes, 0, 0);
+function getClockDateTime(
+  time: { hours: number; minutes: number; seconds: number },
+  showSeconds: boolean
+) {
+  const hours = String(time.hours).padStart(2, '0');
+  const minutes = String(time.minutes).padStart(2, '0');
+  const seconds = String(time.seconds).padStart(2, '0');
+  return showSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
+}
+
+function createLocalizedTimeFormatter(
+  locale: string | undefined,
+  showSeconds: boolean
+) {
   try {
-    return new Intl.DateTimeFormat(locale || undefined, {
+    const format: Intl.DateTimeFormatOptions = {
       hour: '2-digit',
       hourCycle: 'h23',
       minute: '2-digit'
-    }).format(value);
+    };
+    if (showSeconds) {
+      format.second = '2-digit';
+    }
+    return new Intl.DateTimeFormat(locale || undefined, format);
   } catch (_error) {
-    return dateTime;
+    return null;
   }
 }
+
+function getLocalizedTimeLabel(
+  formatter: Intl.DateTimeFormat | null,
+  dateTime: string
+) {
+  const [hours, minutes, seconds = 0] = dateTime.split(':').map(Number);
+  const value = new Date();
+  value.setHours(hours, minutes, seconds, 0);
+  return formatter ? formatter.format(value) : dateTime;
+}
+
+const ClockHourMinuteDigits = memo(function ClockHourMinuteDigits({
+  hours,
+  locale,
+  minutes
+}: {
+  hours: number;
+  locale?: string;
+  minutes: number;
+}) {
+  return (
+    <NumberFlowGroup>
+      <NumberFlow
+        digits={hourDigits}
+        format={twoDigitFormat}
+        locales={locale}
+        style={clockDigitsStyle}
+        trend={0}
+        value={hours}
+      />
+      <span style={colonStyle}>:</span>
+      <NumberFlow
+        digits={minuteDigits}
+        format={twoDigitFormat}
+        locales={locale}
+        style={clockDigitsStyle}
+        trend={0}
+        value={minutes}
+      />
+    </NumberFlowGroup>
+  );
+});
 
 const solidStyle: CSSProperties = {
   background: 'var(--x-nt-wordmark-solid-fill, rgb(31 41 55))',
@@ -229,62 +305,112 @@ function ClockMark({
   model: TopContentModel;
   onEntryAnimationComplete(animationName?: string): void;
 }) {
-  const [time, setTime] = useState(getCurrentMinute);
+  const showSeconds = model.showSeconds === true;
+  const fontWeight = model.fontWeight ?? 320;
+  const [time, setTime] = useState(getCurrentTime);
+  const dateTime = getClockDateTime(time, showSeconds);
+  const secondsText = String(time.seconds).padStart(2, '0');
+  const localizedTimeFormatter = useMemo(
+    () => createLocalizedTimeFormatter(model.locale, showSeconds),
+    [model.locale, showSeconds]
+  );
 
   useEffect(() => {
     let timer = 0;
-    const scheduleNextMinute = () => {
-      const delay = 60_000 - (Date.now() % 60_000) + 24;
+    const interval = showSeconds ? 1_000 : 60_000;
+    const clearTimer = () => {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = 0;
+      }
+    };
+    const syncTime = () => {
+      const nextTime = getCurrentTime();
+      setTime((currentTime) => {
+        const displayedTimeUnchanged =
+          currentTime.hours === nextTime.hours &&
+          currentTime.minutes === nextTime.minutes &&
+          (!showSeconds || currentTime.seconds === nextTime.seconds);
+        return displayedTimeUnchanged ? currentTime : nextTime;
+      });
+    };
+    const scheduleNextTick = () => {
+      clearTimer();
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      const delay = interval - (Date.now() % interval) + 24;
       timer = window.setTimeout(() => {
-        setTime(getCurrentMinute());
-        scheduleNextMinute();
+        timer = 0;
+        if (document.visibilityState !== 'visible') {
+          return;
+        }
+        syncTime();
+        scheduleNextTick();
       }, delay);
     };
     const handleVisibilityChange = () => {
+      clearTimer();
       if (document.visibilityState === 'visible') {
-        window.clearTimeout(timer);
-        setTime(getCurrentMinute());
-        scheduleNextMinute();
+        syncTime();
+        scheduleNextTick();
       }
     };
-    scheduleNextMinute();
+    scheduleNextTick();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.clearTimeout(timer);
+      clearTimer();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [showSeconds]);
 
   return (
     <time
-      aria-label={getLocalizedTimeLabel(model.locale, time.dateTime)}
+      aria-label={getLocalizedTimeLabel(localizedTimeFormatter, dateTime)}
       className="x-nt-wordmark-content x-nt-time-mark"
-      dateTime={time.dateTime}
+      data-show-seconds={showSeconds ? 'true' : 'false'}
+      dateTime={dateTime}
       onAnimationEnd={(event) =>
         onEntryAnimationComplete(event.animationName || undefined)
       }
-      style={clockStyle}
+      style={{
+        ...clockStyle,
+        fontWeight,
+        letterSpacing: getClockLetterSpacing(fontWeight)
+      }}
     >
       <span aria-hidden="true">
-        <NumberFlowGroup>
-          <NumberFlow
-            digits={hourDigits}
-            format={twoDigitFormat}
-            locales={model.locale}
-            style={clockDigitsStyle}
-            trend={0}
-            value={time.hours}
-          />
-          <span style={colonStyle}>:</span>
-          <NumberFlow
-            digits={minuteDigits}
-            format={twoDigitFormat}
-            locales={model.locale}
-            style={clockDigitsStyle}
-            trend={0}
-            value={time.minutes}
-          />
-        </NumberFlowGroup>
+        <ClockHourMinuteDigits
+          hours={time.hours}
+          locale={model.locale}
+          minutes={time.minutes}
+        />
+        {showSeconds ? (
+          <>
+            <span style={colonStyle}>:</span>
+            <span
+              className="x-nt-time-seconds-value"
+              data-second={time.seconds}
+            >
+              <span
+                className="x-nt-time-seconds-digit"
+                data-place="tens"
+                key={`tens-${secondsText[0]}`}
+                onAnimationEnd={(event) => event.stopPropagation()}
+              >
+                {secondsText[0]}
+              </span>
+              <span
+                className="x-nt-time-seconds-digit"
+                data-place="ones"
+                key={`ones-${secondsText[1]}`}
+                onAnimationEnd={(event) => event.stopPropagation()}
+              >
+                {secondsText[1]}
+              </span>
+            </span>
+          </>
+        ) : null}
       </span>
     </time>
   );
@@ -337,6 +463,7 @@ export function createTopContentController(
       flushSync(() => {
         root.render(model.mode === 'time' ? (
           <ClockMark
+            key={model.showSeconds === true ? 'seconds' : 'minutes'}
             model={model}
             onEntryAnimationComplete={options.onEntryAnimationComplete}
           />

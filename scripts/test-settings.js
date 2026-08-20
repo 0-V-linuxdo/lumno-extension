@@ -1,7 +1,7 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 55);
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 57);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
@@ -13,6 +13,8 @@ assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_number_shortcut_
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_input_auto_focus_enabled_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_time_font_weight_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_time_seconds_visible_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_search_result_display_limit_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_view_mode_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY));
@@ -76,6 +78,26 @@ assert.strictEqual(settings.normalizeNewtabTopContentMode(undefined), 'brand');
 assert.strictEqual(
   settings.NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
   '_x_extension_newtab_wordmark_visible_2026_unique_'
+);
+assert.strictEqual(settings.NEWTAB_TIME_FONT_WEIGHT_MIN, 300);
+assert.strictEqual(settings.NEWTAB_TIME_FONT_WEIGHT_MAX, 800);
+assert.strictEqual(settings.NEWTAB_TIME_FONT_WEIGHT_DEFAULT, 320);
+assert.strictEqual(settings.normalizeNewtabTimeFontWeight(undefined), 320);
+assert.strictEqual(settings.normalizeNewtabTimeFontWeight(299), 300);
+assert.strictEqual(settings.normalizeNewtabTimeFontWeight(320), 320);
+assert.strictEqual(settings.normalizeNewtabTimeFontWeight('537'), 537);
+assert.strictEqual(settings.normalizeNewtabTimeFontWeight(801), 800);
+assert.strictEqual(
+  settings.NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
+  '_x_extension_newtab_time_font_weight_2026_unique_'
+);
+assert.strictEqual(settings.normalizeNewtabTimeSecondsVisible(undefined), false);
+assert.strictEqual(settings.normalizeNewtabTimeSecondsVisible(false), false);
+assert.strictEqual(settings.normalizeNewtabTimeSecondsVisible(true), true);
+assert.strictEqual(settings.normalizeNewtabTimeSecondsVisible('true'), false);
+assert.strictEqual(
+  settings.NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
+  '_x_extension_newtab_time_seconds_visible_2026_unique_'
 );
 
 assert.strictEqual(settings.normalizeNewtabShortcutsVisible(false), false);

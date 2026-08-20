@@ -35,11 +35,6 @@ interface PinResult {
   limitReached?: boolean;
 }
 
-interface DismissResult {
-  hidden?: boolean;
-  wasPinned?: boolean;
-}
-
 interface ThemeSuggestion {
   type: 'history';
   url: string;
@@ -49,7 +44,6 @@ interface ThemeSuggestion {
 export interface RecentCardElement extends HTMLDivElement {
   _xHost?: string;
   _xTheme?: ThemeValue;
-  _xDismissButton?: HTMLButtonElement | null;
   _xActionText?: HTMLSpanElement | null;
   _xTitleText?: string;
   _xPinButton?: HTMLButtonElement | null;
@@ -102,16 +96,10 @@ export interface RecentSitesViewOptions {
   isPinned?: (item: RecentSiteItem) => boolean;
   getPinnedCount?: () => number;
   getMaxPinnedCount?: () => number;
-  canDismiss?: () => boolean;
-  getDismissTooltip?: (item: RecentSiteItem) => string;
   updatePinButton?: (
     button: HTMLButtonElement,
     pinned: boolean,
     limitReached: boolean
-  ) => void;
-  updateDismissButton?: (
-    button: HTMLButtonElement,
-    item: RecentSiteItem
   ) => void;
   showToast?: (message: string, isError: boolean) => void;
   showTopActionTooltip?: (
@@ -136,9 +124,11 @@ export interface RecentSitesViewOptions {
   togglePinned?: (
     item: RecentSiteItem
   ) => PinResult | null | Promise<PinResult | null>;
-  hideTemporarily?: (
-    item: RecentSiteItem
-  ) => DismissResult | null | Promise<DismissResult | null>;
+  onItemContextMenu?: (payload: {
+    event: MouseEvent;
+    item: RecentSiteItem;
+    element: RecentCardElement;
+  }) => void;
 }
 
 export interface RecentSitesRenderState {
@@ -198,14 +188,7 @@ interface NormalizedRecentSitesOptions {
   isPinned: NonNullable<RecentSitesViewOptions['isPinned']>;
   getPinnedCount: NonNullable<RecentSitesViewOptions['getPinnedCount']>;
   getMaxPinnedCount: NonNullable<RecentSitesViewOptions['getMaxPinnedCount']>;
-  canDismiss: NonNullable<RecentSitesViewOptions['canDismiss']>;
-  getDismissTooltip: NonNullable<
-    RecentSitesViewOptions['getDismissTooltip']
-  >;
   updatePinButton: NonNullable<RecentSitesViewOptions['updatePinButton']>;
-  updateDismissButton: NonNullable<
-    RecentSitesViewOptions['updateDismissButton']
-  >;
   showToast: NonNullable<RecentSitesViewOptions['showToast']>;
   showTopActionTooltip: NonNullable<
     RecentSitesViewOptions['showTopActionTooltip']
@@ -221,7 +204,9 @@ interface NormalizedRecentSitesOptions {
     RecentSitesViewOptions['hideCursorTooltip']
   >;
   togglePinned: NonNullable<RecentSitesViewOptions['togglePinned']>;
-  hideTemporarily: NonNullable<RecentSitesViewOptions['hideTemporarily']>;
+  onItemContextMenu: NonNullable<
+    RecentSitesViewOptions['onItemContextMenu']
+  >;
 }
 
 interface RecentSiteCardProps {
@@ -368,21 +353,9 @@ function normalizeOptions(
       typeof rawOptions.getMaxPinnedCount === 'function'
         ? rawOptions.getMaxPinnedCount
         : () => 3,
-    canDismiss:
-      typeof rawOptions.canDismiss === 'function'
-        ? rawOptions.canDismiss
-        : () => true,
-    getDismissTooltip:
-      typeof rawOptions.getDismissTooltip === 'function'
-        ? rawOptions.getDismissTooltip
-        : () => '',
     updatePinButton:
       typeof rawOptions.updatePinButton === 'function'
         ? rawOptions.updatePinButton
-        : () => {},
-    updateDismissButton:
-      typeof rawOptions.updateDismissButton === 'function'
-        ? rawOptions.updateDismissButton
         : () => {},
     showToast:
       typeof rawOptions.showToast === 'function'
@@ -411,10 +384,10 @@ function normalizeOptions(
       typeof rawOptions.togglePinned === 'function'
         ? rawOptions.togglePinned
         : () => Promise.resolve(null),
-    hideTemporarily:
-      typeof rawOptions.hideTemporarily === 'function'
-        ? rawOptions.hideTemporarily
-        : () => Promise.resolve(null)
+    onItemContextMenu:
+      typeof rawOptions.onItemContextMenu === 'function'
+        ? rawOptions.onItemContextMenu
+        : () => {}
   };
 }
 
@@ -428,7 +401,6 @@ function RecentSiteCard({
   const titleRef = useRef<HTMLDivElement>(null);
   const actionTextRef = useRef<HTMLSpanElement>(null);
   const pinButtonRef = useRef<HTMLButtonElement>(null);
-  const dismissButtonRef = useRef<HTMLButtonElement>(null);
   const isCardPointerActiveRef = useRef(false);
   const hasNavigateAttemptedRef = useRef(false);
   const tooltipSuppressedRef = useRef(false);
@@ -474,9 +446,6 @@ function RecentSiteCard({
   });
   const pinAction = useExclusiveAsyncAction(
     () => options.togglePinned(item)
-  );
-  const dismissAction = useExclusiveAsyncAction(
-    () => options.hideTemporarily(item)
   );
 
   function clearRollbackTimer(): void {
@@ -623,16 +592,6 @@ function RecentSiteCard({
     }
   }
 
-  function showDismissTooltip(): void {
-    const button = dismissButtonRef.current;
-    if (!button || !options.canDismiss()) {
-      return;
-    }
-    const label = options.getDismissTooltip(item);
-    options.updateDismissButton(button, item);
-    options.showTopActionTooltip(button, label);
-  }
-
   async function handlePin(): Promise<void> {
     const button = pinButtonRef.current;
     const card = cardRef.current;
@@ -678,40 +637,6 @@ function RecentSiteCard({
     );
   }
 
-  async function handleDismiss(): Promise<void> {
-    if (!options.canDismiss()) {
-      return;
-    }
-    options.hideTopActionTooltip();
-    const outcome = await dismissAction.run();
-    if (outcome.status === 'skipped') {
-      return;
-    }
-    if (outcome.status === 'rejected') {
-      options.showToast(
-        options.t('toast_error', '操作失败，请重试'),
-        true
-      );
-      return;
-    }
-    const result = outcome.value;
-    if (!result?.hidden) {
-      return;
-    }
-    options.showToast(
-      result.wasPinned
-        ? options.t(
-            'recent_dismiss_pinned_toast',
-            '已取消置顶并从最近访问移除，再次访问后会重新出现'
-          )
-        : options.t(
-            'recent_dismiss_toast',
-            '已从最近访问移除，再次访问后会重新出现'
-          ),
-      false
-    );
-  }
-
   function dispose(): void {
     clearRollbackTimer();
     clearHoverUnlockTimer();
@@ -726,13 +651,11 @@ function RecentSiteCard({
     const card = cardRef.current;
     const favicon = faviconRef.current;
     const pinButton = pinButtonRef.current;
-    const dismissButton = dismissButtonRef.current;
-    if (!card || !favicon || !pinButton || !dismissButton) {
+    if (!card || !favicon || !pinButton) {
       return;
     }
     card._xHost = host;
     card._xTheme = immediateTheme;
-    card._xDismissButton = dismissButton;
     card._xActionText = actionTextRef.current;
     card._xTitleText = safeTitleText;
     card._xPinButton = pinButton;
@@ -742,7 +665,6 @@ function RecentSiteCard({
     options.attachFaviconWithFallbacks(favicon, faviconPageUrl, host, {
       primaryUrl: browserPageFaviconUrl
     });
-    options.updateDismissButton(dismissButton, item);
     options.updatePinButton(
       pinButton,
       initiallyPinned,
@@ -876,6 +798,13 @@ function RecentSiteCard({
       onBlur={handleBlur}
       onClick={handleClick}
       onAuxClick={handleAuxClick}
+      onContextMenu={(event) => {
+        options.onItemContextMenu({
+          event: event.nativeEvent,
+          item,
+          element: event.currentTarget
+        });
+      }}
       onKeyDown={handleKeyDown}
     >
       <div className="x-nt-recent-card-visual">
@@ -910,39 +839,6 @@ function RecentSiteCard({
             <div className="x-nt-recent-name" title={siteName}>
               {siteName}
             </div>
-            <button
-              ref={dismissButtonRef}
-              aria-busy={dismissAction.pending}
-              disabled={dismissAction.pending}
-              type="button"
-              className="x-nt-recent-dismiss"
-              onPointerDown={stopCardActivation}
-              onClick={(event) => {
-                stopCardActivation(event);
-                void handleDismiss();
-              }}
-              onKeyDown={(event) => {
-                if (
-                  options.canDismiss() &&
-                  (event.key === 'Enter' || event.key === ' ')
-                ) {
-                  stopCardActivation(event);
-                  event.currentTarget.click();
-                }
-              }}
-              onMouseEnter={showDismissTooltip}
-              onPointerLeave={options.hideTopActionTooltip}
-              onPointerCancel={options.hideTopActionTooltip}
-              onMouseLeave={options.hideTopActionTooltip}
-              onFocus={showDismissTooltip}
-              onBlur={options.hideTopActionTooltip}
-            >
-              <i
-                aria-hidden="true"
-                className="ri-icon ri-size-16 ri-subtract-line"
-                data-recent-dismiss-icon=""
-              />
-            </button>
           </div>
           <div ref={titleRef} className="x-nt-recent-title">
             {safeTitleText}

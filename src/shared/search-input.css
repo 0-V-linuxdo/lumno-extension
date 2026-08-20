@@ -1,5 +1,12 @@
 @import url("menu-surface.css");
 
+:root,
+#_x_extension_overlay_2024_unique_,
+#_x_extension_onboarding_overlay_demo_2026_unique_ {
+  --x-lumno-search-shell-border-light: rgba(0, 0, 0, 0.14);
+  --x-lumno-search-shell-border-dark: rgba(255, 255, 255, 0.16);
+}
+
 .x-lumno-search-input,
 .x-lumno-search-input__container {
   all: unset;

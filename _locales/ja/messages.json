@@ -550,6 +550,12 @@
   "newtab_top_content_off": {
     "message": "非表示"
   },
+  "newtab_time_font_weight_title": {
+    "message": "時刻の文字の太さ"
+  },
+  "newtab_time_show_seconds_title": {
+    "message": "秒を表示"
+  },
   "settings_newtab_shortcuts_title": {
     "message": "ショートカット"
   },
@@ -1797,6 +1803,9 @@
   },
   "recent_dismiss_pinned_toast": {
     "message": "固定解除して非表示にしました"
+  },
+  "recent_context_menu_label": {
+    "message": "最近アクセスしたサイトの操作"
   },
   "tab_switcher_title": {
     "message": "最近のタブ"

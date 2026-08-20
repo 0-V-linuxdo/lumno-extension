@@ -34,7 +34,6 @@ interface ModeMenuItem {
 }
 
 interface ModeController {
-  beginModeMenuResultTransition(transition: { fromOffset: number }): boolean;
   clearProviderPrefix(): void;
   closeModeMenu(restoreFocus?: boolean): boolean;
   destroy(): void;
@@ -42,7 +41,6 @@ interface ModeController {
     bottomInset?: number;
     viewportBottom?: number;
   }): number | null;
-  finishModeMenuResultTransition(): boolean;
   getModeMenuFilterQuery(): string;
   handleModeMenuKeyEvent(event: KeyboardEvent): boolean;
   menuElement: HTMLDivElement;
@@ -52,11 +50,6 @@ interface ModeController {
   resetModeMenuDoubleTab(): boolean;
   resetModeTagRemovalConfirmation(): boolean;
   setModeMenuResultOffset(offset: number): void;
-  targetModeMenuResultTransition(transition: {
-    duration: number;
-    easing: string;
-    toOffset: number;
-  }): boolean;
   setPrefixText(
     label: string,
     theme?: object,
@@ -2333,66 +2326,6 @@ describe('Shared search scope menu', () => {
       'var(--x-lumno-search-mode-menu-result-offset, 0px)'
     );
     controller.destroy();
-  });
-
-  it('folds an opening menu into the result-height transaction before its reveal frame', () => {
-    const pendingFrames = new Map<number, FrameRequestCallback>();
-    let frameId = 0;
-    const requestFrameSpy = vi.spyOn(window, 'requestAnimationFrame')
-      .mockImplementation((callback) => {
-        frameId += 1;
-        pendingFrames.set(frameId, callback);
-        return frameId;
-      });
-    const cancelFrameSpy = vi.spyOn(window, 'cancelAnimationFrame')
-      .mockImplementation((id) => {
-        pendingFrames.delete(id);
-      });
-    const parts = createModeParts();
-    const controller = window.LumnoSearchInputMode.createInputModeController(
-      parts,
-      {
-        getModeMenuItems: () => [{
-          active: true,
-          id: 'scope:history',
-          kind: 'local',
-          label: 'History'
-        }]
-      }
-    );
-
-    expect(controller.openModeMenu('none')).toBe(true);
-    expect(controller.isModeMenuVisible()).toBe(true);
-    expect(controller.menuElement.dataset.open).toBe('false');
-    expect(pendingFrames.size).toBe(1);
-
-    expect(controller.beginModeMenuResultTransition({ fromOffset: 0 })).toBe(true);
-    expect(cancelFrameSpy).toHaveBeenCalled();
-    expect(pendingFrames.size).toBe(0);
-    expect(
-      controller.menuElement.style.getPropertyValue(
-        '--x-lumno-search-mode-menu-result-offset'
-      )
-    ).toBe('0px');
-
-    expect(controller.targetModeMenuResultTransition({
-      duration: 180,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      toOffset: 312
-    })).toBe(true);
-    expect(controller.menuElement.dataset.open).toBe('true');
-    expect(controller.menuElement.style.transition).toContain('transform 180ms');
-    expect(
-      controller.menuElement.style.getPropertyValue(
-        '--x-lumno-search-mode-menu-result-offset'
-      )
-    ).toBe('312px');
-
-    expect(controller.finishModeMenuResultTransition()).toBe(true);
-    expect(controller.menuElement.style.transition).toBe('');
-    controller.destroy();
-    requestFrameSpy.mockRestore();
-    cancelFrameSpy.mockRestore();
   });
 
   it('shows the full label bubble only when the trailing-ellipsis label overflows', () => {
