@@ -129,14 +129,6 @@ npm run test:onboarding-content
 - 同梱アイコンセット：[Remix Icon](https://remixicon.com/)
 - 同梱書体：Open Sans
 
-## Star History
-
-<p align="center">
-  <a href="https://github.com/kubai087/lumno-extension/stargazers">
-    <img src="assets/star-history.svg" alt="GitHub Star 履歴グラフ" />
-  </a>
-</p>
-
 ## ライセンス
 
 このプロジェクトは [GPL-3.0](LICENSE) ライセンスで公開されています。

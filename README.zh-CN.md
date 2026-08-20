@@ -140,14 +140,6 @@ npm run test:onboarding-content
 - 内置图标集：[Remix Icon](https://remixicon.com/)
 - 内置字体：Open Sans
 
-## GitHub Star 变化
-
-<p align="center">
-  <a href="https://github.com/kubai087/lumno-extension/stargazers">
-    <img src="assets/star-history.svg" alt="GitHub Star 变化图" />
-  </a>
-</p>
-
 ## 许可证
 
 本项目使用 [GPL-3.0](LICENSE) 许可证。

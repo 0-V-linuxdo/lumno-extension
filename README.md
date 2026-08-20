@@ -140,14 +140,6 @@ npm run test:onboarding-content
 - Bundled icon set: [Remix Icon](https://remixicon.com/)
 - Bundled typeface: Open Sans
 
-## Star History
-
-<p align="center">
-  <a href="https://github.com/kubai087/lumno-extension/stargazers">
-    <img src="assets/star-history.svg" alt="GitHub Star History Chart" />
-  </a>
-</p>
-
 ## License
 
 This project is licensed under [GPL-3.0](LICENSE).
