@@ -806,11 +806,30 @@
         pointer-events: none;
       }
       .x-nt-shortcut-context-menu-portal {
+        --x-nt-context-menu-radius: 17px;
+        --x-nt-context-menu-border-width: 1px;
+        --x-nt-context-menu-padding: 6px;
+        --x-nt-context-menu-option-radius: calc(
+          var(--x-nt-context-menu-radius) -
+          var(--x-nt-context-menu-border-width) -
+          var(--x-nt-context-menu-padding)
+        );
         background: rgb(255 255 255);
+        border-radius: var(--x-nt-context-menu-radius, 17px);
+        padding: var(--x-nt-context-menu-padding, 6px);
         pointer-events: auto;
+      }
+      .x-nt-shortcut-context-menu-portal ._x_extension_select_option_2024_unique_ {
+        border-radius: var(--x-nt-context-menu-option-radius, 10px);
       }
       body[data-theme="dark"] .x-nt-shortcut-context-menu-portal {
         background: rgb(31 31 31);
+      }
+      @supports (corner-shape: superellipse(1.25)) {
+        .x-nt-shortcut-context-menu-portal,
+        .x-nt-shortcut-context-menu-portal ._x_extension_select_option_2024_unique_ {
+          corner-shape: superellipse(1.25);
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         .x-nt-shortcut-icon {
