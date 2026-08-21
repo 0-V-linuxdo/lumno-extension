@@ -2798,10 +2798,9 @@ const DEVELOPMENT_ONLY_INJECT_FILES = Object.freeze([
   'src/background/codex-debug-bridge.js'
 ]);
 const GECKO_HOTKEY_DUP_GUARD_MS = 700;
-const GECKO_PAGE_HOTKEY_DEFER_MS = 90;
 const GECKO_SCRIPT_INJECT_BATCH_SIZE = 1;
+const GECKO_CHROME_API_TIMEOUT_MS = 1500;
 let lastGlobalHotkeyInvokeAt = 0;
-let lastCommandHotkeyAt = 0;
 
 function detectGeckoRuntimeInline() {
   try {
@@ -2834,39 +2833,71 @@ function getRuntimeInjectableFiles(files) {
   return list.filter((file) => !skip.has(file));
 }
 
-function invokeScriptingExecuteScript(details, callback) {
+function invokeChromeCallback(apiFn, args, callback, timeoutMs) {
   const done = typeof callback === 'function' ? callback : () => {};
   let settled = false;
-  const finish = (error, results) => {
+  let timer = null;
+  const finish = (error, result) => {
     if (settled) {
       return;
     }
     settled = true;
-    done(error || '', results);
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    done(error || '', result);
   };
-  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
-    finish('scripting-unavailable');
+  const waitMs = Number.isFinite(Number(timeoutMs))
+    ? Number(timeoutMs)
+    : (isGeckoRuntime() ? GECKO_CHROME_API_TIMEOUT_MS : 0);
+  if (waitMs > 0) {
+    timer = setTimeout(() => {
+      finish('timeout');
+    }, waitMs);
+  }
+  if (typeof apiFn !== 'function') {
+    finish('api-unavailable');
     return;
   }
   let result;
   try {
-    result = chrome.scripting.executeScript(details, (results) => {
+    const argv = Array.isArray(args) ? args.slice() : [];
+    argv.push((value) => {
       const error = chrome.runtime && chrome.runtime.lastError
         ? chrome.runtime.lastError.message || 'unknown'
         : '';
-      finish(error, results);
+      finish(error, value);
     });
+    result = apiFn.apply(null, argv);
   } catch (error) {
-    finish(error && error.message ? error.message : 'executeScript-threw');
+    finish(error && error.message ? error.message : 'threw');
     return;
   }
   if (result && typeof result.then === 'function') {
-    result.then((results) => {
-      finish('', results);
+    result.then((value) => {
+      finish('', value);
     }).catch((error) => {
-      finish(error && error.message ? error.message : 'executeScript-rejected');
+      finish(error && error.message ? error.message : 'rejected');
     });
   }
+}
+
+function invokeScriptingExecuteScript(details, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  const payload = details && typeof details === 'object' ? Object.assign({}, details) : details;
+  if (isGeckoRuntime() && payload && Object.prototype.hasOwnProperty.call(payload, 'injectImmediately')) {
+    delete payload.injectImmediately;
+  }
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    done('scripting-unavailable');
+    return;
+  }
+  invokeChromeCallback(
+    chrome.scripting.executeScript.bind(chrome.scripting),
+    [payload],
+    done
+  );
 }
 
 function executeScriptsOnTab(tabId, files, options, callback) {
@@ -2886,11 +2917,14 @@ function executeScriptsOnTab(tabId, files, options, callback) {
     : injectable.length;
   const runBatch = (start) => {
     const batch = injectable.slice(start, start + batchSize);
-    invokeScriptingExecuteScript({
+    const details = {
       target: { tabId: tabId },
-      injectImmediately: injectImmediately,
       files: batch
-    }, (error) => {
+    };
+    if (injectImmediately && !isGeckoRuntime()) {
+      details.injectImmediately = true;
+    }
+    invokeScriptingExecuteScript(details, (error) => {
       if (error) {
         done(error);
         return;
@@ -2920,86 +2954,39 @@ function openCommandSurfaceFallback(url, options) {
   openNewtabFallbackForUrl(url, options);
 }
 
-function markGeckoCommandHotkeyReceived() {
-  lastCommandHotkeyAt = Date.now();
-}
-
-function wasGeckoCommandHotkeyRecent() {
-  return isGeckoRuntime() && (Date.now() - lastCommandHotkeyAt) <= GECKO_HOTKEY_DUP_GUARD_MS;
-}
-
-function runAfterGeckoCommandChance(source, run) {
-  if (typeof run !== 'function') {
-    return;
-  }
-  if (!isGeckoRuntime() || String(source || '').indexOf('page-hotkey') !== 0) {
-    run();
-    return;
-  }
-  if (wasGeckoCommandHotkeyRecent()) {
-    logHotkeyDebug('gecko-page-hotkey-ignored', {
-      source: source || '',
-      reason: 'command-already-handled'
-    });
-    return;
-  }
-  setTimeout(() => {
-    if (wasGeckoCommandHotkeyRecent()) {
-      logHotkeyDebug('gecko-page-hotkey-ignored', {
-        source: source || '',
-        reason: 'command-won'
-      });
-      return;
-    }
-    run();
-  }, GECKO_PAGE_HOTKEY_DEFER_MS);
-}
-
 function hydrateCommandTab(tab, callback) {
   const done = typeof callback === 'function' ? callback : () => {};
+  let settled = false;
   const finish = (candidate) => {
-    done(candidate && typeof candidate.id === 'number' ? candidate : null);
-  };
-  const queryActive = () => {
-    if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
-      finish(tab && typeof tab.id === 'number' ? tab : null);
+    if (settled) {
       return;
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
-      const activeTab = Array.isArray(activeTabs) && activeTabs[0] ? activeTabs[0] : null;
+    settled = true;
+    done(candidate && typeof candidate.id === 'number' ? candidate : null);
+  };
+  if (tab && typeof tab.id === 'number' && getResolvedTabUrl(tab) && typeof tab.windowId === 'number') {
+    finish(tab);
+    return;
+  }
+  const queryActive = (query, fallback) => {
+    if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
+      fallback();
+      return;
+    }
+    invokeChromeCallback(chrome.tabs.query.bind(chrome.tabs), [query], (error, tabs) => {
+      const activeTab = !error && Array.isArray(tabs) && tabs[0] ? tabs[0] : null;
       if (activeTab && typeof activeTab.id === 'number') {
         finish(activeTab);
         return;
       }
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (fallbackTabs) => {
-        finish(Array.isArray(fallbackTabs) && fallbackTabs[0] ? fallbackTabs[0] : null);
-      });
+      fallback();
     });
   };
-  const needsHydration = isGeckoRuntime() ||
-    !tab ||
-    typeof tab.id !== 'number' ||
-    !getResolvedTabUrl(tab) ||
-    typeof tab.windowId !== 'number';
-  if (!needsHydration) {
-    finish(tab);
-    return;
-  }
-  if (tab && typeof tab.id === 'number' && chrome.tabs && typeof chrome.tabs.get === 'function') {
-    chrome.tabs.get(tab.id, (fresh) => {
-      if (chrome.runtime && chrome.runtime.lastError) {
-        queryActive();
-        return;
-      }
-      if (fresh && typeof fresh.id === 'number' && getResolvedTabUrl(fresh)) {
-        finish(fresh);
-        return;
-      }
-      queryActive();
+  queryActive({ active: true, currentWindow: true }, () => {
+    queryActive({ active: true, lastFocusedWindow: true }, () => {
+      finish(tab && typeof tab.id === 'number' ? tab : null);
     });
-    return;
-  }
-  queryActive();
+  });
 }
 
 function shouldIgnoreDuplicateHotkey(tabId) {
@@ -6117,7 +6104,6 @@ chrome.commands.onCommand.addListener(function(command, tab) {
   ) {
     return;
   }
-  markGeckoCommandHotkeyReceived();
   const commandObservedAt = Date.now();
   const source = command === SHOW_SEARCH_COMMAND_NAME
     ? 'commands'
@@ -7062,9 +7048,7 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ ok: false });
         return;
       }
-      runAfterGeckoCommandChance('page-hotkey-tab-switcher', () => {
-        triggerTabSwitcherForTab(senderTab, 'page-hotkey-tab-switcher', Date.now());
-      });
+      triggerTabSwitcherForTab(senderTab, 'page-hotkey-tab-switcher', Date.now());
       sendResponse({ ok: true });
       return;
     }
@@ -7091,9 +7075,7 @@ function handleShortcutMessage(request, sender, sendResponse) {
           verifiedAfterColdStart: Boolean(request && request.requiresShortcutVerification)
         });
         rememberPageHotkeyContext(senderTab);
-        runAfterGeckoCommandChance(triggerSource, () => {
-          triggerShowSearchForTab(senderTab, triggerSource);
-        });
+        triggerShowSearchForTab(senderTab, triggerSource);
         sendResponse({ ok: true, shortcut: shortcut || '' });
       };
       if (request && request.requiresShortcutVerification === true) {

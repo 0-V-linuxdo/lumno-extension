@@ -141,19 +141,27 @@
     }
   }
 
+  function sendBackgroundHotkey(payload) {
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    if (gecko && typeof gecko.sendRuntimeMessageWithRetry === 'function') {
+      gecko.sendRuntimeMessageWithRetry(chrome, payload);
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(payload);
+    } catch (e) {
+      logHotkeyListenerDebug('send-failed', {
+        error: e && e.message ? e.message : String(e || '')
+      });
+    }
+  }
+
   function triggerOverlay() {
     logHotkeyListenerDebug('trigger-overlay', {
       shortcut: shortcutRaw || '',
       href: location && location.href ? location.href : ''
     });
-    try {
-      chrome.runtime.sendMessage({ action: 'triggerShowSearchFromPageHotkey' });
-    } catch (e) {
-      // Ignore runtime bridge failures.
-      logHotkeyListenerDebug('trigger-overlay-failed', {
-        error: e && e.message ? e.message : String(e || '')
-      });
-    }
+    sendBackgroundHotkey({ action: 'triggerShowSearchFromPageHotkey' });
   }
 
   function triggerTabSwitcherFromPage() {
@@ -161,13 +169,7 @@
       shortcut: tabSwitcherShortcutRaw || '',
       href: location && location.href ? location.href : ''
     });
-    try {
-      chrome.runtime.sendMessage({ action: 'triggerTabSwitcherFromPageHotkey' });
-    } catch (e) {
-      logHotkeyListenerDebug('trigger-tab-switcher-failed', {
-        error: e && e.message ? e.message : String(e || '')
-      });
-    }
+    sendBackgroundHotkey({ action: 'triggerTabSwitcherFromPageHotkey' });
   }
 
   function ensureRemixIconStyles() {

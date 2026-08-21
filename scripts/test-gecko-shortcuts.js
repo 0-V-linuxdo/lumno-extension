@@ -104,12 +104,27 @@ assert.match(
 assert.match(
   backgroundSource,
   /function hydrateCommandTab\(/,
-  'Firefox commands.onCommand tabs often omit url and must be hydrated via tabs.get'
+  'Firefox commands.onCommand tabs often omit url and must be hydrated'
 );
 assert.match(
   backgroundSource,
-  /gecko-page-hotkey-ignored/,
-  'Firefox page hotkeys must yield to chrome.commands so the overlay is not toggled closed'
+  /function invokeChromeCallback\(/,
+  'Gecko chrome.* APIs must settle both callback and promise with a timeout'
+);
+assert.match(
+  backgroundSource,
+  /GECKO_CHROME_API_TIMEOUT_MS/,
+  'Gecko chrome API wrappers must not hang forever'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /function runAfterGeckoCommandChance/,
+  'Page hotkeys must not wait for chrome.commands; that path hung and swallowed Alt+K/Alt+Q'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /function hydrateCommandTab\(tab, callback\)[\s\S]{0,900}?chrome\.tabs\.get\(/,
+  'hydrateCommandTab must not block on tabs.get which Firefox may never callback'
 );
 assert.match(
   backgroundSource,
@@ -147,5 +162,14 @@ assert.match(observerSource, /applyGeckoPageShortcutDefaults/, 'Page observer sh
 
 const hotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
 assert.match(hotkeySource, /applyGeckoHotkeyDefaults/, 'Hotkey listener should seed Gecko defaults immediately');
+assert.match(
+  hotkeySource,
+  /sendRuntimeMessageWithRetry/,
+  'Page hotkeys must retry when the Firefox event page is still waking'
+);
+
+const geckoSource = fs.readFileSync('src/shared/gecko-shortcuts.js', 'utf8');
+assert.match(geckoSource, /function sendRuntimeMessageWithRetry/, 'Gecko helpers should retry disconnected runtime messages');
+assert.match(observerSource, /sendBackgroundHotkey/, 'Shortcut observer should retry background hotkey messages');
 
 console.log('gecko shortcuts ok');

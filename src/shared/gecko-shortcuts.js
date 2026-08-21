@@ -13,6 +13,9 @@
   });
 
   const RESERVED_SHORTCUT_PATTERN = /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCIJ]$/i;
+  const MESSAGE_RETRY_MAX_ATTEMPTS = 6;
+  const MESSAGE_RETRY_DELAY_MS = 80;
+  const DISCONNECTED_PATTERN = /receiving end does not exist|disconnected port|could not establish connection/i;
 
   function isGeckoRuntime(runtime) {
     try {
@@ -59,11 +62,46 @@
     return getDefaultShortcut(commandName) || current;
   }
 
+  function sendRuntimeMessageWithRetry(chromeApi, payload, callback, options) {
+    const done = typeof callback === 'function' ? callback : () => {};
+    const maxAttempts = options && Number.isFinite(Number(options.maxAttempts))
+      ? Math.max(1, Number(options.maxAttempts))
+      : MESSAGE_RETRY_MAX_ATTEMPTS;
+    const delayMs = options && Number.isFinite(Number(options.delayMs))
+      ? Math.max(0, Number(options.delayMs))
+      : MESSAGE_RETRY_DELAY_MS;
+    const runtime = chromeApi && chromeApi.runtime ? chromeApi.runtime : null;
+    if (!runtime || typeof runtime.sendMessage !== 'function') {
+      done(null, 'runtime-unavailable');
+      return;
+    }
+    const attempt = (n) => {
+      try {
+        runtime.sendMessage(payload, (response) => {
+          const error = runtime.lastError ? (runtime.lastError.message || 'unknown') : '';
+          if (error && DISCONNECTED_PATTERN.test(error) && n < maxAttempts) {
+            setTimeout(() => attempt(n + 1), delayMs * n);
+            return;
+          }
+          done(response || null, error);
+        });
+      } catch (error) {
+        if (n < maxAttempts) {
+          setTimeout(() => attempt(n + 1), delayMs * n);
+          return;
+        }
+        done(null, error && error.message ? error.message : 'threw');
+      }
+    };
+    attempt(1);
+  }
+
   return Object.freeze({
     COMMAND_DEFAULTS,
     isGeckoRuntime,
     isConflictingShortcut,
     getDefaultShortcut,
-    resolveShortcut
+    resolveShortcut,
+    sendRuntimeMessageWithRetry
   });
 });

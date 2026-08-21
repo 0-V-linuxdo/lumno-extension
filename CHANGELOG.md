@@ -1,5 +1,13 @@
 Tags: Release
 
+## Firefox port (0.9.56)
+
+- 0.9.55 会把页面热键让给 `chrome.commands`，但 Firefox 的 `tabs.get` 回调可能永远不回来，两条路径一起哑火，快捷键完全没反应。
+- 0.9.56：页面热键立刻执行（命令栏 `ensureOpen`，不再 toggle 关掉）；用带超时的 `tabs.query` 补全当前标签；事件页未醒时内容脚本重试 `sendMessage`。
+
+- 0.9.55 deferred the page hotkey until `chrome.commands` ran, then hung on `tabs.get` — both shortcuts did nothing.
+- 0.9.56 runs the page hotkey immediately (`ensureOpen` so it does not toggle closed), hydrates the tab with a timed `tabs.query`, and retries `sendMessage` while the event page wakes.
+
 ## Firefox port (0.9.55)
 
 - Firefox 的 `commands.onCommand` 经常不带 `tab.url`，Tab Switcher 会误判当前页不能承载，然后跳到 Lumno 新标签页（看起来像打开了插件主页）。

@@ -20,6 +20,28 @@
   const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
 
+  function sendBackgroundHotkey(payload, callback) {
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    if (gecko && typeof gecko.sendRuntimeMessageWithRetry === 'function') {
+      gecko.sendRuntimeMessageWithRetry(chrome, payload, callback);
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(payload, (response) => {
+        const error = chrome.runtime && chrome.runtime.lastError
+          ? chrome.runtime.lastError.message || ''
+          : '';
+        if (typeof callback === 'function') {
+          callback(response || null, error);
+        }
+      });
+    } catch (error) {
+      if (typeof callback === 'function') {
+        callback(null, error && error.message ? error.message : 'threw');
+      }
+    }
+  }
+
   function notifyTopFrameDocumentStarted() {
     if (window.top !== window) {
       return;
@@ -116,26 +138,22 @@
         !SHORTCUT_KEY_MATCHER.canBeChromeCommandShortcut(descriptor)) {
       return;
     }
-    try {
-      chrome.runtime.sendMessage({
-        action: 'triggerShowSearchFromPageHotkey',
-        documentUrl: location && location.href ? location.href : '',
-        documentIsTop: window.top === window,
-        observedAt: Date.now(),
-        observedShortcut: descriptor,
-        requiresShortcutVerification: true,
-        trustedShortcutFallback: true
-      }, (response) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          return;
-        }
-        if (response && typeof response.shortcut === 'string') {
-          applyShowSearchShortcut(response.shortcut);
-        }
-      });
-    } catch (error) {
-      // Ignore an extension context invalidated during reload or navigation.
-    }
+    sendBackgroundHotkey({
+      action: 'triggerShowSearchFromPageHotkey',
+      documentUrl: location && location.href ? location.href : '',
+      documentIsTop: window.top === window,
+      observedAt: Date.now(),
+      observedShortcut: descriptor,
+      requiresShortcutVerification: true,
+      trustedShortcutFallback: true
+    }, (response, error) => {
+      if (error) {
+        return;
+      }
+      if (response && typeof response.shortcut === 'string') {
+        applyShowSearchShortcut(response.shortcut);
+      }
+    });
   }
 
   function relayTabSwitcherShortcut(event) {
@@ -154,17 +172,11 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    try {
-      chrome.runtime.sendMessage({
-        action: 'triggerTabSwitcherFromPageHotkey',
-        documentUrl: location && location.href ? location.href : '',
-        observedAt: Date.now()
-      }, () => {
-        void (chrome.runtime && chrome.runtime.lastError);
-      });
-    } catch (error) {
-      // Ignore an extension context invalidated during reload or navigation.
-    }
+    sendBackgroundHotkey({
+      action: 'triggerTabSwitcherFromPageHotkey',
+      documentUrl: location && location.href ? location.href : '',
+      observedAt: Date.now()
+    });
     return true;
   }
 
@@ -194,19 +206,13 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    try {
-      chrome.runtime.sendMessage({
-        action: 'triggerShowSearchFromPageHotkey',
-        documentUrl: location && location.href ? location.href : '',
-        documentIsTop: window.top === window,
-        observedAt: Date.now(),
-        trustedShortcutFallback: true
-      }, () => {
-        void (chrome.runtime && chrome.runtime.lastError);
-      });
-    } catch (error) {
-      // Ignore an extension context invalidated during reload or navigation.
-    }
+    sendBackgroundHotkey({
+      action: 'triggerShowSearchFromPageHotkey',
+      documentUrl: location && location.href ? location.href : '',
+      documentIsTop: window.top === window,
+      observedAt: Date.now(),
+      trustedShortcutFallback: true
+    });
   }
 
   function normalizeReleaseKey(value) {
