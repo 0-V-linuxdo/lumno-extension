@@ -322,10 +322,13 @@ function shouldTrackSwitcherTab(tab) {
 }
 
 function canHostSwitcherSurface(tab) {
-  if (!tab || typeof tab.id !== 'number' || typeof tab.windowId !== 'number') {
+  if (!tab || typeof tab.id !== 'number') {
     return false;
   }
   const url = getResolvedTabUrl(tab);
+  if (isGeckoRuntime() && !url) {
+    return true;
+  }
   return isOwnExtensionPageUrl(url) ||
     (isBrowserNewtabUrl(url) && hasTabSwitcherExtensionPagePort(tab)) ||
     canOpenOverlayOnUrl(url);
@@ -2801,7 +2804,11 @@ const GECKO_HOTKEY_DUP_GUARD_MS = 700;
 const GECKO_TABS_QUERY_TIMEOUT_MS = 4000;
 const GECKO_TAB_MESSAGE_TIMEOUT_MS = 2500;
 const GECKO_KEEPALIVE_PORT_NAME = 'lumno-gecko-keepalive';
+const GECKO_HOST_ACCESS_PAGE = 'src/onboarding/gecko-host-access.html';
+const GECKO_HOST_ORIGINS = ['<all_urls>'];
 let lastGlobalHotkeyInvokeAt = 0;
+let geckoHostAccessPageOpenedAt = 0;
+const geckoHostRetryByTabId = new Set();
 
 function detectGeckoRuntimeInline() {
   try {
@@ -4979,7 +4986,8 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   const activeUrl = getResolvedTabUrl(activeTab);
   const rawUrl = typeof activeTab.url === 'string' ? activeTab.url : '';
   const rawPendingUrl = typeof activeTab.pendingUrl === 'string' ? activeTab.pendingUrl : '';
-  const restricted = !canOpenOverlayOnUrl(activeUrl);
+  const geckoUnknownUrl = isGeckoRuntime() && !activeUrl;
+  const restricted = geckoUnknownUrl ? false : !canOpenOverlayOnUrl(activeUrl);
   logHotkeyDebug('active-tab', {
     tabId: activeTab.id,
     resolvedUrl: activeUrl,
@@ -4987,6 +4995,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     pendingUrl: rawPendingUrl,
     url: activeUrl,
     restricted: restricted,
+    geckoUnknownUrl: geckoUnknownUrl,
     source: source || ''
   });
   if (restricted) {
@@ -5182,7 +5191,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
           error: error,
           source: source || ''
         });
-        if (!shouldSkipNewtabCommandFallback() &&
+        if (isGeckoRuntime()) {
+          handleGeckoOverlayInjectFailure(error, activeTab, tabs, source);
+        } else if (!shouldSkipNewtabCommandFallback() &&
             openOptions.loadingRecovery !== true &&
             !overlayLoadingRecordsByTabId.has(activeTab.id)) {
           openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
@@ -5905,6 +5916,75 @@ function isGeckoRuntime() {
   return detectGeckoRuntimeInline();
 }
 
+function isMissingGeckoHostPermissionError(error) {
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  if (gecko && typeof gecko.isMissingHostPermissionError === 'function') {
+    return gecko.isMissingHostPermissionError(error);
+  }
+  return /host permission|missing host|cannot access contents of url/i.test(String(error || ''));
+}
+
+function requestGeckoHostPermission(callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  if (!isGeckoRuntime()) {
+    done(true);
+    return;
+  }
+  if (!chrome || !chrome.permissions || typeof chrome.permissions.request !== 'function') {
+    done(false);
+    return;
+  }
+  try {
+    chrome.permissions.request({ origins: GECKO_HOST_ORIGINS }, (ok) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        done(false);
+        return;
+      }
+      done(Boolean(ok));
+    });
+  } catch (error) {
+    done(false);
+  }
+}
+
+function openGeckoHostAccessPage() {
+  const now = Date.now();
+  if ((now - geckoHostAccessPageOpenedAt) < 8000) {
+    return;
+  }
+  geckoHostAccessPageOpenedAt = now;
+  if (!chrome || !chrome.tabs || typeof chrome.tabs.create !== 'function' ||
+      !chrome.runtime || typeof chrome.runtime.getURL !== 'function') {
+    return;
+  }
+  chrome.tabs.create({ url: chrome.runtime.getURL(GECKO_HOST_ACCESS_PAGE) });
+}
+
+function handleGeckoOverlayInjectFailure(error, activeTab, tabs, source) {
+  if (!isGeckoRuntime()) {
+    return;
+  }
+  logHotkeyDebug('gecko-host-permission-needed', {
+    error: String(error || ''),
+    tabId: activeTab && typeof activeTab.id === 'number' ? activeTab.id : null,
+    source: source || '',
+    missingHost: isMissingGeckoHostPermissionError(error)
+  });
+  requestGeckoHostPermission((granted) => {
+    const tabId = activeTab && typeof activeTab.id === 'number' ? activeTab.id : null;
+    if (granted && typeof tabId === 'number' && !geckoHostRetryByTabId.has(tabId)) {
+      geckoHostRetryByTabId.add(tabId);
+      setTimeout(() => geckoHostRetryByTabId.delete(tabId), 5000);
+      prepareShortcutKeyObserversInOpenTabs();
+      openOverlayOnTab(activeTab, Array.isArray(tabs) ? tabs : [], source, {
+        skipDuplicateGuard: true
+      });
+      return;
+    }
+    openGeckoHostAccessPage();
+  });
+}
+
 function getGeckoCommandDefaults() {
   const gecko = globalThis.LumnoGeckoShortcuts;
   return gecko && gecko.COMMAND_DEFAULTS ? gecko.COMMAND_DEFAULTS : {
@@ -6160,6 +6240,11 @@ chrome.commands.onCommand.addListener(function(command, tab) {
       ? 'commands-prefill'
       : (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME ? 'commands-copy-url' : 'commands-tab-switcher'));
   logHotkeyDebug('received', { command: command, source: source });
+  if (isGeckoRuntime()) {
+    requestGeckoHostPermission(() => {
+      prepareShortcutKeyObserversInOpenTabs();
+    });
+  }
   const runForTab = (activeTab) => {
     if (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME) {
       triggerCopyCurrentUrlForTab(activeTab, source);
@@ -6171,6 +6256,10 @@ chrome.commands.onCommand.addListener(function(command, tab) {
     }
     triggerShowSearchForTab(activeTab, source);
   };
+  if (tab && typeof tab.id === 'number') {
+    runForTab(tab);
+    return;
+  }
   hydrateCommandTab(tab, runForTab);
 });
 }
@@ -6257,9 +6346,26 @@ if (chrome.action && chrome.action.onClicked) {
   chrome.action.onClicked.addListener((tab) => {
     if (isGeckoRuntime()) {
       triggerShowSearchForTab(tab, 'action');
+      requestGeckoHostPermission(() => {
+        prepareShortcutKeyObserversInOpenTabs();
+      });
       return;
     }
     openDocumentPipPickerOnTab(tab, 'action');
+  });
+}
+
+if (chrome && chrome.permissions && chrome.permissions.onAdded &&
+    typeof chrome.permissions.onAdded.addListener === 'function') {
+  chrome.permissions.onAdded.addListener((permissions) => {
+    if (!isGeckoRuntime()) {
+      return;
+    }
+    const origins = permissions && Array.isArray(permissions.origins) ? permissions.origins : [];
+    if (!origins.length) {
+      return;
+    }
+    prepareShortcutKeyObserversInOpenTabs();
   });
 }
 

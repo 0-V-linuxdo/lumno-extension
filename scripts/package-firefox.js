@@ -34,7 +34,6 @@ firefoxManifest.browser_specific_settings = {
 
 firefoxManifest.commands = firefoxManifest.commands || {};
 const geckoShortcuts = {
-  'show-search': { default: 'Alt+K', mac: 'Alt+K' },
   'show-search-prefill': { default: 'Alt+L', mac: 'Alt+L' },
   'show-search-prefill-v': { default: 'Alt+Shift+C', mac: 'Alt+Shift+C' },
   'show-tab-switcher': { default: 'Alt+Q', mac: 'Alt+Q' }
@@ -45,9 +44,22 @@ Object.keys(geckoShortcuts).forEach((name) => {
   }
   firefoxManifest.commands[name].suggested_key = geckoShortcuts[name];
 });
+if (firefoxManifest.commands['show-search']) {
+  delete firefoxManifest.commands['show-search'].suggested_key;
+}
+firefoxManifest.commands._execute_action = {
+  suggested_key: { default: 'Alt+K', mac: 'Alt+K' },
+  description: (firefoxManifest.commands['show-search'] &&
+    firefoxManifest.commands['show-search'].description) ||
+    'Open command bar'
+};
 
 const chromeOnlyPermissions = new Set(['favicon']);
 firefoxManifest.permissions = (firefoxManifest.permissions || []).filter((item) => !chromeOnlyPermissions.has(item));
+if (!firefoxManifest.permissions.includes('activeTab')) {
+  firefoxManifest.permissions.unshift('activeTab');
+}
+firefoxManifest.optional_host_permissions = ['<all_urls>'];
 
 if (Array.isArray(firefoxManifest.web_accessible_resources)) {
   firefoxManifest.web_accessible_resources = firefoxManifest.web_accessible_resources.map((entry) => {

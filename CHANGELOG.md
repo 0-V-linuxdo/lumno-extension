@@ -1,5 +1,12 @@
 Tags: Release
 
+## Firefox port (0.9.58)
+
+- 回到 0.9.51 的注入模型，修掉真正让快捷键没反应的两件事：Firefox 临时附加组件**不授予网站权限**；`commands.onCommand` 经常不带 `tab.url`，空 URL 被当成受限页直接放弃。
+- 增加 `activeTab`；Alt+K 走 `_execute_action`（等于点工具栏，会带上当前标签权限）；注入失败则打开授权页，而不是静默失败。
+- 0.9.51 injection model again, with the two Firefox-specific kills: temporary add-ons do **not** grant host access, and `onCommand` often omits `tab.url` so the overlay treated the page as restricted and did nothing.
+- Adds `activeTab`, binds Alt+K to `_execute_action`, and opens a host-access page when inject fails instead of going silent.
+
 ## Firefox port (0.9.57)
 
 - 0.9.55/56 继续在事件页里 `executeScript` 注入约 30 个文件（约 1.3MB），还套了 1.5 秒超时。Firefox 冷启动解析大脚本很容易超时，失败后又禁止打开新标签回退，所以 Alt+K / Alt+Q 完全没反应。

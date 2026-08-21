@@ -48,8 +48,25 @@ assert.strictEqual(
   packagedManifest.background.scripts[packagedManifest.background.scripts.length - 1],
   'src/background/background.js'
 );
-assert.strictEqual(packagedManifest.commands['show-search'].suggested_key.default, 'Alt+K');
+assert.ok(
+  packagedManifest.commands._execute_action &&
+    packagedManifest.commands._execute_action.suggested_key.default === 'Alt+K',
+  'Firefox Alt+K must use _execute_action so the shortcut grants activeTab'
+);
+assert.ok(
+  !packagedManifest.commands['show-search'] ||
+    !packagedManifest.commands['show-search'].suggested_key,
+  'Firefox must not bind Alt+K to both _execute_action and show-search'
+);
 assert.strictEqual(packagedManifest.commands['show-tab-switcher'].suggested_key.default, 'Alt+Q');
+assert.ok(
+  (packagedManifest.permissions || []).includes('activeTab'),
+  'Firefox package needs activeTab so a command/toolbar click can inject without granted host_permissions'
+);
+assert.ok(
+  (packagedManifest.optional_host_permissions || []).includes('<all_urls>'),
+  'Firefox package must be able to request host access at runtime'
+);
 assert.ok(
   fs.existsSync(path.join(extractDir, 'src/shared/gecko-shortcuts.js')),
   'Firefox zip must contain gecko-shortcuts.js'
@@ -59,8 +76,12 @@ assert.ok(
   'Firefox zip must contain background.js'
 );
 assert.ok(
-  fs.existsSync(path.join(extractDir, 'src/overlay/gecko-overlay-bridge.js')),
-  'Firefox zip must contain the gecko overlay bridge'
+  fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.html')),
+  'Firefox zip must contain the host-access page'
+);
+assert.ok(
+  fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.js')),
+  'Firefox zip must contain the host-access script'
 );
 
 const overlayEntry = (packagedManifest.content_scripts || []).find((entry) =>

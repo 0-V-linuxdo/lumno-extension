@@ -16,6 +16,9 @@
   const MESSAGE_RETRY_MAX_ATTEMPTS = 12;
   const MESSAGE_RETRY_DELAY_MS = 200;
   const DISCONNECTED_PATTERN = /receiving end does not exist|disconnected port|could not establish connection/i;
+  const HOST_PERMISSION_ERROR_PATTERN = /host permission|missing host|cannot access contents of url/i;
+  const HOST_ORIGINS = Object.freeze(['<all_urls>']);
+  const HOST_ACCESS_PAGE = 'src/onboarding/gecko-host-access.html';
   const OVERLAY_CONTENT_SCRIPT_FILES = Object.freeze([
     'src/shared/gecko-shortcuts.js',
     'src/shared/icon-font-preload.js',
@@ -133,11 +136,18 @@
     attempt(1);
   }
 
+  function isMissingHostPermissionError(error) {
+    return HOST_PERMISSION_ERROR_PATTERN.test(String(error || ''));
+  }
+
   return Object.freeze({
     COMMAND_DEFAULTS,
     OVERLAY_CONTENT_SCRIPT_FILES,
+    HOST_ORIGINS,
+    HOST_ACCESS_PAGE,
     isGeckoRuntime,
     isConflictingShortcut,
+    isMissingHostPermissionError,
     getDefaultShortcut,
     resolveShortcut,
     sendRuntimeMessageWithRetry

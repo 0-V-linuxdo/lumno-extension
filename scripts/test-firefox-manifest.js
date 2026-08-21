@@ -35,6 +35,11 @@ Object.keys(manifest.commands || {}).forEach((name) => {
 
 assert.strictEqual(manifest.commands['show-search'].suggested_key.default, 'Alt+K');
 assert.strictEqual(manifest.commands['show-tab-switcher'].suggested_key.default, 'Alt+Q');
+assert.strictEqual(
+  (manifest.permissions || []).includes('activeTab'),
+  false,
+  'Chrome source must not add activeTab; Firefox package injects it'
+);
 
 const contentScripts = manifest.content_scripts || [];
 const hasGeckoInObserver = contentScripts.some((entry) =>

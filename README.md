@@ -34,7 +34,7 @@ Lumno is a Manifest V3 extension for Chromium browsers, with a Gecko port for Fi
   </a>
 </p>
 
-<p align="center">Current version: <code>0.9.57</code></p>
+<p align="center">Current version: <code>0.9.58</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 

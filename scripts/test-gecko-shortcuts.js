@@ -83,6 +83,30 @@ assert.match(
 );
 assert.match(
   backgroundSource,
+  /function requestGeckoHostPermission\(/,
+  'Firefox must request host access on a user gesture'
+);
+assert.match(
+  backgroundSource,
+  /function handleGeckoOverlayInjectFailure\(/,
+  'Failed Firefox injects must open the host-access page instead of going silent'
+);
+assert.match(
+  backgroundSource,
+  /geckoUnknownUrl \? false : !canOpenOverlayOnUrl\(activeUrl\)/,
+  'Firefox commands often omit tab.url; empty url must not be treated as a restricted page'
+);
+assert.match(
+  backgroundSource,
+  /if \(tab && typeof tab.id === 'number'\) \{\s*runForTab\(tab\);/,
+  'Firefox must inject from onCommand immediately so activeTab user gesture is not lost'
+);
+assert.ok(
+  fs.existsSync('src/onboarding/gecko-host-access.html'),
+  'Host-access page must exist so temporary add-ons can grant <all_urls>'
+);
+assert.match(
+  backgroundSource,
   /browser\.search\.search/,
   'Firefox search fallback should use browser.search.search'
 );
@@ -206,6 +230,7 @@ assert.match(
 
 const geckoSource = fs.readFileSync('src/shared/gecko-shortcuts.js', 'utf8');
 assert.match(geckoSource, /function sendRuntimeMessageWithRetry/, 'Gecko helpers should retry disconnected runtime messages');
+assert.match(geckoSource, /function isMissingHostPermissionError/, 'Gecko helpers should detect Missing host permission for the tab');
 assert.match(observerSource, /sendBackgroundHotkey/, 'Shortcut observer should retry background hotkey messages');
 
 const bridgeSource = fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8');
