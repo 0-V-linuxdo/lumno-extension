@@ -52,4 +52,47 @@ assert.strictEqual(guards.canFetchPageForFavicon('https://chromewebstore.google.
 assert.strictEqual(guards.canFetchPageForFavicon('https://chrome.google.com/webstore/devconsole/abc'), false);
 assert.strictEqual(guards.canFetchPageForFavicon('file:///Users/kevinxu/test.html'), false);
 
+const chromeOwn = {
+  runtime: {
+    id: 'abc',
+    getURL(path) {
+      return 'chrome-extension://abc/' + String(path || '').replace(/^\//, '');
+    }
+  }
+};
+assert.strictEqual(
+  guards.isOwnExtensionUrl('chrome-extension://abc/src/newtab/lumno-newtab.html?focus=1', chromeOwn),
+  true
+);
+assert.strictEqual(
+  guards.isOwnExtensionUrl('chrome-extension://other/src/newtab/lumno-newtab.html', chromeOwn),
+  false
+);
+
+const geckoOwn = {
+  runtime: {
+    id: 'lumno@0-v-linuxdo.github.io',
+    getURL(path) {
+      return 'moz-extension://11111111-2222-3333-4444-555555555555/' + String(path || '').replace(/^\//, '');
+    }
+  }
+};
+assert.strictEqual(
+  guards.isOwnExtensionUrl(
+    'moz-extension://11111111-2222-3333-4444-555555555555/src/newtab/lumno-newtab.html?focus=1',
+    geckoOwn
+  ),
+  true,
+  'Firefox own pages use an internal UUID host, not the gecko id'
+);
+assert.strictEqual(
+  guards.isOwnExtensionUrl(
+    'moz-extension://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/src/newtab/lumno-newtab.html',
+    geckoOwn
+  ),
+  false
+);
+assert.strictEqual(guards.isOwnExtensionUrl('about:debugging', geckoOwn), false);
+assert.strictEqual(guards.isOwnExtensionUrl('https://example.com/', geckoOwn), false);
+
 console.log('url guards ok');

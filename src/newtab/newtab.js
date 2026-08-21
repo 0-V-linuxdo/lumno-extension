@@ -12590,13 +12590,26 @@
   }
 
   function isOwnExtensionUrl(url) {
-    if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+    const guards = globalThis.LumnoUrlGuards || {};
+    if (typeof guards.isOwnExtensionUrl === 'function') {
+      return guards.isOwnExtensionUrl(url, chrome);
+    }
+    if (!url || !chrome || !chrome.runtime) {
       return false;
     }
     try {
       const parsed = new URL(url);
-      return isBrowserExtensionProtocol(parsed.protocol) &&
-        String(parsed.hostname || '') === String(chrome.runtime.id);
+      if (!isBrowserExtensionProtocol(parsed.protocol)) {
+        return false;
+      }
+      if (chrome.runtime.id && String(parsed.hostname || '') === String(chrome.runtime.id)) {
+        return true;
+      }
+      if (typeof chrome.runtime.getURL === 'function') {
+        const root = String(chrome.runtime.getURL('') || '');
+        return Boolean(root) && String(url).indexOf(root) === 0;
+      }
+      return false;
     } catch (e) {
       return false;
     }

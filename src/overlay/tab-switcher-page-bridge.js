@@ -297,12 +297,24 @@
   }
 
   function isOwnExtensionPage() {
-    if (!chromeApi || !chromeApi.runtime || !chromeApi.runtime.id) {
+    if (!chromeApi || !chromeApi.runtime) {
       return false;
     }
     try {
-      const parsed = new URL(window.location.href);
-      return parsed.protocol === 'chrome-extension:' && parsed.hostname === chromeApi.runtime.id;
+      const href = window.location.href;
+      const parsed = new URL(href);
+      const protocol = String(parsed.protocol || '').toLowerCase();
+      if (protocol !== 'chrome-extension:' && protocol !== 'moz-extension:') {
+        return false;
+      }
+      if (chromeApi.runtime.id && parsed.hostname === chromeApi.runtime.id) {
+        return true;
+      }
+      if (typeof chromeApi.runtime.getURL === 'function') {
+        const root = String(chromeApi.runtime.getURL('') || '');
+        return Boolean(root) && href.indexOf(root) === 0;
+      }
+      return false;
     } catch (error) {
       return false;
     }

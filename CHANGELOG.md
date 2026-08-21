@@ -1,5 +1,15 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.7.0
+
+Still based on upstream **0.9.51**. v1.6.0 made https shortcuts work. On `about:` / privileged pages they stayed silent instead of Chrome’s new-tab / switch-tab fallback.
+
+Firefox cannot inject content scripts into privileged UI. Chrome still calls `tabs.create` with Lumno’s own `lumno-newtab.html?focus=1` (allowed on Gecko) or hops Tab Switcher onto another hostable tab. The port had **no-op’d** those fallbacks, and own `moz-extension://` pages were missed because the host UUID is not the gecko id.
+
+v1.7.0 restores the newtab fallbacks on Gecko, matches own pages via `runtime.getURL('')`, hops Alt+Q to a hostable tab when needed, and opens Lumno newtab when none exists.
+
+Install `lumno-0.9.51-firefox-v1.7.0.zip`. Unload v1.6.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.6.0
 
 Still based on upstream **0.9.51**. v1.5.0 made failure toasts honest, but Alt+Q still said “overlay is not loaded” on https and Alt+K stayed silent.

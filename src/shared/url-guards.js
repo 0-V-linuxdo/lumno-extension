@@ -99,6 +99,30 @@
     }
   }
 
+  function isOwnExtensionUrl(url, chromeApi) {
+    const api = chromeApi || (typeof chrome !== 'undefined' ? chrome : null);
+    if (!url || !api || !api.runtime) {
+      return false;
+    }
+    try {
+      const parsed = new URL(url);
+      const protocol = String(parsed.protocol || '').toLowerCase();
+      if (!isBrowserExtensionProtocol(protocol)) {
+        return false;
+      }
+      if (api.runtime.id && String(parsed.hostname || '') === String(api.runtime.id)) {
+        return true;
+      }
+      if (typeof api.runtime.getURL === 'function') {
+        const root = String(api.runtime.getURL('') || '');
+        return Boolean(root) && String(url).indexOf(root) === 0;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   return Object.freeze({
     canFetchPageForFavicon,
     canOpenOverlayOnUrl,
@@ -106,6 +130,7 @@
     isBrowserInternalUrl,
     isBrowserNewtabUrl,
     isExtensionStoreUrl,
+    isOwnExtensionUrl,
     isRestrictedUrl
   });
 });

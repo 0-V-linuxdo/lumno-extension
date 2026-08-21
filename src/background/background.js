@@ -125,27 +125,18 @@ function isGeckoRuntime() {
 }
 
 function openBrowserNewtabFallback(options) {
-  if (isGeckoRuntime()) {
-    return;
-  }
   if (typeof openBrowserNewtabFallbackUnwrapped === 'function') {
     return openBrowserNewtabFallbackUnwrapped(options);
   }
 }
 
 function openNewtabFallback(options) {
-  if (isGeckoRuntime()) {
-    return;
-  }
   if (typeof openNewtabFallbackUnwrapped === 'function') {
     return openNewtabFallbackUnwrapped(options);
   }
 }
 
 function openNewtabFallbackForUrl(url, options) {
-  if (isGeckoRuntime()) {
-    return;
-  }
   if (typeof openNewtabFallbackForUrlUnwrapped === 'function') {
     return openNewtabFallbackForUrlUnwrapped(url, options);
   }
@@ -428,14 +419,27 @@ function canFetchPageForFavicon(url) {
 }
 
 function isOwnExtensionPageUrl(url) {
-  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+  const guards = globalThis.LumnoUrlGuards || {};
+  if (typeof guards.isOwnExtensionUrl === 'function') {
+    return guards.isOwnExtensionUrl(url, chrome);
+  }
+  if (!url || !chrome || !chrome.runtime) {
     return false;
   }
   try {
     const parsed = new URL(url);
     const protocol = String(parsed.protocol || '').toLowerCase();
-    return isBrowserExtensionProtocol(protocol) &&
-      parsed.hostname === chrome.runtime.id;
+    if (!isBrowserExtensionProtocol(protocol)) {
+      return false;
+    }
+    if (chrome.runtime.id && parsed.hostname === chrome.runtime.id) {
+      return true;
+    }
+    if (typeof chrome.runtime.getURL === 'function') {
+      const root = String(chrome.runtime.getURL('') || '');
+      return Boolean(root) && String(url).indexOf(root) === 0;
+    }
+    return false;
   } catch (error) {
     return false;
   }
@@ -1416,14 +1420,27 @@ function isBrowserNewtabUrl(url) {
 }
 
 function isOwnExtensionUrl(url) {
-  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+  const guards = globalThis.LumnoUrlGuards || {};
+  if (typeof guards.isOwnExtensionUrl === 'function') {
+    return guards.isOwnExtensionUrl(url, chrome);
+  }
+  if (!url || !chrome || !chrome.runtime) {
     return false;
   }
   try {
     const parsed = new URL(url);
     const protocol = String(parsed.protocol || '').toLowerCase();
-    return isBrowserExtensionProtocol(protocol) &&
-      String(parsed.hostname || '') === String(chrome.runtime.id);
+    if (!isBrowserExtensionProtocol(protocol)) {
+      return false;
+    }
+    if (chrome.runtime.id && String(parsed.hostname || '') === String(chrome.runtime.id)) {
+      return true;
+    }
+    if (typeof chrome.runtime.getURL === 'function') {
+      const root = String(chrome.runtime.getURL('') || '');
+      return Boolean(root) && String(url).indexOf(root) === 0;
+    }
+    return false;
   } catch (e) {
     return false;
   }
@@ -1441,13 +1458,12 @@ function isLumnoBrowserOverrideNewtabUrl(url) {
 }
 
 function isOtherExtensionUrl(url) {
-  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+  if (!url) {
     return false;
   }
   try {
     const parsed = new URL(String(url));
-    return isBrowserExtensionProtocol(parsed.protocol) &&
-      String(parsed.hostname || '') !== String(chrome.runtime.id);
+    return isBrowserExtensionProtocol(parsed.protocol) && !isOwnExtensionUrl(url);
   } catch (e) {
     return false;
   }
@@ -5816,26 +5832,26 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
         : (hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null);
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
+        logHotkeyDebug('tab-switcher-fallback-newtab', {
+          activeTabId: activeTab.id,
+          activeUrl: activeUrl,
+          source: source || ''
+        });
         openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
-        notifyGeckoHotkeyFailure(activeTab, 'tab-switcher', 'no-host-hop');
         finishOpening();
         return;
       }
       openingHostTabId = hostTab.id;
       if (hostTab.id !== activeTab.id) {
-        if (isGeckoRuntime()) {
-          logHotkeyDebug('tab-switcher-gecko-no-host-hop', {
-            activeTabId: activeTab.id,
-            hostTabId: hostTab.id,
-            activeUrl: activeUrl,
-            source: source || ''
-          });
-          notifyGeckoHotkeyFailure(activeTab, 'tab-switcher', 'no-host-hop');
-          finishOpening();
-          return;
-        }
+        logHotkeyDebug('tab-switcher-host-hop', {
+          activeTabId: activeTab.id,
+          hostTabId: hostTab.id,
+          activeUrl: activeUrl,
+          source: source || ''
+        });
         focusWindowAndActivateTab(hostTab.id, hostTab.windowId, (result) => {
           if (!result || result.ok === false) {
+            openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
             finishOpening();
             return;
           }

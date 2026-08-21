@@ -81,8 +81,8 @@ assert.ok(
 );
 assert.match(
   switcherBridgeSource,
-  /openTabSwitcherFromCommand[\s\S]*_x_extension_toggleTabSwitcher_2026_unique_[\s\S]*toggle\(context\)/,
-  'shared tab switcher bridge should open the extension-page tab switcher runtime from a background message'
+  /function isOwnExtensionPage\(\)[\s\S]*moz-extension:[\s\S]*runtime\.getURL/,
+  'Firefox extension pages must register the tab switcher port using moz-extension + runtime.getURL'
 );
 assert.match(
   switcherSource,
@@ -248,8 +248,8 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function isOwnExtensionPageUrl\(url\)[\s\S]*chrome\.runtime\.id[\s\S]*parsed\.hostname === chrome\.runtime\.id/,
-  'Alt+Q should only treat this extension own pages as extension-page switcher hosts'
+  /function isOwnExtensionPageUrl\(url\)[\s\S]*chrome\.runtime\.id[\s\S]*parsed\.hostname === chrome\.runtime\.id[\s\S]*runtime\.getURL/,
+  'Alt+Q should treat this extension own pages as extension-page switcher hosts, including Firefox moz-extension UUIDs'
 );
 assert.match(
   backgroundSource,
@@ -263,8 +263,13 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /tab-switcher-gecko-no-host-hop[\s\S]*notifyGeckoHotkeyFailure\(activeTab, 'tab-switcher'(?:, 'no-host-hop')?\)/,
-  'Firefox Alt+Q must not activate another tab when the current page cannot host the switcher'
+  /tab-switcher-host-hop[\s\S]*focusWindowAndActivateTab\(hostTab.id, hostTab.windowId/,
+  'Alt+Q on a restricted page should activate another hostable tab like Chrome'
+);
+assert.match(
+  backgroundSource,
+  /tab-switcher-fallback-newtab[\s\S]*openNewtabFallbackForUrl\(activeUrl, \{ sourceTab: activeTab \}\)/,
+  'Alt+Q should open the Lumno newtab fallback when no tab can host the switcher'
 );
 assert.match(
   backgroundSource,

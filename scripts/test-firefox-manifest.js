@@ -87,13 +87,38 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function isOwnExtensionPageUrl\(url\)[\s\S]*isBrowserExtensionProtocol\(protocol\)/,
-  'Firefox moz-extension pages must count as own extension pages'
+  /function isOwnExtensionPageUrl\(url\)[\s\S]*isBrowserExtensionProtocol\(protocol\)[\s\S]*runtime\.getURL/,
+  'Firefox moz-extension pages must count as own extension pages via runtime.getURL root'
 );
 assert.match(
   backgroundSource,
+  /function openNewtabFallback\(options\)[\s\S]*openNewtabFallbackUnwrapped\(options\)/,
+  'Firefox restricted pages must open the Lumno newtab fallback, not a Gecko no-op'
+);
+assert.match(
+  backgroundSource,
+  /function openBrowserNewtabFallback\(options\)[\s\S]*openBrowserNewtabFallbackUnwrapped\(options\)/,
+  'Firefox must be able to open the browser default new tab as a restricted-page fallback'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /function openNewtabFallback\(options\)[\s\S]{0,80}if \(isGeckoRuntime\(\)\) \{\s*return;/,
+  'Firefox must not no-op openNewtabFallback'
+);
+assert.doesNotMatch(
+  backgroundSource,
   /tab-switcher-gecko-no-host-hop/,
-  'Firefox must not jump to another tab to host the tab switcher'
+  'Firefox Alt+Q on restricted pages should hop or open a new tab like Chrome'
+);
+assert.match(
+  backgroundSource,
+  /tab-switcher-host-hop[\s\S]*focusWindowAndActivateTab\(hostTab.id, hostTab.windowId/,
+  'Firefox Alt+Q should activate a hostable tab when the current page cannot host the switcher'
+);
+assert.match(
+  backgroundSource,
+  /tab-switcher-fallback-newtab[\s\S]*openNewtabFallbackForUrl\(activeUrl, \{ sourceTab: activeTab \}\)/,
+  'Firefox Alt+Q should open Lumno newtab when no hostable tab exists'
 );
 assert.match(
   backgroundSource,
