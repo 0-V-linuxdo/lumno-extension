@@ -78,10 +78,10 @@ Install from the Chrome Web Store: [Install Lumno on Chrome Web Store](https://c
 
 Do **not** install the Chrome zip with CRX Installer. Use the Firefox package:
 
-1. Download [`lumno-0.9.51-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.0.0) and unzip it.
+1. Download [`lumno-0.9.51-firefox-v1.1.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.1.0) and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
-4. Open a normal `https://` page (not `about:`).
+4. Open a normal `https://` page (not `about:`) and refresh once.
 5. Press **Alt+K** (command bar) or **Alt+Q** (tab switcher). The toolbar icon is the same as Alt+K.
 
 Details, persistent unsigned install, and troubleshooting: [FIREFOX.md](./FIREFOX.md).

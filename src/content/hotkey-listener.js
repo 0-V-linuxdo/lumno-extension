@@ -144,6 +144,19 @@
       shortcut: shortcutRaw || '',
       href: location && location.href ? location.href : ''
     });
+    const gecko = globalThis.LumnoGeckoRuntime;
+    const open = window._x_extension_openLumnoCommandBar_2026_unique_;
+    if (gecko && typeof gecko.isGeckoRuntime === 'function' && gecko.isGeckoRuntime() &&
+        typeof open === 'function') {
+      try {
+        const result = open({ ensureOpen: true });
+        if (result && result.ok === true) {
+          return;
+        }
+      } catch (error) {
+        // Fall through to the background path.
+      }
+    }
     try {
       chrome.runtime.sendMessage({ action: 'triggerShowSearchFromPageHotkey' });
     } catch (e) {

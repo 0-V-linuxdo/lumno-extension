@@ -80,10 +80,10 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 
 不要用 CRX Installer 装 Chrome 版 zip。请使用 Firefox 包：
 
-1. 下载 [`lumno-0.9.51-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.0.0) 并解压。
+1. 下载 [`lumno-0.9.51-firefox-v1.1.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.1.0) 并解压。
 2. 打开 `about:debugging#/runtime/this-firefox`。
 3. **临时载入附加组件…** → 选择解压后的 `manifest.json`。
-4. 打开普通 `https://` 页面（不要在 `about:` 上试）。
+4. 打开普通 `https://` 页面（不要在 `about:` 上试）并刷新一次。
 5. 按 **Alt+K**（命令栏）或 **Alt+Q**（Tab Switcher）。工具栏图标与 Alt+K 相同。
 
 详细步骤、持久安装与排障见 [FIREFOX.md](./FIREFOX.md)。

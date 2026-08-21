@@ -13,7 +13,7 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.0.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.1.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');
@@ -40,10 +40,19 @@ assert.match(polyfill, /chrome\.tabs\.executeScript/, 'MV2 polyfill should use t
 assert.match(polyfill, /chrome\.browserAction/, 'MV2 polyfill should alias browserAction to action');
 
 const observerSource = fs.readFileSync('src/content/shortcut-key-observer.js', 'utf8');
+const hotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
 assert.match(observerSource, /applyGeckoPageShortcutDefaults/, 'Page observer should seed Gecko defaults immediately');
 assert.match(observerSource, /triggerTabSwitcherFromGeckoHotkey/, 'Page observer should relay Alt+Q on Gecko');
+assert.match(observerSource, /tryOpenCommandBarLocally/, 'Page observer should open the command bar in-page on Gecko');
+assert.match(hotkeySource, /_x_extension_openLumnoCommandBar_2026_unique_/, 'Hotkey listener should try the in-page command bar first');
 
-const hotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
-assert.match(hotkeySource, /applyGeckoHotkeyDefaults/, 'Hotkey listener should seed Gecko defaults immediately');
+const bridgeSource = fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8');
+assert.match(bridgeSource, /openSearchOverlayFromBackground/, 'Gecko overlay bridge should toggle from background messages');
+assert.match(polyfill, /hasTabsExecute/, 'MV2 polyfill must always overwrite scripting.executeScript');
+assert.doesNotMatch(
+  polyfill,
+  /if \(chrome\.scripting && typeof chrome\.scripting\.executeScript === 'function'\) \{\s*return;/,
+  'MV2 polyfill must not skip when Firefox already exposes scripting.executeScript'
+);
 
 console.log('gecko runtime ok');

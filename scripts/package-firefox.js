@@ -4,8 +4,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const geckoRuntime = require('../src/shared/gecko-runtime.js');
 
-const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.0.0';
-const FIREFOX_MANIFEST_VERSION = '1.0.0';
+const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.1.0';
+const FIREFOX_MANIFEST_VERSION = '1.1.0';
 
 const repoRoot = process.cwd();
 const sourceManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));
@@ -94,13 +94,29 @@ if (Array.isArray(sourceManifest.web_accessible_resources)) {
 }
 
 if (Array.isArray(firefoxManifest.content_scripts)) {
-  firefoxManifest.content_scripts = firefoxManifest.content_scripts.map((entry) => {
+  firefoxManifest.content_scripts = firefoxManifest.content_scripts.map((entry, index) => {
     if (!entry || typeof entry !== 'object') {
       return entry;
     }
     const next = { ...entry };
     delete next.match_origin_as_fallback;
+    if (index === 0 && Array.isArray(next.js) &&
+        !next.js.includes('src/overlay/gecko-overlay-bridge.js')) {
+      next.js = next.js.concat(['src/overlay/gecko-overlay-bridge.js']);
+    }
     return next;
+  });
+}
+
+const overlayFiles = Array.isArray(geckoRuntime.OVERLAY_CONTENT_SCRIPT_FILES)
+  ? geckoRuntime.OVERLAY_CONTENT_SCRIPT_FILES.slice()
+  : [];
+if (overlayFiles.length) {
+  firefoxManifest.content_scripts = firefoxManifest.content_scripts || [];
+  firefoxManifest.content_scripts.push({
+    matches: ['http://*/*', 'https://*/*'],
+    js: overlayFiles,
+    run_at: 'document_idle'
   });
 }
 

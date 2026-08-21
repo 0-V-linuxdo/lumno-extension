@@ -4795,6 +4795,39 @@ function recoverOverlayAfterTopFrameDocumentStart(request, sender) {
   return true;
 }
 
+function tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  if (!isGeckoRuntime() || !activeTab || typeof activeTab.id !== 'number') {
+    done(false);
+    return;
+  }
+  if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
+    done(false);
+    return;
+  }
+  try {
+    chrome.tabs.sendMessage(activeTab.id, {
+      action: 'openSearchOverlayFromBackground',
+      context: {
+        tabs: Array.isArray(tabs) ? tabs : [],
+        ensureOpen: true,
+        openedAt: overlayOpenStartedAt,
+        currentTabId: activeTab.id,
+        currentTabUrl: getResolvedTabUrl(activeTab),
+        prefillQuery: getOverlayPrefillQueryForSource(activeTab, source),
+        prioritizeCurrentPageMatch: source === 'page-hotkey-prefill'
+      }
+    }, (response) => {
+      const error = chrome.runtime && chrome.runtime.lastError
+        ? chrome.runtime.lastError.message || ''
+        : '';
+      done(!error && response && response.ok === true);
+    });
+  } catch (error) {
+    done(false);
+  }
+}
+
 function openOverlayOnTab(activeTab, tabs, source, options) {
   const openOptions = options && typeof options === 'object' ? options : {};
   const overlayOpenStartedAt = Date.now();
@@ -4973,7 +5006,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
               openedAt: overlayOpenStartedAt,
               documentPipEnabled: documentPipEnabledCache,
               siteSearchProviders: Array.isArray(siteSearchProviders) ? siteSearchProviders : [],
-              ensureOpen: openOptions.ensureOpen === true,
+              ensureOpen: openOptions.ensureOpen === true || isGeckoRuntime(),
               loadingSessionTracked: Boolean(overlayLoadingRecord),
               loadingSession: overlayLoadingRecord && overlayLoadingRecord.session
                 ? overlayLoadingRecord.session
@@ -5059,30 +5092,45 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       runOverlayWithResolvedZoom();
     });
   };
-  chrome.scripting.executeScript({
-    target: {tabId: activeTab.id},
-    injectImmediately: true,
-    func: (runtimeVersion) => {
-      return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
-        typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
-    },
-    args: [OVERLAY_RUNTIME_VERSION]
-  }, (results) => {
-    const probeError = chrome.runtime.lastError;
-    const runtimeReady = !probeError &&
-      Array.isArray(results) &&
-      results[0] &&
-      results[0].result === true;
-    if (runtimeReady) {
-      logHotkeyDebug('runtime-reused', {
+  const startOverlayInjection = () => {
+    chrome.scripting.executeScript({
+      target: {tabId: activeTab.id},
+      injectImmediately: true,
+      func: (runtimeVersion) => {
+        return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
+          typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
+      },
+      args: [OVERLAY_RUNTIME_VERSION]
+    }, (results) => {
+      const probeError = chrome.runtime.lastError;
+      const runtimeReady = !probeError &&
+        Array.isArray(results) &&
+        results[0] &&
+        results[0].result === true;
+      if (runtimeReady) {
+        logHotkeyDebug('runtime-reused', {
+          tabId: activeTab.id,
+          source: source || '',
+          version: OVERLAY_RUNTIME_VERSION
+        });
+        runOverlayWithResolvedZoom();
+        return;
+      }
+      injectOverlayRuntime();
+    });
+  };
+  tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, (opened) => {
+    if (opened) {
+      logHotkeyDebug('overlay-opened', {
         tabId: activeTab.id,
+        tabCount: Array.isArray(tabs) ? tabs.length : 0,
         source: source || '',
-        version: OVERLAY_RUNTIME_VERSION
+        path: 'content-script-message'
       });
-      runOverlayWithResolvedZoom();
+      finishOpenAttempt(true);
       return;
     }
-    injectOverlayRuntime();
+    startOverlayInjection();
   });
 }
 

@@ -38,7 +38,7 @@
    "content_scripts": [
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/content/hotkey-listener.js" ],
+         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/content/hotkey-listener.js", "src/overlay/gecko-overlay-bridge.js" ],
          "run_at": "document_start"
       },
       {

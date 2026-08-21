@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.1.0
+
+Still based on upstream **0.9.51**. v1.0.0 was MV2 (host access granted) but still injected the command bar with `scripting.executeScript`. Firefox already exposes that API, so the polyfill skipped, the 30-file inject failed, and shortcuts did nothing.
+
+v1.1.0 always overwrites `scripting.executeScript` with MV2 `tabs.executeScript`, preloads the command bar / Tab Switcher as `http(s)` content scripts, and opens Alt+K in-page.
+
+Install `lumno-0.9.51-firefox-v1.1.0.zip`. Unload v1.0.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.0.0
 
 Clean rewrite of the Firefox / Zen port from upstream **0.9.51**. This is not another patch on 0.9.52–0.9.59.

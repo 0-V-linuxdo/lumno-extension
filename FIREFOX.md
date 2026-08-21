@@ -1,47 +1,52 @@
-# Lumno Firefox / Zen — 0.9.51-firefox-v1.0.0
+# Lumno Firefox / Zen — 0.9.51-firefox-v1.1.0
 
-This is a **clean rewrite** from upstream **0.9.51**. It is not another patch on 0.9.52–0.9.59.
+This is a **clean rewrite** from upstream **0.9.51**. Chrome source stays 0.9.51. It is not a patch on 0.9.52–0.9.59.
 
-Those builds stayed on Manifest V3. On Firefox, temporary add-ons loaded via `about:debugging` **do not grant `host_permissions`**. Content scripts never enter `https` pages, and `scripting.executeScript` fails with *Missing host permission for the tab*. Shortcuts then do nothing.
+## Why v1.0.0 still had dead shortcuts
 
-Firefox still supports Manifest V2, and Mozilla has no plan to remove it. **This package is MV2**, so `<all_urls>` is granted on load, content scripts inject, and the background page stays alive.
+v1.0.0 was Manifest V2 (so host access is granted on load), but the command bar was still injected with `scripting.executeScript`. Firefox 101+ already exposes that API. The MV2 polyfill then **did nothing**, the 30-file inject failed, and Alt+K / Alt+Q had no fallback.
 
-## What 0.9.51-firefox-v1.0.0 changes (only this)
+v1.1.0:
 
-| Chrome 0.9.51 | Firefox package |
-| --- | --- |
-| Manifest V3 service worker | Manifest V2 persistent background |
-| `Ctrl+Shift+K` (DevTools Web Console on Firefox) | `Alt+K` |
-| `Ctrl+Shift+L` / `Ctrl+Shift+C` | `Alt+L` / `Alt+Shift+C` |
-| `Alt+Q` | `Alt+Q` |
-| Toolbar → Document PiP | Toolbar → command bar |
-| Host permission is `host_permissions` (not granted for temp MV3) | `<all_urls>` in `permissions` (granted on load) |
-
-Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q` is workspace).
+1. Always replaces `scripting.executeScript` with MV2 `tabs.executeScript` (one file at a time).
+2. Preloads the command bar and Tab Switcher as `http(s)` content scripts.
+3. Alt+K opens the overlay **in the page**. Toolbar / `chrome.commands` send a message to that same page.
 
 ## Install on Zen / Firefox
 
-Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first.
+Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0).
 
-1. Download `lumno-0.9.51-firefox-v1.0.0.zip` and unzip it.
+1. Download `lumno-0.9.51-firefox-v1.1.0.zip` and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
-4. Open a normal `https://` page (not `about:`).
+4. Open a normal `https://` page (not `about:`) and **refresh once**.
 5. Press **Alt+K** (command bar) or **Alt+Q** (tab switcher). Toolbar icon is the same as Alt+K.
 
-Temporary add-ons disappear when the browser restarts. After load, already-open https tabs receive the page listeners automatically — you do not need a grant page.
+Temporary add-ons disappear when the browser restarts.
 
 ### Persistent unsigned (Zen / Firefox Developer / Nightly)
 
 1. `about:config` → `xpinstall.signatures.required` = `false`
 2. `about:addons` → gear → **Install Add-on From File…** → pick the zip
 
+## Shortcuts
+
+| Action | Firefox / Zen | Chromium 0.9.51 |
+| --- | --- | --- |
+| Open command bar | `Alt+K` | `Ctrl+Shift+K` |
+| Prefill current URL | `Alt+L` | `Ctrl+Shift+L` |
+| Copy current URL | `Alt+Shift+C` | `Ctrl+Shift+C` |
+| Tab switcher | `Alt+Q` | `Alt+Q` |
+| Toolbar icon | Command bar | Document PiP |
+
+Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q` is workspace).
+
 ## If a shortcut still does nothing
 
 1. Do not test on `about:` pages.
-2. Click the toolbar icon.
-3. `about:addons` → gear → **Manage Extension Shortcuts**.
-4. Zen Settings → Keyboard Shortcuts: make sure Alt+K / Alt+Q are not remapped to something else.
+2. Refresh the https page after loading the add-on.
+3. Click the toolbar icon.
+4. `about:addons` → gear → **Manage Extension Shortcuts**.
 
 ## Development
 

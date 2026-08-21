@@ -55,6 +55,16 @@ assert.match(
   /triggerTabSwitcherFromGeckoHotkey/,
   'Firefox page listener should open tab switcher without using Alt+Tab'
 );
+assert.match(
+  backgroundSource,
+  /function tryOpenOverlayViaContentScript\(/,
+  'Firefox should open the command bar through the page content script first'
+);
+assert.match(
+  backgroundSource,
+  /ensureOpen: openOptions\.ensureOpen === true \|\| isGeckoRuntime\(\)/,
+  'Firefox command bar must open rather than toggle-close'
+);
 
 const contentScripts = manifest.content_scripts || [];
 const hasGeckoInObserver = contentScripts.some((entry) =>
@@ -69,5 +79,13 @@ const hasGeckoInHotkey = contentScripts.some((entry) =>
 );
 assert.ok(hasGeckoInObserver, 'shortcut observer content script must include gecko-runtime.js');
 assert.ok(hasGeckoInHotkey, 'hotkey listener content script must include gecko-runtime.js');
+const hasOverlayBridge = contentScripts.some((entry) =>
+  Array.isArray(entry.js) && entry.js.includes('src/overlay/gecko-overlay-bridge.js')
+);
+assert.ok(hasOverlayBridge, 'source content scripts should include the gecko overlay bridge');
+assert.ok(
+  contentScripts.every((entry) => !Array.isArray(entry.js) || !entry.js.includes('src/overlay/search-panel.js')),
+  'Chrome source must not preload the 1.3MB overlay on every page'
+);
 
 console.log('firefox manifest ok');

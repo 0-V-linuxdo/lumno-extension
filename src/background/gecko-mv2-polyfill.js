@@ -1,5 +1,5 @@
 (function() {
-  if (!chrome) {
+  if (typeof chrome === 'undefined' || !chrome) {
     return;
   }
 
@@ -7,31 +7,33 @@
     chrome.action = chrome.browserAction;
   }
 
-  if (chrome.scripting && typeof chrome.scripting.executeScript === 'function') {
-    return;
-  }
+  const nativeExecute = chrome.scripting && typeof chrome.scripting.executeScript === 'function'
+    ? chrome.scripting.executeScript.bind(chrome.scripting)
+    : null;
+  const hasTabsExecute = Boolean(chrome.tabs && typeof chrome.tabs.executeScript === 'function');
 
   function wrapResults(raw) {
     const values = Array.isArray(raw) ? raw : (raw === undefined ? [] : [raw]);
     return values.map((result) => ({ result: result }));
   }
 
-  chrome.scripting = chrome.scripting || {};
-  chrome.scripting.executeScript = function(details, callback) {
+  function finishCallback(callback, results) {
+    if (typeof callback === 'function') {
+      try {
+        callback(results);
+      } catch (error) {
+        // Callers must not break the polyfill promise.
+      }
+    }
+    return results;
+  }
+
+  function executeWithTabsApi(details, callback) {
     return new Promise((resolve) => {
-      const done = (results) => {
-        if (typeof callback === 'function') {
-          try {
-            callback(results);
-          } catch (error) {
-            // Callers must not break the polyfill promise.
-          }
-        }
-        resolve(results);
-      };
+      const done = (results) => resolve(finishCallback(callback, results));
       const target = details && details.target ? details.target : {};
       const tabId = target.tabId;
-      if (typeof tabId !== 'number' || !chrome.tabs || typeof chrome.tabs.executeScript !== 'function') {
+      if (typeof tabId !== 'number' || !hasTabsExecute) {
         done();
         return;
       }
@@ -85,5 +87,31 @@
 
       done();
     });
+  }
+
+  function executeNativeOneFileAtATime(details, callback) {
+    if (!nativeExecute) {
+      return Promise.resolve(finishCallback(callback));
+    }
+    const files = details && Array.isArray(details.files) ? details.files.filter((file) => typeof file === 'string' && file) : [];
+    if (files.length > 1) {
+      const run = (index) => {
+        if (index >= files.length) {
+          return Promise.resolve(finishCallback(callback, [{ result: true }]));
+        }
+        const payload = Object.assign({}, details, { files: [files[index]] });
+        return Promise.resolve(nativeExecute(payload)).then(() => run(index + 1));
+      };
+      return run(0);
+    }
+    return Promise.resolve(nativeExecute(details)).then((results) => finishCallback(callback, results));
+  }
+
+  chrome.scripting = chrome.scripting || {};
+  chrome.scripting.executeScript = function(details, callback) {
+    if (hasTabsExecute) {
+      return executeWithTabsApi(details, callback);
+    }
+    return executeNativeOneFileAtATime(details, callback);
   };
 })();

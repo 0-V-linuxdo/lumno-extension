@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, '1.0.0');
+assert.strictEqual(packagedManifest.version, '1.1.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
@@ -60,8 +60,17 @@ assert.ok(
   'Firefox must not keep Chrome-only match_origin_as_fallback'
 );
 assert.ok(!fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.html')));
-assert.ok(!fs.existsSync(path.join(extractDir, 'src/overlay/gecko-overlay-bridge.js')));
-assert.ok(!fs.existsSync(path.join(extractDir, 'src/shared/gecko-shortcuts.js')));
+assert.ok(fs.existsSync(path.join(extractDir, 'src/overlay/gecko-overlay-bridge.js')));
+assert.ok(fs.existsSync(path.join(extractDir, 'src/shared/gecko-runtime.js')));
+const overlayEntry = (packagedManifest.content_scripts || []).find((entry) =>
+  Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
+);
+assert.ok(overlayEntry, 'Firefox package must preload the command bar as a content script');
+assert.deepStrictEqual(overlayEntry.matches, ['http://*/*', 'https://*/*']);
+assert.ok(overlayEntry.js.includes('src/overlay/tab-switcher.js'));
+assert.ok(overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'));
+const firstScripts = packagedManifest.content_scripts[0] && packagedManifest.content_scripts[0].js;
+assert.ok(Array.isArray(firstScripts) && firstScripts.includes('src/overlay/gecko-overlay-bridge.js'));
 
 fs.rmSync(extractDir, { recursive: true, force: true });
 console.log('package firefox ok');
