@@ -1,5 +1,15 @@
 Tags: Release
 
+## Firefox port (0.9.55)
+
+- Firefox 的 `commands.onCommand` 经常不带 `tab.url`，Tab Switcher 会误判当前页不能承载，然后跳到 Lumno 新标签页（看起来像打开了插件主页）。
+- Firefox 一次只能注入一个 `executeScript` 文件；多文件注入失败后，commands 和页面热键再各触发一次，命令栏就会闪一下标签再没反应。
+- 0.9.55：用 `tabs.get` 补全当前标签；Gecko 上逐文件注入；页面热键让路给 `chrome.commands`；命令栏只打开不立刻 toggle 关掉；不再跳到别的标签承载 Switcher。Firefox 包去掉 `service_worker`，避免只加载 `background.js`。
+
+- Firefox `commands.onCommand` often omits `tab.url`, so Tab Switcher jumped to the Lumno new-tab page (the plugin homepage).
+- Firefox `executeScript` is one-file-at-a-time; multi-file injects failed, then commands + page hotkey toggled the command bar and flashed a tab.
+- 0.9.55 hydrates the active tab, injects one file at a time, lets commands win over page hotkeys, opens (does not toggle-close) the command bar, and never hops to another tab to host the switcher. The Firefox zip no longer declares `service_worker`.
+
 ## Firefox port (0.9.54)
 
 - Firefox 的 `moz-extension://UUID/` 不等于 gecko id，导致扩展自己的新标签页不被识别。

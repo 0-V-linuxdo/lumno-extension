@@ -28,6 +28,10 @@ assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not in
 assert.ok(!(packagedManifest.permissions || []).includes('favicon'), 'Firefox package must drop chrome favicon permission');
 assert.ok(Array.isArray(packagedManifest.background.scripts), 'Firefox package must declare background.scripts');
 assert.ok(
+  !packagedManifest.background.service_worker,
+  'Firefox package must not declare service_worker or some builds load only background.js'
+);
+assert.ok(
   packagedManifest.background.scripts.length > 2,
   'Firefox package must ship helper scripts on the event page'
 );

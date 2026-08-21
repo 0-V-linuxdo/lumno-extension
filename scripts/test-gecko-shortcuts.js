@@ -79,7 +79,7 @@ assert.match(
 assert.match(
   backgroundSource,
   /function executeScriptsOnTab\(/,
-  'Gecko should inject overlay/switcher scripts in batches without missing files'
+  'Gecko should inject overlay/switcher scripts without missing files'
 );
 assert.match(
   backgroundSource,
@@ -93,8 +93,48 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /executeScriptsOnTab\(hostTab\.id,\s*\[[\s\S]*codex-debug-surface\.js/,
+  /GECKO_SCRIPT_INJECT_BATCH_SIZE = 1/,
+  'Firefox executeScript should inject one file at a time'
+);
+assert.match(
+  backgroundSource,
+  /function detectGeckoRuntimeInline\(/,
+  'Gecko detection must not depend only on gecko-shortcuts.js loading'
+);
+assert.match(
+  backgroundSource,
+  /function hydrateCommandTab\(/,
+  'Firefox commands.onCommand tabs often omit url and must be hydrated via tabs.get'
+);
+assert.match(
+  backgroundSource,
+  /gecko-page-hotkey-ignored/,
+  'Firefox page hotkeys must yield to chrome.commands so the overlay is not toggled closed'
+);
+assert.match(
+  backgroundSource,
+  /ensureOpen: openOptions\.ensureOpen === true \|\| isGeckoRuntime\(\)/,
+  'Firefox command bar must open rather than toggle-close on a duplicate hotkey'
+);
+assert.match(
+  backgroundSource,
+  /if \(!hostTab && !isGeckoRuntime\(\)\)/,
+  'Firefox must not jump to the Lumno newtab page to host Tab Switcher'
+);
+assert.match(
+  backgroundSource,
+  /function invokeScriptingExecuteScript\(/,
+  'executeScript must settle both callback and promise so Firefox event pages do not hang'
+);
+assert.match(
+  backgroundSource,
+  /executeScriptsOnTab\(hostTab\.id,\s*\[[\s\S]*'src\/react\/overlay-islands\.js'[\s\S]*'src\/overlay\/tab-switcher\.js'/,
   'Tab switcher inject must go through the Gecko file filter'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /executeScriptsOnTab\(hostTab\.id,\s*\[\s*'src\/shared\/icon-font-preload\.js',\s*'src\/shared\/codex-debug-surface\.js'/,
+  'Tab switcher must not executeScript a missing debug file'
 );
 assert.doesNotMatch(
   backgroundSource,

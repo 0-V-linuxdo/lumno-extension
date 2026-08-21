@@ -18,8 +18,7 @@ const developmentOnlyFiles = new Set([
 firefoxManifest.background = {
   scripts: (Array.isArray(sourceManifest.background && sourceManifest.background.scripts)
     ? sourceManifest.background.scripts
-    : ['src/background/background.js']).filter((file) => !developmentOnlyFiles.has(file)),
-  service_worker: 'src/background/background.js'
+    : ['src/background/background.js']).filter((file) => !developmentOnlyFiles.has(file))
 };
 
 firefoxManifest.browser_specific_settings = {

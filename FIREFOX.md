@@ -4,12 +4,19 @@ This fork adds Gecko support so Lumno can run in **Firefox** and **Zen Browser**
 
 Upstream (`kubai087/lumno-extension`) is Chromium-only. Loading the Chrome zip with CRX Installer on Zen is why **Open command bar** and **Tab switcher** shortcuts did nothing.
 
+## Why 0.9.54 still opened the homepage / flashed a tab
+
+1. Firefox `commands.onCommand` often passes a tab **without `url`**. Tab Switcher then decided the page could not host the overlay and **switched to the Lumno new-tab page** (the plugin homepage).
+2. Firefox historically accepts **one file per `executeScript`**. Injecting several files at once failed, and a duplicate page hotkey toggled the command bar closed. Failed injects could still create a Lumno tab that recovery immediately closed.
+
+0.9.55 hydrates the tab with `tabs.get`, injects **one file at a time**, lets `chrome.commands` win over the page listener, opens the command bar instead of toggling it, and never jumps to another tab to host Tab Switcher.
+
 ## Why 0.9.53 opened the homepage / flashed a tab
 
 1. Tab Switcher injected `codex-debug-surface.js`, which is stripped from the Firefox zip. `executeScript` failed and Lumno opened its new-tab page as a fallback.
 2. Firefox fires **both** `commands.onCommand` and the page-level listener. The command bar is a toggle, so the second event closed it. Overlay inject failure also created a Lumno tab that recovery then closed.
 
-0.9.54 filters missing files, batches injects, ignores the duplicate page hotkey, and does **not** open the Lumno homepage when overlay/switcher inject fails.
+0.9.54 filters missing files, ignores the duplicate page hotkey, and does **not** open the Lumno homepage when overlay/switcher inject fails.
 
 ## Why 0.9.52 still had dead shortcuts
 
@@ -22,6 +29,8 @@ Firefox MV3 uses `background.scripts` as a **window event page**. That context h
 3. Using Firefox-safe suggested keys in the source manifest (`Alt+K` / `Alt+Q`).
 4. Seeding those keys in the page listener **immediately**, even if the background is still starting.
 5. Making the toolbar icon open the command bar on Firefox / Zen.
+
+The Firefox zip no longer includes `service_worker`, so Gecko cannot ignore `background.scripts` and boot only `background.js`.
 
 ## Default shortcuts on Firefox / Zen
 
@@ -45,11 +54,11 @@ On Zen you can also check **Settings → Keyboard Shortcuts** for conflicts.
 
 Do **not** use the Chrome Web Store zip or CRX Installer.
 
-**Unload the old Lumno first** (`about:addons` → Remove), then load 0.9.53.
+**Unload the old Lumno first** (`about:addons` → Remove), then load 0.9.55.
 
 ### Temporary (easiest, unsigned)
 
-1. Download `lumno-firefox-v0.9.54.zip` from this repo’s Releases, or run `npm run package:firefox` and use `dist/lumno-firefox-v0.9.54.zip`.
+1. Download `lumno-firefox-v0.9.55.zip` from this repo’s Releases, or run `npm run package:firefox` and use `dist/lumno-firefox-v0.9.55.zip`.
 2. Unzip the archive.
 3. Open `about:debugging#/runtime/this-firefox`
 4. **Load Temporary Add-on…**

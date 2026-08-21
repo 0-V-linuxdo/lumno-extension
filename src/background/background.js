@@ -2798,8 +2798,30 @@ const DEVELOPMENT_ONLY_INJECT_FILES = Object.freeze([
   'src/background/codex-debug-bridge.js'
 ]);
 const GECKO_HOTKEY_DUP_GUARD_MS = 700;
-const GECKO_SCRIPT_INJECT_BATCH_SIZE = 5;
+const GECKO_PAGE_HOTKEY_DEFER_MS = 90;
+const GECKO_SCRIPT_INJECT_BATCH_SIZE = 1;
 let lastGlobalHotkeyInvokeAt = 0;
+let lastCommandHotkeyAt = 0;
+
+function detectGeckoRuntimeInline() {
+  try {
+    if (typeof browser !== 'undefined' && browser.runtime &&
+        typeof browser.runtime.getBrowserInfo === 'function') {
+      return true;
+    }
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      if (String(chrome.runtime.getURL('') || '').indexOf('moz-extension:') === 0) {
+        return true;
+      }
+    }
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent)
+      ? String(navigator.userAgent)
+      : '';
+    return /firefox|zenbrowser|icedragon/i.test(ua);
+  } catch (error) {
+    return false;
+  }
+}
 
 function getRuntimeInjectableFiles(files) {
   const list = Array.isArray(files)
@@ -2810,6 +2832,41 @@ function getRuntimeInjectableFiles(files) {
   }
   const skip = new Set(DEVELOPMENT_ONLY_INJECT_FILES);
   return list.filter((file) => !skip.has(file));
+}
+
+function invokeScriptingExecuteScript(details, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  let settled = false;
+  const finish = (error, results) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    done(error || '', results);
+  };
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    finish('scripting-unavailable');
+    return;
+  }
+  let result;
+  try {
+    result = chrome.scripting.executeScript(details, (results) => {
+      const error = chrome.runtime && chrome.runtime.lastError
+        ? chrome.runtime.lastError.message || 'unknown'
+        : '';
+      finish(error, results);
+    });
+  } catch (error) {
+    finish(error && error.message ? error.message : 'executeScript-threw');
+    return;
+  }
+  if (result && typeof result.then === 'function') {
+    result.then((results) => {
+      finish('', results);
+    }).catch((error) => {
+      finish(error && error.message ? error.message : 'executeScript-rejected');
+    });
+  }
 }
 
 function executeScriptsOnTab(tabId, files, options, callback) {
@@ -2825,18 +2882,15 @@ function executeScriptsOnTab(tabId, files, options, callback) {
     return;
   }
   const batchSize = isGeckoRuntime()
-    ? Math.min(GECKO_SCRIPT_INJECT_BATCH_SIZE, injectable.length)
+    ? GECKO_SCRIPT_INJECT_BATCH_SIZE
     : injectable.length;
   const runBatch = (start) => {
     const batch = injectable.slice(start, start + batchSize);
-    chrome.scripting.executeScript({
+    invokeScriptingExecuteScript({
       target: { tabId: tabId },
       injectImmediately: injectImmediately,
       files: batch
-    }, () => {
-      const error = chrome.runtime && chrome.runtime.lastError
-        ? chrome.runtime.lastError.message || 'unknown'
-        : '';
+    }, (error) => {
       if (error) {
         done(error);
         return;
@@ -2864,6 +2918,88 @@ function openCommandSurfaceFallback(url, options) {
     return;
   }
   openNewtabFallbackForUrl(url, options);
+}
+
+function markGeckoCommandHotkeyReceived() {
+  lastCommandHotkeyAt = Date.now();
+}
+
+function wasGeckoCommandHotkeyRecent() {
+  return isGeckoRuntime() && (Date.now() - lastCommandHotkeyAt) <= GECKO_HOTKEY_DUP_GUARD_MS;
+}
+
+function runAfterGeckoCommandChance(source, run) {
+  if (typeof run !== 'function') {
+    return;
+  }
+  if (!isGeckoRuntime() || String(source || '').indexOf('page-hotkey') !== 0) {
+    run();
+    return;
+  }
+  if (wasGeckoCommandHotkeyRecent()) {
+    logHotkeyDebug('gecko-page-hotkey-ignored', {
+      source: source || '',
+      reason: 'command-already-handled'
+    });
+    return;
+  }
+  setTimeout(() => {
+    if (wasGeckoCommandHotkeyRecent()) {
+      logHotkeyDebug('gecko-page-hotkey-ignored', {
+        source: source || '',
+        reason: 'command-won'
+      });
+      return;
+    }
+    run();
+  }, GECKO_PAGE_HOTKEY_DEFER_MS);
+}
+
+function hydrateCommandTab(tab, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  const finish = (candidate) => {
+    done(candidate && typeof candidate.id === 'number' ? candidate : null);
+  };
+  const queryActive = () => {
+    if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
+      finish(tab && typeof tab.id === 'number' ? tab : null);
+      return;
+    }
+    chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+      const activeTab = Array.isArray(activeTabs) && activeTabs[0] ? activeTabs[0] : null;
+      if (activeTab && typeof activeTab.id === 'number') {
+        finish(activeTab);
+        return;
+      }
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (fallbackTabs) => {
+        finish(Array.isArray(fallbackTabs) && fallbackTabs[0] ? fallbackTabs[0] : null);
+      });
+    });
+  };
+  const needsHydration = isGeckoRuntime() ||
+    !tab ||
+    typeof tab.id !== 'number' ||
+    !getResolvedTabUrl(tab) ||
+    typeof tab.windowId !== 'number';
+  if (!needsHydration) {
+    finish(tab);
+    return;
+  }
+  if (tab && typeof tab.id === 'number' && chrome.tabs && typeof chrome.tabs.get === 'function') {
+    chrome.tabs.get(tab.id, (fresh) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        queryActive();
+        return;
+      }
+      if (fresh && typeof fresh.id === 'number' && getResolvedTabUrl(fresh)) {
+        finish(fresh);
+        return;
+      }
+      queryActive();
+    });
+    return;
+  }
+  queryActive();
 }
 
 function shouldIgnoreDuplicateHotkey(tabId) {
@@ -4924,7 +5060,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
           scheduleSiteSearchProviderIconWarmup(providers, '');
         })
         .catch(() => {});
-      chrome.scripting.executeScript({
+      invokeScriptingExecuteScript({
             target: {tabId: activeTab.id},
             injectImmediately: true,
             func: (overlayTabs, overlayPanelContext, overlayHostId) => {
@@ -4951,18 +5087,18 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
               openedAt: overlayOpenStartedAt,
               documentPipEnabled: documentPipEnabledCache,
               siteSearchProviders: Array.isArray(siteSearchProviders) ? siteSearchProviders : [],
-              ensureOpen: openOptions.ensureOpen === true,
+              ensureOpen: openOptions.ensureOpen === true || isGeckoRuntime(),
               loadingSessionTracked: Boolean(overlayLoadingRecord),
               loadingSession: overlayLoadingRecord && overlayLoadingRecord.session
                 ? overlayLoadingRecord.session
                 : null
             }, OVERLAY_HOST_ID]
-          }, function(results) {
-            if (chrome.runtime.lastError) {
+          }, function(error, results) {
+            if (error) {
               logHotkeyDebug('inject-failed', {
                 step: 'src/overlay/search-panel.js',
                 tabId: activeTab.id,
-                error: chrome.runtime.lastError.message || 'unknown',
+                error: error,
                 source: source || ''
               });
               if (!shouldSkipNewtabCommandFallback() &&
@@ -5036,7 +5172,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       runOverlayWithResolvedZoom();
     });
   };
-  chrome.scripting.executeScript({
+  invokeScriptingExecuteScript({
     target: {tabId: activeTab.id},
     injectImmediately: true,
     func: (runtimeVersion) => {
@@ -5044,8 +5180,8 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
         typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
     },
     args: [OVERLAY_RUNTIME_VERSION]
-  }, (results) => {
-    const probeError = chrome.runtime.lastError;
+  }, (error, results) => {
+    const probeError = error;
     const runtimeReady = !probeError &&
       Array.isArray(results) &&
       results[0] &&
@@ -5206,7 +5342,6 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
   function runDynamicSwitcherScript(switcherContext) {
     executeScriptsOnTab(hostTab.id, [
       'src/shared/icon-font-preload.js',
-      'src/shared/codex-debug-surface.js',
       'src/react/overlay-islands.js',
       'src/overlay/tab-switcher.js'
     ], { injectImmediately: true }, (error) => {
@@ -5223,8 +5358,9 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
         finishOpen(false, errorMessage);
         return;
       }
-      chrome.scripting.executeScript({
+      invokeScriptingExecuteScript({
         target: { tabId: hostTab.id },
+        injectImmediately: true,
         func: (switcherContext) => {
           const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
           if (typeof toggle !== 'function') {
@@ -5237,9 +5373,9 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
             : { ok: true };
         },
         args: [switcherContext]
-      }, (results) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          const errorMessage = chrome.runtime.lastError.message || 'unknown';
+      }, (runError, results) => {
+        if (runError) {
+          const errorMessage = runError;
           logHotkeyDebug('tab-switcher-run-failed', {
             tabId: hostTab.id,
             error: errorMessage,
@@ -5511,15 +5647,14 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
       }
       const activeUrl = getResolvedTabUrl(activeTab);
       const canHostOnActiveTab = canHostSwitcherSurface(activeTab);
-      const hostItem = canHostOnActiveTab
-        ? items.find((item) => item && item.id === activeTab.id)
-        : items.find((item) => {
+      let hostTab = canHostOnActiveTab ? activeTab : null;
+      if (!hostTab && !isGeckoRuntime()) {
+        const hostItem = items.find((item) => {
           const candidate = tabList.find((tabItem) => tabItem && tabItem.id === item.id) || item;
           return item && item.id !== activeTab.id && canHostSwitcherSurface(candidate);
         });
-      const hostTab = canHostOnActiveTab
-        ? activeTab
-        : (hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null);
+        hostTab = hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null;
+      }
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
         if (!shouldSkipNewtabCommandFallback()) {
@@ -5721,7 +5856,17 @@ function openDocumentPipPickerOnTab(activeTab, source) {
 
 function isGeckoRuntime() {
   const gecko = globalThis.LumnoGeckoShortcuts;
-  return Boolean(gecko && typeof gecko.isGeckoRuntime === 'function' && gecko.isGeckoRuntime());
+  if (gecko && typeof gecko.isGeckoRuntime === 'function') {
+    try {
+      if (gecko.isGeckoRuntime()) {
+        return true;
+      }
+    } catch (error) {
+      // Fall through to inline detection so a missing helper cannot
+      // re-enable Chrome newtab fallbacks on Firefox.
+    }
+  }
+  return detectGeckoRuntimeInline();
 }
 
 function getGeckoCommandDefaults() {
@@ -5972,6 +6117,7 @@ chrome.commands.onCommand.addListener(function(command, tab) {
   ) {
     return;
   }
+  markGeckoCommandHotkeyReceived();
   const commandObservedAt = Date.now();
   const source = command === SHOW_SEARCH_COMMAND_NAME
     ? 'commands'
@@ -5990,20 +6136,7 @@ chrome.commands.onCommand.addListener(function(command, tab) {
     }
     triggerShowSearchForTab(activeTab, source);
   };
-  if (tab && typeof tab.id === 'number') {
-    runForTab(tab);
-    return;
-  }
-  chrome.tabs.query({active: true, currentWindow: true}, function(activeTabs) {
-    const activeTab = Array.isArray(activeTabs) && activeTabs[0] ? activeTabs[0] : null;
-    if (activeTab && typeof activeTab.id === 'number') {
-      runForTab(activeTab);
-      return;
-    }
-    chrome.tabs.query({active: true, lastFocusedWindow: true}, function(fallbackTabs) {
-      runForTab(Array.isArray(fallbackTabs) && fallbackTabs[0] ? fallbackTabs[0] : null);
-    });
-  });
+  hydrateCommandTab(tab, runForTab);
 });
 }
 
@@ -6929,7 +7062,9 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ ok: false });
         return;
       }
-      triggerTabSwitcherForTab(senderTab, 'page-hotkey-tab-switcher', Date.now());
+      runAfterGeckoCommandChance('page-hotkey-tab-switcher', () => {
+        triggerTabSwitcherForTab(senderTab, 'page-hotkey-tab-switcher', Date.now());
+      });
       sendResponse({ ok: true });
       return;
     }
@@ -6956,7 +7091,9 @@ function handleShortcutMessage(request, sender, sendResponse) {
           verifiedAfterColdStart: Boolean(request && request.requiresShortcutVerification)
         });
         rememberPageHotkeyContext(senderTab);
-        triggerShowSearchForTab(senderTab, triggerSource);
+        runAfterGeckoCommandChance(triggerSource, () => {
+          triggerShowSearchForTab(senderTab, triggerSource);
+        });
         sendResponse({ ok: true, shortcut: shortcut || '' });
       };
       if (request && request.requiresShortcutVerification === true) {
