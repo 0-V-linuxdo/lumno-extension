@@ -60,14 +60,10 @@ assert.strictEqual(
   false,
   'content script should not try to force-capture Alt+Tab'
 );
-assert.ok(
+assert.strictEqual(
   contentHotkeySource.includes('triggerTabSwitcherFromPageHotkey'),
-  'content script should relay the configured tab-switcher shortcut on Gecko'
-);
-assert.doesNotMatch(
-  contentHotkeySource,
-  /Alt\+Tab|isBestEffortAltTabEvent/,
-  'content script should not capture OS-level Alt+Tab'
+  false,
+  'content script should not expose an Alt+Tab page-hotkey switcher trigger'
 );
 assert.match(
   switcherBridgeSource,
@@ -160,7 +156,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function prepareShortcutKeyObserver\(tab\)[\s\S]*allFrames:\s*true[\s\S]*files:\s*\['src\/shared\/gecko-shortcuts\.js',\s*'src\/shared\/shortcut-key-matcher\.js',\s*'src\/content\/shortcut-key-observer\.js'\]/,
+  /function prepareShortcutKeyObserver\(tab\)[\s\S]*allFrames:\s*true[\s\S]*files:\s*\[[\s\S]*src\/shared\/gecko-runtime\.js[\s\S]*src\/shared\/shortcut-key-matcher\.js[\s\S]*src\/content\/shortcut-key-observer\.js[\s\S]*\]/,
   'the background should dynamically install the release observer in already-open tabs and focused frames'
 );
 assert.match(
@@ -175,9 +171,11 @@ const shortcutReleaseContentScript = manifest.content_scripts.find((entry) => (
 ));
 assert.ok(
   shortcutReleaseContentScript &&
-    shortcutReleaseContentScript.js.includes('src/shared/gecko-shortcuts.js') &&
+    shortcutReleaseContentScript.js.includes('src/shared/gecko-runtime.js') &&
     shortcutReleaseContentScript.js.includes('src/shared/shortcut-key-matcher.js') &&
     shortcutReleaseContentScript.js.includes('src/content/shortcut-key-observer.js') &&
+    shortcutReleaseContentScript.js.indexOf('src/shared/gecko-runtime.js') <
+      shortcutReleaseContentScript.js.indexOf('src/content/shortcut-key-observer.js') &&
     shortcutReleaseContentScript.run_at === 'document_start' &&
     shortcutReleaseContentScript.all_frames === true &&
     shortcutReleaseContentScript.match_about_blank === true &&
@@ -250,13 +248,8 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function isOwnExtensionPageUrl\(url\)[\s\S]*isOwnExtensionUrl\(url\)/,
+  /function isOwnExtensionPageUrl\(url\)[\s\S]*chrome\.runtime\.id[\s\S]*parsed\.hostname === chrome\.runtime\.id/,
   'Alt+Q should only treat this extension own pages as extension-page switcher hosts'
-);
-assert.match(
-  backgroundSource,
-  /function isOwnExtensionUrl\(url\)[\s\S]*runtime\.getURL\(''\)/,
-  'own-page detection must use runtime.getURL origin so Firefox moz-extension UUIDs match'
 );
 assert.match(
   backgroundSource,
@@ -433,14 +426,10 @@ assert.match(
   /recentTabTracker\.setThumbnail\(resolvedTab\.id,[\s\S]*postTabSwitcherThumbnailUpdate\(resolvedTab,/,
   'thumbnail capture success should publish the fresh cover to an already-open switcher'
 );
-assert.ok(
+assert.strictEqual(
   backgroundSource.includes('triggerTabSwitcherFromPageHotkey'),
-  'background router should accept the Gecko page-level tab-switcher shortcut'
-);
-assert.doesNotMatch(
-  backgroundSource,
-  /isBestEffortAltTabEvent|Alt\+Tab page-hotkey/,
-  'background router should not restore OS-level Alt+Tab capture'
+  false,
+  'background router should not keep the removed Alt+Tab page-hotkey action'
 );
 assert.match(
   switcherSource,
@@ -1249,7 +1238,7 @@ assert.match(
 );
 assert.match(
   injectSwitcherBlock,
-  /executeScriptsOnTab\(hostTab\.id,\s*\[[\s\S]*'src\/react\/overlay-islands\.js',[\s\S]*'src\/overlay\/tab-switcher\.js'[\s\S]*\][\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
+  /chrome\.scripting\.executeScript\(\{[\s\S]*files:\s*\[[\s\S]*'src\/react\/overlay-islands\.js',[\s\S]*'src\/overlay\/tab-switcher\.js'[\s\S]*\][\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
   'Alt+Q should install the React entry before direct tab switcher injection'
 );
 const runSwitcherScriptStart = injectSwitcherBlock.indexOf('const runSwitcherScript = (tabZoomFactor) => {');

@@ -2,7 +2,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { OVERLAY_CONTENT_SCRIPT_FILES } = require('../src/shared/gecko-shortcuts.js');
+const geckoRuntime = require('../src/shared/gecko-runtime.js');
+
+const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.0.0';
+const FIREFOX_MANIFEST_VERSION = '1.0.0';
 
 const repoRoot = process.cwd();
 const sourceManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));
@@ -10,22 +13,45 @@ const firefoxManifest = JSON.parse(JSON.stringify(sourceManifest));
 
 delete firefoxManifest.key;
 delete firefoxManifest.externally_connectable;
+delete firefoxManifest.host_permissions;
+delete firefoxManifest.action;
 
-const developmentOnlyFiles = new Set([
-  'src/background/codex-debug-bridge.js',
-  'src/shared/codex-debug-surface.js'
-]);
+firefoxManifest.manifest_version = 2;
+firefoxManifest.version = FIREFOX_MANIFEST_VERSION;
+
+const helperScripts = [
+  'src/background/gecko-mv2-polyfill.js',
+  'src/shared/gecko-runtime.js'
+];
+const importOrder = [];
+const backgroundSource = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
+const importMatches = [...backgroundSource.matchAll(/lumnoImportScript\('([^']+)'/g)];
+importMatches.forEach((match) => {
+  if (!helperScripts.includes(match[1]) && !importOrder.includes(match[1])) {
+    importOrder.push(match[1]);
+  }
+});
 
 firefoxManifest.background = {
-  scripts: (Array.isArray(sourceManifest.background && sourceManifest.background.scripts)
-    ? sourceManifest.background.scripts
-    : ['src/background/background.js']).filter((file) => !developmentOnlyFiles.has(file))
+  scripts: helperScripts.concat(importOrder).concat(['src/background/background.js']),
+  persistent: true
+};
+
+firefoxManifest.browser_action = {
+  default_title: sourceManifest.action && sourceManifest.action.default_title
+    ? sourceManifest.action.default_title
+    : '__MSG_ext_name__',
+  default_icon: sourceManifest.icons || {
+    16: 'assets/images/lumno.png',
+    48: 'assets/images/lumno.png',
+    128: 'assets/images/lumno.png'
+  }
 };
 
 firefoxManifest.browser_specific_settings = {
   gecko: {
     id: 'lumno@0-v-linuxdo.github.io',
-    strict_min_version: '121.0',
+    strict_min_version: '109.0',
     data_collection_permissions: {
       required: ['none']
     }
@@ -33,67 +59,53 @@ firefoxManifest.browser_specific_settings = {
 };
 
 firefoxManifest.commands = firefoxManifest.commands || {};
-const geckoShortcuts = {
-  'show-search-prefill': { default: 'Alt+L', mac: 'Alt+L' },
-  'show-search-prefill-v': { default: 'Alt+Shift+C', mac: 'Alt+Shift+C' },
-  'show-tab-switcher': { default: 'Alt+Q', mac: 'Alt+Q' }
-};
+const geckoShortcuts = geckoRuntime.COMMAND_DEFAULTS;
 Object.keys(geckoShortcuts).forEach((name) => {
   if (!firefoxManifest.commands[name]) {
     return;
   }
-  firefoxManifest.commands[name].suggested_key = geckoShortcuts[name];
+  firefoxManifest.commands[name].suggested_key = {
+    default: geckoShortcuts[name],
+    mac: geckoShortcuts[name]
+  };
 });
-if (firefoxManifest.commands['show-search']) {
-  delete firefoxManifest.commands['show-search'].suggested_key;
-}
-firefoxManifest.commands._execute_action = {
-  suggested_key: { default: 'Alt+K', mac: 'Alt+K' },
-  description: (firefoxManifest.commands['show-search'] &&
-    firefoxManifest.commands['show-search'].description) ||
-    'Open command bar'
-};
 
-const chromeOnlyPermissions = new Set(['favicon']);
-firefoxManifest.permissions = (firefoxManifest.permissions || []).filter((item) => !chromeOnlyPermissions.has(item));
-if (!firefoxManifest.permissions.includes('activeTab')) {
-  firefoxManifest.permissions.unshift('activeTab');
+const droppedPermissions = new Set(['scripting', 'favicon', 'tabGroups']);
+const permissions = (sourceManifest.permissions || []).filter((item) => !droppedPermissions.has(item));
+if (!permissions.includes('activeTab')) {
+  permissions.push('activeTab');
 }
-firefoxManifest.optional_host_permissions = ['<all_urls>'];
+if (!permissions.includes('<all_urls>')) {
+  permissions.push('<all_urls>');
+}
+firefoxManifest.permissions = permissions;
 
-if (Array.isArray(firefoxManifest.web_accessible_resources)) {
-  firefoxManifest.web_accessible_resources = firefoxManifest.web_accessible_resources.map((entry) => {
-    if (!entry || !Array.isArray(entry.resources)) {
+if (Array.isArray(sourceManifest.web_accessible_resources)) {
+  const resources = [];
+  sourceManifest.web_accessible_resources.forEach((entry) => {
+    const list = entry && Array.isArray(entry.resources) ? entry.resources : [];
+    list.forEach((resource) => {
+      if (resource && resource !== '_favicon/*' && !resources.includes(resource)) {
+        resources.push(resource);
+      }
+    });
+  });
+  firefoxManifest.web_accessible_resources = resources;
+}
+
+if (Array.isArray(firefoxManifest.content_scripts)) {
+  firefoxManifest.content_scripts = firefoxManifest.content_scripts.map((entry) => {
+    if (!entry || typeof entry !== 'object') {
       return entry;
     }
-    return {
-      ...entry,
-      resources: entry.resources.filter((resource) => resource !== '_favicon/*')
-    };
+    const next = { ...entry };
+    delete next.match_origin_as_fallback;
+    return next;
   });
 }
 
-const overlayFiles = Array.isArray(OVERLAY_CONTENT_SCRIPT_FILES)
-  ? OVERLAY_CONTENT_SCRIPT_FILES.slice()
-  : [];
-firefoxManifest.content_scripts = Array.isArray(firefoxManifest.content_scripts)
-  ? firefoxManifest.content_scripts.slice()
-  : [];
-
-const hasOverlayContentScript = firefoxManifest.content_scripts.some((entry) =>
-  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
-);
-if (!hasOverlayContentScript && overlayFiles.length) {
-  firefoxManifest.content_scripts.push({
-    matches: ['http://*/*', 'https://*/*'],
-    js: overlayFiles,
-    run_at: 'document_idle'
-  });
-}
-
-const version = firefoxManifest.version;
 const distDir = path.join(repoRoot, 'dist');
-const zipPath = path.join(distDir, `lumno-firefox-v${version}.zip`);
+const zipPath = path.join(distDir, `lumno-${PRODUCT_TAG}.zip`);
 const packageRoots = ['src', '_locales', 'assets'];
 
 fs.mkdirSync(distDir, { recursive: true });
@@ -118,7 +130,7 @@ function stagedPath(value) {
 
 function shouldCopyPackagePath(sourcePath) {
   const packagePath = normalizePackagePath(path.relative(repoRoot, sourcePath));
-  if (developmentOnlyFiles.has(packagePath) || path.basename(sourcePath) === '.DS_Store') {
+  if (path.basename(sourcePath) === '.DS_Store') {
     return false;
   }
   return packagePath !== 'assets/images/readme' && !packagePath.startsWith('assets/images/readme/');
@@ -150,3 +162,4 @@ if (zipResult.status !== 0) {
 }
 
 console.log(`Firefox package written: ${zipPath}`);
+console.log(`Product: ${PRODUCT_TAG} (manifest version ${FIREFOX_MANIFEST_VERSION}, MV2)`);

@@ -149,7 +149,7 @@ const stagedBackgroundPath = stagedPath('src/background/background.js');
 let stagedBackground = fs.readFileSync(stagedBackgroundPath, 'utf8');
 stagedBackground = replaceRequired(
   stagedBackground,
-  /lumnoImportScript\('src\/background\/codex-debug-bridge\.js', 'Lumno: failed to load Codex debug bridge helpers\.'\);\r?\n/,
+  /lumnoImportScript\('src\/background\/codex-debug-bridge\.js', 'Lumno: failed to load Codex debug bridge helpers\.'\);\r?\n\r?\n/,
   '',
   1,
   'background debug bridge import'

@@ -3,64 +3,72 @@ function lumnoImportScript(path, warnLabel) {
   if (typeof importScripts !== 'function') {
     return;
   }
-  const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : null;
-  const candidates = [];
-  if (runtime && typeof runtime.getURL === 'function') {
-    try {
-      candidates.push(runtime.getURL(path));
-    } catch (error) {
-      // Ignore getURL failures and fall back to relative paths.
-    }
+  try {
+    importScripts(chrome.runtime.getURL(path));
+  } catch (error) {
+    console.warn(warnLabel || ('Lumno: failed to load ' + path + '.'), error);
   }
-  if (path.indexOf('src/background/') === 0) {
-    candidates.push('./' + path.slice('src/background/'.length));
-  } else if (path.indexOf('src/') === 0) {
-    candidates.push('../' + path.slice('src/'.length));
-  } else {
-    candidates.push('../../' + path);
-  }
-  let lastError = null;
-  for (let i = 0; i < candidates.length; i += 1) {
-    try {
-      importScripts(candidates[i]);
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  console.warn(warnLabel || ('Lumno: failed to load ' + path + '.'), lastError);
 }
 
-lumnoImportScript('src/shared/gecko-shortcuts.js', 'Lumno: failed to load gecko shortcut helpers.');
+lumnoImportScript('src/shared/gecko-runtime.js', 'Lumno: failed to load gecko runtime helpers.');
 lumnoImportScript('src/shared/blacklist-utils.js', 'Lumno: failed to load blacklist utils.');
+
 lumnoImportScript('src/shared/url-guards.js', 'Lumno: failed to load URL guards.');
+
 lumnoImportScript('src/shared/favicon-utils.js', 'Lumno: failed to load favicon utils.');
+
 lumnoImportScript('src/shared/shortcut-favicon.js', 'Lumno: failed to load shortcut favicon helpers.');
+
 lumnoImportScript('src/shared/shortcut-key-matcher.js', 'Lumno: failed to load shortcut key matcher.');
+
 lumnoImportScript('src/shared/favicon-cache.js', 'Lumno: failed to load favicon cache runtime.');
+
 lumnoImportScript('src/newtab/favicon-theme.js', 'Lumno: failed to load newtab favicon theme helpers.');
+
 lumnoImportScript('src/shared/extension-routes.js', 'Lumno: failed to load extension routes.');
+
 lumnoImportScript('src/background/command-target-policy.js', 'Lumno: failed to load command target policy.');
+
 lumnoImportScript('src/shared/settings.js', 'Lumno: failed to load settings utils.');
+
 lumnoImportScript('src/shared/update-notice.js', 'Lumno: failed to load update notice utils.');
+
 lumnoImportScript('src/shared/search-utils.js', 'Lumno: failed to load search utils.');
+
 lumnoImportScript('src/shared/selection-intent.js', 'Lumno: failed to load selection intent helpers.');
+
 lumnoImportScript('src/shared/site-search-store.js', 'Lumno: failed to load site search store.');
+
 lumnoImportScript('src/background/ai-provider-submit.js', 'Lumno: failed to load AI provider submit runtime.');
+
 lumnoImportScript('src/background/extension-pages.js', 'Lumno: failed to load extension page helpers.');
+
 lumnoImportScript('src/background/tab-groups.js', 'Lumno: failed to load tab group helpers.');
+
 lumnoImportScript('src/background/bookmark-tab-groups.js', 'Lumno: failed to load bookmark tab group helpers.');
+
 lumnoImportScript('src/background/selection-target.js', 'Lumno: failed to load selection target helpers.');
+
 lumnoImportScript('src/background/selection-quick-action-provider.js', 'Lumno: failed to load selection quick action provider helpers.');
+
 lumnoImportScript('src/background/message-router.js', 'Lumno: failed to load background message router.');
+
 lumnoImportScript('src/background/newtab-fallback.js', 'Lumno: failed to load newtab fallback helpers.');
+
 lumnoImportScript('src/background/shortcut-rules.js', 'Lumno: failed to load shortcut rules helpers.');
+
 lumnoImportScript('src/background/pip-ownership.js', 'Lumno: failed to load PiP ownership utils.');
+
 lumnoImportScript('src/background/pip-main-world.js', 'Lumno: failed to load PiP main-world utils.');
+
 lumnoImportScript('src/background/recent-tab-switcher.js', 'Lumno: failed to load recent tab switcher helpers.');
+
 lumnoImportScript('src/background/overlay-loading-lifecycle.js', 'Lumno: failed to load Overlay loading lifecycle helpers.');
+
 lumnoImportScript('src/background/dev-extension-startup.js', 'Lumno: failed to load development startup helpers.');
+
 lumnoImportScript('src/background/codex-debug-bridge.js', 'Lumno: failed to load Codex debug bridge helpers.');
+
 lumnoImportScript('assets/vendor/pinyin-pro.js', 'Lumno: failed to load pinyin support.');
 
 const BACKGROUND_PAGES = globalThis.LumnoBackgroundPages || {};
@@ -86,9 +94,62 @@ const BACKGROUND_NEWTAB_FALLBACK = globalThis.LumnoBackgroundNewtabFallback || {
 const BACKGROUND_TAB_GROUPS = globalThis.LumnoBackgroundTabGroups || {};
 const isLocalFileLikeTargetUrl = BACKGROUND_NEWTAB_FALLBACK.isLocalFileLikeTargetUrl;
 const checkFileSchemeAccess = BACKGROUND_NEWTAB_FALLBACK.checkFileSchemeAccess;
-const openBrowserNewtabFallback = BACKGROUND_NEWTAB_FALLBACK.openBrowserNewtabFallback;
-const openNewtabFallback = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallback;
-const openNewtabFallbackForUrl = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallbackForUrl;
+const openBrowserNewtabFallbackUnwrapped = BACKGROUND_NEWTAB_FALLBACK.openBrowserNewtabFallback;
+const openNewtabFallbackUnwrapped = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallback;
+const openNewtabFallbackForUrlUnwrapped = BACKGROUND_NEWTAB_FALLBACK.openNewtabFallbackForUrl;
+
+function isGeckoRuntime() {
+  const gecko = globalThis.LumnoGeckoRuntime;
+  if (gecko && typeof gecko.isGeckoRuntime === 'function') {
+    try {
+      if (gecko.isGeckoRuntime()) {
+        return true;
+      }
+    } catch (error) {
+      // Fall through to inline detection.
+    }
+  }
+  try {
+    if (typeof browser !== 'undefined' && browser.runtime &&
+        typeof browser.runtime.getBrowserInfo === 'function') {
+      return true;
+    }
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function' &&
+        String(chrome.runtime.getURL('') || '').indexOf('moz-extension:') === 0) {
+      return true;
+    }
+  } catch (error) {
+    return false;
+  }
+  return false;
+}
+
+function openBrowserNewtabFallback(options) {
+  if (isGeckoRuntime()) {
+    return;
+  }
+  if (typeof openBrowserNewtabFallbackUnwrapped === 'function') {
+    return openBrowserNewtabFallbackUnwrapped(options);
+  }
+}
+
+function openNewtabFallback(options) {
+  if (isGeckoRuntime()) {
+    return;
+  }
+  if (typeof openNewtabFallbackUnwrapped === 'function') {
+    return openNewtabFallbackUnwrapped(options);
+  }
+}
+
+function openNewtabFallbackForUrl(url, options) {
+  if (isGeckoRuntime()) {
+    return;
+  }
+  if (typeof openNewtabFallbackForUrlUnwrapped === 'function') {
+    return openNewtabFallbackForUrlUnwrapped(url, options);
+  }
+}
 const BACKGROUND_SHORTCUT_RULES = globalThis.LumnoShortcutRules || {};
 const RECENT_TAB_SWITCHER = globalThis.LumnoRecentTabSwitcher || {};
 const OVERLAY_LOADING_LIFECYCLE = globalThis.LumnoOverlayLoadingLifecycle || {};
@@ -228,7 +289,15 @@ function canFetchPageForFavicon(url) {
 }
 
 function isOwnExtensionPageUrl(url) {
-  return isOwnExtensionUrl(url);
+  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'chrome-extension:' && parsed.hostname === chrome.runtime.id;
+  } catch (error) {
+    return false;
+  }
 }
 
 function getResolvedTabUrl(tab) {
@@ -241,6 +310,14 @@ function getResolvedTabUrl(tab) {
   }
   const pendingUrl = typeof tab.pendingUrl === 'string' ? String(tab.pendingUrl).trim() : '';
   return pendingUrl;
+}
+
+function canAttemptOverlayOnTab(tab) {
+  const url = getResolvedTabUrl(tab);
+  if (canOpenOverlayOnUrl(url)) {
+    return true;
+  }
+  return isGeckoRuntime() && Boolean(tab && typeof tab.id === 'number' && !url);
 }
 
 function getSourceTabGroupContext(tab) {
@@ -322,13 +399,10 @@ function shouldTrackSwitcherTab(tab) {
 }
 
 function canHostSwitcherSurface(tab) {
-  if (!tab || typeof tab.id !== 'number') {
+  if (!tab || typeof tab.id !== 'number' || typeof tab.windowId !== 'number') {
     return false;
   }
   const url = getResolvedTabUrl(tab);
-  if (isGeckoRuntime() && !url) {
-    return true;
-  }
   return isOwnExtensionPageUrl(url) ||
     (isBrowserNewtabUrl(url) && hasTabSwitcherExtensionPagePort(tab)) ||
     canOpenOverlayOnUrl(url);
@@ -790,7 +864,11 @@ function prepareShortcutKeyObserver(tab) {
           tabId: tab.id,
           allFrames: true
         },
-        files: ['src/shared/gecko-shortcuts.js', 'src/shared/shortcut-key-matcher.js', 'src/content/shortcut-key-observer.js']
+        files: [
+          'src/shared/gecko-runtime.js',
+          'src/shared/shortcut-key-matcher.js',
+          'src/content/shortcut-key-observer.js'
+        ]
       }, () => {
         const error = chrome.runtime && chrome.runtime.lastError
           ? chrome.runtime.lastError.message || 'unknown'
@@ -826,7 +904,56 @@ function prepareShortcutKeyObserversInOpenTabs() {
     }
     (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
       prepareShortcutKeyObserver(tab);
+      prepareGeckoPageHotkeys(tab);
     });
+  });
+}
+
+function prepareGeckoPageHotkeys(tab) {
+  if (!isGeckoRuntime() || !tab || typeof tab.id !== 'number') {
+    return;
+  }
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    return;
+  }
+  try {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [
+        'src/shared/gecko-runtime.js',
+        'src/shared/settings.js',
+        'src/content/hotkey-listener.js'
+      ]
+    }, () => {
+      void (chrome.runtime && chrome.runtime.lastError);
+    });
+  } catch (error) {
+    // Restricted tabs (about:, AMO, etc.) cannot receive content scripts.
+  }
+}
+
+function ensureGeckoCommandShortcuts() {
+  if (!isGeckoRuntime() || !chrome || !chrome.commands || typeof chrome.commands.update !== 'function') {
+    return;
+  }
+  const gecko = globalThis.LumnoGeckoRuntime;
+  const defaults = gecko && gecko.COMMAND_DEFAULTS ? gecko.COMMAND_DEFAULTS : {
+    'show-search': 'Alt+K',
+    'show-search-prefill': 'Alt+L',
+    'show-search-prefill-v': 'Alt+Shift+C',
+    'show-tab-switcher': 'Alt+Q'
+  };
+  Object.keys(defaults).forEach((name) => {
+    try {
+      chrome.commands.update({
+        name: name,
+        shortcut: defaults[name]
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Temporary add-ons often start with empty shortcuts; ignore bind failures.
+    }
   });
 }
 
@@ -1077,46 +1204,20 @@ function isLumnoNewtabUrl(url) {
 }
 
 function isBrowserNewtabUrl(url) {
-  const guards = globalThis.LumnoUrlGuards || {};
-  if (typeof guards.isBrowserNewtabUrl === 'function') {
-    return guards.isBrowserNewtabUrl(url);
-  }
-  const lower = String(url || '').trim().toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
-  return lower === 'chrome://newtab' ||
-    lower === 'chrome://new-tab-page' ||
-    lower === 'edge://newtab' ||
-    lower === 'brave://newtab' ||
-    lower === 'vivaldi://newtab' ||
-    lower === 'opera://startpage' ||
-    lower === 'about:newtab' ||
-    lower === 'about:home' ||
-    lower === 'about:privatebrowsing';
+  const lower = String(url || '').toLowerCase();
+  return lower === 'chrome://newtab/' ||
+    lower === 'chrome://new-tab-page/' ||
+    lower === 'edge://newtab/' ||
+    lower === 'brave://newtab/' ||
+    lower === 'opera://startpage/';
 }
 
 function isOwnExtensionUrl(url) {
-  const guards = globalThis.LumnoUrlGuards || {};
-  if (typeof guards.isOwnExtensionUrl === 'function') {
-    return guards.isOwnExtensionUrl(url, chrome);
-  }
-  const value = String(url || '');
-  if (!value || !chrome || !chrome.runtime) {
-    return false;
-  }
-  if (typeof chrome.runtime.getURL === 'function') {
-    try {
-      const origin = String(chrome.runtime.getURL('') || '');
-      if (origin && (value === origin || value.indexOf(origin) === 0)) {
-        return true;
-      }
-    } catch (error) {
-      // Fall through to hostname comparison.
-    }
-  }
-  if (!chrome.runtime.id) {
+  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
     return false;
   }
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(url);
     const protocol = String(parsed.protocol || '').toLowerCase();
     return isBrowserExtensionProtocol(protocol) &&
       String(parsed.hostname || '') === String(chrome.runtime.id);
@@ -1568,6 +1669,8 @@ const tabSwitcherOpeningByWindowKey = new Map();
 const TAB_SWITCHER_HOST_STATE_TIMEOUT_MS = 400;
 const tabSwitcherHostTabIdByWindowId = new Map();
 const HOTKEY_DUP_GUARD_MS = 180;
+const GECKO_HOTKEY_DUP_GUARD_MS = 700;
+let lastGlobalHotkeyInvokeAt = 0;
 const OVERLAY_OPENING_GUARD_MS = 5000;
 const OVERLAY_RUNTIME_VERSION = '2026-08-20-current-page-provider-v13';
 const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
@@ -2796,209 +2899,10 @@ function migrateStorageIfNeeded(keys) {
   });
 }
 
-const DEVELOPMENT_ONLY_INJECT_FILES = Object.freeze([
-  'src/shared/codex-debug-surface.js',
-  'src/background/codex-debug-bridge.js'
-]);
-const GECKO_HOTKEY_DUP_GUARD_MS = 700;
-const GECKO_TABS_QUERY_TIMEOUT_MS = 4000;
-const GECKO_TAB_MESSAGE_TIMEOUT_MS = 2500;
-const GECKO_KEEPALIVE_PORT_NAME = 'lumno-gecko-keepalive';
-const GECKO_HOST_ACCESS_PAGE = 'src/onboarding/gecko-host-access.html';
-const GECKO_HOST_ORIGINS = ['<all_urls>'];
-let lastGlobalHotkeyInvokeAt = 0;
-let geckoHostAccessPageOpenedAt = 0;
-const geckoHostRetryByTabId = new Set();
-
-function detectGeckoRuntimeInline() {
-  try {
-    if (typeof browser !== 'undefined' && browser.runtime &&
-        typeof browser.runtime.getBrowserInfo === 'function') {
-      return true;
-    }
-    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
-      if (String(chrome.runtime.getURL('') || '').indexOf('moz-extension:') === 0) {
-        return true;
-      }
-    }
-    const ua = (typeof navigator !== 'undefined' && navigator.userAgent)
-      ? String(navigator.userAgent)
-      : '';
-    return /firefox|zenbrowser|icedragon/i.test(ua);
-  } catch (error) {
-    return false;
-  }
-}
-
-function getRuntimeInjectableFiles(files) {
-  const list = Array.isArray(files)
-    ? files.filter((file) => typeof file === 'string' && file)
-    : [];
-  if (!isGeckoRuntime()) {
-    return list;
-  }
-  const skip = new Set(DEVELOPMENT_ONLY_INJECT_FILES);
-  return list.filter((file) => !skip.has(file));
-}
-
-function invokeChromeCallback(apiFn, args, callback, timeoutMs) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  let settled = false;
-  let timer = null;
-  const finish = (error, result) => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    done(error || '', result);
-  };
-  const waitMs = Number.isFinite(Number(timeoutMs))
-    ? Number(timeoutMs)
-    : 0;
-  if (waitMs > 0) {
-    timer = setTimeout(() => {
-      finish('timeout');
-    }, waitMs);
-  }
-  if (typeof apiFn !== 'function') {
-    finish('api-unavailable');
-    return;
-  }
-  let result;
-  try {
-    const argv = Array.isArray(args) ? args.slice() : [];
-    argv.push((value) => {
-      const error = chrome.runtime && chrome.runtime.lastError
-        ? chrome.runtime.lastError.message || 'unknown'
-        : '';
-      finish(error, value);
-    });
-    result = apiFn.apply(null, argv);
-  } catch (error) {
-    finish(error && error.message ? error.message : 'threw');
-    return;
-  }
-  if (result && typeof result.then === 'function') {
-    result.then((value) => {
-      finish('', value);
-    }).catch((error) => {
-      finish(error && error.message ? error.message : 'rejected');
-    });
-  }
-}
-
-function invokeScriptingExecuteScript(details, callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  const payload = details && typeof details === 'object' ? Object.assign({}, details) : details;
-  if (isGeckoRuntime() && payload && Object.prototype.hasOwnProperty.call(payload, 'injectImmediately')) {
-    delete payload.injectImmediately;
-  }
-  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
-    done('scripting-unavailable');
-    return;
-  }
-  invokeChromeCallback(
-    chrome.scripting.executeScript.bind(chrome.scripting),
-    [payload],
-    done
-  );
-}
-
-function executeScriptsOnTab(tabId, files, options, callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  const injectImmediately = !(options && options.injectImmediately === false);
-  const injectable = getRuntimeInjectableFiles(files);
-  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
-    done('scripting-unavailable');
-    return;
-  }
-  if (typeof tabId !== 'number' || !injectable.length) {
-    done(null);
-    return;
-  }
-  const batchSize = injectable.length;
-  const runBatch = (start) => {
-    const batch = injectable.slice(start, start + batchSize);
-    const details = {
-      target: { tabId: tabId },
-      files: batch
-    };
-    if (injectImmediately && !isGeckoRuntime()) {
-      details.injectImmediately = true;
-    }
-    invokeScriptingExecuteScript(details, (error) => {
-      if (error) {
-        done(error);
-        return;
-      }
-      if (start + batch.length >= injectable.length) {
-        done(null);
-        return;
-      }
-      runBatch(start + batch.length);
-    });
-  };
-  runBatch(0);
-}
-
-function shouldSkipNewtabCommandFallback() {
-  return isGeckoRuntime();
-}
-
-function openCommandSurfaceFallback(url, options) {
-  if (shouldSkipNewtabCommandFallback()) {
-    logHotkeyDebug('gecko-skip-newtab-fallback', {
-      url: url || '',
-      source: options && options.source ? options.source : ''
-    });
-    return;
-  }
-  openNewtabFallbackForUrl(url, options);
-}
-
-function hydrateCommandTab(tab, callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  let settled = false;
-  const finish = (candidate) => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    done(candidate && typeof candidate.id === 'number' ? candidate : null);
-  };
-  if (tab && typeof tab.id === 'number' && getResolvedTabUrl(tab) && typeof tab.windowId === 'number') {
-    finish(tab);
-    return;
-  }
-  const queryActive = (query, fallback) => {
-    if (!chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
-      fallback();
-      return;
-    }
-    invokeChromeCallback(chrome.tabs.query.bind(chrome.tabs), [query], (error, tabs) => {
-      const activeTab = !error && Array.isArray(tabs) && tabs[0] ? tabs[0] : null;
-      if (activeTab && typeof activeTab.id === 'number') {
-        finish(activeTab);
-        return;
-      }
-      fallback();
-    }, isGeckoRuntime() ? GECKO_TABS_QUERY_TIMEOUT_MS : 0);
-  };
-  queryActive({ active: true, currentWindow: true }, () => {
-    queryActive({ active: true, lastFocusedWindow: true }, () => {
-      finish(tab && typeof tab.id === 'number' ? tab : null);
-    });
-  });
-}
-
 function shouldIgnoreDuplicateHotkey(tabId) {
   const now = Date.now();
   const guardMs = isGeckoRuntime() ? GECKO_HOTKEY_DUP_GUARD_MS : HOTKEY_DUP_GUARD_MS;
-  if ((now - lastGlobalHotkeyInvokeAt) <= guardMs) {
+  if (isGeckoRuntime() && (now - lastGlobalHotkeyInvokeAt) <= guardMs) {
     return true;
   }
   lastGlobalHotkeyInvokeAt = now;
@@ -3050,9 +2954,6 @@ function beginOverlayOpening(tab, source) {
 }
 
 function rememberPageHotkeyContext(tab) {
-  if (isGeckoRuntime()) {
-    return;
-  }
   if (!tab || typeof tab.id !== 'number' || typeof tab.windowId !== 'number') {
     lastPageHotkeyContext = null;
     return;
@@ -3095,9 +2996,6 @@ function getOverlayPrefillQueryForSource(tab, source) {
 }
 
 function recoverFromPageHotkeyNewtab(newTabId, windowId) {
-  if (isGeckoRuntime()) {
-    return;
-  }
   const recentContext = getRecentPageHotkeyContext(windowId);
   if (!recentContext || typeof newTabId !== 'number') {
     return;
@@ -4897,41 +4795,6 @@ function recoverOverlayAfterTopFrameDocumentStart(request, sender) {
   return true;
 }
 
-function tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  if (!isGeckoRuntime() || !activeTab || typeof activeTab.id !== 'number') {
-    done(false);
-    return;
-  }
-  if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
-    done(false);
-    return;
-  }
-  const overlayPanelContext = {
-    tabZoomFactor: 1,
-    prefillQuery: getOverlayPrefillQueryForSource(activeTab, source),
-    prioritizeCurrentPageMatch: source === 'page-hotkey-prefill',
-    currentTabId: activeTab.id,
-    currentTabUrl: getResolvedTabUrl(activeTab),
-    openedAt: overlayOpenStartedAt,
-    documentPipEnabled: documentPipEnabledCache,
-    siteSearchProviders: Array.isArray(siteSearchCache) ? siteSearchCache : [],
-    ensureOpen: true
-  };
-  invokeChromeCallback(
-    chrome.tabs.sendMessage.bind(chrome.tabs),
-    [activeTab.id, {
-      action: 'openSearchOverlayFromBackground',
-      tabs: Array.isArray(tabs) ? tabs : [],
-      context: overlayPanelContext
-    }],
-    (error, response) => {
-      done(!error && response && response.ok === true);
-    },
-    GECKO_TAB_MESSAGE_TIMEOUT_MS
-  );
-}
-
 function openOverlayOnTab(activeTab, tabs, source, options) {
   const openOptions = options && typeof options === 'object' ? options : {};
   const overlayOpenStartedAt = Date.now();
@@ -4965,9 +4828,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   };
   if (!activeTab || typeof activeTab.id !== 'number') {
     logHotkeyDebug('no-active-tab', { source: source || '' });
-    if (!shouldSkipNewtabCommandFallback()) {
-      openNewtabFallback();
-    }
+    openNewtabFallback();
     finishOpenAttempt(false);
     return;
   }
@@ -4986,8 +4847,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   const activeUrl = getResolvedTabUrl(activeTab);
   const rawUrl = typeof activeTab.url === 'string' ? activeTab.url : '';
   const rawPendingUrl = typeof activeTab.pendingUrl === 'string' ? activeTab.pendingUrl : '';
-  const geckoUnknownUrl = isGeckoRuntime() && !activeUrl;
-  const restricted = geckoUnknownUrl ? false : !canOpenOverlayOnUrl(activeUrl);
+  const restricted = !canAttemptOverlayOnTab(activeTab);
   logHotkeyDebug('active-tab', {
     tabId: activeTab.id,
     resolvedUrl: activeUrl,
@@ -4995,7 +4855,6 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     pendingUrl: rawPendingUrl,
     url: activeUrl,
     restricted: restricted,
-    geckoUnknownUrl: geckoUnknownUrl,
     source: source || ''
   });
   if (restricted) {
@@ -5020,19 +4879,16 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     });
     if (action === 'none') {
       logHotkeyDebug('fallback-open-browser-newtab', { reason: 'restricted_url', source: source || '' });
-      if (shouldSkipNewtabCommandFallback()) {
-        return;
-      }
       openBrowserNewtabFallback({ sourceTab: activeTab });
       return;
     }
     if (action === 'default') {
       logHotkeyDebug('fallback-open-create-newtab', { reason: 'restricted_url', source: source || '' });
-      openCommandSurfaceFallback(activeUrl, { sourceTab: activeTab, source: source || '' });
+      openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
       return;
     }
     logHotkeyDebug('fallback-open-lumno-newtab', { reason: 'restricted_url', source: source || '' });
-    openCommandSurfaceFallback(activeUrl, { sourceTab: activeTab, source: source || '' });
+    openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
     return;
   }
   overlayOpening = beginOverlayOpening(activeTab, source);
@@ -5090,7 +4946,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
           scheduleSiteSearchProviderIconWarmup(providers, '');
         })
         .catch(() => {});
-      invokeScriptingExecuteScript({
+      chrome.scripting.executeScript({
             target: {tabId: activeTab.id},
             injectImmediately: true,
             func: (overlayTabs, overlayPanelContext, overlayHostId) => {
@@ -5117,24 +4973,21 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
               openedAt: overlayOpenStartedAt,
               documentPipEnabled: documentPipEnabledCache,
               siteSearchProviders: Array.isArray(siteSearchProviders) ? siteSearchProviders : [],
-              ensureOpen: openOptions.ensureOpen === true || isGeckoRuntime(),
+              ensureOpen: openOptions.ensureOpen === true,
               loadingSessionTracked: Boolean(overlayLoadingRecord),
               loadingSession: overlayLoadingRecord && overlayLoadingRecord.session
                 ? overlayLoadingRecord.session
                 : null
             }, OVERLAY_HOST_ID]
-          }, function(error, results) {
-            if (error) {
+          }, function(results) {
+            if (chrome.runtime.lastError) {
               logHotkeyDebug('inject-failed', {
                 step: 'src/overlay/search-panel.js',
                 tabId: activeTab.id,
-                error: error,
+                error: chrome.runtime.lastError.message || 'unknown',
                 source: source || ''
               });
-              if (isGeckoRuntime()) {
-                handleGeckoOverlayInjectFailure(error, activeTab, tabs, source);
-              } else if (!shouldSkipNewtabCommandFallback() &&
-                  openOptions.loadingRecovery !== true &&
+              if (openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
               }
@@ -5152,10 +5005,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: result.reason || 'unknown',
                 source: source || ''
               });
-              if (isGeckoRuntime()) {
-                handleGeckoOverlayInjectFailure(result.reason || 'search_panel_missing', activeTab, tabs, source);
-              } else if (!shouldSkipNewtabCommandFallback() &&
-                  openOptions.loadingRecovery !== true &&
+              if (openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
               }
@@ -5187,18 +5037,19 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   };
   const injectOverlayRuntime = () => {
     logHotkeyDebug('inject-start', { tabId: activeTab.id, file: overlayInjectionFiles.join(','), source: source || '' });
-    executeScriptsOnTab(activeTab.id, overlayInjectionFiles, { injectImmediately: true }, (error) => {
-      if (error) {
+    chrome.scripting.executeScript({
+      target: {tabId: activeTab.id},
+      injectImmediately: true,
+      files: overlayInjectionFiles
+    }, function() {
+      if (chrome.runtime.lastError) {
         logHotkeyDebug('inject-failed', {
           step: overlayInjectionFiles.join(','),
           tabId: activeTab.id,
-          error: error,
+          error: chrome.runtime.lastError.message || 'unknown',
           source: source || ''
         });
-        if (isGeckoRuntime()) {
-          handleGeckoOverlayInjectFailure(error, activeTab, tabs, source);
-        } else if (!shouldSkipNewtabCommandFallback() &&
-            openOptions.loadingRecovery !== true &&
+        if (openOptions.loadingRecovery !== true &&
             !overlayLoadingRecordsByTabId.has(activeTab.id)) {
           openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
         }
@@ -5208,54 +5059,37 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       runOverlayWithResolvedZoom();
     });
   };
-  const startOverlayInjection = () => {
-    invokeScriptingExecuteScript({
-      target: {tabId: activeTab.id},
-      injectImmediately: true,
-      func: (runtimeVersion) => {
-        return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
-          typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
-      },
-      args: [OVERLAY_RUNTIME_VERSION]
-    }, (error, results) => {
-      const probeError = error;
-      const runtimeReady = !probeError &&
-        Array.isArray(results) &&
-        results[0] &&
-        results[0].result === true;
-      if (runtimeReady) {
-        logHotkeyDebug('runtime-reused', {
-          tabId: activeTab.id,
-          source: source || '',
-          version: OVERLAY_RUNTIME_VERSION
-        });
-        runOverlayWithResolvedZoom();
-        return;
-      }
-      injectOverlayRuntime();
-    });
-  };
-  tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, (opened) => {
-    if (opened) {
-      logHotkeyDebug('overlay-opened', {
+  chrome.scripting.executeScript({
+    target: {tabId: activeTab.id},
+    injectImmediately: true,
+    func: (runtimeVersion) => {
+      return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
+        typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
+    },
+    args: [OVERLAY_RUNTIME_VERSION]
+  }, (results) => {
+    const probeError = chrome.runtime.lastError;
+    const runtimeReady = !probeError &&
+      Array.isArray(results) &&
+      results[0] &&
+      results[0].result === true;
+    if (runtimeReady) {
+      logHotkeyDebug('runtime-reused', {
         tabId: activeTab.id,
-        tabCount: Array.isArray(tabs) ? tabs.length : 0,
         source: source || '',
-        path: 'content-script-message'
+        version: OVERLAY_RUNTIME_VERSION
       });
-      finishOpenAttempt(true);
+      runOverlayWithResolvedZoom();
       return;
     }
-    startOverlayInjection();
+    injectOverlayRuntime();
   });
 }
 
 function triggerShowSearchForResolvedTab(tab, source) {
   if (!tab || typeof tab.id !== 'number') {
     logHotkeyDebug('no-active-tab', { source: source || '' });
-    if (!shouldSkipNewtabCommandFallback()) {
-      openNewtabFallback();
-    }
+    openNewtabFallback();
     return;
   }
   if (shouldDeferRestrictedOverlayNavigation(tab)) {
@@ -5336,9 +5170,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     }
   };
   if (!hostTab || typeof hostTab.id !== 'number') {
-    if (!shouldSkipNewtabCommandFallback()) {
-      openNewtabFallback();
-    }
+    openNewtabFallback();
     finishOpen(false, 'invalid-host-tab');
     return;
   }
@@ -5372,10 +5204,6 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           reason: reason || '',
           source: context && context.source ? context.source : ''
         });
-        if (isGeckoRuntime()) {
-          runDynamicSwitcherScript(buildSwitcherContext(1));
-          return;
-        }
         openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
         finishOpen(false, reason || 'extension-page-open-failed');
         return;
@@ -5390,32 +5218,29 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     });
     return;
   }
-  function runDynamicSwitcherScript(switcherContext) {
-    executeScriptsOnTab(hostTab.id, [
-      'src/shared/icon-font-preload.js',
-      'src/react/overlay-islands.js',
-      'src/overlay/tab-switcher.js'
-    ], { injectImmediately: true }, (error) => {
-      if (error) {
-        const errorMessage = error;
+  const runDynamicSwitcherScript = (switcherContext) => {
+    chrome.scripting.executeScript({
+      target: { tabId: hostTab.id },
+      files: [
+        'src/shared/icon-font-preload.js',
+        'src/shared/codex-debug-surface.js',
+        'src/react/overlay-islands.js',
+        'src/overlay/tab-switcher.js'
+      ]
+    }, () => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        const errorMessage = chrome.runtime.lastError.message || 'unknown';
         logHotkeyDebug('tab-switcher-inject-failed', {
           tabId: hostTab.id,
           error: errorMessage,
           source: context && context.source ? context.source : ''
         });
-        if (isGeckoRuntime()) {
-          handleGeckoInjectFailure(errorMessage, hostTab, () => {
-            injectTabSwitcherOnTab(hostTab, tabItems, context);
-          });
-        } else if (!shouldSkipNewtabCommandFallback()) {
-          openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
-        }
+        openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
         finishOpen(false, errorMessage);
         return;
       }
-      invokeScriptingExecuteScript({
+      chrome.scripting.executeScript({
         target: { tabId: hostTab.id },
-        injectImmediately: true,
         func: (switcherContext) => {
           const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
           if (typeof toggle !== 'function') {
@@ -5428,9 +5253,9 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
             : { ok: true };
         },
         args: [switcherContext]
-      }, (runError, results) => {
-        if (runError) {
-          const errorMessage = runError;
+      }, (results) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          const errorMessage = chrome.runtime.lastError.message || 'unknown';
           logHotkeyDebug('tab-switcher-run-failed', {
             tabId: hostTab.id,
             error: errorMessage,
@@ -5458,7 +5283,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
         finishOpen(true, 'executeScript');
       });
     });
-  }
+  };
   const runSwitcherScript = (tabZoomFactor) => {
     const switcherContext = buildSwitcherContext(tabZoomFactor);
     if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
@@ -5578,9 +5403,7 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
   }
   if (!tab || typeof tab.id !== 'number') {
     logHotkeyDebug('tab-switcher-no-active-tab', { source: source || '' });
-    if (!shouldSkipNewtabCommandFallback()) {
-      openNewtabFallback();
-    }
+    openNewtabFallback();
     return;
   }
   const windowId = typeof tab.windowId === 'number' ? tab.windowId : null;
@@ -5702,19 +5525,18 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
       }
       const activeUrl = getResolvedTabUrl(activeTab);
       const canHostOnActiveTab = canHostSwitcherSurface(activeTab);
-      let hostTab = canHostOnActiveTab ? activeTab : null;
-      if (!hostTab && !isGeckoRuntime()) {
-        const hostItem = items.find((item) => {
+      const hostItem = canHostOnActiveTab
+        ? items.find((item) => item && item.id === activeTab.id)
+        : items.find((item) => {
           const candidate = tabList.find((tabItem) => tabItem && tabItem.id === item.id) || item;
           return item && item.id !== activeTab.id && canHostSwitcherSurface(candidate);
         });
-        hostTab = hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null;
-      }
+      const hostTab = canHostOnActiveTab
+        ? activeTab
+        : (hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null);
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
-        if (!shouldSkipNewtabCommandFallback()) {
-          openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
-        }
+        openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
         finishOpening();
         return;
       }
@@ -5909,232 +5731,12 @@ function openDocumentPipPickerOnTab(activeTab, source) {
   });
 }
 
-function isGeckoRuntime() {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  if (gecko && typeof gecko.isGeckoRuntime === 'function') {
-    try {
-      if (gecko.isGeckoRuntime()) {
-        return true;
-      }
-    } catch (error) {
-      // Fall through to inline detection so a missing helper cannot
-      // re-enable Chrome newtab fallbacks on Firefox.
-    }
-  }
-  return detectGeckoRuntimeInline();
-}
-
-function isMissingGeckoHostPermissionError(error) {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  if (gecko && typeof gecko.isMissingHostPermissionError === 'function') {
-    return gecko.isMissingHostPermissionError(error);
-  }
-  return /host permission|missing host|cannot access contents of url/i.test(String(error || ''));
-}
-
-function requestGeckoHostPermission(callback) {
-  const done = typeof callback === 'function' ? callback : () => {};
-  if (!isGeckoRuntime()) {
-    done(true);
-    return;
-  }
-  if (!chrome || !chrome.permissions || typeof chrome.permissions.request !== 'function') {
-    done(false);
-    return;
-  }
-  try {
-    chrome.permissions.request({ origins: GECKO_HOST_ORIGINS }, (ok) => {
-      if (chrome.runtime && chrome.runtime.lastError) {
-        done(false);
-        return;
-      }
-      done(Boolean(ok));
-    });
-  } catch (error) {
-    done(false);
-  }
-}
-
-function openGeckoHostAccessPage(options) {
-  const force = options && options.force === true;
-  const now = Date.now();
-  if (!force && (now - geckoHostAccessPageOpenedAt) < 8000) {
-    return;
-  }
-  geckoHostAccessPageOpenedAt = now;
-  if (!chrome || !chrome.tabs || typeof chrome.tabs.create !== 'function' ||
-      !chrome.runtime || typeof chrome.runtime.getURL !== 'function') {
-    return;
-  }
-  chrome.tabs.create({ url: chrome.runtime.getURL(GECKO_HOST_ACCESS_PAGE) });
-}
-
-function maybeOpenGeckoHostAccessOnStartup() {
-  if (!isGeckoRuntime()) {
-    return;
-  }
-  if (!chrome || !chrome.permissions || typeof chrome.permissions.contains !== 'function') {
-    openGeckoHostAccessPage({ force: true });
-    return;
-  }
-  try {
-    chrome.permissions.contains({ origins: GECKO_HOST_ORIGINS }, (granted) => {
-      if (chrome.runtime && chrome.runtime.lastError) {
-        openGeckoHostAccessPage({ force: true });
-        return;
-      }
-      if (granted) {
-        injectGeckoSurfaceIntoOpenTabs();
-        return;
-      }
-      openGeckoHostAccessPage({ force: true });
-    });
-  } catch (error) {
-    openGeckoHostAccessPage({ force: true });
-  }
-}
-
-function getGeckoOverlayInjectFiles() {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  const files = gecko && Array.isArray(gecko.OVERLAY_CONTENT_SCRIPT_FILES)
-    ? gecko.OVERLAY_CONTENT_SCRIPT_FILES.slice()
-    : [];
-  return getRuntimeInjectableFiles(files);
-}
-
-function shouldInjectGeckoOverlayOnTab(tab) {
-  if (!tab || typeof tab.id !== 'number') {
-    return false;
-  }
-  const url = getResolvedTabUrl(tab);
-  if (!url) {
-    return true;
-  }
-  return canOpenOverlayOnUrl(url);
-}
-
-function injectGeckoSurfaceIntoOpenTabs() {
-  if (!isGeckoRuntime()) {
-    return;
-  }
-  prepareShortcutKeyObserversInOpenTabs();
-  const files = getGeckoOverlayInjectFiles();
-  if (!files.length || !chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
-    return;
-  }
-  chrome.tabs.query({}, (tabs) => {
-    if (chrome.runtime && chrome.runtime.lastError) {
-      return;
-    }
-    (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
-      if (!shouldInjectGeckoOverlayOnTab(tab)) {
-        return;
-      }
-      executeScriptsOnTab(tab.id, files, { injectImmediately: false }, () => {});
-    });
-  });
-}
-
-function handleGeckoInjectFailure(error, activeTab, retryFn) {
-  if (!isGeckoRuntime()) {
-    return;
-  }
-  logHotkeyDebug('gecko-host-permission-needed', {
-    error: String(error || ''),
-    tabId: activeTab && typeof activeTab.id === 'number' ? activeTab.id : null,
-    missingHost: isMissingGeckoHostPermissionError(error)
-  });
-  requestGeckoHostPermission((granted) => {
-    const tabId = activeTab && typeof activeTab.id === 'number' ? activeTab.id : null;
-    if (granted) {
-      injectGeckoSurfaceIntoOpenTabs();
-      if (typeof retryFn === 'function' && typeof tabId === 'number' &&
-          !geckoHostRetryByTabId.has(tabId)) {
-        geckoHostRetryByTabId.add(tabId);
-        setTimeout(() => geckoHostRetryByTabId.delete(tabId), 5000);
-        retryFn();
-      }
-      return;
-    }
-    openGeckoHostAccessPage();
-  });
-}
-
-function handleGeckoOverlayInjectFailure(error, activeTab, tabs, source) {
-  handleGeckoInjectFailure(error, activeTab, () => {
-    openOverlayOnTab(activeTab, Array.isArray(tabs) ? tabs : [], source, {
-      skipDuplicateGuard: true
-    });
-  });
-}
-
-function getGeckoCommandDefaults() {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  return gecko && gecko.COMMAND_DEFAULTS ? gecko.COMMAND_DEFAULTS : {
-    'show-search': 'Alt+K',
-    'show-search-prefill': 'Alt+L',
-    'show-search-prefill-v': 'Alt+Shift+C',
-    'show-tab-switcher': 'Alt+Q'
-  };
-}
-
-function isGeckoConflictingShortcut(value) {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  if (gecko && typeof gecko.isConflictingShortcut === 'function') {
-    return gecko.isConflictingShortcut(value);
-  }
-  const text = String(value || '').trim();
-  if (!text) {
-    return true;
-  }
-  return /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCIJ]$/i.test(text);
-}
-
-function ensureGeckoCommandShortcuts() {
-  if (!isGeckoRuntime()) {
-    return;
-  }
-  if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
-    return;
-  }
-  const geckoDefaults = getGeckoCommandDefaults();
-  chrome.commands.getAll((commands) => {
-    if (chrome.runtime && chrome.runtime.lastError) {
-      return;
-    }
-    const items = Array.isArray(commands) ? commands : [];
-    items.forEach((command) => {
-      if (!command || !command.name || !geckoDefaults[command.name]) {
-        return;
-      }
-      const current = typeof command.shortcut === 'string' ? command.shortcut.trim() : '';
-      if (current && !isGeckoConflictingShortcut(current)) {
-        return;
-      }
-      if (typeof chrome.commands.update !== 'function') {
-        return;
-      }
-      try {
-        const updated = chrome.commands.update({
-          name: command.name,
-          shortcut: geckoDefaults[command.name]
-        });
-        if (updated && typeof updated.catch === 'function') {
-          updated.catch(() => {});
-        }
-      } catch (error) {
-        // Ignore browsers that expose commands but reject updates.
-      }
-    });
-  });
-}
-
 function getDefaultFallbackShortcutByPlatform(platformOs) {
   return platformOs === 'mac' ? 'Command+Shift+K' : 'Ctrl+Shift+K';
 }
 
 function getDefaultFallbackShortcut(callback) {
-  const gecko = globalThis.LumnoGeckoShortcuts;
+  const gecko = globalThis.LumnoGeckoRuntime;
   if (gecko && typeof gecko.isGeckoRuntime === 'function' && gecko.isGeckoRuntime()) {
     callback(gecko.getDefaultShortcut('show-search') || 'Alt+K');
     return;
@@ -6162,10 +5764,10 @@ function getConfiguredFallbackShortcut(callback) {
       }
       const items = Array.isArray(commands) ? commands : [];
       const command = items.find((item) => item && item.name === SHOW_SEARCH_COMMAND_NAME);
+      const gecko = globalThis.LumnoGeckoRuntime;
       const shortcut = command && typeof command.shortcut === 'string'
         ? normalizeShortcutFromCommandsValue(command.shortcut)
         : '';
-      const gecko = globalThis.LumnoGeckoShortcuts;
       if (gecko && typeof gecko.resolveShortcut === 'function') {
         callback(gecko.resolveShortcut(SHOW_SEARCH_COMMAND_NAME, shortcut) || defaultShortcut);
         return;
@@ -6176,10 +5778,7 @@ function getConfiguredFallbackShortcut(callback) {
 }
 
 function getConfiguredTabSwitcherShortcut(callback) {
-  const gecko = globalThis.LumnoGeckoShortcuts;
-  const fallbackShortcut = (gecko && typeof gecko.getDefaultShortcut === 'function'
-    ? gecko.getDefaultShortcut(SHOW_TAB_SWITCHER_COMMAND_NAME)
-    : '') || 'Alt+Q';
+  const fallbackShortcut = 'Alt+Q';
   if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
     callback(fallbackShortcut);
     return;
@@ -6191,6 +5790,7 @@ function getConfiguredTabSwitcherShortcut(callback) {
     }
     const items = Array.isArray(commands) ? commands : [];
     const command = items.find((item) => item && item.name === SHOW_TAB_SWITCHER_COMMAND_NAME);
+    const gecko = globalThis.LumnoGeckoRuntime;
     const shortcut = command && typeof command.shortcut === 'string'
       ? String(command.shortcut).trim()
       : '';
@@ -6305,8 +5905,6 @@ function publishExtensionUpdateNotice(details) {
   }).catch(() => {});
 }
 
-if (chrome && chrome.commands && chrome.commands.onCommand &&
-    typeof chrome.commands.onCommand.addListener === 'function') {
 chrome.commands.onCommand.addListener(function(command, tab) {
   if (
     command !== SHOW_SEARCH_COMMAND_NAME &&
@@ -6323,11 +5921,6 @@ chrome.commands.onCommand.addListener(function(command, tab) {
       ? 'commands-prefill'
       : (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME ? 'commands-copy-url' : 'commands-tab-switcher'));
   logHotkeyDebug('received', { command: command, source: source });
-  if (isGeckoRuntime()) {
-    requestGeckoHostPermission(() => {
-      injectGeckoSurfaceIntoOpenTabs();
-    });
-  }
   const runForTab = (activeTab) => {
     if (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME) {
       triggerCopyCurrentUrlForTab(activeTab, source);
@@ -6343,11 +5936,10 @@ chrome.commands.onCommand.addListener(function(command, tab) {
     runForTab(tab);
     return;
   }
-  hydrateCommandTab(tab, runForTab);
+  chrome.tabs.query({active: true, currentWindow: true}, function(activeTabs) {
+    runForTab(activeTabs && activeTabs[0]);
+  });
 });
-}
-
-ensureGeckoCommandShortcuts();
 
 if (chrome && chrome.runtime && chrome.runtime.onConnect) {
   chrome.runtime.onConnect.addListener(registerTabSwitcherExtensionPagePortConnection);
@@ -6375,20 +5967,14 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Static manifest content scripts only apply to future document loads. A
   // development-extension reload keeps existing tabs alive, so install the
   // shortcut observer there now instead of waiting for the next shortcut.
-  ensureGeckoCommandShortcuts();
   prepareShortcutKeyObserversInOpenTabs();
   if (!details) {
     schedulePersistPinnedTabSnapshot();
     return;
   }
   const reason = String(details.reason || '');
-  if (isGeckoRuntime()) {
-    maybeOpenGeckoHostAccessOnStartup();
-  }
   if (reason === 'install') {
-    if (!isGeckoRuntime()) {
-      openOnboardingPage({ reason: 'install' });
-    }
+    openOnboardingPage({ reason: 'install' });
     schedulePersistPinnedTabSnapshot();
     return;
   }
@@ -6420,7 +6006,6 @@ function restoreBackgroundStateOnStartup() {
 
 if (chrome && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
-    ensureGeckoCommandShortcuts();
     prepareShortcutKeyObserversInOpenTabs();
     restoreBackgroundStateOnStartup();
   });
@@ -6430,31 +6015,19 @@ ensureTabSwitcherStateLoaded().catch(() => {});
 cleanupRemovedAiStorageKeys();
 cleanupLocalOnlyBookmarkTopbarSyncStorage();
 
-if (chrome.action && chrome.action.onClicked) {
-  chrome.action.onClicked.addListener((tab) => {
+if ((chrome.action && chrome.action.onClicked) || (chrome.browserAction && chrome.browserAction.onClicked)) {
+  const actionApi = (chrome.action && chrome.action.onClicked) ? chrome.action : chrome.browserAction;
+  actionApi.onClicked.addListener((tab) => {
     if (isGeckoRuntime()) {
       triggerShowSearchForTab(tab, 'action');
-      requestGeckoHostPermission(() => {
-        injectGeckoSurfaceIntoOpenTabs();
-      });
       return;
     }
     openDocumentPipPickerOnTab(tab, 'action');
   });
 }
-
-if (chrome && chrome.permissions && chrome.permissions.onAdded &&
-    typeof chrome.permissions.onAdded.addListener === 'function') {
-  chrome.permissions.onAdded.addListener((permissions) => {
-    if (!isGeckoRuntime()) {
-      return;
-    }
-    const origins = permissions && Array.isArray(permissions.origins) ? permissions.origins : [];
-    if (!origins.length) {
-      return;
-    }
-    injectGeckoSurfaceIntoOpenTabs();
-  });
+ensureGeckoCommandShortcuts();
+if (isGeckoRuntime()) {
+  prepareShortcutKeyObserversInOpenTabs();
 }
 
 if (chrome && chrome.tabs && chrome.tabs.onActivated) {
@@ -7025,14 +6598,12 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   shortcuts: {
     actions: [
       'getShowSearchShortcut',
-      'getTabSwitcherShortcut',
       'getCopyCurrentUrlCommandShortcut',
       'copyCurrentPageUrl',
       'triggerShowSearchFromPageHotkey',
-      'triggerTabSwitcherFromPageHotkey',
+      'triggerTabSwitcherFromGeckoHotkey',
       'notifyTabSwitcherShortcutModifierReleased',
-      'getShortcutRules',
-      'geckoHostPermissionGranted'
+      'getShortcutRules'
     ],
     handler: handleShortcutMessage
   },
@@ -7267,12 +6838,6 @@ function handleShortcutMessage(request, sender, sendResponse) {
       });
       return true;
     }
-    case 'getTabSwitcherShortcut': {
-      getConfiguredTabSwitcherShortcut((shortcut) => {
-        sendResponse({ shortcut: shortcut || '' });
-      });
-      return true;
-    }
     case 'getCopyCurrentUrlCommandShortcut': {
       getConfiguredCopyUrlCommandShortcut((shortcut) => {
         sendResponse({ shortcut: shortcut || '' });
@@ -7286,7 +6851,7 @@ function handleShortcutMessage(request, sender, sendResponse) {
       });
       return true;
     }
-    case 'triggerTabSwitcherFromPageHotkey': {
+    case 'triggerTabSwitcherFromGeckoHotkey': {
       const senderTab = sender && sender.tab ? sender.tab : null;
       if (!senderTab || typeof senderTab.id !== 'number') {
         sendResponse({ ok: false });
@@ -7352,11 +6917,6 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ items: items });
       });
       return true;
-    }
-    case 'geckoHostPermissionGranted': {
-      injectGeckoSurfaceIntoOpenTabs();
-      sendResponse({ ok: true });
-      return;
     }
     default:
       return sendUnknownBackgroundMessageResponse(sendResponse);
@@ -7507,32 +7067,6 @@ function handleSearchMessage(request, sender, sendResponse) {
                 }
                 sendResponse({ ok: true, url: fallbackUrl });
               });
-              return;
-            } catch (e) {
-              pendingSearchAt = 0;
-              pendingSearchTabId = null;
-              pendingSearchGroupContext = null;
-            }
-          }
-          if (typeof browser !== 'undefined' && browser.search &&
-              typeof browser.search.search === 'function') {
-            markPendingSearchTab(null, sourceTab);
-            try {
-              const searched = browser.search.search({ query });
-              if (searched && typeof searched.then === 'function') {
-                searched.then(() => {
-                  sendResponse({ ok: true, url: fallbackUrl });
-                }).catch(() => {
-                  pendingSearchAt = 0;
-                  pendingSearchTabId = null;
-                  pendingSearchGroupContext = null;
-                  createResolvedTab(fallbackUrl, () => {
-                    sendResponse({ ok: true, url: fallbackUrl });
-                  });
-                });
-                return;
-              }
-              sendResponse({ ok: true, url: fallbackUrl });
               return;
             } catch (e) {
               pendingSearchAt = 0;

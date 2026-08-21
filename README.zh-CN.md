@@ -12,7 +12,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-MV3-111827?style=flat-square" alt="Manifest V3" />
-  <img src="https://img.shields.io/badge/Browser-Chromium%20%7C%20Firefox%20%7C%20Zen-2563eb?style=flat-square" alt="Chromium Firefox Zen" />
+  <img src="https://img.shields.io/badge/Browser-Chromium-2563eb?style=flat-square" alt="Chromium" />
+  <img src="https://img.shields.io/badge/Firefox-MV2_port-ff7139?style=flat-square" alt="Firefox MV2 port" />
   <img src="https://img.shields.io/badge/Language-JavaScript-f59e0b?style=flat-square" alt="JavaScript" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-16a34a?style=flat-square" alt="GPL-3.0" />
 </p>
@@ -25,7 +26,7 @@
 
 
 
-Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展（本 fork 增加了 Firefox / Zen 的 Gecko 移植），把「聚焦搜索命令栏」和「极简新标签页」放在一起：你可以从任意网页快速搜索书签、历史、常用网站、已打开标签页、站内搜索和 AI 助手，也可以把新标签页整理成更好用的工作入口。
+Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜索命令栏」和「极简新标签页」放在一起：你可以从任意网页快速搜索书签、历史、常用网站、已打开标签页、站内搜索和 AI 助手，也可以把新标签页整理成更好用的工作入口。
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao">
@@ -36,7 +37,8 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展（本 fork 增加
   </a>
 </p>
 
-<p align="center">当前版本：<code>0.9.59</code></p>
+<p align="center">当前版本：<code>0.9.51</code></p>
+<p align="center">Firefox / Zen 移植：<code>0.9.51-firefox-v1.0.0</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -61,30 +63,32 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展（本 fork 增加
 
 ## 快捷键
 
-| 操作 | 默认快捷键 |
-| --- | --- |
-| 打开聚焦搜索命令栏 | `Cmd+Shift+K` / `Ctrl+Shift+K` |
-| 打开命令栏并预填当前页面链接 | `Cmd+Shift+L` / `Ctrl+Shift+L` |
-| 复制当前页面链接 | `Cmd+Shift+C` / `Ctrl+Shift+C` |
-| 最近标签切换器 | `Alt+Q` |
+| 操作 | Chromium | Firefox / Zen |
+| --- | --- | --- |
+| 打开聚焦搜索命令栏 | `Cmd+Shift+K` / `Ctrl+Shift+K` | `Alt+K` |
+| 打开命令栏并预填当前页面链接 | `Cmd+Shift+L` / `Ctrl+Shift+L` | `Alt+L` |
+| 复制当前页面链接 | `Cmd+Shift+C` / `Ctrl+Shift+C` | `Alt+Shift+C` |
+| Tab Switcher | `Alt+Q` | `Alt+Q` |
 
-在 **Firefox / Zen** 上，Chrome 默认的 `Ctrl+Shift+K` / `Ctrl+Shift+C` 会被开发者工具占用，所以本 fork 会改绑为 `Alt+K`（命令栏），Tab Switcher 仍为 `Alt+Q`。详见 [FIREFOX.md](./FIREFOX.md)。
-
-浏览器可能会占用或限制扩展快捷键。请在 `chrome://extensions/shortcuts`、`edge://extensions/shortcuts`、`about:addons` → 管理扩展快捷键，或 Zen「设置 → 键盘快捷键」中修改。
-
-## Firefox / Zen
-
-本 fork 已开始移植到 Gecko。**不要用 CRX Installer 安装 Chrome 版 zip**，否则命令栏和 Tab Switcher 快捷键不会触发。
-
-完整说明见 [FIREFOX.md](./FIREFOX.md)。
-
-快速安装：`npm run package:firefox` → 解压 → 打开 `about:debugging#/runtime/this-firefox` → 「临时载入附加组件」→ 选择 `manifest.json`。
+浏览器可能会占用或限制扩展快捷键。请在 `chrome://extensions/shortcuts`、`edge://extensions/shortcuts`，或 Firefox / Zen 的 `about:addons` → 齿轮 → **管理扩展快捷键** 中修改。
 
 ## 安装使用
 
-Chromium 可通过上方的 Chrome Web Store 或 Microsoft Edge Add-ons 入口安装。
+可通过上方的 Chrome Web Store 或 Microsoft Edge Add-ons 入口安装。
 
-手动安装：
+### Firefox / Zen
+
+不要用 CRX Installer 装 Chrome 版 zip。请使用 Firefox 包：
+
+1. 下载 [`lumno-0.9.51-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.0.0) 并解压。
+2. 打开 `about:debugging#/runtime/this-firefox`。
+3. **临时载入附加组件…** → 选择解压后的 `manifest.json`。
+4. 打开普通 `https://` 页面（不要在 `about:` 上试）。
+5. 按 **Alt+K**（命令栏）或 **Alt+Q**（Tab Switcher）。工具栏图标与 Alt+K 相同。
+
+详细步骤、持久安装与排障见 [FIREFOX.md](./FIREFOX.md)。
+
+Chromium 手动安装：
 
 1. 克隆或下载本仓库。
 2. 打开 `chrome://extensions/`，或在 Edge/Brave/Vivaldi/Opera 等 Chromium 浏览器中打开对应的扩展管理页。

@@ -88,7 +88,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /invokeScriptingExecuteScript\(\{\s*target: \{tabId: activeTab\.id\},\s*injectImmediately: true,\s*func: \(runtimeVersion\) => \{[\s\S]*?_x_extension_search_overlay_runtime_version_2026_unique_[\s\S]*?_x_extension_toggleSearchOverlay_2026_unique_[\s\S]*?args: \[OVERLAY_RUNTIME_VERSION\][\s\S]*?if \(runtimeReady\) \{[\s\S]*?runOverlayWithResolvedZoom\(\);\s*return;\s*\}[\s\S]*?injectOverlayRuntime\(\);/,
+  /chrome\.scripting\.executeScript\(\{\s*target: \{tabId: activeTab\.id\},\s*injectImmediately: true,\s*func: \(runtimeVersion\) => \{[\s\S]*?_x_extension_search_overlay_runtime_version_2026_unique_[\s\S]*?_x_extension_toggleSearchOverlay_2026_unique_[\s\S]*?args: \[OVERLAY_RUNTIME_VERSION\][\s\S]*?if \(runtimeReady\) \{[\s\S]*?runOverlayWithResolvedZoom\(\);\s*return;\s*\}[\s\S]*?injectOverlayRuntime\(\);/,
   'same-page reopen should call the existing runtime and inject the full file set only after a failed version probe'
 );
 assert.match(

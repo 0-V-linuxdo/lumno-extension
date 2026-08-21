@@ -26,10 +26,7 @@
       lower === 'edge://newtab' ||
       lower === 'brave://newtab' ||
       lower === 'vivaldi://newtab' ||
-      lower === 'opera://startpage' ||
-      lower === 'about:newtab' ||
-      lower === 'about:home' ||
-      lower === 'about:privatebrowsing';
+      lower === 'opera://startpage';
   }
 
   function isExtensionStoreUrl(url) {
@@ -43,8 +40,7 @@
       return (host === 'chrome.google.com' && path.startsWith('/webstore')) ||
         host === 'chromewebstore.google.com' ||
         (host === 'microsoftedge.microsoft.com' && path.startsWith('/addons')) ||
-        host === 'addons.opera.com' ||
-        host === 'addons.mozilla.org';
+        host === 'addons.opera.com';
     } catch (e) {
       return false;
     }
@@ -67,36 +63,6 @@
     } catch (e) {
       return true;
     }
-  }
-
-  function isOwnExtensionUrl(url, runtime) {
-    const value = String(url || '');
-    if (!value) {
-      return false;
-    }
-    const chromeApi = runtime || (typeof chrome !== 'undefined' ? chrome : null);
-    if (chromeApi && chromeApi.runtime && typeof chromeApi.runtime.getURL === 'function') {
-      try {
-        const origin = String(chromeApi.runtime.getURL('') || '');
-        if (origin && (value === origin || value.indexOf(origin) === 0)) {
-          return true;
-        }
-      } catch (error) {
-        // Ignore getURL failures and fall back to id comparison.
-      }
-    }
-    try {
-      const parsed = new URL(value);
-      if (!isBrowserExtensionProtocol(parsed.protocol)) {
-        return false;
-      }
-      if (chromeApi && chromeApi.runtime && chromeApi.runtime.id) {
-        return String(parsed.hostname || '') === String(chromeApi.runtime.id);
-      }
-    } catch (error) {
-      return false;
-    }
-    return false;
   }
 
   function canOpenOverlayOnUrl(url) {
@@ -140,7 +106,6 @@
     isBrowserInternalUrl,
     isBrowserNewtabUrl,
     isExtensionStoreUrl,
-    isOwnExtensionUrl,
     isRestrictedUrl
   });
 });

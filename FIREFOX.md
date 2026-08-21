@@ -1,74 +1,54 @@
-# Lumno Firefox / Zen port
+# Lumno Firefox / Zen — 0.9.51-firefox-v1.0.0
 
-This fork starts from upstream **0.9.51** (Chromium-only) and adds a Gecko package for Firefox and Zen.
+This is a **clean rewrite** from upstream **0.9.51**. It is not another patch on 0.9.52–0.9.59.
 
-Do **not** install the Chrome zip with CRX Installer.
+Those builds stayed on Manifest V3. On Firefox, temporary add-ons loaded via `about:debugging` **do not grant `host_permissions`**. Content scripts never enter `https` pages, and `scripting.executeScript` fails with *Missing host permission for the tab*. Shortcuts then do nothing.
 
-## Why every 0.9.52–0.9.57 build looked dead
+Firefox still supports Manifest V2, and Mozilla has no plan to remove it. **This package is MV2**, so `<all_urls>` is granted on load, content scripts inject, and the background page stays alive.
 
-Mozilla’s own docs:
+## What 0.9.51-firefox-v1.0.0 changes (only this)
 
-1. **Temporary add-ons skip the install permission prompt.**  
-   `about:debugging` does not grant `host_permissions`. Without that grant, content scripts never enter `https` pages and `scripting.executeScript` fails with *Missing host permission for the tab*. Both Alt+K and Alt+Q then do nothing.  
-   See [Temporary installation in Firefox](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) and the MV3 host-permission notes in the [Manifest V3 migration guide](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/).
-
-2. **`commands.onCommand` often passes a tab with no `url`.**  
-   Lumno treats an empty URL as restricted (`about:` / missing). The overlay never injects. 0.9.53 then opened the new-tab homepage as a fallback; later builds skipped that fallback, so the shortcut went silent.
-
-3. **`Ctrl+Shift+K` is Firefox DevTools (Web Console).**  
-   0.9.51’s Chrome default cannot fire on Gecko. This fork uses `Alt+K` via `_execute_action` (same as clicking the toolbar, which also grants `activeTab`).
+| Chrome 0.9.51 | Firefox package |
+| --- | --- |
+| Manifest V3 service worker | Manifest V2 persistent background |
+| `Ctrl+Shift+K` (DevTools Web Console on Firefox) | `Alt+K` |
+| `Ctrl+Shift+L` / `Ctrl+Shift+C` | `Alt+L` / `Alt+Shift+C` |
+| `Alt+Q` | `Alt+Q` |
+| Toolbar → Document PiP | Toolbar → command bar |
+| Host permission is `host_permissions` (not granted for temp MV3) | `<all_urls>` in `permissions` (granted on load) |
 
 Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q` is workspace).
 
-## Default shortcuts on Firefox / Zen
+## Install on Zen / Firefox
 
-| Action | Firefox / Zen | Chromium (0.9.51) |
-| --- | --- | --- |
-| Open command bar | `Alt+K` (toolbar command) | `Ctrl+Shift+K` |
-| Prefill current URL | `Alt+L` | `Ctrl+Shift+L` |
-| Copy current URL | `Alt+Shift+C` | `Ctrl+Shift+C` |
-| Tab switcher | `Alt+Q` | `Alt+Q` |
-| Toolbar icon | Opens command bar | Document PiP picker |
+Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first.
 
-## Install on Zen / Firefox (required)
+1. Download `lumno-0.9.51-firefox-v1.0.0.zip` and unzip it.
+2. Open `about:debugging#/runtime/this-firefox`.
+3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
+4. Open a normal `https://` page (not `about:`).
+5. Press **Alt+K** (command bar) or **Alt+Q** (tab switcher). Toolbar icon is the same as Alt+K.
 
-**Unload the old Lumno first** (`about:addons` → Remove), then load 0.9.59.
-
-### Temporary (easiest, unsigned)
-
-1. Download `lumno-firefox-v0.9.59.zip` from Releases, or run `npm run package:firefox`.
-2. Unzip.
-3. Open `about:debugging#/runtime/this-firefox`
-4. **Load Temporary Add-on…** → unzipped `manifest.json`
-5. A **“允许访问网站”** tab opens immediately. Press the button. (If it does not: click the Lumno toolbar icon, or `about:addons` → Lumno → **权限** → enable **访问您在所有网站的数据**)
-6. Open a normal `https://` page and press `Alt+K` / `Alt+Q`. After granting access, already-open tabs get the overlay injected — a refresh is optional.
-
-Temporary add-ons are removed when the browser restarts.
+Temporary add-ons disappear when the browser restarts. After load, already-open https tabs receive the page listeners automatically — you do not need a grant page.
 
 ### Persistent unsigned (Zen / Firefox Developer / Nightly)
 
 1. `about:config` → `xpinstall.signatures.required` = `false`
 2. `about:addons` → gear → **Install Add-on From File…** → pick the zip
-3. Confirm host access in the install prompt or the Permissions tab
 
-## If shortcuts still do nothing
+## If a shortcut still does nothing
 
-1. `about:addons` → Lumno → Permissions → “Access your data for all websites” must be **on**
-2. Do not test on `about:` pages
-3. Click the toolbar icon — that is the same command as Alt+K
-4. `about:addons` → gear → **Manage Extension Shortcuts**
-
-## What works vs still Chromium-only
-
-Works: command bar and tab switcher on http(s) after host access is granted, toolbar button, new tab override, bookmarks/history/top sites, settings.
-
-Limited: Chrome `_favicon`, Document PiP, `tabGroups` on Firefox < 137.
+1. Do not test on `about:` pages.
+2. Click the toolbar icon.
+3. `about:addons` → gear → **Manage Extension Shortcuts**.
+4. Zen Settings → Keyboard Shortcuts: make sure Alt+K / Alt+Q are not remapped to something else.
 
 ## Development
 
 ```bash
 git clone https://github.com/0-V-linuxdo/lumno-extension.git
 cd lumno-extension
-npm test
-npm run package:firefox
+node scripts/test-gecko-runtime.js
+node scripts/test-firefox-manifest.js
+node scripts/test-package-firefox.js
 ```

@@ -1,6 +1,6 @@
 {
   "name": "lumno-extension",
-  "version": "0.9.59",
+  "version": "0.9.51",
   "private": true,
   "engines": {
     "node": "20.x"
@@ -22,6 +22,9 @@
     "profile:newtab-data": "node --expose-gc scripts/profile-newtab-data-performance.js",
     "package:store": "npm run build:react && node scripts/package-store.js",
     "package:firefox": "node scripts/package-firefox.js",
+    "test:firefox-manifest": "node scripts/test-firefox-manifest.js",
+    "test:gecko-runtime": "node scripts/test-gecko-runtime.js",
+    "test:package-firefox": "node scripts/test-package-firefox.js",
     "test:package-store": "node scripts/test-package-store.js",
     "test:blacklist": "node scripts/test-blacklist.js",
     "test:url-guards": "node scripts/test-url-guards.js",

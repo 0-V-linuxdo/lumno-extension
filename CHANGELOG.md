@@ -1,85 +1,24 @@
 Tags: Release
 
-## Firefox port (0.9.59)
+## 0.9.51-firefox-v1.0.0
 
-- 临时载入后立刻打开授权页。没有网站权限时快捷键根本不会触发，授权页不能等注入失败才出现。
-- 授权网站访问后，立刻把命令栏 / Tab Switcher 注入到已经打开的 https 标签，不必再刷新页面。
-- Tab Switcher / 命令栏注入失败也会打开授权页，不再静默。
-- Temporary add-ons now open the host-access page on load. Shortcuts cannot fire until that grant exists.
-- After host access is granted, overlay scripts are injected into already-open https tabs so Alt+K / Alt+Q work without a reload.
-- Command bar and Tab Switcher inject failures now open the host-access page instead of going silent.
+Clean rewrite of the Firefox / Zen port from upstream **0.9.51**. This is not another patch on 0.9.52–0.9.59.
 
-## Firefox port (0.9.58)
+Those builds stayed on Manifest V3. Firefox does **not** grant `host_permissions` for temporary add-ons loaded via `about:debugging`, so content scripts never entered `https` pages and `scripting.executeScript` failed with *Missing host permission*. Shortcuts then did nothing.
 
-- 回到 0.9.51 的注入模型，修掉真正让快捷键没反应的两件事：Firefox 临时附加组件**不授予网站权限**；`commands.onCommand` 经常不带 `tab.url`，空 URL 被当成受限页直接放弃。
-- 增加 `activeTab`；Alt+K 走 `_execute_action`（等于点工具栏，会带上当前标签权限）；注入失败则打开授权页，而不是静默失败。
-- 0.9.51 injection model again, with the two Firefox-specific kills: temporary add-ons do **not** grant host access, and `onCommand` often omits `tab.url` so the overlay treated the page as restricted and did nothing.
-- Adds `activeTab`, binds Alt+K to `_execute_action`, and opens a host-access page when inject fails instead of going silent.
+This package is **Manifest V2**. Mozilla still supports MV2, and `<all_urls>` in `permissions` is granted on load.
 
-## Firefox port (0.9.57)
+- Firefox zip is MV2 with a persistent background page and `<all_urls>` host access.
+- Default shortcuts: `Alt+K` command bar, `Alt+Q` tab switcher, `Alt+L` prefill current URL, `Alt+Shift+C` copy URL. (Firefox DevTools swallows Chrome's `Ctrl+Shift+K/C/I/J/L`.)
+- Toolbar icon opens the command bar (Document PiP stays Chromium-only).
+- Empty-url `onCommand` tabs still attempt overlay inject; Gecko never jumps to the new-tab homepage.
+- Page-level Alt+K / Alt+Q backup, plus `commands.update` so temporary add-ons actually bind shortcuts.
+- MV2 `tabs.executeScript` polyfill injects the overlay file list one file at a time.
+- Chrome source remains upstream 0.9.51 Manifest V3. Product tag: `0.9.51-firefox-v1.0.0` (Firefox `manifest.version` is `1.0.0` because toolkit versions cannot contain hyphens).
 
-- 0.9.55/56 继续在事件页里 `executeScript` 注入约 30 个文件（约 1.3MB），还套了 1.5 秒超时。Firefox 冷启动解析大脚本很容易超时，失败后又禁止打开新标签回退，所以 Alt+K / Alt+Q 完全没反应。
-- 0.9.57 撤回这条注入补丁：Firefox 包把命令栏和 Tab Switcher 做成 `http(s)` 内容脚本，快捷键在页面里直接打开浮层，不再等后台注入。事件页用 `runtime.connect` 保活；`executeScript` 只作回退。
+Install from `lumno-0.9.51-firefox-v1.0.0.zip`. Do not use the Chrome zip or CRX Installer. See `FIREFOX.md`.
 
-- 0.9.55/56 still injected ~30 overlay files (~1.3MB) from the event page, then aborted at 1.5s. On Firefox that timed out after a cold start, skipped the new-tab fallback, and both shortcuts did nothing.
-- 0.9.57 reverts that inject path. The Firefox package ships the command bar and tab switcher as http(s) content scripts so Alt+K / Alt+Q open in-page. The event page stays awake over `runtime.connect`; `executeScript` is only a fallback.
-
-## Firefox port (0.9.56)
-
-- 0.9.55 会把页面热键让给 `chrome.commands`，但 Firefox 的 `tabs.get` 回调可能永远不回来，两条路径一起哑火，快捷键完全没反应。
-- 0.9.56：页面热键立刻执行（命令栏 `ensureOpen`，不再 toggle 关掉）；用带超时的 `tabs.query` 补全当前标签；事件页未醒时内容脚本重试 `sendMessage`。
-
-- 0.9.55 deferred the page hotkey until `chrome.commands` ran, then hung on `tabs.get` — both shortcuts did nothing.
-- 0.9.56 runs the page hotkey immediately (`ensureOpen` so it does not toggle closed), hydrates the tab with a timed `tabs.query`, and retries `sendMessage` while the event page wakes.
-
-## Firefox port (0.9.55)
-
-- Firefox 的 `commands.onCommand` 经常不带 `tab.url`，Tab Switcher 会误判当前页不能承载，然后跳到 Lumno 新标签页（看起来像打开了插件主页）。
-- Firefox 一次只能注入一个 `executeScript` 文件；多文件注入失败后，commands 和页面热键再各触发一次，命令栏就会闪一下标签再没反应。
-- 0.9.55：用 `tabs.get` 补全当前标签；Gecko 上逐文件注入；页面热键让路给 `chrome.commands`；命令栏只打开不立刻 toggle 关掉；不再跳到别的标签承载 Switcher。Firefox 包去掉 `service_worker`，避免只加载 `background.js`。
-
-- Firefox `commands.onCommand` often omits `tab.url`, so Tab Switcher jumped to the Lumno new-tab page (the plugin homepage).
-- Firefox `executeScript` is one-file-at-a-time; multi-file injects failed, then commands + page hotkey toggled the command bar and flashed a tab.
-- 0.9.55 hydrates the active tab, injects one file at a time, lets commands win over page hotkeys, opens (does not toggle-close) the command bar, and never hops to another tab to host the switcher. The Firefox zip no longer declares `service_worker`.
-
-## Firefox port (0.9.54)
-
-- Firefox 的 `moz-extension://UUID/` 不等于 gecko id，导致扩展自己的新标签页不被识别。
-- Tab Switcher 不再注入 zip 里已删除的 `codex-debug-surface.js`，失败时也不再打开 Lumno 主页。
-- 命令栏不再被 `commands` + 页面热键各触发一次（开了又关），失败时不再闪一下新标签再关掉。
-- Overlay / Tab Switcher 脚本在 Gecko 上分批注入。
-
-- Firefox own-page detection now uses `runtime.getURL('')` so `moz-extension://UUID/` matches.
-- Tab Switcher no longer injects the packaged-out debug surface, and no longer opens the Lumno homepage on inject failure.
-- Command bar no longer double-fires (commands + page hotkey toggling it closed) or flashes a fallback tab.
-- Overlay/switcher scripts inject in batches on Gecko.
-
-## Firefox port (0.9.53)
-
-- Firefox 事件页没有 `importScripts`。`background.scripts` 现在按顺序加载全部后台模块，Chrome 仍走 `service_worker`。
-- 源清单默认快捷键改为 `Alt+K` / `Alt+Q`，避免 Firefox 开发者工具吞掉 `Ctrl+Shift+K/C`。
-- 页面级监听在后台未就绪时立刻使用 Gecko 默认键；工具栏按钮在 Firefox/Zen 上打开命令栏。
-- 设置页的快捷键入口改为 `about:addons` / `commands.openShortcutSettings()`。
-- 搜索回退到 `browser.search.search`。新增 gecko / firefox-manifest / package-firefox 回归测试。
-
-- Firefox event pages have no `importScripts`. `background.scripts` now loads every helper; Chrome still uses `service_worker`.
-- Source-manifest shortcuts are now `Alt+K` / `Alt+Q` so Firefox DevTools cannot swallow them.
-- Page listeners seed Gecko defaults immediately; the toolbar button opens the command bar on Firefox/Zen.
-- Shortcut settings open `about:addons`. Search falls back to `browser.search.search`.
-- Added gecko shortcut, Firefox manifest, and Firefox package regression tests.
-
-## Firefox port (0.9.52)
-
-
-- 增加 Firefox / Zen / Gecko 适配：`browser_specific_settings.gecko`、MV3 `background.scripts` + `service_worker` 双声明。
-- 修复在 Firefox/Zen 上「打开命令栏」「Tab Switcher」快捷键无响应：Chrome 默认 `Ctrl+Shift+K/C` 与 Firefox 开发者工具冲突，安装后自动改绑到 `Alt+K` / `Alt+Q` 等不冲突组合，并补页面级快捷键回退。
-- 修复 Gecko 上 `importScripts(moz-extension://…)` 可能失败导致 background 无法启动的问题。
-- 识别 `about:newtab` / `moz-extension:` / AMO，新增 `npm run package:firefox` 生成可在 about:debugging 加载的 zip。
-
-- Added Firefox / Zen / Gecko support: gecko id, dual MV3 background (`scripts` + `service_worker`).
-- Fixed command-bar and tab-switcher shortcuts doing nothing on Firefox/Zen: Chrome defaults `Ctrl+Shift+K/C` collide with Firefox DevTools. Gecko now rebinds empty/conflicting commands (Alt+K / Alt+Q) and adds a page-level fallback.
-- Fixed background startup on Gecko when `importScripts` rejects absolute `moz-extension://` URLs.
-- Recognize `about:newtab` / `moz-extension:` / AMO. Added `npm run package:firefox`.
+---
 
 ## Features
 

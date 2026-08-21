@@ -24,8 +24,6 @@
     : null);
   let shortcutRaw = '';
   let shortcutSpec = null;
-  let tabSwitcherShortcutRaw = '';
-  let tabSwitcherShortcutSpec = null;
   let lastRefreshAt = 0;
   let lastVisibleReportAt = 0;
   let pageToastTimer = null;
@@ -141,55 +139,19 @@
     }
   }
 
-  function sendBackgroundHotkey(payload) {
-    const gecko = globalThis.LumnoGeckoShortcuts;
-    if (gecko && typeof gecko.sendRuntimeMessageWithRetry === 'function') {
-      gecko.sendRuntimeMessageWithRetry(chrome, payload);
-      return;
-    }
-    try {
-      chrome.runtime.sendMessage(payload);
-    } catch (e) {
-      logHotkeyListenerDebug('send-failed', {
-        error: e && e.message ? e.message : String(e || '')
-      });
-    }
-  }
-
-  function tryOpenCommandBarLocally() {
-    const gecko = globalThis.LumnoGeckoShortcuts;
-    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
-      return false;
-    }
-    const open = window._x_extension_openLumnoCommandBar_2026_unique_;
-    if (typeof open !== 'function') {
-      return false;
-    }
-    try {
-      const result = open({ ensureOpen: true });
-      return Boolean(result && result.ok === true);
-    } catch (error) {
-      return false;
-    }
-  }
-
   function triggerOverlay() {
     logHotkeyListenerDebug('trigger-overlay', {
       shortcut: shortcutRaw || '',
       href: location && location.href ? location.href : ''
     });
-    if (tryOpenCommandBarLocally()) {
-      return;
+    try {
+      chrome.runtime.sendMessage({ action: 'triggerShowSearchFromPageHotkey' });
+    } catch (e) {
+      // Ignore runtime bridge failures.
+      logHotkeyListenerDebug('trigger-overlay-failed', {
+        error: e && e.message ? e.message : String(e || '')
+      });
     }
-    sendBackgroundHotkey({ action: 'triggerShowSearchFromPageHotkey' });
-  }
-
-  function triggerTabSwitcherFromPage() {
-    logHotkeyListenerDebug('trigger-tab-switcher', {
-      shortcut: tabSwitcherShortcutRaw || '',
-      href: location && location.href ? location.href : ''
-    });
-    sendBackgroundHotkey({ action: 'triggerTabSwitcherFromPageHotkey' });
   }
 
   function ensureRemixIconStyles() {
@@ -583,17 +545,13 @@
   }
 
   function applyGeckoHotkeyDefaults() {
-    const gecko = globalThis.LumnoGeckoShortcuts;
+    const gecko = globalThis.LumnoGeckoRuntime;
     if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
       return;
     }
     if (!shortcutSpec) {
       shortcutRaw = gecko.getDefaultShortcut('show-search') || 'Alt+K';
       shortcutSpec = parseShortcut(shortcutRaw);
-    }
-    if (!tabSwitcherShortcutSpec) {
-      tabSwitcherShortcutRaw = gecko.getDefaultShortcut('show-tab-switcher') || 'Alt+Q';
-      tabSwitcherShortcutSpec = parseShortcut(tabSwitcherShortcutRaw);
     }
   }
 
@@ -634,7 +592,7 @@
         const nextShortcut = response && typeof response.shortcut === 'string'
           ? response.shortcut
           : '';
-        const gecko = globalThis.LumnoGeckoShortcuts;
+        const gecko = globalThis.LumnoGeckoRuntime;
         const resolvedShortcut = gecko && typeof gecko.resolveShortcut === 'function'
           ? gecko.resolveShortcut('show-search', nextShortcut)
           : nextShortcut;
@@ -647,23 +605,6 @@
           shortcut: shortcutRaw,
           hasSpec: Boolean(shortcutSpec)
         });
-      });
-      chrome.runtime.sendMessage({ action: 'getTabSwitcherShortcut' }, (response) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          return;
-        }
-        const nextShortcut = response && typeof response.shortcut === 'string'
-          ? response.shortcut
-          : '';
-        const gecko = globalThis.LumnoGeckoShortcuts;
-        const resolvedShortcut = gecko && typeof gecko.resolveShortcut === 'function'
-          ? gecko.resolveShortcut('show-tab-switcher', nextShortcut)
-          : nextShortcut;
-        if (resolvedShortcut === tabSwitcherShortcutRaw) {
-          return;
-        }
-        tabSwitcherShortcutRaw = resolvedShortcut;
-        tabSwitcherShortcutSpec = parseShortcut(resolvedShortcut);
       });
     } catch (e) {
       // Ignore runtime bridge failures on restricted frames.
@@ -749,18 +690,6 @@
       event.preventDefault();
       event.stopPropagation();
       triggerOverlay();
-      return;
-    }
-    const matchedTabSwitcherShortcut = Boolean(
-      tabSwitcherShortcutSpec && shortcutMatchesEvent(event, tabSwitcherShortcutSpec)
-    );
-    if (matchedTabSwitcherShortcut) {
-      if (editableTarget) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      triggerTabSwitcherFromPage();
       return;
     }
     if (event.defaultPrevented) {

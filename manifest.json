@@ -3,62 +3,28 @@
       "default_title": "__MSG_ext_name__"
    },
    "background": {
-      "service_worker": "src/background/background.js",
-      "scripts": [
-         "src/shared/gecko-shortcuts.js",
-         "src/shared/blacklist-utils.js",
-         "src/shared/url-guards.js",
-         "src/shared/favicon-utils.js",
-         "src/shared/shortcut-favicon.js",
-         "src/shared/shortcut-key-matcher.js",
-         "src/shared/favicon-cache.js",
-         "src/newtab/favicon-theme.js",
-         "src/shared/extension-routes.js",
-         "src/background/command-target-policy.js",
-         "src/shared/settings.js",
-         "src/shared/update-notice.js",
-         "src/shared/search-utils.js",
-         "src/shared/selection-intent.js",
-         "src/shared/site-search-store.js",
-         "src/background/ai-provider-submit.js",
-         "src/background/extension-pages.js",
-         "src/background/tab-groups.js",
-         "src/background/bookmark-tab-groups.js",
-         "src/background/selection-target.js",
-         "src/background/selection-quick-action-provider.js",
-         "src/background/message-router.js",
-         "src/background/newtab-fallback.js",
-         "src/background/shortcut-rules.js",
-         "src/background/pip-ownership.js",
-         "src/background/pip-main-world.js",
-         "src/background/recent-tab-switcher.js",
-         "src/background/overlay-loading-lifecycle.js",
-         "src/background/dev-extension-startup.js",
-         "src/background/codex-debug-bridge.js",
-         "assets/vendor/pinyin-pro.js",
-         "src/background/background.js"
-      ]
+      "service_worker": "src/background/background.js"
    },
    "commands": {
       "show-search": {
          "description": "__MSG_command_show_search__",
          "suggested_key": {
-            "default": "Alt+K",
-            "mac": "Alt+K"
+            "default": "Ctrl+Shift+K",
+            "mac": "Command+Shift+K"
          }
       },
       "show-search-prefill": {
          "description": "__MSG_command_show_search_prefill__",
          "suggested_key": {
-            "default": "Alt+L",
-            "mac": "Alt+L"
+            "default": "Ctrl+Shift+L",
+            "mac": "Command+Shift+L"
          }
       },
       "show-search-prefill-v": {
          "description": "__MSG_command_show_search_prefill_v__",
          "suggested_key": {
-            "default": "Alt+Shift+C",
-            "mac": "Alt+Shift+C"
+            "default": "Ctrl+Shift+C",
+            "mac": "Command+Shift+C"
          }
       },
       "show-tab-switcher": {
@@ -71,42 +37,21 @@
    },
    "content_scripts": [
       {
-         "matches": [
-            "<all_urls>"
-         ],
-         "js": [
-            "src/shared/gecko-shortcuts.js",
-            "src/shared/settings.js",
-            "src/content/hotkey-listener.js",
-            "src/overlay/gecko-overlay-bridge.js"
-         ],
+         "matches": [ "\u003Call_urls>" ],
+         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/content/hotkey-listener.js" ],
          "run_at": "document_start"
       },
       {
-         "matches": [
-            "<all_urls>"
-         ],
-         "js": [
-            "src/shared/gecko-shortcuts.js",
-            "src/shared/shortcut-key-matcher.js",
-            "src/content/shortcut-key-observer.js"
-         ],
+         "matches": [ "\u003Call_urls>" ],
+         "js": [ "src/shared/gecko-runtime.js", "src/shared/shortcut-key-matcher.js", "src/content/shortcut-key-observer.js" ],
          "run_at": "document_start",
          "all_frames": true,
          "match_about_blank": true,
          "match_origin_as_fallback": true
       },
       {
-         "matches": [
-            "<all_urls>"
-         ],
-         "js": [
-            "src/shared/settings.js",
-            "src/shared/selection-action-icons.js",
-            "src/shared/selection-intent.js",
-            "src/shared/toast.js",
-            "src/content/selection-quick-actions.js"
-         ],
+         "matches": [ "\u003Call_urls>" ],
+         "js": [ "src/shared/settings.js", "src/shared/selection-action-icons.js", "src/shared/selection-intent.js", "src/shared/toast.js", "src/content/selection-quick-actions.js" ],
          "run_at": "document_idle"
       },
       {
@@ -138,22 +83,12 @@
             "*://*.bilibili.com/*",
             "*://*.bilibili.tv/*"
          ],
-         "js": [
-            "src/shared/settings.js",
-            "src/content/auto-pip-blacklist.js",
-            "src/content/site-auto-pip.js"
-         ],
+         "js": [ "src/shared/settings.js", "src/content/auto-pip-blacklist.js", "src/content/site-auto-pip.js" ],
          "run_at": "document_idle"
       },
       {
-         "matches": [
-            "*://*.youtube.com/*",
-            "*://youtube.com/*"
-         ],
-         "js": [
-            "src/shared/settings.js",
-            "src/content/youtube-auto-pip.js"
-         ],
+         "matches": [ "*://*.youtube.com/*", "*://youtube.com/*" ],
+         "js": [ "src/shared/settings.js", "src/content/youtube-auto-pip.js" ],
          "run_at": "document_idle"
       }
    ],
@@ -167,9 +102,7 @@
    "chrome_url_overrides": {
       "newtab": "src/newtab/newtab.html"
    },
-   "host_permissions": [
-      "<all_urls>"
-   ],
+   "host_permissions": [ "\u003Call_urls>" ],
    "icons": {
       "128": "assets/images/lumno.png",
       "16": "assets/images/lumno.png",
@@ -182,66 +115,14 @@
    },
    "web_accessible_resources": [
       {
-         "resources": [
-            "assets/images/lumno.png",
-            "assets/images/lumno-selection-mark.svg",
-            "assets/images/lumno-input-light.png",
-            "assets/images/lumno-wordmark.svg",
-            "assets/images/lumno-wordmark-dark.svg",
-            "assets/images/lumno-wordmark-mask.svg",
-            "assets/images/site-search/*.png",
-            "assets/data/site-search.json",
-            "assets/data/shortcut-rules.json",
-            "assets/vendor/pinyin-pro.js",
-            "assets/remixicon/fonts/remixicon.css",
-            "assets/remixicon/fonts/remixicon.woff2",
-            "assets/remixicon/icons/*.svg",
-            "assets/fonts/open-sans/open-sans.css",
-            "assets/fonts/open-sans/OpenSans-VariableFont-wdth-wght.ttf",
-            "_locales/en/messages.json",
-            "_locales/ja/messages.json",
-            "_locales/zh_CN/messages.json",
-            "_locales/zh_TW/messages.json",
-            "src/shared/search-input.css",
-            "src/shared/menu-surface.css",
-            "src/shared/feature-hints.css",
-            "src/shared/tooltip.css",
-            "src/shared/cursor-tooltip.css",
-            "src/shared/toast.css",
-            "src/overlay/suggestions-view.css",
-            "src/content/youtube-auto-pip-page.js",
-            "_favicon/*"
-         ],
-         "matches": [
-            "<all_urls>"
-         ]
+        "resources": [ "assets/images/lumno.png", "assets/images/lumno-selection-mark.svg", "assets/images/lumno-input-light.png", "assets/images/lumno-wordmark.svg", "assets/images/lumno-wordmark-dark.svg", "assets/images/lumno-wordmark-mask.svg", "assets/images/site-search/*.png", "assets/data/site-search.json", "assets/data/shortcut-rules.json", "assets/vendor/pinyin-pro.js", "assets/remixicon/fonts/remixicon.css", "assets/remixicon/fonts/remixicon.woff2", "assets/remixicon/icons/*.svg", "assets/fonts/open-sans/open-sans.css", "assets/fonts/open-sans/OpenSans-VariableFont-wdth-wght.ttf", "_locales/en/messages.json", "_locales/ja/messages.json", "_locales/zh_CN/messages.json", "_locales/zh_TW/messages.json", "src/shared/search-input.css", "src/shared/menu-surface.css", "src/shared/feature-hints.css", "src/shared/tooltip.css", "src/shared/cursor-tooltip.css", "src/shared/toast.css", "src/overlay/suggestions-view.css", "src/content/youtube-auto-pip-page.js", "_favicon/*" ],
+         "matches": [ "\u003Call_urls>" ]
       }
    ],
-   "manifest_version": 3,
-   "default_locale": "zh_CN",
+  "manifest_version": 3,
+  "default_locale": "zh_CN",
    "name": "__MSG_ext_name__",
    "author": "Kubai087",
-   "permissions": [
-      "scripting",
-      "tabs",
-      "tabGroups",
-      "history",
-      "topSites",
-      "bookmarks",
-      "storage",
-      "search",
-      "favicon"
-   ],
-   "version": "0.9.59",
-   "browser_specific_settings": {
-      "gecko": {
-         "id": "lumno@0-v-linuxdo.github.io",
-         "strict_min_version": "121.0",
-         "data_collection_permissions": {
-            "required": [
-               "none"
-            ]
-         }
-      }
-   }
+   "permissions": [ "scripting", "tabs", "tabGroups", "history", "topSites", "bookmarks", "storage", "search", "favicon" ],
+   "version": "0.9.51"
 }

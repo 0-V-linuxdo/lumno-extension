@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { OVERLAY_CONTENT_SCRIPT_FILES } = require('../src/shared/gecko-shortcuts.js');
+const geckoRuntime = require('../src/shared/gecko-runtime.js');
 
 const repoRoot = process.cwd();
 const pack = spawnSync(process.execPath, ['scripts/package-firefox.js'], {
@@ -12,8 +12,8 @@ const pack = spawnSync(process.execPath, ['scripts/package-firefox.js'], {
 });
 assert.strictEqual(pack.status, 0, pack.stderr || pack.stdout || 'package:firefox failed');
 
-const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));
-const zipPath = path.join(repoRoot, 'dist', `lumno-firefox-v${manifest.version}.zip`);
+const zipName = `lumno-${geckoRuntime.PRODUCT_TAG}.zip`;
+const zipPath = path.join(repoRoot, 'dist', zipName);
 assert.ok(fs.existsSync(zipPath), `Firefox zip missing: ${zipPath}`);
 
 const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumno-firefox-zip-'));
@@ -24,102 +24,44 @@ const unzip = spawnSync('python3', ['-c', [
 assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox package');
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
+assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
+assert.strictEqual(packagedManifest.version, '1.0.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
-assert.ok(!(packagedManifest.permissions || []).includes('favicon'), 'Firefox package must drop chrome favicon permission');
-assert.ok(Array.isArray(packagedManifest.background.scripts), 'Firefox package must declare background.scripts');
-assert.ok(
-  !packagedManifest.background.service_worker,
-  'Firefox package must not declare service_worker or some builds load only background.js'
-);
-assert.ok(
-  packagedManifest.background.scripts.length > 2,
-  'Firefox package must ship helper scripts on the event page'
-);
-assert.ok(
-  !packagedManifest.background.scripts.includes('src/background/codex-debug-bridge.js'),
-  'Firefox package should omit development-only background files'
-);
-assert.ok(
-  packagedManifest.background.scripts.includes('src/shared/gecko-shortcuts.js'),
-  'Firefox package must load gecko shortcut helpers before background.js'
-);
+assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
+assert.ok(!packagedManifest.service_worker && !packagedManifest.background.service_worker,
+  'Firefox MV2 package must not declare service_worker');
+assert.strictEqual(packagedManifest.background.persistent, true);
+assert.ok(Array.isArray(packagedManifest.background.scripts));
+assert.ok(packagedManifest.background.scripts.includes('src/background/gecko-mv2-polyfill.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/shared/gecko-runtime.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/background/background.js'));
 assert.strictEqual(
   packagedManifest.background.scripts[packagedManifest.background.scripts.length - 1],
   'src/background/background.js'
 );
-assert.ok(
-  packagedManifest.commands._execute_action &&
-    packagedManifest.commands._execute_action.suggested_key.default === 'Alt+K',
-  'Firefox Alt+K must use _execute_action so the shortcut grants activeTab'
-);
-assert.ok(
-  !packagedManifest.commands['show-search'] ||
-    !packagedManifest.commands['show-search'].suggested_key,
-  'Firefox must not bind Alt+K to both _execute_action and show-search'
-);
+assert.ok(packagedManifest.browser_action, 'Firefox MV2 uses browser_action');
+assert.ok(!(packagedManifest.permissions || []).includes('favicon'));
+assert.ok(!(packagedManifest.permissions || []).includes('scripting'));
+assert.ok(!(packagedManifest.permissions || []).includes('tabGroups'));
+assert.ok((packagedManifest.permissions || []).includes('<all_urls>'),
+  'MV2 must grant host access on install so content scripts inject');
+assert.ok((packagedManifest.permissions || []).includes('activeTab'));
+assert.strictEqual(packagedManifest.commands['show-search'].suggested_key.default, 'Alt+K');
 assert.strictEqual(packagedManifest.commands['show-tab-switcher'].suggested_key.default, 'Alt+Q');
+assert.ok(Array.isArray(packagedManifest.web_accessible_resources));
+assert.ok(!packagedManifest.web_accessible_resources.includes('_favicon/*'));
 assert.ok(
-  (packagedManifest.permissions || []).includes('activeTab'),
-  'Firefox package needs activeTab so a command/toolbar click can inject without granted host_permissions'
-);
-assert.ok(
-  (packagedManifest.optional_host_permissions || []).includes('<all_urls>'),
-  'Firefox package must be able to request host access at runtime'
+  fs.existsSync(path.join(extractDir, 'src/background/gecko-mv2-polyfill.js')),
+  'Firefox zip must contain the MV2 scripting polyfill'
 );
 assert.ok(
-  fs.existsSync(path.join(extractDir, 'src/shared/gecko-shortcuts.js')),
-  'Firefox zip must contain gecko-shortcuts.js'
+  packagedManifest.content_scripts.every((entry) => !entry.match_origin_as_fallback),
+  'Firefox must not keep Chrome-only match_origin_as_fallback'
 );
-assert.ok(
-  fs.existsSync(path.join(extractDir, 'src/background/background.js')),
-  'Firefox zip must contain background.js'
-);
-assert.ok(
-  fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.html')),
-  'Firefox zip must contain the host-access page'
-);
-assert.ok(
-  fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.js')),
-  'Firefox zip must contain the host-access script'
-);
-
-const overlayEntry = (packagedManifest.content_scripts || []).find((entry) =>
-  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
-);
-assert.ok(overlayEntry, 'Firefox package must declare command-bar overlay content_scripts');
-assert.deepStrictEqual(
-  overlayEntry.matches,
-  ['http://*/*', 'https://*/*'],
-  'Overlay content scripts should only run on http(s) pages'
-);
-assert.strictEqual(overlayEntry.run_at, 'document_idle');
-OVERLAY_CONTENT_SCRIPT_FILES.forEach((file) => {
-  assert.ok(
-    overlayEntry.js.includes(file),
-    `Firefox overlay content_scripts must include ${file}`
-  );
-  assert.ok(
-    fs.existsSync(path.join(extractDir, file)),
-    `Firefox zip must contain overlay file ${file}`
-  );
-});
-assert.ok(
-  overlayEntry.js.includes('src/overlay/tab-switcher.js'),
-  'Firefox overlay content_scripts must include tab-switcher.js'
-);
-assert.ok(
-  overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'),
-  'Firefox overlay content_scripts must include gecko-overlay-bridge.js'
-);
-
-const sourceHasOverlayContentScript = (manifest.content_scripts || []).some((entry) =>
-  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
-);
-assert.ok(
-  !sourceHasOverlayContentScript,
-  'Chrome source manifest must not preload the 1.3MB overlay on every page'
-);
+assert.ok(!fs.existsSync(path.join(extractDir, 'src/onboarding/gecko-host-access.html')));
+assert.ok(!fs.existsSync(path.join(extractDir, 'src/overlay/gecko-overlay-bridge.js')));
+assert.ok(!fs.existsSync(path.join(extractDir, 'src/shared/gecko-shortcuts.js')));
 
 fs.rmSync(extractDir, { recursive: true, force: true });
 console.log('package firefox ok');

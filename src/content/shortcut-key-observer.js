@@ -20,48 +20,6 @@
   const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
 
-  function tryOpenCommandBarLocally() {
-    if (window.top !== window) {
-      return false;
-    }
-    const gecko = globalThis.LumnoGeckoShortcuts;
-    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
-      return false;
-    }
-    const open = window._x_extension_openLumnoCommandBar_2026_unique_;
-    if (typeof open !== 'function') {
-      return false;
-    }
-    try {
-      const result = open({ ensureOpen: true });
-      return Boolean(result && result.ok === true);
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function sendBackgroundHotkey(payload, callback) {
-    const gecko = globalThis.LumnoGeckoShortcuts;
-    if (gecko && typeof gecko.sendRuntimeMessageWithRetry === 'function') {
-      gecko.sendRuntimeMessageWithRetry(chrome, payload, callback);
-      return;
-    }
-    try {
-      chrome.runtime.sendMessage(payload, (response) => {
-        const error = chrome.runtime && chrome.runtime.lastError
-          ? chrome.runtime.lastError.message || ''
-          : '';
-        if (typeof callback === 'function') {
-          callback(response || null, error);
-        }
-      });
-    } catch (error) {
-      if (typeof callback === 'function') {
-        callback(null, error && error.message ? error.message : 'threw');
-      }
-    }
-  }
-
   function notifyTopFrameDocumentStarted() {
     if (window.top !== window) {
       return;
@@ -81,7 +39,7 @@
   }
 
   function applyShowSearchShortcut(shortcut) {
-    const gecko = globalThis.LumnoGeckoShortcuts;
+    const gecko = globalThis.LumnoGeckoRuntime;
     let nextShortcut = String(shortcut || '').trim();
     if (gecko && typeof gecko.resolveShortcut === 'function') {
       nextShortcut = gecko.resolveShortcut('show-search', nextShortcut) || nextShortcut;
@@ -93,7 +51,7 @@
   }
 
   function applyTabSwitcherShortcut(shortcut) {
-    const gecko = globalThis.LumnoGeckoShortcuts;
+    const gecko = globalThis.LumnoGeckoRuntime;
     let nextShortcut = String(shortcut || '').trim();
     if (gecko && typeof gecko.resolveShortcut === 'function') {
       nextShortcut = gecko.resolveShortcut('show-tab-switcher', nextShortcut) || nextShortcut;
@@ -105,7 +63,7 @@
   }
 
   function applyGeckoPageShortcutDefaults() {
-    const gecko = globalThis.LumnoGeckoShortcuts;
+    const gecko = globalThis.LumnoGeckoRuntime;
     if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
       return;
     }
@@ -136,18 +94,6 @@
         }
         applyShowSearchShortcut(nextShortcut);
       });
-      chrome.runtime.sendMessage({ action: 'getTabSwitcherShortcut' }, (response) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          return;
-        }
-        const nextShortcut = response && typeof response.shortcut === 'string'
-          ? response.shortcut
-          : '';
-        if (nextShortcut === tabSwitcherShortcutRaw) {
-          return;
-        }
-        applyTabSwitcherShortcut(nextShortcut);
-      });
     } catch (error) {
       // Ignore an extension context invalidated during reload or navigation.
     }
@@ -158,22 +104,26 @@
         !SHORTCUT_KEY_MATCHER.canBeChromeCommandShortcut(descriptor)) {
       return;
     }
-    sendBackgroundHotkey({
-      action: 'triggerShowSearchFromPageHotkey',
-      documentUrl: location && location.href ? location.href : '',
-      documentIsTop: window.top === window,
-      observedAt: Date.now(),
-      observedShortcut: descriptor,
-      requiresShortcutVerification: true,
-      trustedShortcutFallback: true
-    }, (response, error) => {
-      if (error) {
-        return;
-      }
-      if (response && typeof response.shortcut === 'string') {
-        applyShowSearchShortcut(response.shortcut);
-      }
-    });
+    try {
+      chrome.runtime.sendMessage({
+        action: 'triggerShowSearchFromPageHotkey',
+        documentUrl: location && location.href ? location.href : '',
+        documentIsTop: window.top === window,
+        observedAt: Date.now(),
+        observedShortcut: descriptor,
+        requiresShortcutVerification: true,
+        trustedShortcutFallback: true
+      }, (response) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          return;
+        }
+        if (response && typeof response.shortcut === 'string') {
+          applyShowSearchShortcut(response.shortcut);
+        }
+      });
+    } catch (error) {
+      // Ignore an extension context invalidated during reload or navigation.
+    }
   }
 
   function relayTabSwitcherShortcut(event) {
@@ -192,11 +142,17 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    sendBackgroundHotkey({
-      action: 'triggerTabSwitcherFromPageHotkey',
-      documentUrl: location && location.href ? location.href : '',
-      observedAt: Date.now()
-    });
+    try {
+      chrome.runtime.sendMessage({
+        action: 'triggerTabSwitcherFromGeckoHotkey',
+        documentUrl: location && location.href ? location.href : '',
+        observedAt: Date.now()
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Ignore an extension context invalidated during reload or navigation.
+    }
     return true;
   }
 
@@ -226,16 +182,19 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    if (tryOpenCommandBarLocally()) {
-      return;
+    try {
+      chrome.runtime.sendMessage({
+        action: 'triggerShowSearchFromPageHotkey',
+        documentUrl: location && location.href ? location.href : '',
+        documentIsTop: window.top === window,
+        observedAt: Date.now(),
+        trustedShortcutFallback: true
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Ignore an extension context invalidated during reload or navigation.
     }
-    sendBackgroundHotkey({
-      action: 'triggerShowSearchFromPageHotkey',
-      documentUrl: location && location.href ? location.href : '',
-      documentIsTop: window.top === window,
-      observedAt: Date.now(),
-      trustedShortcutFallback: true
-    });
   }
 
   function normalizeReleaseKey(value) {
