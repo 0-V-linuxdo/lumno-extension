@@ -110,6 +110,26 @@ assert.match(
   /notifyGeckoHotkeyFailure\(activeTab, 'command-bar', 'restricted-page'\)/,
   'Firefox command bar must toast on restricted pages instead of failing silently'
 );
+assert.match(
+  backgroundSource,
+  /src\/shared\/gecko-content-globals\.js/,
+  'Firefox tab switcher inject must include the Gecko globalThis-to-window mirror'
+);
+assert.match(
+  fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8'),
+  /search_panel_failed/,
+  'Firefox command bar bridge must not report success when the overlay did not open'
+);
+assert.match(
+  fs.readFileSync('src/react/overlay-islands.js', 'utf8'),
+  /new Proxy\(globalThis/,
+  'Firefox overlay islands must dual-write APIs onto window'
+);
+assert.match(
+  fs.readFileSync('src/shared/gecko-content-globals.js', 'utf8'),
+  /mirrorGeckoContentGlobals/,
+  'Firefox must ship a content-script globalThis-to-window mirror'
+);
 
 const polyfillSource = fs.readFileSync('src/background/gecko-mv2-polyfill.js', 'utf8');
 assert.match(

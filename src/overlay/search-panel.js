@@ -5,6 +5,23 @@ window._x_extension_search_overlay_runtime_version_2026_unique_ =
 window._x_extension_search_overlay_open_2026_unique_ = false;
 
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
+  if (typeof globalThis !== 'undefined' &&
+      typeof globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_ === 'function') {
+    globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_();
+  } else if (typeof globalThis !== 'undefined' && typeof window !== 'undefined' && globalThis !== window) {
+    try {
+      const names = Object.getOwnPropertyNames(globalThis);
+      for (let i = 0; i < names.length; i++) {
+        const key = names[i];
+        if ((key.indexOf('Lumno') === 0 || key.indexOf('_x_extension_') === 0) &&
+            window[key] == null && globalThis[key] != null) {
+          window[key] = globalThis[key];
+        }
+      }
+    } catch (error) {
+      // Ignore mirror failures; helper lookups below still run.
+    }
+  }
   let captureTabHandler = null;
   let overlayThemeStorageListener = null;
   let overlayLanguageStorageListener = null;

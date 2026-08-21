@@ -31,8 +31,34 @@
     }
   }
 
+  function mirrorContentGlobals() {
+    if (typeof globalThis !== 'undefined' &&
+        typeof globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_ === 'function') {
+      globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_();
+    }
+  }
+
+  function readContentGlobal(name) {
+    try {
+      if (typeof globalThis !== 'undefined' && globalThis[name]) {
+        return globalThis[name];
+      }
+    } catch (error) {
+      // Ignore.
+    }
+    try {
+      if (typeof window !== 'undefined' && window[name]) {
+        return window[name];
+      }
+    } catch (error) {
+      // Ignore.
+    }
+    return undefined;
+  }
+
   function openCommandBar(context) {
-    const toggle = window._x_extension_toggleSearchOverlay_2026_unique_;
+    mirrorContentGlobals();
+    const toggle = readContentGlobal('_x_extension_toggleSearchOverlay_2026_unique_');
     if (typeof toggle !== 'function') {
       return { ok: false, reason: 'search_panel_missing' };
     }
@@ -41,17 +67,40 @@
       openedAt: Date.now(),
       currentTabUrl: location && location.href ? location.href : ''
     }, context && typeof context === 'object' ? context : {});
-    toggle(Array.isArray(overlayContext.tabs) ? overlayContext.tabs : [], overlayContext);
-    return { ok: true };
+    try {
+      const result = toggle(Array.isArray(overlayContext.tabs) ? overlayContext.tabs : [], overlayContext);
+      if (result && typeof result === 'object') {
+        return result;
+      }
+      if (window._x_extension_search_overlay_open_2026_unique_ === true) {
+        return { ok: true };
+      }
+      return { ok: false, reason: 'search_panel_failed' };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'search_panel_threw',
+        error: error && error.message ? error.message : String(error || 'unknown')
+      };
+    }
   }
 
   function openTabSwitcher(context) {
-    const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
+    mirrorContentGlobals();
+    const toggle = readContentGlobal('_x_extension_toggleTabSwitcher_2026_unique_');
     if (typeof toggle !== 'function') {
       return { ok: false, reason: 'tab_switcher_missing' };
     }
-    const result = toggle(context && typeof context === 'object' ? context : {});
-    return result && typeof result === 'object' ? result : { ok: true };
+    try {
+      const result = toggle(context && typeof context === 'object' ? context : {});
+      return result && typeof result === 'object' ? result : { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'tab_switcher_threw',
+        error: error && error.message ? error.message : String(error || 'unknown')
+      };
+    }
   }
 
   window._x_extension_openLumnoCommandBar_2026_unique_ = openCommandBar;

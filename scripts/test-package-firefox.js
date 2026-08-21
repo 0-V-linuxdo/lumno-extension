@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.5.0');
+assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.6.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
@@ -68,6 +68,13 @@ const overlayEntry = (packagedManifest.content_scripts || []).find((entry) =>
 assert.ok(overlayEntry, 'Firefox package must preload the command bar as a content script');
 assert.deepStrictEqual(overlayEntry.matches, ['http://*/*', 'https://*/*']);
 assert.ok(overlayEntry.js.includes('src/overlay/tab-switcher.js'));
+assert.ok(overlayEntry.js.includes('src/shared/gecko-content-globals.js'));
+assert.ok(
+  overlayEntry.js.indexOf('src/react/overlay-islands.js') <
+    overlayEntry.js.indexOf('src/shared/gecko-content-globals.js'),
+  'Gecko global mirror must run after overlay-islands'
+);
+assert.ok(fs.existsSync(path.join(extractDir, 'src/shared/gecko-content-globals.js')));
 assert.ok(overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'));
 const firstScripts = packagedManifest.content_scripts[0] && packagedManifest.content_scripts[0].js;
 assert.ok(Array.isArray(firstScripts) && firstScripts.includes('src/overlay/gecko-overlay-bridge.js'));

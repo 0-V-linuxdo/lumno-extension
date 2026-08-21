@@ -13,8 +13,8 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.5.0');
-assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.5.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.6.0');
+assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.6.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');
@@ -148,5 +148,42 @@ assert.strictEqual(redeclareRuntime.calls.length, 3, 'polyfill continues after r
 assert.strictEqual(redeclareRuntime.calls[0].details.file, '/src/shared/settings.js');
 assert.strictEqual(redeclareRuntime.calls[1].details.file, '/src/overlay/search-panel.js');
 assert.strictEqual(redeclareRuntime.calls[2].details.code, '1');
+
+const mirrorSource = fs.readFileSync('src/shared/gecko-content-globals.js', 'utf8');
+const windowLike = {};
+const contentGlobal = {
+  LumnoOverlayTabSwitcherView: { createTabSwitcherView() { return true; } },
+  LumnoOverlayShell: { createOverlayMount() { return true; } },
+  _x_extension_toggleTabSwitcher_2026_unique_: function() {}
+};
+contentGlobal.globalThis = contentGlobal;
+contentGlobal.window = windowLike;
+vm.runInNewContext(mirrorSource, contentGlobal, { filename: 'src/shared/gecko-content-globals.js' });
+assert.strictEqual(
+  windowLike.LumnoOverlayTabSwitcherView,
+  contentGlobal.LumnoOverlayTabSwitcherView,
+  'Gecko mirror copies Lumno APIs from globalThis onto window'
+);
+assert.strictEqual(
+  windowLike.LumnoOverlayShell,
+  contentGlobal.LumnoOverlayShell,
+  'Gecko mirror copies overlay shell onto window'
+);
+
+const islandsSource = fs.readFileSync('src/react/overlay-islands.js', 'utf8');
+assert.match(islandsSource, /new Proxy\(globalThis/, 'overlay-islands must dual-write onto window on Gecko');
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/shared/gecko-content-globals.js'),
+  'overlay content scripts must include the Gecko global mirror'
+);
+const islandsIndex = gecko.OVERLAY_CONTENT_SCRIPT_FILES.indexOf('src/react/overlay-islands.js');
+const mirrorIndex = gecko.OVERLAY_CONTENT_SCRIPT_FILES.indexOf('src/shared/gecko-content-globals.js');
+assert.ok(islandsIndex >= 0 && mirrorIndex > islandsIndex, 'mirror must run after overlay-islands');
+
+const splitRoot = {};
+const splitWindow = {};
+const geckoDual = loadGeckoRuntime({ window: splitWindow });
+assert.ok(geckoDual);
+assert.ok(splitWindow.LumnoGeckoRuntime, 'Gecko runtime must also assign onto window');
 
 console.log('gecko runtime ok');

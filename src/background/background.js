@@ -165,6 +165,7 @@ function getTabSwitcherInjectionFiles() {
       'src/shared/gecko-runtime.js',
       'src/shared/icon-font-preload.js',
       'src/react/overlay-islands.js',
+      'src/shared/gecko-content-globals.js',
       'src/overlay/tab-switcher.js',
       'src/overlay/gecko-overlay-bridge.js'
     ];
@@ -184,10 +185,14 @@ function geckoHotkeyFailureMessage(kind, reason) {
       ? 'Lumno: Tab Switcher needs a normal https page (not about: or the add-on page).'
       : 'Lumno: command bar needs a normal https page (not about: or the add-on page).';
   }
+  if (code === 'react-view-unavailable') {
+    return 'Lumno: overlay UI failed to start. Refresh this https page, then try again.';
+  }
   if (code === 'helper-missing' ||
       code === 'tab_switcher_missing' ||
       code === 'search_panel_missing' ||
-      code === 'react-view-unavailable') {
+      code === 'search_panel_failed' ||
+      code === 'search_panel_threw') {
     return 'Lumno: overlay is not loaded on this tab. Refresh the https page, then try again.';
   }
   if (code === 'inject-failed') {
@@ -5182,18 +5187,30 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
             target: {tabId: activeTab.id},
             injectImmediately: true,
             func: (overlayTabs, overlayPanelContext, overlayHostId) => {
-              const toggleOverlay = window._x_extension_toggleSearchOverlay_2026_unique_;
+              const mirror = typeof globalThis !== 'undefined'
+                ? globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_
+                : null;
+              if (typeof mirror === 'function') {
+                mirror();
+              }
+              const toggleOverlay = (typeof globalThis !== 'undefined' &&
+                  globalThis._x_extension_toggleSearchOverlay_2026_unique_) ||
+                window._x_extension_toggleSearchOverlay_2026_unique_;
               if (typeof toggleOverlay !== 'function') {
                 console.warn('Lumno: overlay search panel helper not available.');
                 return { ok: false, reason: 'search_panel_missing' };
               }
-              toggleOverlay(overlayTabs, overlayPanelContext);
+              const result = toggleOverlay(overlayTabs, overlayPanelContext);
+              if (result && typeof result === 'object' && result.ok === false) {
+                return result;
+              }
               const overlayHost = document.getElementById(overlayHostId);
+              const overlayOpen = window._x_extension_search_overlay_open_2026_unique_ === true &&
+                Boolean(overlayHost && overlayHost.isConnected);
               return {
-                ok: true,
-                overlayOpen:
-                  window._x_extension_search_overlay_open_2026_unique_ === true &&
-                  Boolean(overlayHost && overlayHost.isConnected)
+                ok: overlayOpen || (result && result.ok === true),
+                overlayOpen: overlayOpen,
+                reason: overlayOpen ? '' : ((result && result.reason) || 'search_panel_failed')
               };
             },
             args: [tabs, {
@@ -5286,8 +5303,13 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       target: {tabId: activeTab.id},
       injectImmediately: true,
       func: (runtimeVersion) => {
-        return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
-          typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
+        const toggle = (typeof globalThis !== 'undefined' &&
+            globalThis._x_extension_toggleSearchOverlay_2026_unique_) ||
+          window._x_extension_toggleSearchOverlay_2026_unique_;
+        const version = (typeof globalThis !== 'undefined' &&
+            globalThis._x_extension_search_overlay_runtime_version_2026_unique_) ||
+          window._x_extension_search_overlay_runtime_version_2026_unique_;
+        return version === runtimeVersion && typeof toggle === 'function';
       },
       args: [OVERLAY_RUNTIME_VERSION]
     }, (results) => {
@@ -5460,7 +5482,15 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
       func: (nextContext) => {
-        const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
+        const mirror = typeof globalThis !== 'undefined'
+          ? globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_
+          : null;
+        if (typeof mirror === 'function') {
+          mirror();
+        }
+        const toggle = (typeof globalThis !== 'undefined' &&
+            globalThis._x_extension_toggleTabSwitcher_2026_unique_) ||
+          window._x_extension_toggleTabSwitcher_2026_unique_;
         if (typeof toggle !== 'function') {
           return { ok: false, reason: 'tab_switcher_missing' };
         }

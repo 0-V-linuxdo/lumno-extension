@@ -4,6 +4,13 @@
     module.exports = api;
   }
   root.LumnoGeckoRuntime = api;
+  if (typeof window !== 'undefined' && window !== root) {
+    try {
+      window.LumnoGeckoRuntime = api;
+    } catch (error) {
+      // Content-script window may be a different object on Gecko.
+    }
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   const COMMAND_DEFAULTS = Object.freeze({
     'show-search': 'Alt+K',
@@ -12,8 +19,8 @@
     'show-tab-switcher': 'Alt+Q'
   });
   const RESERVED_SHORTCUT_PATTERN = /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCLI]$/i;
-  const PRODUCT_TAG = '0.9.51-firefox-v1.5.0';
-  const FIREFOX_MANIFEST_VERSION = '1.5.0';
+  const PRODUCT_TAG = '0.9.51-firefox-v1.6.0';
+  const FIREFOX_MANIFEST_VERSION = '1.6.0';
   const OVERLAY_CONTENT_SCRIPT_FILES = Object.freeze([
     'src/shared/gecko-runtime.js',
     'src/shared/icon-font-preload.js',
@@ -47,6 +54,7 @@
     'src/overlay/site-fixes.js',
     'src/overlay/page-theme.js',
     'src/react/overlay-islands.js',
+    'src/shared/gecko-content-globals.js',
     'src/overlay/search-panel.js',
     'src/overlay/tab-switcher.js',
     'src/overlay/gecko-overlay-bridge.js'

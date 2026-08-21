@@ -38,7 +38,7 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 </p>
 
 <p align="center">当前版本：<code>0.9.51</code></p>
-<p align="center">Firefox / Zen 移植：<code>0.9.51-firefox-v1.5.0</code></p>
+<p align="center">Firefox / Zen 移植：<code>0.9.51-firefox-v1.6.0</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -80,7 +80,7 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 
 不要用 CRX Installer 装 Chrome 版 zip。请使用 Firefox 包：
 
-1. 下载 [`lumno-0.9.51-firefox-v1.5.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.5.0) 并解压。
+1. 下载 [`lumno-0.9.51-firefox-v1.6.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.6.0) 并解压。
 2. 打开 `about:debugging#/runtime/this-firefox`。
 3. **临时载入附加组件…** → 选择解压后的 `manifest.json`。
 4. 打开普通 `https://` 页面（不要在 `about:` 上试）。v1.2.0 起不必先刷新。

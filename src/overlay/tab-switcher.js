@@ -1046,6 +1046,10 @@
   }
 
   window._x_extension_toggleTabSwitcher_2026_unique_ = function(rawContext) {
+    if (typeof globalThis !== 'undefined' &&
+        typeof globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_ === 'function') {
+      globalThis._x_extension_mirrorGeckoContentGlobals_2026_unique_();
+    }
     const context = rawContext && typeof rawContext === 'object' ? rawContext : {};
     if (handleExistingSwitcher(context)) {
       return { ok: true, reason: 'already-open' };
@@ -1056,7 +1060,8 @@
     if (!tabs.length) {
       return { ok: false, reason: 'empty' };
     }
-    const tabSwitcherReactViewApi = window.LumnoOverlayTabSwitcherView;
+    const tabSwitcherReactViewApi = (typeof globalThis !== 'undefined' && globalThis.LumnoOverlayTabSwitcherView) ||
+      window.LumnoOverlayTabSwitcherView;
     if (!tabSwitcherReactViewApi ||
         typeof tabSwitcherReactViewApi.createTabSwitcherView !== 'function') {
       return { ok: false, reason: 'react-view-unavailable' };

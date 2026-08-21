@@ -1,5 +1,15 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.6.0
+
+Still based on upstream **0.9.51**. v1.5.0 made failure toasts honest, but Alt+Q still said “overlay is not loaded” on https and Alt+K stayed silent.
+
+Firefox content scripts use a `globalThis` that is **not** `window`. Overlay modules (including `overlay-islands.js`) export to `globalThis`; search-panel / tab-switcher read `window.Lumno*`. The tab switcher then returned `react-view-unavailable`. The command-bar bridge always replied `{ok:true}` after calling toggle, so Alt+K looked dead.
+
+v1.6.0 dual-writes APIs onto `window`, mirrors `globalThis` → `window` after islands load, and reports command-bar failure when the overlay does not open.
+
+Install `lumno-0.9.51-firefox-v1.6.0.zip`. Unload v1.5.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.5.0
 
 Still based on upstream **0.9.51**. v1.4.0 stopped Alt+Q from hopping tabs, but used one toast for every failure (“use a normal https page”). On https, re-injecting overlay files over scripts already loaded by `content_scripts` hit **redeclaration** and aborted `search-panel.js` / `tab-switcher.js`. The command bar also stayed silent: restricted pages and some inject failures never toasted.
