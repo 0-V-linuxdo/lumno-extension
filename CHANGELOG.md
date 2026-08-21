@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.4.0
+
+Still based on upstream **0.9.51**. v1.3.0 fixed inject file paths, but Alt+Q on a `moz-extension://` add-on page still **jumped to another tab**: `isOwnExtensionPageUrl` only matched `chrome-extension:`, so Firefox treated the add-on page as unhostable and called `focusWindowAndActivateTab` on a recent https tab. On https, re-injecting the switcher over already-loaded content scripts could abort the toggle.
+
+v1.4.0 treats `moz-extension:` as an own page, never hops to another tab on Gecko, tries `tabs.sendMessage` then an in-page toggle before re-injecting files, and shows a toast instead of switching tabs.
+
+Install `lumno-0.9.51-firefox-v1.4.0.zip`. Unload v1.3.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.3.0
 
 Still based on upstream **0.9.51**. v1.2.0 preloaded and re-injected the overlay into already-open tabs, but the MV2 polyfill passed `src/...` files to `tabs.executeScript` **without a leading `/`**. Firefox resolves those relative to the **page URL**, so every dynamic inject failed. Bound `chrome.commands` then ate Alt+K / Alt+Q before the page listener, and both paths stayed silent.

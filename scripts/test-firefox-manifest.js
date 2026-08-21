@@ -85,6 +85,21 @@ assert.match(
   /ensureOpen: openOptions\.ensureOpen === true \|\| isGeckoRuntime\(\)/,
   'Firefox command bar must open rather than toggle-close'
 );
+assert.match(
+  backgroundSource,
+  /function isOwnExtensionPageUrl\(url\)[\s\S]*isBrowserExtensionProtocol\(protocol\)/,
+  'Firefox moz-extension pages must count as own extension pages'
+);
+assert.match(
+  backgroundSource,
+  /tab-switcher-gecko-no-host-hop/,
+  'Firefox must not jump to another tab to host the tab switcher'
+);
+assert.match(
+  backgroundSource,
+  /runSwitcherToggle/,
+  'Firefox tab switcher should toggle an existing helper before re-injecting files'
+);
 
 const polyfillSource = fs.readFileSync('src/background/gecko-mv2-polyfill.js', 'utf8');
 assert.match(

@@ -13,8 +13,8 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.3.0');
-assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.3.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.4.0');
+assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.4.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');
@@ -51,6 +51,7 @@ assert.match(hotkeySource, /_x_extension_openLumnoCommandBar_2026_unique_/, 'Hot
 
 const bridgeSource = fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8');
 assert.match(bridgeSource, /openSearchOverlayFromBackground/, 'Gecko overlay bridge should toggle from background messages');
+assert.match(bridgeSource, /showGeckoHotkeyToast/, 'Gecko overlay bridge should show hotkey failure toasts in-page');
 assert.match(polyfill, /hasTabsExecute/, 'MV2 polyfill must always overwrite scripting.executeScript');
 assert.match(polyfill, /function toExtensionFilePath\(/, 'Firefox tabs.executeScript needs extension-root file paths');
 assert.match(polyfill, /'\/' \+ path/, 'Firefox tabs.executeScript files must start with /');

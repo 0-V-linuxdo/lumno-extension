@@ -36,7 +36,7 @@ Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused br
 </p>
 
 <p align="center">Current version: <code>0.9.51</code></p>
-<p align="center">Firefox / Zen port: <code>0.9.51-firefox-v1.3.0</code></p>
+<p align="center">Firefox / Zen port: <code>0.9.51-firefox-v1.4.0</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -78,7 +78,7 @@ Install from the Chrome Web Store: [Install Lumno on Chrome Web Store](https://c
 
 Do **not** install the Chrome zip with CRX Installer. Use the Firefox package:
 
-1. Download [`lumno-0.9.51-firefox-v1.3.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.3.0) and unzip it.
+1. Download [`lumno-0.9.51-firefox-v1.4.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.4.0) and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
 4. Open a normal `https://` page (not `about:`). Refresh is optional in v1.2.0.
@@ -136,7 +136,7 @@ npm run test:package-firefox
 npm run package:firefox
 ```
 
-`npm run package:store` reads the version from `manifest.json` and creates `dist/lumno-store-v<version>.zip`. It requires `zip` and `zipinfo` to be available on the system. `npm run package:firefox` writes `dist/lumno-0.9.51-firefox-v1.3.0.zip`.
+`npm run package:store` reads the version from `manifest.json` and creates `dist/lumno-store-v<version>.zip`. It requires `zip` and `zipinfo` to be available on the system. `npm run package:firefox` writes `dist/lumno-0.9.51-firefox-v1.4.0.zip`.
 
 ## Project Structure
 

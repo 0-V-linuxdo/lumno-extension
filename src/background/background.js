@@ -181,58 +181,76 @@ function notifyGeckoHotkeyFailure(tab, kind) {
   if (!isGeckoRuntime() || !tab || typeof tab.id !== 'number') {
     return;
   }
-  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
-    return;
-  }
   const message = kind === 'tab-switcher'
-    ? 'Lumno: Tab Switcher could not open. Refresh this https page, or assign Alt+Q in about:addons → Manage Extension Shortcuts.'
+    ? 'Lumno: Tab Switcher could not open. Use a normal https page (not about: or the add-on page).'
     : 'Lumno: command bar could not open. Refresh this https page, or click the toolbar icon.';
-  try {
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: (text) => {
-        try {
-          const id = '_x_extension_gecko_hotkey_toast_2026_unique_';
-          let el = document.getElementById(id);
-          if (!el) {
-            el = document.createElement('div');
-            el.id = id;
-            el.setAttribute('role', 'status');
-            el.style.cssText = [
-              'all:initial',
-              'position:fixed',
-              'z-index:2147483647',
-              'left:50%',
-              'bottom:24px',
-              'transform:translateX(-50%)',
-              'max-width:min(420px,calc(100vw - 32px))',
-              'padding:10px 16px',
-              'border-radius:10px',
-              'background:#111827',
-              'color:#f8fafc',
-              'font:13px/1.45 system-ui,sans-serif',
-              'box-shadow:0 10px 30px rgba(0,0,0,.35)',
-              'pointer-events:none'
-            ].join(';');
-            (document.body || document.documentElement).appendChild(el);
-          }
-          el.textContent = String(text || '');
-          setTimeout(() => {
-            if (el && el.parentNode) {
-              el.parentNode.removeChild(el);
+  const injectToast = () => {
+    if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+      return;
+    }
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (text) => {
+          try {
+            const id = '_x_extension_gecko_hotkey_toast_2026_unique_';
+            let el = document.getElementById(id);
+            if (!el) {
+              el = document.createElement('div');
+              el.id = id;
+              el.setAttribute('role', 'status');
+              el.style.cssText = [
+                'all:initial',
+                'position:fixed',
+                'z-index:2147483647',
+                'left:50%',
+                'bottom:24px',
+                'transform:translateX(-50%)',
+                'max-width:min(420px,calc(100vw - 32px))',
+                'padding:10px 16px',
+                'border-radius:10px',
+                'background:#111827',
+                'color:#f8fafc',
+                'font:13px/1.45 system-ui,sans-serif',
+                'box-shadow:0 10px 30px rgba(0,0,0,.35)',
+                'pointer-events:none'
+              ].join(';');
+              (document.body || document.documentElement).appendChild(el);
             }
-          }, 3200);
-        } catch (error) {
-          // Restricted documents cannot show a toast.
+            el.textContent = String(text || '');
+            setTimeout(() => {
+              if (el && el.parentNode) {
+                el.parentNode.removeChild(el);
+              }
+            }, 3200);
+          } catch (error) {
+            // Restricted documents cannot show a toast.
+          }
+        },
+        args: [message]
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Ignore toast injection failures on restricted tabs.
+    }
+  };
+  if (chrome && chrome.tabs && typeof chrome.tabs.sendMessage === 'function') {
+    try {
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'showGeckoHotkeyToast',
+        message: message
+      }, () => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          injectToast();
         }
-      },
-      args: [message]
-    }, () => {
-      void (chrome.runtime && chrome.runtime.lastError);
-    });
-  } catch (error) {
-    // Ignore toast injection failures on restricted tabs.
+      });
+      return;
+    } catch (error) {
+      // Fall through to executeScript.
+    }
   }
+  injectToast();
 }
 
 function isHttpOrHttpsTab(tab) {
@@ -391,7 +409,9 @@ function isOwnExtensionPageUrl(url) {
   }
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'chrome-extension:' && parsed.hostname === chrome.runtime.id;
+    const protocol = String(parsed.protocol || '').toLowerCase();
+    return isBrowserExtensionProtocol(protocol) &&
+      parsed.hostname === chrome.runtime.id;
   } catch (error) {
     return false;
   }
@@ -5415,6 +5435,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           source: context && context.source ? context.source : ''
         });
         openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
         finishOpen(false, reason || 'extension-page-open-failed');
         return;
       }
@@ -5428,6 +5449,60 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     });
     return;
   }
+  const runSwitcherToggle = (switcherContext, onMissing) => {
+    chrome.scripting.executeScript({
+      target: { tabId: hostTab.id },
+      func: (nextContext) => {
+        const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
+        if (typeof toggle !== 'function') {
+          return { ok: false, reason: 'tab_switcher_missing' };
+        }
+        const result = toggle(nextContext);
+        return result && typeof result === 'object'
+          ? result
+          : { ok: true };
+      },
+      args: [switcherContext]
+    }, (results) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        if (typeof onMissing === 'function') {
+          onMissing();
+          return;
+        }
+        const errorMessage = chrome.runtime.lastError.message || 'unknown';
+        logHotkeyDebug('tab-switcher-run-failed', {
+          tabId: hostTab.id,
+          error: errorMessage,
+          source: context && context.source ? context.source : ''
+        });
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        finishOpen(false, errorMessage);
+        return;
+      }
+      const result = Array.isArray(results) && results[0] ? results[0].result : null;
+      if (result && result.ok === false) {
+        if (result.reason === 'tab_switcher_missing' && typeof onMissing === 'function') {
+          onMissing();
+          return;
+        }
+        logHotkeyDebug('tab-switcher-run-failed', {
+          tabId: hostTab.id,
+          error: result.reason || 'unknown',
+          source: context && context.source ? context.source : ''
+        });
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        finishOpen(false, result.reason || 'run-failed');
+        return;
+      }
+      logHotkeyDebug('tab-switcher-opened', {
+        tabId: hostTab.id,
+        itemCount: tabItems.length,
+        source: context && context.source ? context.source : '',
+        path: 'executeScript-toggle'
+      });
+      finishOpen(true, 'executeScript-toggle');
+    });
+  };
   const runDynamicSwitcherScript = (switcherContext) => {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
@@ -5440,60 +5515,22 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           error: errorMessage,
           source: context && context.source ? context.source : ''
         });
-        openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
-        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
-        finishOpen(false, errorMessage);
+        runSwitcherToggle(switcherContext, () => {
+          notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+          finishOpen(false, errorMessage);
+        });
         return;
       }
-      chrome.scripting.executeScript({
-        target: { tabId: hostTab.id },
-        func: (switcherContext) => {
-          const toggle = window._x_extension_toggleTabSwitcher_2026_unique_;
-          if (typeof toggle !== 'function') {
-            console.warn('Lumno: tab switcher helper not available.');
-            return { ok: false, reason: 'tab_switcher_missing' };
-          }
-          const result = toggle(switcherContext);
-          return result && typeof result === 'object'
-            ? result
-            : { ok: true };
-        },
-        args: [switcherContext]
-      }, (results) => {
-        if (chrome.runtime && chrome.runtime.lastError) {
-          const errorMessage = chrome.runtime.lastError.message || 'unknown';
-          logHotkeyDebug('tab-switcher-run-failed', {
-            tabId: hostTab.id,
-            error: errorMessage,
-            source: context && context.source ? context.source : ''
-          });
-          finishOpen(false, errorMessage);
-          return;
-        }
-        const result = Array.isArray(results) && results[0] ? results[0].result : null;
-        if (result && result.ok === false) {
-          logHotkeyDebug('tab-switcher-run-failed', {
-            tabId: hostTab.id,
-            error: result.reason || 'unknown',
-            source: context && context.source ? context.source : ''
-          });
-          finishOpen(false, result.reason || 'run-failed');
-          return;
-        }
-        logHotkeyDebug('tab-switcher-opened', {
-          tabId: hostTab.id,
-          itemCount: tabItems.length,
-          source: context && context.source ? context.source : '',
-          path: 'executeScript'
-        });
-        finishOpen(true, 'executeScript');
+      runSwitcherToggle(switcherContext, () => {
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        finishOpen(false, 'tab_switcher_missing');
       });
     });
   };
   const runSwitcherScript = (tabZoomFactor) => {
     const switcherContext = buildSwitcherContext(tabZoomFactor);
     if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
-      runDynamicSwitcherScript(switcherContext);
+      runSwitcherToggle(switcherContext, () => runDynamicSwitcherScript(switcherContext));
       return;
     }
     try {
@@ -5505,7 +5542,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           response &&
           response.ok === true;
         if (!didOpen) {
-          runDynamicSwitcherScript(switcherContext);
+          runSwitcherToggle(switcherContext, () => runDynamicSwitcherScript(switcherContext));
           return;
         }
         logHotkeyDebug('tab-switcher-opened', {
@@ -5517,7 +5554,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
         finishOpen(true, 'runtime-message');
       });
     } catch (error) {
-      runDynamicSwitcherScript(switcherContext);
+      runSwitcherToggle(switcherContext, () => runDynamicSwitcherScript(switcherContext));
     }
   };
   if (chrome.tabs && typeof chrome.tabs.getZoom === 'function') {
@@ -5743,11 +5780,23 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
         openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+        notifyGeckoHotkeyFailure(activeTab, 'tab-switcher');
         finishOpening();
         return;
       }
       openingHostTabId = hostTab.id;
       if (hostTab.id !== activeTab.id) {
+        if (isGeckoRuntime()) {
+          logHotkeyDebug('tab-switcher-gecko-no-host-hop', {
+            activeTabId: activeTab.id,
+            hostTabId: hostTab.id,
+            activeUrl: activeUrl,
+            source: source || ''
+          });
+          notifyGeckoHotkeyFailure(activeTab, 'tab-switcher');
+          finishOpening();
+          return;
+        }
         focusWindowAndActivateTab(hostTab.id, hostTab.windowId, (result) => {
           if (!result || result.ok === false) {
             finishOpening();

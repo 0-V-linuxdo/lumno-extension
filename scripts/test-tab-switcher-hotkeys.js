@@ -263,6 +263,11 @@ assert.match(
 );
 assert.match(
   backgroundSource,
+  /tab-switcher-gecko-no-host-hop[\s\S]*notifyGeckoHotkeyFailure\(activeTab, 'tab-switcher'\)/,
+  'Firefox Alt+Q must not activate another tab when the current page cannot host the switcher'
+);
+assert.match(
+  backgroundSource,
   /function postTabSwitcherMessageToExtensionPage\(tab,\s*message,\s*callback\)[\s\S]*isTabSwitcherExtensionPageMessageTarget\(tab\)[\s\S]*(?:record\.)?port\.postMessage\((?:message|payload)\)/,
   'background should send switcher open and advance messages to extension-page message targets through the registered port'
 );

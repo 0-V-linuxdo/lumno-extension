@@ -74,5 +74,43 @@
       sendResponse(openTabSwitcher(request.context));
       return true;
     }
+    if (request.action === 'showGeckoHotkeyToast') {
+      try {
+        const id = '_x_extension_gecko_hotkey_toast_2026_unique_';
+        let el = document.getElementById(id);
+        if (!el) {
+          el = document.createElement('div');
+          el.id = id;
+          el.setAttribute('role', 'status');
+          el.style.cssText = [
+            'all:initial',
+            'position:fixed',
+            'z-index:2147483647',
+            'left:50%',
+            'bottom:24px',
+            'transform:translateX(-50%)',
+            'max-width:min(420px,calc(100vw - 32px))',
+            'padding:10px 16px',
+            'border-radius:10px',
+            'background:#111827',
+            'color:#f8fafc',
+            'font:13px/1.45 system-ui,sans-serif',
+            'box-shadow:0 10px 30px rgba(0,0,0,.35)',
+            'pointer-events:none'
+          ].join(';');
+          (document.body || document.documentElement).appendChild(el);
+        }
+        el.textContent = String(request.message || '');
+        setTimeout(() => {
+          if (el && el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        }, 3200);
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false });
+      }
+      return true;
+    }
   });
 })();
