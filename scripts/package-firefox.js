@@ -4,8 +4,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const geckoRuntime = require('../src/shared/gecko-runtime.js');
 
-const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.7.0';
-const FIREFOX_MANIFEST_VERSION = geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.7.0';
+const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.8.0';
+const FIREFOX_MANIFEST_VERSION = geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.8.0';
 
 const repoRoot = process.cwd();
 const sourceManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));

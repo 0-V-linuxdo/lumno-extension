@@ -13,8 +13,8 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.7.0');
-assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.7.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.8.0');
+assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.8.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');

@@ -2145,7 +2145,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         'padding-top': '0',
         'padding-bottom': '0',
         'padding-left': '50px',
-        'padding-right': '92px'
+        'padding-right': '92px',
+        'align-content': 'center'
       },
       iconStyleOverrides: {
         left: '13px'

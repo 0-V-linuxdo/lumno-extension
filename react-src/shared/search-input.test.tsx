@@ -166,4 +166,11 @@ describe('Shared search input React island', () => {
     expect(parts.modeBadge?.dataset.surface).toBe('overlay');
     expect(parts.modeBadge?.hidden).toBe(false);
   });
+
+  it('restores form-control centering after all:unset for Gecko 156+', () => {
+    const parts = create({ useInlineBaseStyles: true });
+
+    expect(parts.input.style.getPropertyValue('all')).toBe('unset');
+    expect(parts.input.style.getPropertyValue('align-content')).toBe('center');
+  });
 });

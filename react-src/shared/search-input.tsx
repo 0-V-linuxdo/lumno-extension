@@ -137,6 +137,7 @@ const BASE_STYLES: Record<keyof typeof CLASSES, StyleOverrides> = {
   },
   input: {
     all: 'unset',
+    'align-content': 'center',
     background: 'transparent',
     border: 'none',
     'border-bottom': 'none',

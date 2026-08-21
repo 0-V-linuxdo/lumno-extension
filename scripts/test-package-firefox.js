@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.7.0');
+assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.8.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');

@@ -1,5 +1,15 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.8.0
+
+Still based on upstream **0.9.51**. On Firefox Nightly 156 the command-bar search field (placeholder + caret) sat at the top of the 56px row; Zen 1.21.15b (Firefox 154) looked normal. Language did not matter.
+
+Firefox 156 (Bug 2055599) moved UA form-control centering to author-overridable `align-content`. The overlay input uses `all: unset` and then sets `height: 56px` with **zero vertical padding**, so Nightly drops that centering and the text/caret jump up (Bug 2064376). Zen 154 still centers in the form-control internals, which is why the same CSS looked fine there. New-tab search has 8px padding and is much less exposed.
+
+v1.8.0 restores `align-content: center` after `all: unset` on `.x-lumno-search-input__field` and the React island `BASE_STYLES.input`. Safe on Zen 154 (ignored / no-op) and the actual fix on Nightly 156.
+
+Install `lumno-0.9.51-firefox-v1.8.0.zip`. Unload v1.7.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.7.0
 
 Still based on upstream **0.9.51**. v1.6.0 made https shortcuts work. On `about:` / privileged pages they stayed silent instead of Chrome’s new-tab / switch-tab fallback.

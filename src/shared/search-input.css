@@ -32,6 +32,9 @@
 
 .x-lumno-search-input__field {
   all: unset;
+  /* Gecko 156+ (Bug 2055599 / 2064376): UA input centering moved to
+     align-content, and `all: unset` drops it so overlay text/caret sit high. */
+  align-content: center;
   width: 100%;
   padding: 20px 64px 20px 50px;
   background: transparent;

@@ -1,6 +1,14 @@
-# Lumno Firefox / Zen — 0.9.51-firefox-v1.7.0
+# Lumno Firefox / Zen — 0.9.51-firefox-v1.8.0
 
 This is a **clean rewrite** from upstream **0.9.51**. Chrome source stays 0.9.51. It is not a patch on 0.9.52–0.9.59.
+
+## Why the command-bar search field jumped up in Nightly
+
+v1.7.0 restored restricted-page fallbacks. On **Firefox Nightly 156** the overlay search placeholder and caret sat at the top of the 56px row; **Zen 1.21** (Firefox 154) stayed vertically centered. Switching UI language did not change it.
+
+The overlay input is `all: unset` + `height: 56px` + **zero vertical padding**. Firefox 156 (Bug 2055599) moved UA centering to `align-content`, which `all: unset` removes (Bug 2064376). Zen 154 still centers inside the form control, so the same CSS looked fine.
+
+v1.8.0 puts `align-content: center` back after `all: unset`. Zen is unchanged; Nightly matches Zen.
 
 ## Why v1.6.0 stayed silent on restricted pages
 
@@ -18,9 +26,9 @@ v1.7.0:
 
 ## Install on Zen / Firefox
 
-Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0–v1.6.0).
+Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0–v1.7.0).
 
-1. Download `lumno-0.9.51-firefox-v1.7.0.zip` and unzip it.
+1. Download `lumno-0.9.51-firefox-v1.8.0.zip` and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
 4. Open a normal `https://` page (not `about:` and not the add-on page). **Refresh once** after loading the add-on.
@@ -52,7 +60,7 @@ Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q
 1. Confirm the address bar is `https://…` for in-page overlay. Restricted pages open a new tab instead.
 2. Refresh that tab once after loading the add-on.
 3. Click the toolbar icon. If that opens the command bar, check **Manage Extension Shortcuts**.
-4. Unload every older Lumno, then load only v1.7.0.
+4. Unload every older Lumno, then load only v1.8.0.
 
 ## Development
 
