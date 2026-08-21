@@ -47,8 +47,17 @@ const hasGeckoInHotkey = contentScripts.some((entry) =>
   entry.js.includes('src/shared/gecko-shortcuts.js') &&
   entry.js.includes('src/content/hotkey-listener.js')
 );
+const hasGeckoOverlayBridge = contentScripts.some((entry) =>
+  Array.isArray(entry.js) &&
+  entry.js.includes('src/overlay/gecko-overlay-bridge.js')
+);
 assert.ok(hasGeckoInObserver, 'shortcut observer content script must include gecko-shortcuts.js');
 assert.ok(hasGeckoInHotkey, 'hotkey listener content script must include gecko-shortcuts.js');
+assert.ok(hasGeckoOverlayBridge, 'document_start content scripts must include gecko-overlay-bridge.js');
+assert.ok(
+  !contentScripts.some((entry) => Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')),
+  'Chrome source manifest must not register the overlay as a content script'
+);
 
 imported.forEach((file) => {
   assert.ok(fs.existsSync(file), `background helper missing: ${file}`);

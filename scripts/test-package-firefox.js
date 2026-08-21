@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { OVERLAY_CONTENT_SCRIPT_FILES } = require('../src/shared/gecko-shortcuts.js');
 
 const repoRoot = process.cwd();
 const pack = spawnSync(process.execPath, ['scripts/package-firefox.js'], {
@@ -56,6 +57,47 @@ assert.ok(
 assert.ok(
   fs.existsSync(path.join(extractDir, 'src/background/background.js')),
   'Firefox zip must contain background.js'
+);
+assert.ok(
+  fs.existsSync(path.join(extractDir, 'src/overlay/gecko-overlay-bridge.js')),
+  'Firefox zip must contain the gecko overlay bridge'
+);
+
+const overlayEntry = (packagedManifest.content_scripts || []).find((entry) =>
+  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
+);
+assert.ok(overlayEntry, 'Firefox package must declare command-bar overlay content_scripts');
+assert.deepStrictEqual(
+  overlayEntry.matches,
+  ['http://*/*', 'https://*/*'],
+  'Overlay content scripts should only run on http(s) pages'
+);
+assert.strictEqual(overlayEntry.run_at, 'document_idle');
+OVERLAY_CONTENT_SCRIPT_FILES.forEach((file) => {
+  assert.ok(
+    overlayEntry.js.includes(file),
+    `Firefox overlay content_scripts must include ${file}`
+  );
+  assert.ok(
+    fs.existsSync(path.join(extractDir, file)),
+    `Firefox zip must contain overlay file ${file}`
+  );
+});
+assert.ok(
+  overlayEntry.js.includes('src/overlay/tab-switcher.js'),
+  'Firefox overlay content_scripts must include tab-switcher.js'
+);
+assert.ok(
+  overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'),
+  'Firefox overlay content_scripts must include gecko-overlay-bridge.js'
+);
+
+const sourceHasOverlayContentScript = (manifest.content_scripts || []).some((entry) =>
+  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
+);
+assert.ok(
+  !sourceHasOverlayContentScript,
+  'Chrome source manifest must not preload the 1.3MB overlay on every page'
 );
 
 fs.rmSync(extractDir, { recursive: true, force: true });

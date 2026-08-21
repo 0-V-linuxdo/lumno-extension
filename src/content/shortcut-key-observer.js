@@ -20,6 +20,26 @@
   const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
 
+  function tryOpenCommandBarLocally() {
+    if (window.top !== window) {
+      return false;
+    }
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
+      return false;
+    }
+    const open = window._x_extension_openLumnoCommandBar_2026_unique_;
+    if (typeof open !== 'function') {
+      return false;
+    }
+    try {
+      const result = open({ ensureOpen: true });
+      return Boolean(result && result.ok === true);
+    } catch (error) {
+      return false;
+    }
+  }
+
   function sendBackgroundHotkey(payload, callback) {
     const gecko = globalThis.LumnoGeckoShortcuts;
     if (gecko && typeof gecko.sendRuntimeMessageWithRetry === 'function') {
@@ -206,6 +226,9 @@
     }
     event.preventDefault();
     event.stopPropagation();
+    if (tryOpenCommandBarLocally()) {
+      return;
+    }
     sendBackgroundHotkey({
       action: 'triggerShowSearchFromPageHotkey',
       documentUrl: location && location.href ? location.href : '',

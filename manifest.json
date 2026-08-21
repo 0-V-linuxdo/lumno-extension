@@ -77,7 +77,8 @@
          "js": [
             "src/shared/gecko-shortcuts.js",
             "src/shared/settings.js",
-            "src/content/hotkey-listener.js"
+            "src/content/hotkey-listener.js",
+            "src/overlay/gecko-overlay-bridge.js"
          ],
          "run_at": "document_start"
       },
@@ -231,7 +232,7 @@
       "search",
       "favicon"
    ],
-   "version": "0.9.56",
+   "version": "0.9.57",
    "browser_specific_settings": {
       "gecko": {
          "id": "lumno@0-v-linuxdo.github.io",

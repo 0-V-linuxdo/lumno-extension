@@ -2,6 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { OVERLAY_CONTENT_SCRIPT_FILES } = require('../src/shared/gecko-shortcuts.js');
 
 const repoRoot = process.cwd();
 const sourceManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));
@@ -57,6 +58,24 @@ if (Array.isArray(firefoxManifest.web_accessible_resources)) {
       ...entry,
       resources: entry.resources.filter((resource) => resource !== '_favicon/*')
     };
+  });
+}
+
+const overlayFiles = Array.isArray(OVERLAY_CONTENT_SCRIPT_FILES)
+  ? OVERLAY_CONTENT_SCRIPT_FILES.slice()
+  : [];
+firefoxManifest.content_scripts = Array.isArray(firefoxManifest.content_scripts)
+  ? firefoxManifest.content_scripts.slice()
+  : [];
+
+const hasOverlayContentScript = firefoxManifest.content_scripts.some((entry) =>
+  entry && Array.isArray(entry.js) && entry.js.includes('src/overlay/search-panel.js')
+);
+if (!hasOverlayContentScript && overlayFiles.length) {
+  firefoxManifest.content_scripts.push({
+    matches: ['http://*/*', 'https://*/*'],
+    js: overlayFiles,
+    run_at: 'document_idle'
   });
 }
 

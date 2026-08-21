@@ -33,6 +33,22 @@ assert.strictEqual(
   'Ctrl+Shift+K',
   'Chrome runtime should keep the current shortcut'
 );
+assert.ok(
+  Array.isArray(gecko.OVERLAY_CONTENT_SCRIPT_FILES),
+  'Gecko overlay content-script file list should be exported'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/overlay/search-panel.js'),
+  'Firefox overlay content scripts must include the command bar'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/overlay/tab-switcher.js'),
+  'Firefox overlay content scripts must include the tab switcher'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/overlay/gecko-overlay-bridge.js'),
+  'Firefox overlay content scripts must include the gecko overlay bridge'
+);
 
 const firefoxGecko = loadGeckoShortcuts({
   chrome: {
@@ -91,10 +107,15 @@ assert.match(
   /GECKO_HOTKEY_DUP_GUARD_MS/,
   'Firefox must debounce chrome.commands and page-hotkey double fires'
 );
-assert.match(
+assert.doesNotMatch(
   backgroundSource,
   /GECKO_SCRIPT_INJECT_BATCH_SIZE = 1/,
-  'Firefox executeScript should inject one file at a time'
+  'Do not inject overlay files one-by-one with a 1.5s timeout; that aborted the 1.3MB inject and silenced shortcuts'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /GECKO_CHROME_API_TIMEOUT_MS/,
+  'Do not wrap every Gecko chrome API in a 1.5s timeout; executeScript of the overlay exceeds that'
 );
 assert.match(
   backgroundSource,
@@ -113,8 +134,13 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /GECKO_CHROME_API_TIMEOUT_MS/,
-  'Gecko chrome API wrappers must not hang forever'
+  /function tryOpenOverlayViaContentScript\(/,
+  'Firefox must open the command bar through the in-page content script before executeScript'
+);
+assert.match(
+  backgroundSource,
+  /openSearchOverlayFromBackground/,
+  'Background must sendMessage to the gecko overlay bridge'
 );
 assert.doesNotMatch(
   backgroundSource,
@@ -159,6 +185,11 @@ assert.doesNotMatch(
 
 const observerSource = fs.readFileSync('src/content/shortcut-key-observer.js', 'utf8');
 assert.match(observerSource, /applyGeckoPageShortcutDefaults/, 'Page observer should seed Gecko defaults immediately');
+assert.match(
+  observerSource,
+  /tryOpenCommandBarLocally/,
+  'Gecko page hotkeys must open the in-page command bar without waiting for the event page'
+);
 
 const hotkeySource = fs.readFileSync('src/content/hotkey-listener.js', 'utf8');
 assert.match(hotkeySource, /applyGeckoHotkeyDefaults/, 'Hotkey listener should seed Gecko defaults immediately');
@@ -167,9 +198,28 @@ assert.match(
   /sendRuntimeMessageWithRetry/,
   'Page hotkeys must retry when the Firefox event page is still waking'
 );
+assert.match(
+  hotkeySource,
+  /tryOpenCommandBarLocally/,
+  'Hotkey listener must open the in-page command bar on Gecko'
+);
 
 const geckoSource = fs.readFileSync('src/shared/gecko-shortcuts.js', 'utf8');
 assert.match(geckoSource, /function sendRuntimeMessageWithRetry/, 'Gecko helpers should retry disconnected runtime messages');
 assert.match(observerSource, /sendBackgroundHotkey/, 'Shortcut observer should retry background hotkey messages');
+
+const bridgeSource = fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8');
+assert.match(bridgeSource, /openSearchOverlayFromBackground/, 'Bridge must accept background overlay messages');
+assert.match(bridgeSource, /lumno-gecko-keepalive/, 'Bridge must keep the Firefox event page awake');
+assert.match(
+  bridgeSource,
+  /_x_extension_toggleSearchOverlay_2026_unique_/,
+  'Bridge must call the in-page command bar toggle'
+);
+assert.match(
+  bridgeSource,
+  /_x_extension_toggleTabSwitcher_2026_unique_/,
+  'Bridge must be able to open the in-page tab switcher'
+);
 
 console.log('gecko shortcuts ok');

@@ -2798,8 +2798,9 @@ const DEVELOPMENT_ONLY_INJECT_FILES = Object.freeze([
   'src/background/codex-debug-bridge.js'
 ]);
 const GECKO_HOTKEY_DUP_GUARD_MS = 700;
-const GECKO_SCRIPT_INJECT_BATCH_SIZE = 1;
-const GECKO_CHROME_API_TIMEOUT_MS = 1500;
+const GECKO_TABS_QUERY_TIMEOUT_MS = 4000;
+const GECKO_TAB_MESSAGE_TIMEOUT_MS = 2500;
+const GECKO_KEEPALIVE_PORT_NAME = 'lumno-gecko-keepalive';
 let lastGlobalHotkeyInvokeAt = 0;
 
 function detectGeckoRuntimeInline() {
@@ -2850,7 +2851,7 @@ function invokeChromeCallback(apiFn, args, callback, timeoutMs) {
   };
   const waitMs = Number.isFinite(Number(timeoutMs))
     ? Number(timeoutMs)
-    : (isGeckoRuntime() ? GECKO_CHROME_API_TIMEOUT_MS : 0);
+    : 0;
   if (waitMs > 0) {
     timer = setTimeout(() => {
       finish('timeout');
@@ -2912,9 +2913,7 @@ function executeScriptsOnTab(tabId, files, options, callback) {
     done(null);
     return;
   }
-  const batchSize = isGeckoRuntime()
-    ? GECKO_SCRIPT_INJECT_BATCH_SIZE
-    : injectable.length;
+  const batchSize = injectable.length;
   const runBatch = (start) => {
     const batch = injectable.slice(start, start + batchSize);
     const details = {
@@ -2980,7 +2979,7 @@ function hydrateCommandTab(tab, callback) {
         return;
       }
       fallback();
-    });
+    }, isGeckoRuntime() ? GECKO_TABS_QUERY_TIMEOUT_MS : 0);
   };
   queryActive({ active: true, currentWindow: true }, () => {
     queryActive({ active: true, lastFocusedWindow: true }, () => {
@@ -4891,6 +4890,41 @@ function recoverOverlayAfterTopFrameDocumentStart(request, sender) {
   return true;
 }
 
+function tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  if (!isGeckoRuntime() || !activeTab || typeof activeTab.id !== 'number') {
+    done(false);
+    return;
+  }
+  if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
+    done(false);
+    return;
+  }
+  const overlayPanelContext = {
+    tabZoomFactor: 1,
+    prefillQuery: getOverlayPrefillQueryForSource(activeTab, source),
+    prioritizeCurrentPageMatch: source === 'page-hotkey-prefill',
+    currentTabId: activeTab.id,
+    currentTabUrl: getResolvedTabUrl(activeTab),
+    openedAt: overlayOpenStartedAt,
+    documentPipEnabled: documentPipEnabledCache,
+    siteSearchProviders: Array.isArray(siteSearchCache) ? siteSearchCache : [],
+    ensureOpen: true
+  };
+  invokeChromeCallback(
+    chrome.tabs.sendMessage.bind(chrome.tabs),
+    [activeTab.id, {
+      action: 'openSearchOverlayFromBackground',
+      tabs: Array.isArray(tabs) ? tabs : [],
+      context: overlayPanelContext
+    }],
+    (error, response) => {
+      done(!error && response && response.ok === true);
+    },
+    GECKO_TAB_MESSAGE_TIMEOUT_MS
+  );
+}
+
 function openOverlayOnTab(activeTab, tabs, source, options) {
   const openOptions = options && typeof options === 'object' ? options : {};
   const overlayOpenStartedAt = Date.now();
@@ -5159,30 +5193,45 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       runOverlayWithResolvedZoom();
     });
   };
-  invokeScriptingExecuteScript({
-    target: {tabId: activeTab.id},
-    injectImmediately: true,
-    func: (runtimeVersion) => {
-      return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
-        typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
-    },
-    args: [OVERLAY_RUNTIME_VERSION]
-  }, (error, results) => {
-    const probeError = error;
-    const runtimeReady = !probeError &&
-      Array.isArray(results) &&
-      results[0] &&
-      results[0].result === true;
-    if (runtimeReady) {
-      logHotkeyDebug('runtime-reused', {
+  const startOverlayInjection = () => {
+    invokeScriptingExecuteScript({
+      target: {tabId: activeTab.id},
+      injectImmediately: true,
+      func: (runtimeVersion) => {
+        return window._x_extension_search_overlay_runtime_version_2026_unique_ === runtimeVersion &&
+          typeof window._x_extension_toggleSearchOverlay_2026_unique_ === 'function';
+      },
+      args: [OVERLAY_RUNTIME_VERSION]
+    }, (error, results) => {
+      const probeError = error;
+      const runtimeReady = !probeError &&
+        Array.isArray(results) &&
+        results[0] &&
+        results[0].result === true;
+      if (runtimeReady) {
+        logHotkeyDebug('runtime-reused', {
+          tabId: activeTab.id,
+          source: source || '',
+          version: OVERLAY_RUNTIME_VERSION
+        });
+        runOverlayWithResolvedZoom();
+        return;
+      }
+      injectOverlayRuntime();
+    });
+  };
+  tryOpenOverlayViaContentScript(activeTab, tabs, source, overlayOpenStartedAt, (opened) => {
+    if (opened) {
+      logHotkeyDebug('overlay-opened', {
         tabId: activeTab.id,
+        tabCount: Array.isArray(tabs) ? tabs.length : 0,
         source: source || '',
-        version: OVERLAY_RUNTIME_VERSION
+        path: 'content-script-message'
       });
-      runOverlayWithResolvedZoom();
+      finishOpenAttempt(true);
       return;
     }
-    injectOverlayRuntime();
+    startOverlayInjection();
   });
 }
 

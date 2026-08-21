@@ -1,5 +1,13 @@
 Tags: Release
 
+## Firefox port (0.9.57)
+
+- 0.9.55/56 继续在事件页里 `executeScript` 注入约 30 个文件（约 1.3MB），还套了 1.5 秒超时。Firefox 冷启动解析大脚本很容易超时，失败后又禁止打开新标签回退，所以 Alt+K / Alt+Q 完全没反应。
+- 0.9.57 撤回这条注入补丁：Firefox 包把命令栏和 Tab Switcher 做成 `http(s)` 内容脚本，快捷键在页面里直接打开浮层，不再等后台注入。事件页用 `runtime.connect` 保活；`executeScript` 只作回退。
+
+- 0.9.55/56 still injected ~30 overlay files (~1.3MB) from the event page, then aborted at 1.5s. On Firefox that timed out after a cold start, skipped the new-tab fallback, and both shortcuts did nothing.
+- 0.9.57 reverts that inject path. The Firefox package ships the command bar and tab switcher as http(s) content scripts so Alt+K / Alt+Q open in-page. The event page stays awake over `runtime.connect`; `executeScript` is only a fallback.
+
 ## Firefox port (0.9.56)
 
 - 0.9.55 会把页面热键让给 `chrome.commands`，但 Firefox 的 `tabs.get` 回调可能永远不回来，两条路径一起哑火，快捷键完全没反应。
