@@ -69,6 +69,36 @@
     }
   }
 
+  function isOwnExtensionUrl(url, runtime) {
+    const value = String(url || '');
+    if (!value) {
+      return false;
+    }
+    const chromeApi = runtime || (typeof chrome !== 'undefined' ? chrome : null);
+    if (chromeApi && chromeApi.runtime && typeof chromeApi.runtime.getURL === 'function') {
+      try {
+        const origin = String(chromeApi.runtime.getURL('') || '');
+        if (origin && (value === origin || value.indexOf(origin) === 0)) {
+          return true;
+        }
+      } catch (error) {
+        // Ignore getURL failures and fall back to id comparison.
+      }
+    }
+    try {
+      const parsed = new URL(value);
+      if (!isBrowserExtensionProtocol(parsed.protocol)) {
+        return false;
+      }
+      if (chromeApi && chromeApi.runtime && chromeApi.runtime.id) {
+        return String(parsed.hostname || '') === String(chromeApi.runtime.id);
+      }
+    } catch (error) {
+      return false;
+    }
+    return false;
+  }
+
   function canOpenOverlayOnUrl(url) {
     if (!url || isBrowserInternalUrl(url)) {
       return false;
@@ -110,6 +140,7 @@
     isBrowserInternalUrl,
     isBrowserNewtabUrl,
     isExtensionStoreUrl,
+    isOwnExtensionUrl,
     isRestrictedUrl
   });
 });

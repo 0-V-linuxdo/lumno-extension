@@ -4,6 +4,13 @@ This fork adds Gecko support so Lumno can run in **Firefox** and **Zen Browser**
 
 Upstream (`kubai087/lumno-extension`) is Chromium-only. Loading the Chrome zip with CRX Installer on Zen is why **Open command bar** and **Tab switcher** shortcuts did nothing.
 
+## Why 0.9.53 opened the homepage / flashed a tab
+
+1. Tab Switcher injected `codex-debug-surface.js`, which is stripped from the Firefox zip. `executeScript` failed and Lumno opened its new-tab page as a fallback.
+2. Firefox fires **both** `commands.onCommand` and the page-level listener. The command bar is a toggle, so the second event closed it. Overlay inject failure also created a Lumno tab that recovery then closed.
+
+0.9.54 filters missing files, batches injects, ignores the duplicate page hotkey, and does **not** open the Lumno homepage when overlay/switcher inject fails.
+
 ## Why 0.9.52 still had dead shortcuts
 
 Firefox MV3 uses `background.scripts` as a **window event page**. That context has **no `importScripts`**. The 0.9.52 zip only listed `background.js`, so all helper modules failed to load and `chrome.commands.onCommand` never became a working command handler. Content-script fallbacks then waited on a dead background and still listened for `Ctrl+Shift+K`, which Firefox swallows for the Web Console.
@@ -42,7 +49,7 @@ Do **not** use the Chrome Web Store zip or CRX Installer.
 
 ### Temporary (easiest, unsigned)
 
-1. Download `lumno-firefox-v0.9.53.zip` from this repo’s Releases, or run `npm run package:firefox` and use `dist/lumno-firefox-v0.9.53.zip`.
+1. Download `lumno-firefox-v0.9.54.zip` from this repo’s Releases, or run `npm run package:firefox` and use `dist/lumno-firefox-v0.9.54.zip`.
 2. Unzip the archive.
 3. Open `about:debugging#/runtime/this-firefox`
 4. **Load Temporary Add-on…**

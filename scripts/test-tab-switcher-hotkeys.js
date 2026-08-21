@@ -250,8 +250,13 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function isOwnExtensionPageUrl\(url\)[\s\S]*chrome\.runtime\.id[\s\S]*parsed\.hostname === chrome\.runtime\.id/,
+  /function isOwnExtensionPageUrl\(url\)[\s\S]*isOwnExtensionUrl\(url\)/,
   'Alt+Q should only treat this extension own pages as extension-page switcher hosts'
+);
+assert.match(
+  backgroundSource,
+  /function isOwnExtensionUrl\(url\)[\s\S]*runtime\.getURL\(''\)/,
+  'own-page detection must use runtime.getURL origin so Firefox moz-extension UUIDs match'
 );
 assert.match(
   backgroundSource,
@@ -1244,7 +1249,7 @@ assert.match(
 );
 assert.match(
   injectSwitcherBlock,
-  /chrome\.scripting\.executeScript\(\{[\s\S]*files:\s*\[[\s\S]*'src\/react\/overlay-islands\.js',[\s\S]*'src\/overlay\/tab-switcher\.js'[\s\S]*\][\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
+  /executeScriptsOnTab\(hostTab\.id,\s*\[[\s\S]*'src\/react\/overlay-islands\.js',[\s\S]*'src\/overlay\/tab-switcher\.js'[\s\S]*\][\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
   'Alt+Q should install the React entry before direct tab switcher injection'
 );
 const runSwitcherScriptStart = injectSwitcherBlock.indexOf('const runSwitcherScript = (tabZoomFactor) => {');

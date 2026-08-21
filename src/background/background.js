@@ -228,15 +228,7 @@ function canFetchPageForFavicon(url) {
 }
 
 function isOwnExtensionPageUrl(url) {
-  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
-    return false;
-  }
-  try {
-    const parsed = new URL(url);
-    return isBrowserExtensionProtocol(parsed.protocol) && parsed.hostname === chrome.runtime.id;
-  } catch (error) {
-    return false;
-  }
+  return isOwnExtensionUrl(url);
 }
 
 function getResolvedTabUrl(tab) {
@@ -1099,11 +1091,29 @@ function isBrowserNewtabUrl(url) {
 }
 
 function isOwnExtensionUrl(url) {
-  if (!url || !chrome || !chrome.runtime || !chrome.runtime.id) {
+  const guards = globalThis.LumnoUrlGuards || {};
+  if (typeof guards.isOwnExtensionUrl === 'function') {
+    return guards.isOwnExtensionUrl(url, chrome);
+  }
+  const value = String(url || '');
+  if (!value || !chrome || !chrome.runtime) {
+    return false;
+  }
+  if (typeof chrome.runtime.getURL === 'function') {
+    try {
+      const origin = String(chrome.runtime.getURL('') || '');
+      if (origin && (value === origin || value.indexOf(origin) === 0)) {
+        return true;
+      }
+    } catch (error) {
+      // Fall through to hostname comparison.
+    }
+  }
+  if (!chrome.runtime.id) {
     return false;
   }
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(value);
     const protocol = String(parsed.protocol || '').toLowerCase();
     return isBrowserExtensionProtocol(protocol) &&
       String(parsed.hostname || '') === String(chrome.runtime.id);
@@ -2783,14 +2793,92 @@ function migrateStorageIfNeeded(keys) {
   });
 }
 
+const DEVELOPMENT_ONLY_INJECT_FILES = Object.freeze([
+  'src/shared/codex-debug-surface.js',
+  'src/background/codex-debug-bridge.js'
+]);
+const GECKO_HOTKEY_DUP_GUARD_MS = 700;
+const GECKO_SCRIPT_INJECT_BATCH_SIZE = 5;
+let lastGlobalHotkeyInvokeAt = 0;
+
+function getRuntimeInjectableFiles(files) {
+  const list = Array.isArray(files)
+    ? files.filter((file) => typeof file === 'string' && file)
+    : [];
+  if (!isGeckoRuntime()) {
+    return list;
+  }
+  const skip = new Set(DEVELOPMENT_ONLY_INJECT_FILES);
+  return list.filter((file) => !skip.has(file));
+}
+
+function executeScriptsOnTab(tabId, files, options, callback) {
+  const done = typeof callback === 'function' ? callback : () => {};
+  const injectImmediately = !(options && options.injectImmediately === false);
+  const injectable = getRuntimeInjectableFiles(files);
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    done('scripting-unavailable');
+    return;
+  }
+  if (typeof tabId !== 'number' || !injectable.length) {
+    done(null);
+    return;
+  }
+  const batchSize = isGeckoRuntime()
+    ? Math.min(GECKO_SCRIPT_INJECT_BATCH_SIZE, injectable.length)
+    : injectable.length;
+  const runBatch = (start) => {
+    const batch = injectable.slice(start, start + batchSize);
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      injectImmediately: injectImmediately,
+      files: batch
+    }, () => {
+      const error = chrome.runtime && chrome.runtime.lastError
+        ? chrome.runtime.lastError.message || 'unknown'
+        : '';
+      if (error) {
+        done(error);
+        return;
+      }
+      if (start + batch.length >= injectable.length) {
+        done(null);
+        return;
+      }
+      runBatch(start + batch.length);
+    });
+  };
+  runBatch(0);
+}
+
+function shouldSkipNewtabCommandFallback() {
+  return isGeckoRuntime();
+}
+
+function openCommandSurfaceFallback(url, options) {
+  if (shouldSkipNewtabCommandFallback()) {
+    logHotkeyDebug('gecko-skip-newtab-fallback', {
+      url: url || '',
+      source: options && options.source ? options.source : ''
+    });
+    return;
+  }
+  openNewtabFallbackForUrl(url, options);
+}
+
 function shouldIgnoreDuplicateHotkey(tabId) {
+  const now = Date.now();
+  const guardMs = isGeckoRuntime() ? GECKO_HOTKEY_DUP_GUARD_MS : HOTKEY_DUP_GUARD_MS;
+  if ((now - lastGlobalHotkeyInvokeAt) <= guardMs) {
+    return true;
+  }
+  lastGlobalHotkeyInvokeAt = now;
   if (typeof tabId !== 'number') {
     return false;
   }
-  const now = Date.now();
   const lastAt = hotkeyInvokeAtByTabId.get(tabId) || 0;
   hotkeyInvokeAtByTabId.set(tabId, now);
-  return (now - lastAt) <= HOTKEY_DUP_GUARD_MS;
+  return (now - lastAt) <= guardMs;
 }
 
 function finishOverlayOpening(opening) {
@@ -2833,6 +2921,9 @@ function beginOverlayOpening(tab, source) {
 }
 
 function rememberPageHotkeyContext(tab) {
+  if (isGeckoRuntime()) {
+    return;
+  }
   if (!tab || typeof tab.id !== 'number' || typeof tab.windowId !== 'number') {
     lastPageHotkeyContext = null;
     return;
@@ -2875,6 +2966,9 @@ function getOverlayPrefillQueryForSource(tab, source) {
 }
 
 function recoverFromPageHotkeyNewtab(newTabId, windowId) {
+  if (isGeckoRuntime()) {
+    return;
+  }
   const recentContext = getRecentPageHotkeyContext(windowId);
   if (!recentContext || typeof newTabId !== 'number') {
     return;
@@ -4707,7 +4801,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   };
   if (!activeTab || typeof activeTab.id !== 'number') {
     logHotkeyDebug('no-active-tab', { source: source || '' });
-    openNewtabFallback();
+    if (!shouldSkipNewtabCommandFallback()) {
+      openNewtabFallback();
+    }
     finishOpenAttempt(false);
     return;
   }
@@ -4758,16 +4854,19 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     });
     if (action === 'none') {
       logHotkeyDebug('fallback-open-browser-newtab', { reason: 'restricted_url', source: source || '' });
+      if (shouldSkipNewtabCommandFallback()) {
+        return;
+      }
       openBrowserNewtabFallback({ sourceTab: activeTab });
       return;
     }
     if (action === 'default') {
       logHotkeyDebug('fallback-open-create-newtab', { reason: 'restricted_url', source: source || '' });
-      openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+      openCommandSurfaceFallback(activeUrl, { sourceTab: activeTab, source: source || '' });
       return;
     }
     logHotkeyDebug('fallback-open-lumno-newtab', { reason: 'restricted_url', source: source || '' });
-    openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+    openCommandSurfaceFallback(activeUrl, { sourceTab: activeTab, source: source || '' });
     return;
   }
   overlayOpening = beginOverlayOpening(activeTab, source);
@@ -4866,7 +4965,8 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: chrome.runtime.lastError.message || 'unknown',
                 source: source || ''
               });
-              if (openOptions.loadingRecovery !== true &&
+              if (!shouldSkipNewtabCommandFallback() &&
+                  openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
               }
@@ -4884,7 +4984,8 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: result.reason || 'unknown',
                 source: source || ''
               });
-              if (openOptions.loadingRecovery !== true &&
+              if (!shouldSkipNewtabCommandFallback() &&
+                  openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
               }
@@ -4916,19 +5017,16 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   };
   const injectOverlayRuntime = () => {
     logHotkeyDebug('inject-start', { tabId: activeTab.id, file: overlayInjectionFiles.join(','), source: source || '' });
-    chrome.scripting.executeScript({
-      target: {tabId: activeTab.id},
-      injectImmediately: true,
-      files: overlayInjectionFiles
-    }, function() {
-      if (chrome.runtime.lastError) {
+    executeScriptsOnTab(activeTab.id, overlayInjectionFiles, { injectImmediately: true }, (error) => {
+      if (error) {
         logHotkeyDebug('inject-failed', {
           step: overlayInjectionFiles.join(','),
           tabId: activeTab.id,
-          error: chrome.runtime.lastError.message || 'unknown',
+          error: error,
           source: source || ''
         });
-        if (openOptions.loadingRecovery !== true &&
+        if (!shouldSkipNewtabCommandFallback() &&
+            openOptions.loadingRecovery !== true &&
             !overlayLoadingRecordsByTabId.has(activeTab.id)) {
           openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
         }
@@ -4968,7 +5066,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
 function triggerShowSearchForResolvedTab(tab, source) {
   if (!tab || typeof tab.id !== 'number') {
     logHotkeyDebug('no-active-tab', { source: source || '' });
-    openNewtabFallback();
+    if (!shouldSkipNewtabCommandFallback()) {
+      openNewtabFallback();
+    }
     return;
   }
   if (shouldDeferRestrictedOverlayNavigation(tab)) {
@@ -5049,7 +5149,9 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     }
   };
   if (!hostTab || typeof hostTab.id !== 'number') {
-    openNewtabFallback();
+    if (!shouldSkipNewtabCommandFallback()) {
+      openNewtabFallback();
+    }
     finishOpen(false, 'invalid-host-tab');
     return;
   }
@@ -5083,6 +5185,10 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           reason: reason || '',
           source: context && context.source ? context.source : ''
         });
+        if (isGeckoRuntime()) {
+          runDynamicSwitcherScript(buildSwitcherContext(1));
+          return;
+        }
         openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
         finishOpen(false, reason || 'extension-page-open-failed');
         return;
@@ -5097,24 +5203,23 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
     });
     return;
   }
-  const runDynamicSwitcherScript = (switcherContext) => {
-    chrome.scripting.executeScript({
-      target: { tabId: hostTab.id },
-      files: [
-        'src/shared/icon-font-preload.js',
-        'src/shared/codex-debug-surface.js',
-        'src/react/overlay-islands.js',
-        'src/overlay/tab-switcher.js'
-      ]
-    }, () => {
-      if (chrome.runtime && chrome.runtime.lastError) {
-        const errorMessage = chrome.runtime.lastError.message || 'unknown';
+  function runDynamicSwitcherScript(switcherContext) {
+    executeScriptsOnTab(hostTab.id, [
+      'src/shared/icon-font-preload.js',
+      'src/shared/codex-debug-surface.js',
+      'src/react/overlay-islands.js',
+      'src/overlay/tab-switcher.js'
+    ], { injectImmediately: true }, (error) => {
+      if (error) {
+        const errorMessage = error;
         logHotkeyDebug('tab-switcher-inject-failed', {
           tabId: hostTab.id,
           error: errorMessage,
           source: context && context.source ? context.source : ''
         });
-        openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
+        if (!shouldSkipNewtabCommandFallback()) {
+          openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
+        }
         finishOpen(false, errorMessage);
         return;
       }
@@ -5162,7 +5267,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
         finishOpen(true, 'executeScript');
       });
     });
-  };
+  }
   const runSwitcherScript = (tabZoomFactor) => {
     const switcherContext = buildSwitcherContext(tabZoomFactor);
     if (!chrome || !chrome.tabs || typeof chrome.tabs.sendMessage !== 'function') {
@@ -5282,7 +5387,9 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
   }
   if (!tab || typeof tab.id !== 'number') {
     logHotkeyDebug('tab-switcher-no-active-tab', { source: source || '' });
-    openNewtabFallback();
+    if (!shouldSkipNewtabCommandFallback()) {
+      openNewtabFallback();
+    }
     return;
   }
   const windowId = typeof tab.windowId === 'number' ? tab.windowId : null;
@@ -5415,7 +5522,9 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
         : (hostItem ? tabList.find((item) => item && item.id === hostItem.id) : null);
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
-        openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+        if (!shouldSkipNewtabCommandFallback()) {
+          openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+        }
         finishOpening();
         return;
       }

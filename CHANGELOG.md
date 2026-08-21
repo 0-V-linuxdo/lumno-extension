@@ -1,5 +1,17 @@
 Tags: Release
 
+## Firefox port (0.9.54)
+
+- Firefox 的 `moz-extension://UUID/` 不等于 gecko id，导致扩展自己的新标签页不被识别。
+- Tab Switcher 不再注入 zip 里已删除的 `codex-debug-surface.js`，失败时也不再打开 Lumno 主页。
+- 命令栏不再被 `commands` + 页面热键各触发一次（开了又关），失败时不再闪一下新标签再关掉。
+- Overlay / Tab Switcher 脚本在 Gecko 上分批注入。
+
+- Firefox own-page detection now uses `runtime.getURL('')` so `moz-extension://UUID/` matches.
+- Tab Switcher no longer injects the packaged-out debug surface, and no longer opens the Lumno homepage on inject failure.
+- Command bar no longer double-fires (commands + page hotkey toggling it closed) or flashes a fallback tab.
+- Overlay/switcher scripts inject in batches on Gecko.
+
 ## Firefox port (0.9.53)
 
 - Firefox 事件页没有 `importScripts`。`background.scripts` 现在按顺序加载全部后台模块，Chrome 仍走 `service_worker`。

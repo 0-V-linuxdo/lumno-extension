@@ -71,6 +71,37 @@ assert.match(
   'Firefox search fallback should use browser.search.search'
 );
 
+assert.match(
+  backgroundSource,
+  /function getRuntimeInjectableFiles\(files\)/,
+  'Gecko inject path must strip development-only files'
+);
+assert.match(
+  backgroundSource,
+  /function executeScriptsOnTab\(/,
+  'Gecko should inject overlay/switcher scripts in batches without missing files'
+);
+assert.match(
+  backgroundSource,
+  /gecko-skip-newtab-fallback/,
+  'Failed command-bar/tab-switcher injects must not open the Lumno homepage on Firefox'
+);
+assert.match(
+  backgroundSource,
+  /GECKO_HOTKEY_DUP_GUARD_MS/,
+  'Firefox must debounce chrome.commands and page-hotkey double fires'
+);
+assert.match(
+  backgroundSource,
+  /executeScriptsOnTab\(hostTab\.id,\s*\[[\s\S]*codex-debug-surface\.js/,
+  'Tab switcher inject must go through the Gecko file filter'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /chrome\.scripting\.executeScript\(\{\s*target:\s*\{\s*tabId:\s*hostTab\.id\s*\},\s*files:\s*\[[^\]]*codex-debug-surface/,
+  'Tab switcher must not executeScript a missing debug file directly'
+);
+
 const observerSource = fs.readFileSync('src/content/shortcut-key-observer.js', 'utf8');
 assert.match(observerSource, /applyGeckoPageShortcutDefaults/, 'Page observer should seed Gecko defaults immediately');
 

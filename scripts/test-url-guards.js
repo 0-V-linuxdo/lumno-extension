@@ -48,6 +48,28 @@ assert.strictEqual(guards.isRestrictedUrl('https://addons.mozilla.org/firefox/ad
 assert.strictEqual(guards.canOpenOverlayOnUrl('https://addons.mozilla.org/firefox/addon/example'), false);
 assert.strictEqual(guards.canOpenOverlayOnUrl('moz-extension://abc/src/newtab/newtab.html'), false);
 
+const geckoRuntime = {
+  runtime: {
+    id: 'lumno@0-v-linuxdo.github.io',
+    getURL(path) {
+      return `moz-extension://uuid-123/${path || ''}`;
+    }
+  }
+};
+assert.strictEqual(
+  guards.isOwnExtensionUrl('moz-extension://uuid-123/src/newtab/newtab.html', geckoRuntime),
+  true,
+  'Firefox own pages use the moz-extension UUID origin, not the gecko id hostname'
+);
+assert.strictEqual(
+  guards.isOwnExtensionUrl('moz-extension://other-id/src/newtab/newtab.html', geckoRuntime),
+  false
+);
+assert.strictEqual(
+  guards.isOwnExtensionUrl('https://example.com/', geckoRuntime),
+  false
+);
+
 assert.strictEqual(guards.canOpenOverlayOnUrl('file:///Users/kevinxu/test.html'), true);
 assert.strictEqual(guards.canOpenOverlayOnUrl('https://x.com/home'), true);
 assert.strictEqual(guards.canOpenOverlayOnUrl('https://chromewebstore.google.com/detail/example/abc'), false);
