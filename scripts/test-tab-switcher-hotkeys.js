@@ -60,10 +60,14 @@ assert.strictEqual(
   false,
   'content script should not try to force-capture Alt+Tab'
 );
-assert.strictEqual(
+assert.ok(
   contentHotkeySource.includes('triggerTabSwitcherFromPageHotkey'),
-  false,
-  'content script should not expose an Alt+Tab page-hotkey switcher trigger'
+  'content script should relay the configured tab-switcher shortcut on Gecko'
+);
+assert.doesNotMatch(
+  contentHotkeySource,
+  /Alt\+Tab|isBestEffortAltTabEvent/,
+  'content script should not capture OS-level Alt+Tab'
 );
 assert.match(
   switcherBridgeSource,
@@ -151,12 +155,12 @@ assert.match(
 );
 assert.match(
   shortcutReleaseRelaySource,
-  /RUNTIME_KEY[\s\S]*previousRuntime\.cleanup\(\)[\s\S]*RELEASE_REPLAY_WINDOW_MS[\s\S]*recentTrustedKeydownAtByKey[\s\S]*function rememberTrustedShortcutKeydown\(event\)[\s\S]*function rememberTrustedShortcutRelease\(event\)[\s\S]*function getBufferedReleasedShortcutKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*keydownAt <= observedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keydown',\s*relayShowSearchShortcut,\s*true\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)[\s\S]*removeEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased/,
+  /RUNTIME_KEY[\s\S]*previousRuntime\.cleanup\(\)[\s\S]*RELEASE_REPLAY_WINDOW_MS[\s\S]*recentTrustedKeydownAtByKey[\s\S]*function rememberTrustedShortcutKeydown\(event\)[\s\S]*function rememberTrustedShortcutRelease\(event\)[\s\S]*function getBufferedReleasedShortcutKey\(keys, commandStartedAt\)[\s\S]*observedAt >= startedAt[\s\S]*keydownAt <= observedAt[\s\S]*request\.commandStartedAt[\s\S]*function notifyTabSwitcherShortcutModifierReleased\(event\)[\s\S]*event\.isTrusted !== true[\s\S]*rememberTrustedShortcutRelease\(event\)[\s\S]*relayTabSwitcherShortcutRelease\(key\)[\s\S]*window\.addEventListener\('keydown',\s*relayCommandShortcuts,\s*true\)[\s\S]*window\.addEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased,\s*true\)[\s\S]*removeEventListener\('keyup',\s*notifyTabSwitcherShortcutModifierReleased/,
   'the document-start observer should correlate trusted keydown/keyup pairs and replay releases from the current shortcut command'
 );
 assert.match(
   backgroundSource,
-  /function prepareShortcutKeyObserver\(tab\)[\s\S]*allFrames:\s*true[\s\S]*files:\s*\['src\/shared\/shortcut-key-matcher\.js',\s*'src\/content\/shortcut-key-observer\.js'\]/,
+  /function prepareShortcutKeyObserver\(tab\)[\s\S]*allFrames:\s*true[\s\S]*files:\s*\['src\/shared\/gecko-shortcuts\.js',\s*'src\/shared\/shortcut-key-matcher\.js',\s*'src\/content\/shortcut-key-observer\.js'\]/,
   'the background should dynamically install the release observer in already-open tabs and focused frames'
 );
 assert.match(
@@ -171,7 +175,9 @@ const shortcutReleaseContentScript = manifest.content_scripts.find((entry) => (
 ));
 assert.ok(
   shortcutReleaseContentScript &&
-    shortcutReleaseContentScript.js[0] === 'src/shared/shortcut-key-matcher.js' &&
+    shortcutReleaseContentScript.js.includes('src/shared/gecko-shortcuts.js') &&
+    shortcutReleaseContentScript.js.includes('src/shared/shortcut-key-matcher.js') &&
+    shortcutReleaseContentScript.js.includes('src/content/shortcut-key-observer.js') &&
     shortcutReleaseContentScript.run_at === 'document_start' &&
     shortcutReleaseContentScript.all_frames === true &&
     shortcutReleaseContentScript.match_about_blank === true &&
@@ -422,10 +428,14 @@ assert.match(
   /recentTabTracker\.setThumbnail\(resolvedTab\.id,[\s\S]*postTabSwitcherThumbnailUpdate\(resolvedTab,/,
   'thumbnail capture success should publish the fresh cover to an already-open switcher'
 );
-assert.strictEqual(
+assert.ok(
   backgroundSource.includes('triggerTabSwitcherFromPageHotkey'),
-  false,
-  'background router should not keep the removed Alt+Tab page-hotkey action'
+  'background router should accept the Gecko page-level tab-switcher shortcut'
+);
+assert.doesNotMatch(
+  backgroundSource,
+  /isBestEffortAltTabEvent|Alt\+Tab page-hotkey/,
+  'background router should not restore OS-level Alt+Tab capture'
 );
 assert.match(
   switcherSource,
@@ -1359,7 +1369,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /importScripts\(chrome\.runtime\.getURL\('src\/newtab\/favicon-theme\.js'\)\)/,
+  /lumnoImportScript\('src\/newtab\/favicon-theme\.js'/,
   'Alt+Q should import the same favicon theme helpers used by newtab recent sites'
 );
 assert.match(
@@ -1589,7 +1599,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /chrome\.commands\.onCommand\.addListener[\s\S]*const commandObservedAt = Date\.now\(\)[\s\S]*chrome\.tabs\.query[\s\S]*triggerTabSwitcherForTab\(activeTabs\[0\],\s*source,\s*commandObservedAt\)/,
+  /chrome\.commands\.onCommand\.addListener[\s\S]*const commandObservedAt = Date\.now\(\)[\s\S]*triggerTabSwitcherForTab\(activeTab,\s*source,\s*commandObservedAt\)[\s\S]*chrome\.tabs\.query/,
   'the command timestamp should be captured before the asynchronous active-tab query'
 );
 assert.match(

@@ -1,5 +1,8 @@
 
 function lumnoImportScript(path, warnLabel) {
+  if (typeof importScripts !== 'function') {
+    return;
+  }
   const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : null;
   const candidates = [];
   if (runtime && typeof runtime.getURL === 'function') {
@@ -28,6 +31,7 @@ function lumnoImportScript(path, warnLabel) {
   console.warn(warnLabel || ('Lumno: failed to load ' + path + '.'), lastError);
 }
 
+lumnoImportScript('src/shared/gecko-shortcuts.js', 'Lumno: failed to load gecko shortcut helpers.');
 lumnoImportScript('src/shared/blacklist-utils.js', 'Lumno: failed to load blacklist utils.');
 lumnoImportScript('src/shared/url-guards.js', 'Lumno: failed to load URL guards.');
 lumnoImportScript('src/shared/favicon-utils.js', 'Lumno: failed to load favicon utils.');
@@ -791,7 +795,7 @@ function prepareShortcutKeyObserver(tab) {
           tabId: tab.id,
           allFrames: true
         },
-        files: ['src/shared/shortcut-key-matcher.js', 'src/content/shortcut-key-observer.js']
+        files: ['src/shared/gecko-shortcuts.js', 'src/shared/shortcut-key-matcher.js', 'src/content/shortcut-key-observer.js']
       }, () => {
         const error = chrome.runtime && chrome.runtime.lastError
           ? chrome.runtime.lastError.message || 'unknown'
@@ -5607,34 +5611,25 @@ function openDocumentPipPickerOnTab(activeTab, source) {
 }
 
 function isGeckoRuntime() {
-  try {
-    if (typeof browser !== 'undefined' && browser.runtime &&
-        typeof browser.runtime.getBrowserInfo === 'function') {
-      return true;
-    }
-    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
-      const extensionRoot = String(chrome.runtime.getURL('') || '');
-      if (extensionRoot.indexOf('moz-extension:') === 0) {
-        return true;
-      }
-    }
-    const ua = (typeof navigator !== 'undefined' && navigator.userAgent)
-      ? String(navigator.userAgent)
-      : '';
-    return /firefox|zenbrowser|icedragon/i.test(ua);
-  } catch (error) {
-    return false;
-  }
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  return Boolean(gecko && typeof gecko.isGeckoRuntime === 'function' && gecko.isGeckoRuntime());
 }
 
-const GECKO_COMMAND_DEFAULTS = {
-  'show-search': 'Alt+K',
-  'show-search-prefill': 'Alt+L',
-  'show-search-prefill-v': 'Alt+Shift+C',
-  'show-tab-switcher': 'Alt+Q'
-};
+function getGeckoCommandDefaults() {
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  return gecko && gecko.COMMAND_DEFAULTS ? gecko.COMMAND_DEFAULTS : {
+    'show-search': 'Alt+K',
+    'show-search-prefill': 'Alt+L',
+    'show-search-prefill-v': 'Alt+Shift+C',
+    'show-tab-switcher': 'Alt+Q'
+  };
+}
 
 function isGeckoConflictingShortcut(value) {
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  if (gecko && typeof gecko.isConflictingShortcut === 'function') {
+    return gecko.isConflictingShortcut(value);
+  }
   const text = String(value || '').trim();
   if (!text) {
     return true;
@@ -5649,13 +5644,14 @@ function ensureGeckoCommandShortcuts() {
   if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
     return;
   }
+  const geckoDefaults = getGeckoCommandDefaults();
   chrome.commands.getAll((commands) => {
     if (chrome.runtime && chrome.runtime.lastError) {
       return;
     }
     const items = Array.isArray(commands) ? commands : [];
     items.forEach((command) => {
-      if (!command || !command.name || !GECKO_COMMAND_DEFAULTS[command.name]) {
+      if (!command || !command.name || !geckoDefaults[command.name]) {
         return;
       }
       const current = typeof command.shortcut === 'string' ? command.shortcut.trim() : '';
@@ -5668,7 +5664,7 @@ function ensureGeckoCommandShortcuts() {
       try {
         const updated = chrome.commands.update({
           name: command.name,
-          shortcut: GECKO_COMMAND_DEFAULTS[command.name]
+          shortcut: geckoDefaults[command.name]
         });
         if (updated && typeof updated.catch === 'function') {
           updated.catch(() => {});
@@ -5685,6 +5681,11 @@ function getDefaultFallbackShortcutByPlatform(platformOs) {
 }
 
 function getDefaultFallbackShortcut(callback) {
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  if (gecko && typeof gecko.isGeckoRuntime === 'function' && gecko.isGeckoRuntime()) {
+    callback(gecko.getDefaultShortcut('show-search') || 'Alt+K');
+    return;
+  }
   if (!chrome || !chrome.runtime || typeof chrome.runtime.getPlatformInfo !== 'function') {
     callback('Ctrl+Shift+K');
     return;
@@ -5711,13 +5712,21 @@ function getConfiguredFallbackShortcut(callback) {
       const shortcut = command && typeof command.shortcut === 'string'
         ? normalizeShortcutFromCommandsValue(command.shortcut)
         : '';
+      const gecko = globalThis.LumnoGeckoShortcuts;
+      if (gecko && typeof gecko.resolveShortcut === 'function') {
+        callback(gecko.resolveShortcut(SHOW_SEARCH_COMMAND_NAME, shortcut) || defaultShortcut);
+        return;
+      }
       callback(shortcut || defaultShortcut);
     });
   });
 }
 
 function getConfiguredTabSwitcherShortcut(callback) {
-  const fallbackShortcut = 'Alt+Q';
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  const fallbackShortcut = (gecko && typeof gecko.getDefaultShortcut === 'function'
+    ? gecko.getDefaultShortcut(SHOW_TAB_SWITCHER_COMMAND_NAME)
+    : '') || 'Alt+Q';
   if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
     callback(fallbackShortcut);
     return;
@@ -5732,6 +5741,10 @@ function getConfiguredTabSwitcherShortcut(callback) {
     const shortcut = command && typeof command.shortcut === 'string'
       ? String(command.shortcut).trim()
       : '';
+    if (gecko && typeof gecko.resolveShortcut === 'function') {
+      callback(gecko.resolveShortcut(SHOW_TAB_SWITCHER_COMMAND_NAME, shortcut) || fallbackShortcut);
+      return;
+    }
     callback(shortcut || fallbackShortcut);
   });
 }
@@ -5841,7 +5854,7 @@ function publishExtensionUpdateNotice(details) {
 
 if (chrome && chrome.commands && chrome.commands.onCommand &&
     typeof chrome.commands.onCommand.addListener === 'function') {
-chrome.commands.onCommand.addListener(function(command) {
+chrome.commands.onCommand.addListener(function(command, tab) {
   if (
     command !== SHOW_SEARCH_COMMAND_NAME &&
     command !== SHOW_SEARCH_PREFILL_COMMAND_NAME &&
@@ -5850,8 +5863,6 @@ chrome.commands.onCommand.addListener(function(command) {
   ) {
     return;
   }
-  if (command !== SHOW_TAB_SWITCHER_COMMAND_NAME) {
-  }
   const commandObservedAt = Date.now();
   const source = command === SHOW_SEARCH_COMMAND_NAME
     ? 'commands'
@@ -5859,16 +5870,30 @@ chrome.commands.onCommand.addListener(function(command) {
       ? 'commands-prefill'
       : (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME ? 'commands-copy-url' : 'commands-tab-switcher'));
   logHotkeyDebug('received', { command: command, source: source });
-  chrome.tabs.query({active: true, currentWindow: true}, function(activeTabs) {
+  const runForTab = (activeTab) => {
     if (command === SHOW_SEARCH_PREFILL_V_COMMAND_NAME) {
-      triggerCopyCurrentUrlForTab(activeTabs[0], source);
+      triggerCopyCurrentUrlForTab(activeTab, source);
       return;
     }
     if (command === SHOW_TAB_SWITCHER_COMMAND_NAME) {
-      triggerTabSwitcherForTab(activeTabs[0], source, commandObservedAt);
+      triggerTabSwitcherForTab(activeTab, source, commandObservedAt);
       return;
     }
-    triggerShowSearchForTab(activeTabs[0], source);
+    triggerShowSearchForTab(activeTab, source);
+  };
+  if (tab && typeof tab.id === 'number') {
+    runForTab(tab);
+    return;
+  }
+  chrome.tabs.query({active: true, currentWindow: true}, function(activeTabs) {
+    const activeTab = Array.isArray(activeTabs) && activeTabs[0] ? activeTabs[0] : null;
+    if (activeTab && typeof activeTab.id === 'number') {
+      runForTab(activeTab);
+      return;
+    }
+    chrome.tabs.query({active: true, lastFocusedWindow: true}, function(fallbackTabs) {
+      runForTab(Array.isArray(fallbackTabs) && fallbackTabs[0] ? fallbackTabs[0] : null);
+    });
   });
 });
 }
@@ -5953,6 +5978,10 @@ cleanupLocalOnlyBookmarkTopbarSyncStorage();
 
 if (chrome.action && chrome.action.onClicked) {
   chrome.action.onClicked.addListener((tab) => {
+    if (isGeckoRuntime()) {
+      triggerShowSearchForTab(tab, 'action');
+      return;
+    }
     openDocumentPipPickerOnTab(tab, 'action');
   });
 }
@@ -7001,6 +7030,32 @@ function handleSearchMessage(request, sender, sendResponse) {
                 }
                 sendResponse({ ok: true, url: fallbackUrl });
               });
+              return;
+            } catch (e) {
+              pendingSearchAt = 0;
+              pendingSearchTabId = null;
+              pendingSearchGroupContext = null;
+            }
+          }
+          if (typeof browser !== 'undefined' && browser.search &&
+              typeof browser.search.search === 'function') {
+            markPendingSearchTab(null, sourceTab);
+            try {
+              const searched = browser.search.search({ query });
+              if (searched && typeof searched.then === 'function') {
+                searched.then(() => {
+                  sendResponse({ ok: true, url: fallbackUrl });
+                }).catch(() => {
+                  pendingSearchAt = 0;
+                  pendingSearchTabId = null;
+                  pendingSearchGroupContext = null;
+                  createResolvedTab(fallbackUrl, () => {
+                    sendResponse({ ok: true, url: fallbackUrl });
+                  });
+                });
+                return;
+              }
+              sendResponse({ ok: true, url: fallbackUrl });
               return;
             } catch (e) {
               pendingSearchAt = 0;

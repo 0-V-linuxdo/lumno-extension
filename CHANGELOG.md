@@ -1,6 +1,21 @@
 Tags: Release
 
+## Firefox port (0.9.53)
+
+- Firefox 事件页没有 `importScripts`。`background.scripts` 现在按顺序加载全部后台模块，Chrome 仍走 `service_worker`。
+- 源清单默认快捷键改为 `Alt+K` / `Alt+Q`，避免 Firefox 开发者工具吞掉 `Ctrl+Shift+K/C`。
+- 页面级监听在后台未就绪时立刻使用 Gecko 默认键；工具栏按钮在 Firefox/Zen 上打开命令栏。
+- 设置页的快捷键入口改为 `about:addons` / `commands.openShortcutSettings()`。
+- 搜索回退到 `browser.search.search`。新增 gecko / firefox-manifest / package-firefox 回归测试。
+
+- Firefox event pages have no `importScripts`. `background.scripts` now loads every helper; Chrome still uses `service_worker`.
+- Source-manifest shortcuts are now `Alt+K` / `Alt+Q` so Firefox DevTools cannot swallow them.
+- Page listeners seed Gecko defaults immediately; the toolbar button opens the command bar on Firefox/Zen.
+- Shortcut settings open `about:addons`. Search falls back to `browser.search.search`.
+- Added gecko shortcut, Firefox manifest, and Firefox package regression tests.
+
 ## Firefox port (0.9.52)
+
 
 - 增加 Firefox / Zen / Gecko 适配：`browser_specific_settings.gecko`、MV3 `background.scripts` + `service_worker` 双声明。
 - 修复在 Firefox/Zen 上「打开命令栏」「Tab Switcher」快捷键无响应：Chrome 默认 `Ctrl+Shift+K/C` 与 Firefox 开发者工具冲突，安装后自动改绑到 `Alt+K` / `Alt+Q` 等不冲突组合，并补页面级快捷键回退。

@@ -44,7 +44,9 @@ assert.strictEqual(guards.isRestrictedUrl('chrome-extension://abc/src/newtab/new
 assert.strictEqual(guards.isRestrictedUrl('https://chromewebstore.google.com/detail/example/abc'), true);
 assert.strictEqual(guards.isRestrictedUrl('https://chrome.google.com/webstore/detail/example/abc'), true);
 assert.strictEqual(guards.isRestrictedUrl('https://microsoftedge.microsoft.com/addons/detail/example/abc'), true);
-assert.strictEqual(guards.isRestrictedUrl('https://example.com/release/'), false);
+assert.strictEqual(guards.isRestrictedUrl('https://addons.mozilla.org/firefox/addon/example'), true);
+assert.strictEqual(guards.canOpenOverlayOnUrl('https://addons.mozilla.org/firefox/addon/example'), false);
+assert.strictEqual(guards.canOpenOverlayOnUrl('moz-extension://abc/src/newtab/newtab.html'), false);
 
 assert.strictEqual(guards.canOpenOverlayOnUrl('file:///Users/kevinxu/test.html'), true);
 assert.strictEqual(guards.canOpenOverlayOnUrl('https://x.com/home'), true);

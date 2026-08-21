@@ -5,6 +5,37 @@
    "background": {
       "service_worker": "src/background/background.js",
       "scripts": [
+         "src/shared/gecko-shortcuts.js",
+         "src/shared/blacklist-utils.js",
+         "src/shared/url-guards.js",
+         "src/shared/favicon-utils.js",
+         "src/shared/shortcut-favicon.js",
+         "src/shared/shortcut-key-matcher.js",
+         "src/shared/favicon-cache.js",
+         "src/newtab/favicon-theme.js",
+         "src/shared/extension-routes.js",
+         "src/background/command-target-policy.js",
+         "src/shared/settings.js",
+         "src/shared/update-notice.js",
+         "src/shared/search-utils.js",
+         "src/shared/selection-intent.js",
+         "src/shared/site-search-store.js",
+         "src/background/ai-provider-submit.js",
+         "src/background/extension-pages.js",
+         "src/background/tab-groups.js",
+         "src/background/bookmark-tab-groups.js",
+         "src/background/selection-target.js",
+         "src/background/selection-quick-action-provider.js",
+         "src/background/message-router.js",
+         "src/background/newtab-fallback.js",
+         "src/background/shortcut-rules.js",
+         "src/background/pip-ownership.js",
+         "src/background/pip-main-world.js",
+         "src/background/recent-tab-switcher.js",
+         "src/background/overlay-loading-lifecycle.js",
+         "src/background/dev-extension-startup.js",
+         "src/background/codex-debug-bridge.js",
+         "assets/vendor/pinyin-pro.js",
          "src/background/background.js"
       ]
    },
@@ -12,22 +43,22 @@
       "show-search": {
          "description": "__MSG_command_show_search__",
          "suggested_key": {
-            "default": "Ctrl+Shift+K",
-            "mac": "Command+Shift+K"
+            "default": "Alt+K",
+            "mac": "Alt+K"
          }
       },
       "show-search-prefill": {
          "description": "__MSG_command_show_search_prefill__",
          "suggested_key": {
-            "default": "Ctrl+Shift+L",
-            "mac": "Command+Shift+L"
+            "default": "Alt+L",
+            "mac": "Alt+L"
          }
       },
       "show-search-prefill-v": {
          "description": "__MSG_command_show_search_prefill_v__",
          "suggested_key": {
-            "default": "Ctrl+Shift+C",
-            "mac": "Command+Shift+C"
+            "default": "Alt+Shift+C",
+            "mac": "Alt+Shift+C"
          }
       },
       "show-tab-switcher": {
@@ -44,6 +75,7 @@
             "<all_urls>"
          ],
          "js": [
+            "src/shared/gecko-shortcuts.js",
             "src/shared/settings.js",
             "src/content/hotkey-listener.js"
          ],
@@ -54,6 +86,7 @@
             "<all_urls>"
          ],
          "js": [
+            "src/shared/gecko-shortcuts.js",
             "src/shared/shortcut-key-matcher.js",
             "src/content/shortcut-key-observer.js"
          ],
@@ -198,7 +231,7 @@
       "search",
       "favicon"
    ],
-   "version": "0.9.52",
+   "version": "0.9.53",
    "browser_specific_settings": {
       "gecko": {
          "id": "lumno@0-v-linuxdo.github.io",

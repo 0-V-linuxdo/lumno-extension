@@ -938,7 +938,7 @@ function runWiringTests() {
   );
 
   const backgroundSource = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
-  assert(backgroundSource.includes("importScripts(chrome.runtime.getURL('src/background/codex-debug-bridge.js'))"));
+  assert(backgroundSource.includes("lumnoImportScript('src/background/codex-debug-bridge.js'"));
   assert(
     (backgroundSource.match(/'src\/shared\/codex-debug-surface\.js'/g) || []).length >= 3,
     'search overlay, tab switcher, and document PiP injection paths should install the debug surface'

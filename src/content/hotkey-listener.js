@@ -560,6 +560,21 @@
     return Boolean(element.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'));
   }
 
+  function applyGeckoHotkeyDefaults() {
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
+      return;
+    }
+    if (!shortcutSpec) {
+      shortcutRaw = gecko.getDefaultShortcut('show-search') || 'Alt+K';
+      shortcutSpec = parseShortcut(shortcutRaw);
+    }
+    if (!tabSwitcherShortcutSpec) {
+      tabSwitcherShortcutRaw = gecko.getDefaultShortcut('show-tab-switcher') || 'Alt+Q';
+      tabSwitcherShortcutSpec = parseShortcut(tabSwitcherShortcutRaw);
+    }
+  }
+
   function shortcutMatchesEvent(event, spec) {
     if (!spec) {
       return false;
@@ -597,11 +612,15 @@
         const nextShortcut = response && typeof response.shortcut === 'string'
           ? response.shortcut
           : '';
-        if (nextShortcut === shortcutRaw) {
+        const gecko = globalThis.LumnoGeckoShortcuts;
+        const resolvedShortcut = gecko && typeof gecko.resolveShortcut === 'function'
+          ? gecko.resolveShortcut('show-search', nextShortcut)
+          : nextShortcut;
+        if (resolvedShortcut === shortcutRaw) {
           return;
         }
-        shortcutRaw = nextShortcut;
-        shortcutSpec = parseShortcut(nextShortcut);
+        shortcutRaw = resolvedShortcut;
+        shortcutSpec = parseShortcut(resolvedShortcut);
         logHotkeyListenerDebug('shortcut-refresh', {
           shortcut: shortcutRaw,
           hasSpec: Boolean(shortcutSpec)
@@ -614,11 +633,15 @@
         const nextShortcut = response && typeof response.shortcut === 'string'
           ? response.shortcut
           : '';
-        if (nextShortcut === tabSwitcherShortcutRaw) {
+        const gecko = globalThis.LumnoGeckoShortcuts;
+        const resolvedShortcut = gecko && typeof gecko.resolveShortcut === 'function'
+          ? gecko.resolveShortcut('show-tab-switcher', nextShortcut)
+          : nextShortcut;
+        if (resolvedShortcut === tabSwitcherShortcutRaw) {
           return;
         }
-        tabSwitcherShortcutRaw = nextShortcut;
-        tabSwitcherShortcutSpec = parseShortcut(nextShortcut);
+        tabSwitcherShortcutRaw = resolvedShortcut;
+        tabSwitcherShortcutSpec = parseShortcut(resolvedShortcut);
       });
     } catch (e) {
       // Ignore runtime bridge failures on restricted frames.
@@ -629,6 +652,7 @@
   }
 
   hydrateLocaleMessages();
+  applyGeckoHotkeyDefaults();
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (providerStorageRuntime

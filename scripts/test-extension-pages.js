@@ -217,6 +217,15 @@ function openExtensionShortcutsPage(options) {
     'legacy local release marker should migrate into sync'
   );
 
+  const geckoCreatedTabs = [];
+  const geckoChrome = createChromeApi({}, {}, geckoCreatedTabs, '0.9.53');
+  geckoChrome.runtime.getURL = (value) => `moz-extension://lumno-test-id/${value || ''}`;
+  global.chrome = geckoChrome;
+  assert.strictEqual(pages.getExtensionDetailsUrl(), 'about:addons', 'Gecko details URL should be about:addons');
+  const geckoShortcutsOpened = await openExtensionShortcutsPage();
+  assert.strictEqual(geckoShortcutsOpened, true, 'Gecko shortcut settings should open a tab');
+  assert.strictEqual(geckoCreatedTabs[0], 'about:addons', 'Gecko shortcut settings should open about:addons');
+
   delete global.chrome;
   console.log('extension page tests passed');
 })();

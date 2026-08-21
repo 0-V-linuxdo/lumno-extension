@@ -39,7 +39,11 @@
   }
 
   function applyShowSearchShortcut(shortcut) {
-    const nextShortcut = String(shortcut || '').trim();
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    let nextShortcut = String(shortcut || '').trim();
+    if (gecko && typeof gecko.resolveShortcut === 'function') {
+      nextShortcut = gecko.resolveShortcut('show-search', nextShortcut) || nextShortcut;
+    }
     showSearchShortcutRaw = nextShortcut;
     showSearchShortcutSpec = typeof SHORTCUT_KEY_MATCHER.parseShortcut === 'function'
       ? SHORTCUT_KEY_MATCHER.parseShortcut(nextShortcut)
@@ -47,11 +51,28 @@
   }
 
   function applyTabSwitcherShortcut(shortcut) {
-    const nextShortcut = String(shortcut || '').trim();
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    let nextShortcut = String(shortcut || '').trim();
+    if (gecko && typeof gecko.resolveShortcut === 'function') {
+      nextShortcut = gecko.resolveShortcut('show-tab-switcher', nextShortcut) || nextShortcut;
+    }
     tabSwitcherShortcutRaw = nextShortcut;
     tabSwitcherShortcutSpec = typeof SHORTCUT_KEY_MATCHER.parseShortcut === 'function'
       ? SHORTCUT_KEY_MATCHER.parseShortcut(nextShortcut)
       : null;
+  }
+
+  function applyGeckoPageShortcutDefaults() {
+    const gecko = globalThis.LumnoGeckoShortcuts;
+    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
+      return;
+    }
+    if (!showSearchShortcutSpec) {
+      applyShowSearchShortcut(gecko.getDefaultShortcut('show-search'));
+    }
+    if (!tabSwitcherShortcutSpec) {
+      applyTabSwitcherShortcut(gecko.getDefaultShortcut('show-tab-switcher'));
+    }
   }
 
   function refreshShowSearchShortcut(force) {
@@ -355,6 +376,7 @@
   };
 
   notifyTopFrameDocumentStarted();
+  applyGeckoPageShortcutDefaults();
   refreshShowSearchShortcut(true);
   window.addEventListener('keydown', relayCommandShortcuts, true);
   window.addEventListener('keyup', notifyTabSwitcherShortcutModifierReleased, true);

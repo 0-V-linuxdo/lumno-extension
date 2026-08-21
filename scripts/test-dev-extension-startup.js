@@ -28,11 +28,11 @@ async function run() {
     path.join(repoRoot, 'src/background/background.js'),
     'utf8'
   );
-  assert.match(backgroundSource, /importScripts\(chrome\.runtime\.getURL\('src\/background\/dev-extension-startup\.js'\)\)/);
+  assert.match(backgroundSource, /lumnoImportScript\('src\/background\/dev-extension-startup\.js'/);
   assert.match(backgroundSource, /DEV_EXTENSION_STARTUP\.isSameVersionReload\(details, chrome\.runtime\.getManifest\(\)\.version\)/);
   assert.match(
     backgroundSource,
-    /chrome\.runtime\.onStartup\.addListener\(\(\) => \{\s*prepareShortcutKeyObserversInOpenTabs\(\);\s*restoreBackgroundStateOnStartup\(\);\s*\}\)/
+    /chrome\.runtime\.onStartup\.addListener\(\(\) => \{\s*ensureGeckoCommandShortcuts\(\);\s*prepareShortcutKeyObserversInOpenTabs\(\);\s*restoreBackgroundStateOnStartup\(\);\s*\}\)/
   );
   assert.doesNotMatch(backgroundSource, /reloadDevelopmentExtensionOnStartup/);
 }

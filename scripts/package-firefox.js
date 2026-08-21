@@ -10,8 +10,15 @@ const firefoxManifest = JSON.parse(JSON.stringify(sourceManifest));
 delete firefoxManifest.key;
 delete firefoxManifest.externally_connectable;
 
+const developmentOnlyFiles = new Set([
+  'src/background/codex-debug-bridge.js',
+  'src/shared/codex-debug-surface.js'
+]);
+
 firefoxManifest.background = {
-  scripts: ['src/background/background.js'],
+  scripts: (Array.isArray(sourceManifest.background && sourceManifest.background.scripts)
+    ? sourceManifest.background.scripts
+    : ['src/background/background.js']).filter((file) => !developmentOnlyFiles.has(file)),
   service_worker: 'src/background/background.js'
 };
 
@@ -29,7 +36,7 @@ firefoxManifest.commands = firefoxManifest.commands || {};
 const geckoShortcuts = {
   'show-search': { default: 'Alt+K', mac: 'Alt+K' },
   'show-search-prefill': { default: 'Alt+L', mac: 'Alt+L' },
-  'show-search-prefill-v': { default: 'Alt+Shift+C', mac: 'MacCtrl+Shift+C' },
+  'show-search-prefill-v': { default: 'Alt+Shift+C', mac: 'Alt+Shift+C' },
   'show-tab-switcher': { default: 'Alt+Q', mac: 'Alt+Q' }
 };
 Object.keys(geckoShortcuts).forEach((name) => {
@@ -58,10 +65,6 @@ const version = firefoxManifest.version;
 const distDir = path.join(repoRoot, 'dist');
 const zipPath = path.join(distDir, `lumno-firefox-v${version}.zip`);
 const packageRoots = ['src', '_locales', 'assets'];
-const developmentOnlyFiles = new Set([
-  'src/background/codex-debug-bridge.js',
-  'src/shared/codex-debug-surface.js'
-]);
 
 fs.mkdirSync(distDir, { recursive: true });
 if (fs.existsSync(zipPath)) {

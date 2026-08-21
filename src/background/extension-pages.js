@@ -21,7 +21,28 @@
       : null;
   }
 
+  function isGeckoRuntime() {
+    const gecko = typeof globalThis !== 'undefined' ? globalThis.LumnoGeckoShortcuts : null;
+    if (gecko && typeof gecko.isGeckoRuntime === 'function') {
+      return gecko.isGeckoRuntime();
+    }
+    const chromeApi = getChromeApi();
+    if (chromeApi && chromeApi.runtime && typeof chromeApi.runtime.getURL === 'function') {
+      try {
+        return String(chromeApi.runtime.getURL('') || '').indexOf('moz-extension:') === 0;
+      } catch (error) {
+        // Ignore getURL failures while detecting the browser.
+      }
+    }
+    return typeof browser !== 'undefined' &&
+      browser.runtime &&
+      typeof browser.runtime.getBrowserInfo === 'function';
+  }
+
   function getExtensionDetailsUrl() {
+    if (isGeckoRuntime()) {
+      return 'about:addons';
+    }
     const chromeApi = getChromeApi();
     if (!chromeApi || !chromeApi.runtime || !chromeApi.runtime.id) {
       return 'chrome://extensions/';
@@ -362,9 +383,36 @@
       done(false);
       return;
     }
+    const active = openOptions.disposition !== 'backgroundTab';
+    const openAboutAddons = () => {
+      chromeApi.tabs.create({
+        url: 'about:addons',
+        active
+      }, () => {
+        done(!(chromeApi.runtime && chromeApi.runtime.lastError));
+      });
+    };
+    if (isGeckoRuntime()) {
+      if (chromeApi.commands && typeof chromeApi.commands.openShortcutSettings === 'function') {
+        try {
+          const opened = chromeApi.commands.openShortcutSettings();
+          if (opened && typeof opened.then === 'function') {
+            opened.then(() => done(true)).catch(() => openAboutAddons());
+            return;
+          }
+          done(true);
+          return;
+        } catch (error) {
+          openAboutAddons();
+          return;
+        }
+      }
+      openAboutAddons();
+      return;
+    }
     chromeApi.tabs.create({
       url: 'chrome://extensions/shortcuts',
-      active: openOptions.disposition !== 'backgroundTab'
+      active
     }, () => {
       done(!(chromeApi.runtime && chromeApi.runtime.lastError));
     });
