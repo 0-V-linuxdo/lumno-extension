@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.5.0
+
+Still based on upstream **0.9.51**. v1.4.0 stopped Alt+Q from hopping tabs, but used one toast for every failure (“use a normal https page”). On https, re-injecting overlay files over scripts already loaded by `content_scripts` hit **redeclaration** and aborted `search-panel.js` / `tab-switcher.js`. The command bar also stayed silent: restricted pages and some inject failures never toasted.
+
+v1.5.0 skips redeclaration during sequential inject, still tries the in-page toggle after a failed inject, toasts with a **reason-specific** message, and always toasts on Gecko command-bar failure (including restricted pages).
+
+Install `lumno-0.9.51-firefox-v1.5.0.zip`. Unload v1.4.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.4.0
 
 Still based on upstream **0.9.51**. v1.3.0 fixed inject file paths, but Alt+Q on a `moz-extension://` add-on page still **jumped to another tab**: `isOwnExtensionPageUrl` only matched `chrome-extension:`, so Firefox treated the add-on page as unhostable and called `focusWindowAndActivateTab` on a recent https tab. On https, re-injecting the switcher over already-loaded content scripts could abort the toggle.

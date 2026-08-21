@@ -62,19 +62,38 @@
 
       const failed = () => Boolean(chrome.runtime && chrome.runtime.lastError);
 
+      function isSkippableInjectFailure(file) {
+        const name = String(file || '');
+        if (name.indexOf('codex-debug') !== -1) {
+          return true;
+        }
+        const message = chrome.runtime && chrome.runtime.lastError
+          ? String(chrome.runtime.lastError.message || '')
+          : '';
+        return /already been declared|redeclaration|already declared|duplicate identifier/i.test(message);
+      }
+
       if (Array.isArray(details.files) && details.files.length) {
         const files = details.files
           .map((file) => toExtensionFilePath(file))
           .filter(Boolean);
+        let skippedAny = false;
         const next = (index) => {
           if (index >= files.length) {
-            done([{ result: true }]);
+            if (!skippedAny) {
+              done([{ result: true }]);
+              return;
+            }
+            chrome.tabs.executeScript(tabId, Object.assign({ code: '1' }, inject), () => {
+              void (chrome.runtime && chrome.runtime.lastError);
+              done([{ result: true }]);
+            });
             return;
           }
           chrome.tabs.executeScript(tabId, Object.assign({ file: files[index] }, inject), () => {
             if (failed()) {
-              const skipped = String(files[index] || '').indexOf('codex-debug') !== -1;
-              if (skipped) {
+              if (isSkippableInjectFailure(files[index])) {
+                skippedAny = true;
                 next(index + 1);
                 return;
               }
@@ -124,7 +143,9 @@
         }
         const payload = Object.assign({}, details, { files: [files[index]] });
         return Promise.resolve(nativeExecute(payload)).then(() => run(index + 1), (error) => {
-          if (String(files[index] || '').indexOf('codex-debug') !== -1) {
+          const message = error && error.message ? String(error.message) : String(error || '');
+          if (String(files[index] || '').indexOf('codex-debug') !== -1 ||
+              /already been declared|redeclaration|already declared|duplicate identifier/i.test(message)) {
             return run(index + 1);
           }
           throw error;

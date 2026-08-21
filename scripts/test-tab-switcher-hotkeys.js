@@ -263,7 +263,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /tab-switcher-gecko-no-host-hop[\s\S]*notifyGeckoHotkeyFailure\(activeTab, 'tab-switcher'\)/,
+  /tab-switcher-gecko-no-host-hop[\s\S]*notifyGeckoHotkeyFailure\(activeTab, 'tab-switcher'(?:, 'no-host-hop')?\)/,
   'Firefox Alt+Q must not activate another tab when the current page cannot host the switcher'
 );
 assert.match(

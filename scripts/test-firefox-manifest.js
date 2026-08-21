@@ -100,6 +100,16 @@ assert.match(
   /runSwitcherToggle/,
   'Firefox tab switcher should toggle an existing helper before re-injecting files'
 );
+assert.match(
+  backgroundSource,
+  /function geckoHotkeyFailureMessage\(/,
+  'Firefox hotkey failures must use a reason-specific toast'
+);
+assert.match(
+  backgroundSource,
+  /notifyGeckoHotkeyFailure\(activeTab, 'command-bar', 'restricted-page'\)/,
+  'Firefox command bar must toast on restricted pages instead of failing silently'
+);
 
 const polyfillSource = fs.readFileSync('src/background/gecko-mv2-polyfill.js', 'utf8');
 assert.match(

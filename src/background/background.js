@@ -177,13 +177,32 @@ function getTabSwitcherInjectionFiles() {
   ];
 }
 
-function notifyGeckoHotkeyFailure(tab, kind) {
+function geckoHotkeyFailureMessage(kind, reason) {
+  const code = String(reason || '');
+  if (code === 'restricted-page' || code === 'no-host-hop') {
+    return kind === 'tab-switcher'
+      ? 'Lumno: Tab Switcher needs a normal https page (not about: or the add-on page).'
+      : 'Lumno: command bar needs a normal https page (not about: or the add-on page).';
+  }
+  if (code === 'helper-missing' ||
+      code === 'tab_switcher_missing' ||
+      code === 'search_panel_missing' ||
+      code === 'react-view-unavailable') {
+    return 'Lumno: overlay is not loaded on this tab. Refresh the https page, then try again.';
+  }
+  if (code === 'inject-failed') {
+    return 'Lumno: could not inject into this tab. Refresh the https page, or click the toolbar icon.';
+  }
+  return kind === 'tab-switcher'
+    ? 'Lumno: Tab Switcher could not open. Refresh this https page.'
+    : 'Lumno: command bar could not open. Refresh this https page, or click the toolbar icon.';
+}
+
+function notifyGeckoHotkeyFailure(tab, kind, reason) {
   if (!isGeckoRuntime() || !tab || typeof tab.id !== 'number') {
     return;
   }
-  const message = kind === 'tab-switcher'
-    ? 'Lumno: Tab Switcher could not open. Use a normal https page (not about: or the add-on page).'
-    : 'Lumno: command bar could not open. Refresh this https page, or click the toolbar icon.';
+  const message = geckoHotkeyFailureMessage(kind, reason);
   const injectToast = () => {
     if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
       return;
@@ -5089,6 +5108,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
       url: activeUrl,
       source: source || ''
     });
+    notifyGeckoHotkeyFailure(activeTab, 'command-bar', 'restricted-page');
     if (action === 'none') {
       logHotkeyDebug('fallback-open-browser-newtab', { reason: 'restricted_url', source: source || '' });
       openBrowserNewtabFallback({ sourceTab: activeTab });
@@ -5199,11 +5219,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: chrome.runtime.lastError.message || 'unknown',
                 source: source || ''
               });
-              if (openOptions.loadingRecovery !== true &&
-                  !overlayLoadingRecordsByTabId.has(activeTab.id)) {
-                openNewtabFallback({ sourceTab: activeTab });
-                notifyGeckoHotkeyFailure(activeTab, 'command-bar');
-              }
+              notifyGeckoHotkeyFailure(activeTab, 'command-bar', 'inject-failed');
               finishOpenAttempt(false);
               return;
             }
@@ -5218,11 +5234,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: result.reason || 'unknown',
                 source: source || ''
               });
-              if (openOptions.loadingRecovery !== true &&
-                  !overlayLoadingRecordsByTabId.has(activeTab.id)) {
-                openNewtabFallback({ sourceTab: activeTab });
-                notifyGeckoHotkeyFailure(activeTab, 'command-bar');
-              }
+              notifyGeckoHotkeyFailure(activeTab, 'command-bar', result.reason || 'helper-missing');
               finishOpenAttempt(false);
               return;
             }
@@ -5263,12 +5275,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
           error: chrome.runtime.lastError.message || 'unknown',
           source: source || ''
         });
-        if (openOptions.loadingRecovery !== true &&
-            !overlayLoadingRecordsByTabId.has(activeTab.id)) {
-          openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
-          notifyGeckoHotkeyFailure(activeTab, 'command-bar');
-        }
-        finishOpenAttempt(false);
+        runOverlayWithResolvedZoom();
         return;
       }
       runOverlayWithResolvedZoom();
@@ -5435,7 +5442,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           source: context && context.source ? context.source : ''
         });
         openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
-        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher', 'restricted-page');
         finishOpen(false, reason || 'extension-page-open-failed');
         return;
       }
@@ -5475,7 +5482,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           error: errorMessage,
           source: context && context.source ? context.source : ''
         });
-        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher', 'inject-failed');
         finishOpen(false, errorMessage);
         return;
       }
@@ -5490,7 +5497,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           error: result.reason || 'unknown',
           source: context && context.source ? context.source : ''
         });
-        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher', result.reason || 'helper-missing');
         finishOpen(false, result.reason || 'run-failed');
         return;
       }
@@ -5516,13 +5523,13 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           source: context && context.source ? context.source : ''
         });
         runSwitcherToggle(switcherContext, () => {
-          notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+          notifyGeckoHotkeyFailure(hostTab, 'tab-switcher', 'inject-failed');
           finishOpen(false, errorMessage);
         });
         return;
       }
       runSwitcherToggle(switcherContext, () => {
-        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher', 'tab_switcher_missing');
         finishOpen(false, 'tab_switcher_missing');
       });
     });
@@ -5780,7 +5787,7 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
       const selectedIndex = getDefaultSwitcherSelectedIndex(items, activeTab.id);
       if (!hostTab || typeof hostTab.id !== 'number') {
         openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
-        notifyGeckoHotkeyFailure(activeTab, 'tab-switcher');
+        notifyGeckoHotkeyFailure(activeTab, 'tab-switcher', 'no-host-hop');
         finishOpening();
         return;
       }
@@ -5793,7 +5800,7 @@ function triggerTabSwitcherForTab(tab, source, commandObservedAt) {
             activeUrl: activeUrl,
             source: source || ''
           });
-          notifyGeckoHotkeyFailure(activeTab, 'tab-switcher');
+          notifyGeckoHotkeyFailure(activeTab, 'tab-switcher', 'no-host-hop');
           finishOpening();
           return;
         }

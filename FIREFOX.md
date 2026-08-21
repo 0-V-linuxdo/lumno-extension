@@ -1,30 +1,30 @@
-# Lumno Firefox / Zen — 0.9.51-firefox-v1.4.0
+# Lumno Firefox / Zen — 0.9.51-firefox-v1.5.0
 
 This is a **clean rewrite** from upstream **0.9.51**. Chrome source stays 0.9.51. It is not a patch on 0.9.52–0.9.59.
 
-## Why v1.3.0 still jumped / stayed silent
+## Why v1.4.0 still toasted / stayed silent
 
-v1.3.0 fixed `tabs.executeScript` paths (`/src/...`). That was not enough:
+v1.4.0 stopped Alt+Q from jumping to another tab, but:
 
-1. `isOwnExtensionPageUrl` only accepted `chrome-extension:`. Firefox add-on pages are `moz-extension://…`. Alt+Q then picked another tab that *could* host the switcher and **activated it** — jump from the add-on page.
-2. On https, if `tabs.sendMessage` missed, the fallback re-injected switcher files on top of the static content scripts. A redeclaration error aborted the toggle, so https stayed silent.
-3. Failure toasts used `executeScript` only, which also fails on restricted pages.
+1. One toast covered every Tab Switcher failure, including https inject failure — it always said “use a normal https page”.
+2. Dynamic inject re-ran files already loaded by `content_scripts` (`settings.js`, `gecko-runtime.js`, …). Firefox **redeclaration** aborted the rest of the list, so `search-panel.js` / `tab-switcher.js` never ran.
+3. The command bar had no toast on restricted pages, and some inject failures were gated by the loading-record — Alt+K looked completely dead.
 
-v1.4.0:
+v1.5.0:
 
-1. Own-page detection includes `moz-extension:`.
-2. Gecko **never** focuses another tab to host the switcher.
-3. Open path: `sendMessage` → in-page toggle → inject files only if the helper is missing.
-4. Toasts go through the content-script bridge first.
+1. Sequential inject **skips** redeclaration / already-declared errors and continues.
+2. After a failed inject, still try the in-page toggle.
+3. Toasts are **reason-specific** (restricted page vs overlay not loaded vs inject failed).
+4. Command bar **always** toasts on Gecko failure, including `about:` / add-on pages.
 
 ## Install on Zen / Firefox
 
-Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0–v1.3.0).
+Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0–v1.4.0).
 
-1. Download `lumno-0.9.51-firefox-v1.4.0.zip` and unzip it.
+1. Download `lumno-0.9.51-firefox-v1.5.0.zip` and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
-4. Open a normal `https://` page (not `about:` and not the add-on page). Refresh is optional.
+4. Open a normal `https://` page (not `about:` and not the add-on page). **Refresh once** after loading the add-on.
 5. Press **Alt+K** (command bar) or **Alt+Q** (tab switcher). Toolbar icon is the same as Alt+K.
 
 Temporary add-ons disappear when the browser restarts.
@@ -48,10 +48,11 @@ Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q
 
 ## If a shortcut still does nothing
 
-1. Do not test on `about:` or the add-on (`moz-extension://`) page.
-2. Click the toolbar icon. If that opens the command bar, the page can host it — check `about:addons` → gear → **Manage Extension Shortcuts**.
-3. If a dark toast appears at the bottom, you are on a restricted page or the overlay is not loaded; open/refresh an https page.
-4. Unload every older Lumno, then load only v1.4.0.
+1. Confirm the address bar is `https://…`.
+2. Refresh that tab once after loading the add-on.
+3. Click the toolbar icon. If that opens the command bar, check **Manage Extension Shortcuts**.
+4. Read the toast: restricted page vs “overlay is not loaded” vs inject failed.
+5. Unload every older Lumno, then load only v1.5.0.
 
 ## Development
 
