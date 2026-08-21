@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.2.0');
+assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.3.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
@@ -71,6 +71,12 @@ assert.ok(overlayEntry.js.includes('src/overlay/tab-switcher.js'));
 assert.ok(overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'));
 const firstScripts = packagedManifest.content_scripts[0] && packagedManifest.content_scripts[0].js;
 assert.ok(Array.isArray(firstScripts) && firstScripts.includes('src/overlay/gecko-overlay-bridge.js'));
+const packagedPolyfill = fs.readFileSync(
+  path.join(extractDir, 'src/background/gecko-mv2-polyfill.js'),
+  'utf8'
+);
+assert.match(packagedPolyfill, /function toExtensionFilePath\(/);
+assert.match(packagedPolyfill, /'\/' \+ path/);
 
 fs.rmSync(extractDir, { recursive: true, force: true });
 console.log('package firefox ok');

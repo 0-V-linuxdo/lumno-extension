@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.3.0
+
+Still based on upstream **0.9.51**. v1.2.0 preloaded and re-injected the overlay into already-open tabs, but the MV2 polyfill passed `src/...` files to `tabs.executeScript` **without a leading `/`**. Firefox resolves those relative to the **page URL**, so every dynamic inject failed. Bound `chrome.commands` then ate Alt+K / Alt+Q before the page listener, and both paths stayed silent.
+
+v1.3.0 prefixes inject files with `/` so they resolve against the extension root. Static content scripts were already correct.
+
+Install `lumno-0.9.51-firefox-v1.3.0.zip`. Unload v1.2.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.2.0
 
 Still based on upstream **0.9.51**. v1.1.0 preloaded the overlay as content scripts, but already-open tabs never received them, Tab Switcher fallback still injected `codex-debug-surface.js` (one failure aborts sequential `tabs.executeScript`), and inject errors stayed silent.

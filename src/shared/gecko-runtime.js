@@ -12,8 +12,8 @@
     'show-tab-switcher': 'Alt+Q'
   });
   const RESERVED_SHORTCUT_PATTERN = /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCLI]$/i;
-  const PRODUCT_TAG = '0.9.51-firefox-v1.2.0';
-  const FIREFOX_MANIFEST_VERSION = '1.2.0';
+  const PRODUCT_TAG = '0.9.51-firefox-v1.3.0';
+  const FIREFOX_MANIFEST_VERSION = '1.3.0';
   const OVERLAY_CONTENT_SCRIPT_FILES = Object.freeze([
     'src/shared/gecko-runtime.js',
     'src/shared/icon-font-preload.js',

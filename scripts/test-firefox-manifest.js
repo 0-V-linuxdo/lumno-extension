@@ -86,6 +86,18 @@ assert.match(
   'Firefox command bar must open rather than toggle-close'
 );
 
+const polyfillSource = fs.readFileSync('src/background/gecko-mv2-polyfill.js', 'utf8');
+assert.match(
+  polyfillSource,
+  /function toExtensionFilePath\(/,
+  'Firefox tabs.executeScript relative files resolve against the page URL'
+);
+assert.match(
+  polyfillSource,
+  /'\/' \+ path/,
+  'Firefox inject files must be extension-root paths starting with /'
+);
+
 const contentScripts = manifest.content_scripts || [];
 const hasGeckoInObserver = contentScripts.some((entry) =>
   Array.isArray(entry.js) &&

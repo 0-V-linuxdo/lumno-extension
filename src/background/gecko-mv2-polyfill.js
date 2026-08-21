@@ -28,6 +28,20 @@
     return results;
   }
 
+  function toExtensionFilePath(file) {
+    const path = String(file || '').replace(/\\/g, '/').trim();
+    if (!path) {
+      return '';
+    }
+    if (path.charAt(0) === '/') {
+      return path;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+      return path;
+    }
+    return '/' + path;
+  }
+
   function executeWithTabsApi(details, callback) {
     return new Promise((resolve) => {
       const done = (results) => resolve(finishCallback(callback, results));
@@ -49,7 +63,9 @@
       const failed = () => Boolean(chrome.runtime && chrome.runtime.lastError);
 
       if (Array.isArray(details.files) && details.files.length) {
-        const files = details.files.filter((file) => typeof file === 'string' && file);
+        const files = details.files
+          .map((file) => toExtensionFilePath(file))
+          .filter(Boolean);
         const next = (index) => {
           if (index >= files.length) {
             done([{ result: true }]);
@@ -98,7 +114,9 @@
     if (!nativeExecute) {
       return Promise.resolve(finishCallback(callback));
     }
-    const files = details && Array.isArray(details.files) ? details.files.filter((file) => typeof file === 'string' && file) : [];
+    const files = details && Array.isArray(details.files)
+      ? details.files.map((file) => toExtensionFilePath(file)).filter(Boolean)
+      : [];
     if (files.length > 1) {
       const run = (index) => {
         if (index >= files.length) {
@@ -114,7 +132,10 @@
       };
       return run(0);
     }
-    return Promise.resolve(nativeExecute(details)).then((results) => finishCallback(callback, results));
+    const payload = files.length === 1
+      ? Object.assign({}, details, { files: files })
+      : details;
+    return Promise.resolve(nativeExecute(payload)).then((results) => finishCallback(callback, results));
   }
 
   chrome.scripting = chrome.scripting || {};

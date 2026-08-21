@@ -13,8 +13,8 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.2.0');
-assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.2.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.3.0');
+assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.3.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');
@@ -52,11 +52,56 @@ assert.match(hotkeySource, /_x_extension_openLumnoCommandBar_2026_unique_/, 'Hot
 const bridgeSource = fs.readFileSync('src/overlay/gecko-overlay-bridge.js', 'utf8');
 assert.match(bridgeSource, /openSearchOverlayFromBackground/, 'Gecko overlay bridge should toggle from background messages');
 assert.match(polyfill, /hasTabsExecute/, 'MV2 polyfill must always overwrite scripting.executeScript');
+assert.match(polyfill, /function toExtensionFilePath\(/, 'Firefox tabs.executeScript needs extension-root file paths');
+assert.match(polyfill, /'\/' \+ path/, 'Firefox tabs.executeScript files must start with /');
 assert.match(polyfill, /codex-debug/, 'MV2 polyfill should skip a failed debug-only inject file');
 assert.doesNotMatch(
   polyfill,
   /if \(chrome\.scripting && typeof chrome\.scripting\.executeScript === 'function'\) \{\s*return;/,
   'MV2 polyfill must not skip when Firefox already exposes scripting.executeScript'
 );
+
+function loadPolyfill() {
+  const calls = [];
+  const sandbox = {
+    chrome: {
+      action: {},
+      browserAction: {},
+      runtime: { lastError: null },
+      tabs: {
+        executeScript(tabId, details, callback) {
+          calls.push({ tabId: tabId, details: details });
+          if (typeof callback === 'function') {
+            callback();
+          }
+        }
+      },
+      scripting: {
+        executeScript() {
+          throw new Error('native scripting must not run when tabs.executeScript exists');
+        }
+      }
+    },
+    console
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(polyfill, sandbox, { filename: 'src/background/gecko-mv2-polyfill.js' });
+  return { chrome: sandbox.chrome, calls: calls };
+}
+
+const polyfillRuntime = loadPolyfill();
+polyfillRuntime.chrome.scripting.executeScript({
+  target: { tabId: 7 },
+  files: ['src/shared/gecko-runtime.js', 'src/overlay/search-panel.js']
+}, () => {});
+assert.strictEqual(polyfillRuntime.calls.length, 2, 'polyfill injects one file at a time');
+assert.strictEqual(polyfillRuntime.calls[0].details.file, '/src/shared/gecko-runtime.js');
+assert.strictEqual(polyfillRuntime.calls[1].details.file, '/src/overlay/search-panel.js');
+polyfillRuntime.calls.length = 0;
+polyfillRuntime.chrome.scripting.executeScript({
+  target: { tabId: 8 },
+  files: ['/src/overlay/tab-switcher.js']
+}, () => {});
+assert.strictEqual(polyfillRuntime.calls[0].details.file, '/src/overlay/tab-switcher.js');
 
 console.log('gecko runtime ok');
