@@ -28,10 +28,15 @@
         return;
       }
       if (granted) {
-        setStatus('已授权。请回到 https 页面刷新一次，再按 Alt+K / Alt+Q。', 'ok');
+        setStatus('已授权。正在把命令栏装进已打开的页面，无需刷新即可按 Alt+K / Alt+Q。', 'ok');
         if (grantButton) {
           grantButton.textContent = '已授权';
           grantButton.disabled = true;
+        }
+        try {
+          chrome.runtime.sendMessage({ action: 'geckoHostPermissionGranted' });
+        } catch (error) {
+          // Ignore if the event page is still waking.
         }
       }
     });
@@ -49,9 +54,14 @@
           return;
         }
         if (granted) {
-          setStatus('已授权。请回到 https 页面刷新一次，再按 Alt+K / Alt+Q。', 'ok');
+          setStatus('已授权。正在把命令栏装进已打开的页面，无需刷新即可按 Alt+K / Alt+Q。', 'ok');
           grantButton.textContent = '已授权';
           grantButton.disabled = true;
+          try {
+            chrome.runtime.sendMessage({ action: 'geckoHostPermissionGranted' });
+          } catch (error) {
+            // Background will also see permissions.onAdded.
+          }
           return;
         }
         setStatus('未授权。可到 about:addons → Lumno → 权限 手动打开。', 'warn');

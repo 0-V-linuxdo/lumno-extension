@@ -5131,7 +5131,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: error,
                 source: source || ''
               });
-              if (!shouldSkipNewtabCommandFallback() &&
+              if (isGeckoRuntime()) {
+                handleGeckoOverlayInjectFailure(error, activeTab, tabs, source);
+              } else if (!shouldSkipNewtabCommandFallback() &&
                   openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
@@ -5150,7 +5152,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
                 error: result.reason || 'unknown',
                 source: source || ''
               });
-              if (!shouldSkipNewtabCommandFallback() &&
+              if (isGeckoRuntime()) {
+                handleGeckoOverlayInjectFailure(result.reason || 'search_panel_missing', activeTab, tabs, source);
+              } else if (!shouldSkipNewtabCommandFallback() &&
                   openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
@@ -5399,7 +5403,11 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           error: errorMessage,
           source: context && context.source ? context.source : ''
         });
-        if (!shouldSkipNewtabCommandFallback()) {
+        if (isGeckoRuntime()) {
+          handleGeckoInjectFailure(errorMessage, hostTab, () => {
+            injectTabSwitcherOnTab(hostTab, tabItems, context);
+          });
+        } else if (!shouldSkipNewtabCommandFallback()) {
           openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
         }
         finishOpen(false, errorMessage);
@@ -5947,9 +5955,10 @@ function requestGeckoHostPermission(callback) {
   }
 }
 
-function openGeckoHostAccessPage() {
+function openGeckoHostAccessPage(options) {
+  const force = options && options.force === true;
   const now = Date.now();
-  if ((now - geckoHostAccessPageOpenedAt) < 8000) {
+  if (!force && (now - geckoHostAccessPageOpenedAt) < 8000) {
     return;
   }
   geckoHostAccessPageOpenedAt = now;
@@ -5960,28 +5969,102 @@ function openGeckoHostAccessPage() {
   chrome.tabs.create({ url: chrome.runtime.getURL(GECKO_HOST_ACCESS_PAGE) });
 }
 
-function handleGeckoOverlayInjectFailure(error, activeTab, tabs, source) {
+function maybeOpenGeckoHostAccessOnStartup() {
+  if (!isGeckoRuntime()) {
+    return;
+  }
+  if (!chrome || !chrome.permissions || typeof chrome.permissions.contains !== 'function') {
+    openGeckoHostAccessPage({ force: true });
+    return;
+  }
+  try {
+    chrome.permissions.contains({ origins: GECKO_HOST_ORIGINS }, (granted) => {
+      if (chrome.runtime && chrome.runtime.lastError) {
+        openGeckoHostAccessPage({ force: true });
+        return;
+      }
+      if (granted) {
+        injectGeckoSurfaceIntoOpenTabs();
+        return;
+      }
+      openGeckoHostAccessPage({ force: true });
+    });
+  } catch (error) {
+    openGeckoHostAccessPage({ force: true });
+  }
+}
+
+function getGeckoOverlayInjectFiles() {
+  const gecko = globalThis.LumnoGeckoShortcuts;
+  const files = gecko && Array.isArray(gecko.OVERLAY_CONTENT_SCRIPT_FILES)
+    ? gecko.OVERLAY_CONTENT_SCRIPT_FILES.slice()
+    : [];
+  return getRuntimeInjectableFiles(files);
+}
+
+function shouldInjectGeckoOverlayOnTab(tab) {
+  if (!tab || typeof tab.id !== 'number') {
+    return false;
+  }
+  const url = getResolvedTabUrl(tab);
+  if (!url) {
+    return true;
+  }
+  return canOpenOverlayOnUrl(url);
+}
+
+function injectGeckoSurfaceIntoOpenTabs() {
+  if (!isGeckoRuntime()) {
+    return;
+  }
+  prepareShortcutKeyObserversInOpenTabs();
+  const files = getGeckoOverlayInjectFiles();
+  if (!files.length || !chrome || !chrome.tabs || typeof chrome.tabs.query !== 'function') {
+    return;
+  }
+  chrome.tabs.query({}, (tabs) => {
+    if (chrome.runtime && chrome.runtime.lastError) {
+      return;
+    }
+    (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
+      if (!shouldInjectGeckoOverlayOnTab(tab)) {
+        return;
+      }
+      executeScriptsOnTab(tab.id, files, { injectImmediately: false }, () => {});
+    });
+  });
+}
+
+function handleGeckoInjectFailure(error, activeTab, retryFn) {
   if (!isGeckoRuntime()) {
     return;
   }
   logHotkeyDebug('gecko-host-permission-needed', {
     error: String(error || ''),
     tabId: activeTab && typeof activeTab.id === 'number' ? activeTab.id : null,
-    source: source || '',
     missingHost: isMissingGeckoHostPermissionError(error)
   });
   requestGeckoHostPermission((granted) => {
     const tabId = activeTab && typeof activeTab.id === 'number' ? activeTab.id : null;
-    if (granted && typeof tabId === 'number' && !geckoHostRetryByTabId.has(tabId)) {
-      geckoHostRetryByTabId.add(tabId);
-      setTimeout(() => geckoHostRetryByTabId.delete(tabId), 5000);
-      prepareShortcutKeyObserversInOpenTabs();
-      openOverlayOnTab(activeTab, Array.isArray(tabs) ? tabs : [], source, {
-        skipDuplicateGuard: true
-      });
+    if (granted) {
+      injectGeckoSurfaceIntoOpenTabs();
+      if (typeof retryFn === 'function' && typeof tabId === 'number' &&
+          !geckoHostRetryByTabId.has(tabId)) {
+        geckoHostRetryByTabId.add(tabId);
+        setTimeout(() => geckoHostRetryByTabId.delete(tabId), 5000);
+        retryFn();
+      }
       return;
     }
     openGeckoHostAccessPage();
+  });
+}
+
+function handleGeckoOverlayInjectFailure(error, activeTab, tabs, source) {
+  handleGeckoInjectFailure(error, activeTab, () => {
+    openOverlayOnTab(activeTab, Array.isArray(tabs) ? tabs : [], source, {
+      skipDuplicateGuard: true
+    });
   });
 }
 
@@ -6242,7 +6325,7 @@ chrome.commands.onCommand.addListener(function(command, tab) {
   logHotkeyDebug('received', { command: command, source: source });
   if (isGeckoRuntime()) {
     requestGeckoHostPermission(() => {
-      prepareShortcutKeyObserversInOpenTabs();
+      injectGeckoSurfaceIntoOpenTabs();
     });
   }
   const runForTab = (activeTab) => {
@@ -6299,8 +6382,13 @@ chrome.runtime.onInstalled.addListener((details) => {
     return;
   }
   const reason = String(details.reason || '');
+  if (isGeckoRuntime()) {
+    maybeOpenGeckoHostAccessOnStartup();
+  }
   if (reason === 'install') {
-    openOnboardingPage({ reason: 'install' });
+    if (!isGeckoRuntime()) {
+      openOnboardingPage({ reason: 'install' });
+    }
     schedulePersistPinnedTabSnapshot();
     return;
   }
@@ -6347,7 +6435,7 @@ if (chrome.action && chrome.action.onClicked) {
     if (isGeckoRuntime()) {
       triggerShowSearchForTab(tab, 'action');
       requestGeckoHostPermission(() => {
-        prepareShortcutKeyObserversInOpenTabs();
+        injectGeckoSurfaceIntoOpenTabs();
       });
       return;
     }
@@ -6365,7 +6453,7 @@ if (chrome && chrome.permissions && chrome.permissions.onAdded &&
     if (!origins.length) {
       return;
     }
-    prepareShortcutKeyObserversInOpenTabs();
+    injectGeckoSurfaceIntoOpenTabs();
   });
 }
 
@@ -6943,7 +7031,8 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
       'triggerShowSearchFromPageHotkey',
       'triggerTabSwitcherFromPageHotkey',
       'notifyTabSwitcherShortcutModifierReleased',
-      'getShortcutRules'
+      'getShortcutRules',
+      'geckoHostPermissionGranted'
     ],
     handler: handleShortcutMessage
   },
@@ -7263,6 +7352,11 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ items: items });
       });
       return true;
+    }
+    case 'geckoHostPermissionGranted': {
+      injectGeckoSurfaceIntoOpenTabs();
+      sendResponse({ ok: true });
+      return;
     }
     default:
       return sendUnknownBackgroundMessageResponse(sendResponse);

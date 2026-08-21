@@ -32,19 +32,16 @@ Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q
 
 ## Install on Zen / Firefox (required)
 
-**Unload the old Lumno first** (`about:addons` → Remove), then load 0.9.58.
+**Unload the old Lumno first** (`about:addons` → Remove), then load 0.9.59.
 
 ### Temporary (easiest, unsigned)
 
-1. Download `lumno-firefox-v0.9.58.zip` from Releases, or run `npm run package:firefox`.
+1. Download `lumno-firefox-v0.9.59.zip` from Releases, or run `npm run package:firefox`.
 2. Unzip.
 3. Open `about:debugging#/runtime/this-firefox`
 4. **Load Temporary Add-on…** → unzipped `manifest.json`
-5. **Grant site access** (this is the step that was missing):
-   - Click the Lumno toolbar icon once, or
-   - Open the “允许访问网站” page if it appears and press the button, or
-   - `about:addons` → Lumno → **权限** → enable **访问您在所有网站的数据**
-6. Open a normal `https://` page, **refresh once**, press `Alt+K` / `Alt+Q`.
+5. A **“允许访问网站”** tab opens immediately. Press the button. (If it does not: click the Lumno toolbar icon, or `about:addons` → Lumno → **权限** → enable **访问您在所有网站的数据**)
+6. Open a normal `https://` page and press `Alt+K` / `Alt+Q`. After granting access, already-open tabs get the overlay injected — a refresh is optional.
 
 Temporary add-ons are removed when the browser restarts.
 

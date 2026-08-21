@@ -1,5 +1,14 @@
 Tags: Release
 
+## Firefox port (0.9.59)
+
+- 临时载入后立刻打开授权页。没有网站权限时快捷键根本不会触发，授权页不能等注入失败才出现。
+- 授权网站访问后，立刻把命令栏 / Tab Switcher 注入到已经打开的 https 标签，不必再刷新页面。
+- Tab Switcher / 命令栏注入失败也会打开授权页，不再静默。
+- Temporary add-ons now open the host-access page on load. Shortcuts cannot fire until that grant exists.
+- After host access is granted, overlay scripts are injected into already-open https tabs so Alt+K / Alt+Q work without a reload.
+- Command bar and Tab Switcher inject failures now open the host-access page instead of going silent.
+
 ## Firefox port (0.9.58)
 
 - 回到 0.9.51 的注入模型，修掉真正让快捷键没反应的两件事：Firefox 临时附加组件**不授予网站权限**；`commands.onCommand` 经常不带 `tab.url`，空 URL 被当成受限页直接放弃。

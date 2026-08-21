@@ -88,8 +88,38 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function handleGeckoOverlayInjectFailure\(/,
-  'Failed Firefox injects must open the host-access page instead of going silent'
+  /function maybeOpenGeckoHostAccessOnStartup\(/,
+  'Firefox must open the host-access page when a temporary add-on loads without site access'
+);
+assert.match(
+  backgroundSource,
+  /if \(isGeckoRuntime\(\)\) \{\s*maybeOpenGeckoHostAccessOnStartup\(\);/,
+  'Gecko install/reload must prompt for host access instead of waiting for a dead shortcut'
+);
+assert.match(
+  backgroundSource,
+  /function injectGeckoSurfaceIntoOpenTabs\(/,
+  'After host access is granted, overlay scripts must be injected into already-open tabs'
+);
+assert.match(
+  backgroundSource,
+  /if \(isGeckoRuntime\(\)\) \{\s*maybeOpenGeckoHostAccessOnStartup\(\);/,
+  'Gecko install/reload must prompt for host access instead of waiting for a dead shortcut'
+);
+assert.match(
+  fs.readFileSync('src/onboarding/gecko-host-access.js', 'utf8'),
+  /geckoHostPermissionGranted/,
+  'Host-access page must tell the background to inject overlay scripts after grant'
+);
+assert.match(
+  backgroundSource,
+  /geckoHostPermissionGranted/,
+  'The host-access page must tell the background to inject overlay scripts'
+);
+assert.match(
+  backgroundSource,
+  /handleGeckoInjectFailure\(errorMessage, hostTab/,
+  'Tab Switcher inject failures must also request host access instead of going silent'
 );
 assert.match(
   backgroundSource,
