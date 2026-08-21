@@ -14,6 +14,8 @@
   let showSearchShortcutRaw = '';
   let showSearchShortcutSpec = null;
   let showSearchShortcutRefreshedAt = 0;
+  let tabSwitcherShortcutRaw = '';
+  let tabSwitcherShortcutSpec = null;
   let armedReleaseKeys = [];
   const recentTrustedKeydownAtByKey = new Map();
   const recentTrustedReleaseAtByKey = new Map();
@@ -44,6 +46,14 @@
       : null;
   }
 
+  function applyTabSwitcherShortcut(shortcut) {
+    const nextShortcut = String(shortcut || '').trim();
+    tabSwitcherShortcutRaw = nextShortcut;
+    tabSwitcherShortcutSpec = typeof SHORTCUT_KEY_MATCHER.parseShortcut === 'function'
+      ? SHORTCUT_KEY_MATCHER.parseShortcut(nextShortcut)
+      : null;
+  }
+
   function refreshShowSearchShortcut(force) {
     const now = Date.now();
     if (!force && (now - showSearchShortcutRefreshedAt) < SHOW_SEARCH_SHORTCUT_REFRESH_MS) {
@@ -62,6 +72,18 @@
           return;
         }
         applyShowSearchShortcut(nextShortcut);
+      });
+      chrome.runtime.sendMessage({ action: 'getTabSwitcherShortcut' }, (response) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          return;
+        }
+        const nextShortcut = response && typeof response.shortcut === 'string'
+          ? response.shortcut
+          : '';
+        if (nextShortcut === tabSwitcherShortcutRaw) {
+          return;
+        }
+        applyTabSwitcherShortcut(nextShortcut);
       });
     } catch (error) {
       // Ignore an extension context invalidated during reload or navigation.
@@ -93,6 +115,43 @@
     } catch (error) {
       // Ignore an extension context invalidated during reload or navigation.
     }
+  }
+
+  function relayTabSwitcherShortcut(event) {
+    if (!event || event.isTrusted !== true || event.isComposing || event.repeat) {
+      return false;
+    }
+    if (!tabSwitcherShortcutSpec) {
+      return false;
+    }
+    const descriptor = typeof SHORTCUT_KEY_MATCHER.describeKeyboardEvent === 'function'
+      ? SHORTCUT_KEY_MATCHER.describeKeyboardEvent(event)
+      : null;
+    if (typeof SHORTCUT_KEY_MATCHER.descriptorMatchesShortcut !== 'function' ||
+        !SHORTCUT_KEY_MATCHER.descriptorMatchesShortcut(descriptor, tabSwitcherShortcutSpec)) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      chrome.runtime.sendMessage({
+        action: 'triggerTabSwitcherFromPageHotkey',
+        documentUrl: location && location.href ? location.href : '',
+        observedAt: Date.now()
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+    } catch (error) {
+      // Ignore an extension context invalidated during reload or navigation.
+    }
+    return true;
+  }
+
+  function relayCommandShortcuts(event) {
+    if (relayTabSwitcherShortcut(event)) {
+      return;
+    }
+    relayShowSearchShortcut(event);
   }
 
   function relayShowSearchShortcut(event) {
@@ -297,13 +356,13 @@
 
   notifyTopFrameDocumentStarted();
   refreshShowSearchShortcut(true);
-  window.addEventListener('keydown', relayShowSearchShortcut, true);
+  window.addEventListener('keydown', relayCommandShortcuts, true);
   window.addEventListener('keyup', notifyTabSwitcherShortcutModifierReleased, true);
   window.addEventListener('focus', refreshShowSearchShortcutOnFocus, true);
   document.addEventListener('visibilitychange', refreshShowSearchShortcutOnVisibility, true);
   window[RUNTIME_KEY] = Object.freeze({
     cleanup() {
-      window.removeEventListener('keydown', relayShowSearchShortcut, true);
+      window.removeEventListener('keydown', relayCommandShortcuts, true);
       window.removeEventListener('keyup', notifyTabSwitcherShortcutModifierReleased, true);
       window.removeEventListener('focus', refreshShowSearchShortcutOnFocus, true);
       document.removeEventListener('visibilitychange', refreshShowSearchShortcutOnVisibility, true);

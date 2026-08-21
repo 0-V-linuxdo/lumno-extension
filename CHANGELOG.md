@@ -1,5 +1,17 @@
 Tags: Release
 
+## Firefox port (0.9.52)
+
+- 增加 Firefox / Zen / Gecko 适配：`browser_specific_settings.gecko`、MV3 `background.scripts` + `service_worker` 双声明。
+- 修复在 Firefox/Zen 上「打开命令栏」「Tab Switcher」快捷键无响应：Chrome 默认 `Ctrl+Shift+K/C` 与 Firefox 开发者工具冲突，安装后自动改绑到 `Alt+K` / `Alt+Q` 等不冲突组合，并补页面级快捷键回退。
+- 修复 Gecko 上 `importScripts(moz-extension://…)` 可能失败导致 background 无法启动的问题。
+- 识别 `about:newtab` / `moz-extension:` / AMO，新增 `npm run package:firefox` 生成可在 about:debugging 加载的 zip。
+
+- Added Firefox / Zen / Gecko support: gecko id, dual MV3 background (`scripts` + `service_worker`).
+- Fixed command-bar and tab-switcher shortcuts doing nothing on Firefox/Zen: Chrome defaults `Ctrl+Shift+K/C` collide with Firefox DevTools. Gecko now rebinds empty/conflicting commands (Alt+K / Alt+Q) and adds a page-level fallback.
+- Fixed background startup on Gecko when `importScripts` rejects absolute `moz-extension://` URLs.
+- Recognize `about:newtab` / `moz-extension:` / AMO. Added `npm run package:firefox`.
+
 ## Features
 
 - 搜索浮层、新标签页、设置页和引导页完成 React 迁移，并移除旧 UI 渲染回退路径。

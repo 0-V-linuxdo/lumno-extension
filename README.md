@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-MV3-111827?style=flat-square" alt="Manifest V3" />
-  <img src="https://img.shields.io/badge/Browser-Chromium-2563eb?style=flat-square" alt="Chromium" />
+  <img src="https://img.shields.io/badge/Browser-Chromium%20%7C%20Firefox%20%7C%20Zen-2563eb?style=flat-square" alt="Chromium Firefox Zen" />
   <img src="https://img.shields.io/badge/Language-JavaScript-f59e0b?style=flat-square" alt="JavaScript" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-16a34a?style=flat-square" alt="GPL-3.0" />
 </p>
@@ -23,7 +23,7 @@
   <a href="README.ja.md">日本語</a>
 </p>
 
-Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused browser command bar with a minimal new tab page, so you can search bookmarks, history, top sites, open tabs, site-search shortcuts, and AI assistants from one place.
+Lumno is a Manifest V3 extension for Chromium browsers, with a Gecko port for Firefox and Zen in this fork. It combines a focused browser command bar with a minimal new tab page, so you can search bookmarks, history, top sites, open tabs, site-search shortcuts, and AI assistants from one place.
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao">
@@ -34,7 +34,7 @@ Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused br
   </a>
 </p>
 
-<p align="center">Current version: <code>0.9.51</code></p>
+<p align="center">Current version: <code>0.9.52</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -64,12 +64,23 @@ Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused br
 | Open the command bar | `Cmd+Shift+K` / `Ctrl+Shift+K` |
 | Open the command bar with the current page URL | `Cmd+Shift+L` / `Ctrl+Shift+L` |
 | Copy the current page URL | `Cmd+Shift+C` / `Ctrl+Shift+C` |
+| Recent tab switcher | `Alt+Q` |
 
-Browsers may reserve or limit extension shortcuts. Change them at `chrome://extensions/shortcuts`, `edge://extensions/shortcuts`, or the equivalent shortcuts page in your browser.
+On **Firefox / Zen**, Chrome’s `Ctrl+Shift+K` / `Ctrl+Shift+C` collide with DevTools, so this fork rebinds to `Alt+K` (command bar) and keeps `Alt+Q` (tab switcher). See [FIREFOX.md](./FIREFOX.md).
+
+Browsers may reserve or limit extension shortcuts. Change them at `chrome://extensions/shortcuts`, `edge://extensions/shortcuts`, `about:addons` → Manage Extension Shortcuts, or Zen Settings → Keyboard Shortcuts.
+
+## Firefox / Zen
+
+This fork ports Lumno to Gecko. **Do not install the Chrome zip with CRX Installer** if you want shortcuts to work.
+
+Full steps: [FIREFOX.md](./FIREFOX.md)
+
+Quick path: `npm run package:firefox` → unzip → `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `manifest.json`.
 
 ## Installation
 
-Install from the Chrome Web Store: [Install Lumno on Chrome Web Store](https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao?utm_source=item-share-cb)
+Install from the Chrome Web Store (Chromium): [Install Lumno on Chrome Web Store](https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao?utm_source=item-share-cb)
 
 For manual installation:
 

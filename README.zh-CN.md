@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-MV3-111827?style=flat-square" alt="Manifest V3" />
-  <img src="https://img.shields.io/badge/Browser-Chromium-2563eb?style=flat-square" alt="Chromium" />
+  <img src="https://img.shields.io/badge/Browser-Chromium%20%7C%20Firefox%20%7C%20Zen-2563eb?style=flat-square" alt="Chromium Firefox Zen" />
   <img src="https://img.shields.io/badge/Language-JavaScript-f59e0b?style=flat-square" alt="JavaScript" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-16a34a?style=flat-square" alt="GPL-3.0" />
 </p>
@@ -25,7 +25,7 @@
 
 
 
-Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜索命令栏」和「极简新标签页」放在一起：你可以从任意网页快速搜索书签、历史、常用网站、已打开标签页、站内搜索和 AI 助手，也可以把新标签页整理成更好用的工作入口。
+Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展（本 fork 增加了 Firefox / Zen 的 Gecko 移植），把「聚焦搜索命令栏」和「极简新标签页」放在一起：你可以从任意网页快速搜索书签、历史、常用网站、已打开标签页、站内搜索和 AI 助手，也可以把新标签页整理成更好用的工作入口。
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao">
@@ -36,7 +36,7 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
   </a>
 </p>
 
-<p align="center">当前版本：<code>0.9.51</code></p>
+<p align="center">当前版本：<code>0.9.52</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -66,12 +66,23 @@ Lumno 是一个面向 Chromium 浏览器的 Manifest V3 扩展，把「聚焦搜
 | 打开聚焦搜索命令栏 | `Cmd+Shift+K` / `Ctrl+Shift+K` |
 | 打开命令栏并预填当前页面链接 | `Cmd+Shift+L` / `Ctrl+Shift+L` |
 | 复制当前页面链接 | `Cmd+Shift+C` / `Ctrl+Shift+C` |
+| 最近标签切换器 | `Alt+Q` |
 
-浏览器可能会占用或限制扩展快捷键。请在 `chrome://extensions/shortcuts`、`edge://extensions/shortcuts` 或对应浏览器的扩展快捷键页面中修改。
+在 **Firefox / Zen** 上，Chrome 默认的 `Ctrl+Shift+K` / `Ctrl+Shift+C` 会被开发者工具占用，所以本 fork 会改绑为 `Alt+K`（命令栏），Tab Switcher 仍为 `Alt+Q`。详见 [FIREFOX.md](./FIREFOX.md)。
+
+浏览器可能会占用或限制扩展快捷键。请在 `chrome://extensions/shortcuts`、`edge://extensions/shortcuts`、`about:addons` → 管理扩展快捷键，或 Zen「设置 → 键盘快捷键」中修改。
+
+## Firefox / Zen
+
+本 fork 已开始移植到 Gecko。**不要用 CRX Installer 安装 Chrome 版 zip**，否则命令栏和 Tab Switcher 快捷键不会触发。
+
+完整说明见 [FIREFOX.md](./FIREFOX.md)。
+
+快速安装：`npm run package:firefox` → 解压 → 打开 `about:debugging#/runtime/this-firefox` → 「临时载入附加组件」→ 选择 `manifest.json`。
 
 ## 安装使用
 
-可通过上方的 Chrome Web Store 或 Microsoft Edge Add-ons 入口安装。
+Chromium 可通过上方的 Chrome Web Store 或 Microsoft Edge Add-ons 入口安装。
 
 手动安装：
 

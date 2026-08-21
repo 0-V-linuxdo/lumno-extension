@@ -24,6 +24,8 @@
     : null);
   let shortcutRaw = '';
   let shortcutSpec = null;
+  let tabSwitcherShortcutRaw = '';
+  let tabSwitcherShortcutSpec = null;
   let lastRefreshAt = 0;
   let lastVisibleReportAt = 0;
   let pageToastTimer = null;
@@ -149,6 +151,20 @@
     } catch (e) {
       // Ignore runtime bridge failures.
       logHotkeyListenerDebug('trigger-overlay-failed', {
+        error: e && e.message ? e.message : String(e || '')
+      });
+    }
+  }
+
+  function triggerTabSwitcherFromPage() {
+    logHotkeyListenerDebug('trigger-tab-switcher', {
+      shortcut: tabSwitcherShortcutRaw || '',
+      href: location && location.href ? location.href : ''
+    });
+    try {
+      chrome.runtime.sendMessage({ action: 'triggerTabSwitcherFromPageHotkey' });
+    } catch (e) {
+      logHotkeyListenerDebug('trigger-tab-switcher-failed', {
         error: e && e.message ? e.message : String(e || '')
       });
     }
@@ -591,6 +607,19 @@
           hasSpec: Boolean(shortcutSpec)
         });
       });
+      chrome.runtime.sendMessage({ action: 'getTabSwitcherShortcut' }, (response) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          return;
+        }
+        const nextShortcut = response && typeof response.shortcut === 'string'
+          ? response.shortcut
+          : '';
+        if (nextShortcut === tabSwitcherShortcutRaw) {
+          return;
+        }
+        tabSwitcherShortcutRaw = nextShortcut;
+        tabSwitcherShortcutSpec = parseShortcut(nextShortcut);
+      });
     } catch (e) {
       // Ignore runtime bridge failures on restricted frames.
       logHotkeyListenerDebug('shortcut-refresh-failed', {
@@ -674,6 +703,18 @@
       event.preventDefault();
       event.stopPropagation();
       triggerOverlay();
+      return;
+    }
+    const matchedTabSwitcherShortcut = Boolean(
+      tabSwitcherShortcutSpec && shortcutMatchesEvent(event, tabSwitcherShortcutSpec)
+    );
+    if (matchedTabSwitcherShortcut) {
+      if (editableTarget) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      triggerTabSwitcherFromPage();
       return;
     }
     if (event.defaultPrevented) {

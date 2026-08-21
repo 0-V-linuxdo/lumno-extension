@@ -1,183 +1,63 @@
 
-try {
-  importScripts(chrome.runtime.getURL('src/shared/blacklist-utils.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load blacklist utils.', error);
+function lumnoImportScript(path, warnLabel) {
+  const runtime = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime : null;
+  const candidates = [];
+  if (runtime && typeof runtime.getURL === 'function') {
+    try {
+      candidates.push(runtime.getURL(path));
+    } catch (error) {
+      // Ignore getURL failures and fall back to relative paths.
+    }
+  }
+  if (path.indexOf('src/background/') === 0) {
+    candidates.push('./' + path.slice('src/background/'.length));
+  } else if (path.indexOf('src/') === 0) {
+    candidates.push('../' + path.slice('src/'.length));
+  } else {
+    candidates.push('../../' + path);
+  }
+  let lastError = null;
+  for (let i = 0; i < candidates.length; i += 1) {
+    try {
+      importScripts(candidates[i]);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.warn(warnLabel || ('Lumno: failed to load ' + path + '.'), lastError);
 }
 
-try {
-  importScripts(chrome.runtime.getURL('src/shared/url-guards.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load URL guards.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/favicon-utils.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load favicon utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/shortcut-favicon.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load shortcut favicon helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/shortcut-key-matcher.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load shortcut key matcher.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/favicon-cache.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load favicon cache runtime.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/newtab/favicon-theme.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load newtab favicon theme helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/extension-routes.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load extension routes.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/command-target-policy.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load command target policy.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/settings.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load settings utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/update-notice.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load update notice utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/search-utils.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load search utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/selection-intent.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load selection intent helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/shared/site-search-store.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load site search store.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/ai-provider-submit.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load AI provider submit runtime.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/extension-pages.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load extension page helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/tab-groups.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load tab group helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/bookmark-tab-groups.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load bookmark tab group helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/selection-target.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load selection target helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/selection-quick-action-provider.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load selection quick action provider helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/message-router.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load background message router.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/newtab-fallback.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load newtab fallback helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/shortcut-rules.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load shortcut rules helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/pip-ownership.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load PiP ownership utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/pip-main-world.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load PiP main-world utils.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/recent-tab-switcher.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load recent tab switcher helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/overlay-loading-lifecycle.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load Overlay loading lifecycle helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/dev-extension-startup.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load development startup helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('src/background/codex-debug-bridge.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load Codex debug bridge helpers.', error);
-}
-
-try {
-  importScripts(chrome.runtime.getURL('assets/vendor/pinyin-pro.js'));
-} catch (error) {
-  console.warn('Lumno: failed to load pinyin support.', error);
-}
+lumnoImportScript('src/shared/blacklist-utils.js', 'Lumno: failed to load blacklist utils.');
+lumnoImportScript('src/shared/url-guards.js', 'Lumno: failed to load URL guards.');
+lumnoImportScript('src/shared/favicon-utils.js', 'Lumno: failed to load favicon utils.');
+lumnoImportScript('src/shared/shortcut-favicon.js', 'Lumno: failed to load shortcut favicon helpers.');
+lumnoImportScript('src/shared/shortcut-key-matcher.js', 'Lumno: failed to load shortcut key matcher.');
+lumnoImportScript('src/shared/favicon-cache.js', 'Lumno: failed to load favicon cache runtime.');
+lumnoImportScript('src/newtab/favicon-theme.js', 'Lumno: failed to load newtab favicon theme helpers.');
+lumnoImportScript('src/shared/extension-routes.js', 'Lumno: failed to load extension routes.');
+lumnoImportScript('src/background/command-target-policy.js', 'Lumno: failed to load command target policy.');
+lumnoImportScript('src/shared/settings.js', 'Lumno: failed to load settings utils.');
+lumnoImportScript('src/shared/update-notice.js', 'Lumno: failed to load update notice utils.');
+lumnoImportScript('src/shared/search-utils.js', 'Lumno: failed to load search utils.');
+lumnoImportScript('src/shared/selection-intent.js', 'Lumno: failed to load selection intent helpers.');
+lumnoImportScript('src/shared/site-search-store.js', 'Lumno: failed to load site search store.');
+lumnoImportScript('src/background/ai-provider-submit.js', 'Lumno: failed to load AI provider submit runtime.');
+lumnoImportScript('src/background/extension-pages.js', 'Lumno: failed to load extension page helpers.');
+lumnoImportScript('src/background/tab-groups.js', 'Lumno: failed to load tab group helpers.');
+lumnoImportScript('src/background/bookmark-tab-groups.js', 'Lumno: failed to load bookmark tab group helpers.');
+lumnoImportScript('src/background/selection-target.js', 'Lumno: failed to load selection target helpers.');
+lumnoImportScript('src/background/selection-quick-action-provider.js', 'Lumno: failed to load selection quick action provider helpers.');
+lumnoImportScript('src/background/message-router.js', 'Lumno: failed to load background message router.');
+lumnoImportScript('src/background/newtab-fallback.js', 'Lumno: failed to load newtab fallback helpers.');
+lumnoImportScript('src/background/shortcut-rules.js', 'Lumno: failed to load shortcut rules helpers.');
+lumnoImportScript('src/background/pip-ownership.js', 'Lumno: failed to load PiP ownership utils.');
+lumnoImportScript('src/background/pip-main-world.js', 'Lumno: failed to load PiP main-world utils.');
+lumnoImportScript('src/background/recent-tab-switcher.js', 'Lumno: failed to load recent tab switcher helpers.');
+lumnoImportScript('src/background/overlay-loading-lifecycle.js', 'Lumno: failed to load Overlay loading lifecycle helpers.');
+lumnoImportScript('src/background/dev-extension-startup.js', 'Lumno: failed to load development startup helpers.');
+lumnoImportScript('src/background/codex-debug-bridge.js', 'Lumno: failed to load Codex debug bridge helpers.');
+lumnoImportScript('assets/vendor/pinyin-pro.js', 'Lumno: failed to load pinyin support.');
 
 const BACKGROUND_PAGES = globalThis.LumnoBackgroundPages || {};
 const getExtensionDetailsUrl = BACKGROUND_PAGES.getExtensionDetailsUrl;
@@ -349,7 +229,7 @@ function isOwnExtensionPageUrl(url) {
   }
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'chrome-extension:' && parsed.hostname === chrome.runtime.id;
+    return isBrowserExtensionProtocol(parsed.protocol) && parsed.hostname === chrome.runtime.id;
   } catch (error) {
     return false;
   }
@@ -1198,12 +1078,20 @@ function isLumnoNewtabUrl(url) {
 }
 
 function isBrowserNewtabUrl(url) {
-  const lower = String(url || '').toLowerCase();
-  return lower === 'chrome://newtab/' ||
-    lower === 'chrome://new-tab-page/' ||
-    lower === 'edge://newtab/' ||
-    lower === 'brave://newtab/' ||
-    lower === 'opera://startpage/';
+  const guards = globalThis.LumnoUrlGuards || {};
+  if (typeof guards.isBrowserNewtabUrl === 'function') {
+    return guards.isBrowserNewtabUrl(url);
+  }
+  const lower = String(url || '').trim().toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
+  return lower === 'chrome://newtab' ||
+    lower === 'chrome://new-tab-page' ||
+    lower === 'edge://newtab' ||
+    lower === 'brave://newtab' ||
+    lower === 'vivaldi://newtab' ||
+    lower === 'opera://startpage' ||
+    lower === 'about:newtab' ||
+    lower === 'about:home' ||
+    lower === 'about:privatebrowsing';
 }
 
 function isOwnExtensionUrl(url) {
@@ -5718,6 +5606,80 @@ function openDocumentPipPickerOnTab(activeTab, source) {
   });
 }
 
+function isGeckoRuntime() {
+  try {
+    if (typeof browser !== 'undefined' && browser.runtime &&
+        typeof browser.runtime.getBrowserInfo === 'function') {
+      return true;
+    }
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      const extensionRoot = String(chrome.runtime.getURL('') || '');
+      if (extensionRoot.indexOf('moz-extension:') === 0) {
+        return true;
+      }
+    }
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent)
+      ? String(navigator.userAgent)
+      : '';
+    return /firefox|zenbrowser|icedragon/i.test(ua);
+  } catch (error) {
+    return false;
+  }
+}
+
+const GECKO_COMMAND_DEFAULTS = {
+  'show-search': 'Alt+K',
+  'show-search-prefill': 'Alt+L',
+  'show-search-prefill-v': 'Alt+Shift+C',
+  'show-tab-switcher': 'Alt+Q'
+};
+
+function isGeckoConflictingShortcut(value) {
+  const text = String(value || '').trim();
+  if (!text) {
+    return true;
+  }
+  return /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCIJ]$/i.test(text);
+}
+
+function ensureGeckoCommandShortcuts() {
+  if (!isGeckoRuntime()) {
+    return;
+  }
+  if (!chrome || !chrome.commands || typeof chrome.commands.getAll !== 'function') {
+    return;
+  }
+  chrome.commands.getAll((commands) => {
+    if (chrome.runtime && chrome.runtime.lastError) {
+      return;
+    }
+    const items = Array.isArray(commands) ? commands : [];
+    items.forEach((command) => {
+      if (!command || !command.name || !GECKO_COMMAND_DEFAULTS[command.name]) {
+        return;
+      }
+      const current = typeof command.shortcut === 'string' ? command.shortcut.trim() : '';
+      if (current && !isGeckoConflictingShortcut(current)) {
+        return;
+      }
+      if (typeof chrome.commands.update !== 'function') {
+        return;
+      }
+      try {
+        const updated = chrome.commands.update({
+          name: command.name,
+          shortcut: GECKO_COMMAND_DEFAULTS[command.name]
+        });
+        if (updated && typeof updated.catch === 'function') {
+          updated.catch(() => {});
+        }
+      } catch (error) {
+        // Ignore browsers that expose commands but reject updates.
+      }
+    });
+  });
+}
+
 function getDefaultFallbackShortcutByPlatform(platformOs) {
   return platformOs === 'mac' ? 'Command+Shift+K' : 'Ctrl+Shift+K';
 }
@@ -5877,6 +5839,8 @@ function publishExtensionUpdateNotice(details) {
   }).catch(() => {});
 }
 
+if (chrome && chrome.commands && chrome.commands.onCommand &&
+    typeof chrome.commands.onCommand.addListener === 'function') {
 chrome.commands.onCommand.addListener(function(command) {
   if (
     command !== SHOW_SEARCH_COMMAND_NAME &&
@@ -5907,6 +5871,9 @@ chrome.commands.onCommand.addListener(function(command) {
     triggerShowSearchForTab(activeTabs[0], source);
   });
 });
+}
+
+ensureGeckoCommandShortcuts();
 
 if (chrome && chrome.runtime && chrome.runtime.onConnect) {
   chrome.runtime.onConnect.addListener(registerTabSwitcherExtensionPagePortConnection);
@@ -5934,6 +5901,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Static manifest content scripts only apply to future document loads. A
   // development-extension reload keeps existing tabs alive, so install the
   // shortcut observer there now instead of waiting for the next shortcut.
+  ensureGeckoCommandShortcuts();
   prepareShortcutKeyObserversInOpenTabs();
   if (!details) {
     schedulePersistPinnedTabSnapshot();
@@ -5973,6 +5941,7 @@ function restoreBackgroundStateOnStartup() {
 
 if (chrome && chrome.runtime && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
+    ensureGeckoCommandShortcuts();
     prepareShortcutKeyObserversInOpenTabs();
     restoreBackgroundStateOnStartup();
   });
@@ -6556,9 +6525,11 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   shortcuts: {
     actions: [
       'getShowSearchShortcut',
+      'getTabSwitcherShortcut',
       'getCopyCurrentUrlCommandShortcut',
       'copyCurrentPageUrl',
       'triggerShowSearchFromPageHotkey',
+      'triggerTabSwitcherFromPageHotkey',
       'notifyTabSwitcherShortcutModifierReleased',
       'getShortcutRules'
     ],
@@ -6795,6 +6766,12 @@ function handleShortcutMessage(request, sender, sendResponse) {
       });
       return true;
     }
+    case 'getTabSwitcherShortcut': {
+      getConfiguredTabSwitcherShortcut((shortcut) => {
+        sendResponse({ shortcut: shortcut || '' });
+      });
+      return true;
+    }
     case 'getCopyCurrentUrlCommandShortcut': {
       getConfiguredCopyUrlCommandShortcut((shortcut) => {
         sendResponse({ shortcut: shortcut || '' });
@@ -6807,6 +6784,16 @@ function handleShortcutMessage(request, sender, sendResponse) {
         sendResponse({ ok: Boolean(ok) });
       });
       return true;
+    }
+    case 'triggerTabSwitcherFromPageHotkey': {
+      const senderTab = sender && sender.tab ? sender.tab : null;
+      if (!senderTab || typeof senderTab.id !== 'number') {
+        sendResponse({ ok: false });
+        return;
+      }
+      triggerTabSwitcherForTab(senderTab, 'page-hotkey-tab-switcher', Date.now());
+      sendResponse({ ok: true });
+      return;
     }
     case 'triggerShowSearchFromPageHotkey': {
       const senderTab = sender && sender.tab ? sender.tab : null;

@@ -16,9 +16,12 @@ const guards = sandbox.LumnoUrlGuards;
 assert.ok(guards, 'LumnoUrlGuards should be exported');
 
 assert.strictEqual(guards.isBrowserExtensionProtocol('chrome-extension:'), true);
+assert.strictEqual(guards.isBrowserExtensionProtocol('moz-extension:'), true);
 assert.strictEqual(guards.isBrowserExtensionProtocol('https:'), false);
 
 assert.strictEqual(guards.isBrowserNewtabUrl('chrome://newtab/'), true);
+assert.strictEqual(guards.isBrowserNewtabUrl('about:newtab'), true);
+assert.strictEqual(guards.isBrowserNewtabUrl('about:home'), true);
 assert.strictEqual(guards.isBrowserNewtabUrl('chrome://new-tab-page/'), true);
 assert.strictEqual(guards.isBrowserNewtabUrl('edge://newtab/'), true);
 assert.strictEqual(guards.isBrowserNewtabUrl('chrome://extensions/'), false);
