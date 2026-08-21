@@ -57,6 +57,11 @@
           }
           chrome.tabs.executeScript(tabId, Object.assign({ file: files[index] }, inject), () => {
             if (failed()) {
+              const skipped = String(files[index] || '').indexOf('codex-debug') !== -1;
+              if (skipped) {
+                next(index + 1);
+                return;
+              }
               done();
               return;
             }
@@ -100,7 +105,12 @@
           return Promise.resolve(finishCallback(callback, [{ result: true }]));
         }
         const payload = Object.assign({}, details, { files: [files[index]] });
-        return Promise.resolve(nativeExecute(payload)).then(() => run(index + 1));
+        return Promise.resolve(nativeExecute(payload)).then(() => run(index + 1), (error) => {
+          if (String(files[index] || '').indexOf('codex-debug') !== -1) {
+            return run(index + 1);
+          }
+          throw error;
+        });
       };
       return run(0);
     }

@@ -1238,8 +1238,13 @@ assert.match(
 );
 assert.match(
   injectSwitcherBlock,
-  /chrome\.scripting\.executeScript\(\{[\s\S]*files:\s*\[[\s\S]*'src\/react\/overlay-islands\.js',[\s\S]*'src\/overlay\/tab-switcher\.js'[\s\S]*\][\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
+  /chrome\.scripting\.executeScript\(\{[\s\S]*files:\s*getTabSwitcherInjectionFiles\(\)[\s\S]*runDynamicSwitcherScript\(switcherContext\)/,
   'Alt+Q should install the React entry before direct tab switcher injection'
+);
+assert.match(
+  backgroundSource,
+  /function getTabSwitcherInjectionFiles\(\)[\s\S]*src\/react\/overlay-islands\.js[\s\S]*src\/overlay\/tab-switcher\.js/,
+  'Tab switcher inject file list must still load overlay-islands then tab-switcher'
 );
 const runSwitcherScriptStart = injectSwitcherBlock.indexOf('const runSwitcherScript = (tabZoomFactor) => {');
 assert.notStrictEqual(runSwitcherScriptStart, -1, 'Alt+Q switcher opener should define the runtime open path');

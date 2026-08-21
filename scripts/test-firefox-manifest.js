@@ -47,8 +47,28 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /function prepareGeckoPageHotkeys\(/,
-  'Already-open https tabs need hotkey-listener after about:debugging load'
+  /function prepareGeckoOverlaySurface\(/,
+  'Already-open https tabs need the overlay files after about:debugging load'
+);
+assert.match(
+  backgroundSource,
+  /function notifyGeckoHotkeyFailure\(/,
+  'Firefox inject failures must not stay silent'
+);
+assert.match(
+  backgroundSource,
+  /commands\.getAll/,
+  'Firefox should only bind empty command shortcuts so user remaps survive'
+);
+assert.match(
+  backgroundSource,
+  /function getTabSwitcherInjectionFiles\(/,
+  'Firefox tab switcher inject must not depend on the debug surface'
+);
+assert.match(
+  backgroundSource,
+  /shouldInjectOverlayCodexDebugSurface = !isGeckoRuntime\(\)/,
+  'Firefox overlay inject must never include the debug surface'
 );
 assert.match(
   backgroundSource,

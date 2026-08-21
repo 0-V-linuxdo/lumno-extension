@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.51-firefox-v1.2.0
+
+Still based on upstream **0.9.51**. v1.1.0 preloaded the overlay as content scripts, but already-open tabs never received them, Tab Switcher fallback still injected `codex-debug-surface.js` (one failure aborts sequential `tabs.executeScript`), and inject errors stayed silent.
+
+v1.2.0 injects the overlay into open `http(s)` tabs on install, skips the debug surface on Gecko, opens Alt+Q in-page when the switcher is already loaded, shows a page toast on inject failure, and only `commands.update`s empty shortcuts.
+
+Install `lumno-0.9.51-firefox-v1.2.0.zip`. Unload v1.1.0 first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.1.0
 
 Still based on upstream **0.9.51**. v1.0.0 was MV2 (host access granted) but still injected the command bar with `scripting.executeScript`. Firefox already exposes that API, so the polyfill skipped, the 30-file inject failed, and shortcuts did nothing.

@@ -150,6 +150,103 @@ function openNewtabFallbackForUrl(url, options) {
     return openNewtabFallbackForUrlUnwrapped(url, options);
   }
 }
+
+function getGeckoOverlayContentScriptFiles() {
+  const gecko = globalThis.LumnoGeckoRuntime;
+  if (gecko && Array.isArray(gecko.OVERLAY_CONTENT_SCRIPT_FILES)) {
+    return gecko.OVERLAY_CONTENT_SCRIPT_FILES.slice();
+  }
+  return [];
+}
+
+function getTabSwitcherInjectionFiles() {
+  if (isGeckoRuntime()) {
+    return [
+      'src/shared/gecko-runtime.js',
+      'src/shared/icon-font-preload.js',
+      'src/react/overlay-islands.js',
+      'src/overlay/tab-switcher.js',
+      'src/overlay/gecko-overlay-bridge.js'
+    ];
+  }
+  return [
+    'src/shared/icon-font-preload.js',
+    'src/shared/codex-debug-surface.js',
+    'src/react/overlay-islands.js',
+    'src/overlay/tab-switcher.js'
+  ];
+}
+
+function notifyGeckoHotkeyFailure(tab, kind) {
+  if (!isGeckoRuntime() || !tab || typeof tab.id !== 'number') {
+    return;
+  }
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    return;
+  }
+  const message = kind === 'tab-switcher'
+    ? 'Lumno: Tab Switcher could not open. Refresh this https page, or assign Alt+Q in about:addons → Manage Extension Shortcuts.'
+    : 'Lumno: command bar could not open. Refresh this https page, or click the toolbar icon.';
+  try {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (text) => {
+        try {
+          const id = '_x_extension_gecko_hotkey_toast_2026_unique_';
+          let el = document.getElementById(id);
+          if (!el) {
+            el = document.createElement('div');
+            el.id = id;
+            el.setAttribute('role', 'status');
+            el.style.cssText = [
+              'all:initial',
+              'position:fixed',
+              'z-index:2147483647',
+              'left:50%',
+              'bottom:24px',
+              'transform:translateX(-50%)',
+              'max-width:min(420px,calc(100vw - 32px))',
+              'padding:10px 16px',
+              'border-radius:10px',
+              'background:#111827',
+              'color:#f8fafc',
+              'font:13px/1.45 system-ui,sans-serif',
+              'box-shadow:0 10px 30px rgba(0,0,0,.35)',
+              'pointer-events:none'
+            ].join(';');
+            (document.body || document.documentElement).appendChild(el);
+          }
+          el.textContent = String(text || '');
+          setTimeout(() => {
+            if (el && el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          }, 3200);
+        } catch (error) {
+          // Restricted documents cannot show a toast.
+        }
+      },
+      args: [message]
+    }, () => {
+      void (chrome.runtime && chrome.runtime.lastError);
+    });
+  } catch (error) {
+    // Ignore toast injection failures on restricted tabs.
+  }
+}
+
+function isHttpOrHttpsTab(tab) {
+  const url = getResolvedTabUrl(tab);
+  if (!url) {
+    return false;
+  }
+  try {
+    const protocol = String(new URL(url).protocol || '').toLowerCase();
+    return protocol === 'http:' || protocol === 'https:';
+  } catch (error) {
+    return /^https?:/i.test(url);
+  }
+}
 const BACKGROUND_SHORTCUT_RULES = globalThis.LumnoShortcutRules || {};
 const RECENT_TAB_SWITCHER = globalThis.LumnoRecentTabSwitcher || {};
 const OVERLAY_LOADING_LIFECYCLE = globalThis.LumnoOverlayLoadingLifecycle || {};
@@ -905,6 +1002,7 @@ function prepareShortcutKeyObserversInOpenTabs() {
     (Array.isArray(tabs) ? tabs : []).forEach((tab) => {
       prepareShortcutKeyObserver(tab);
       prepareGeckoPageHotkeys(tab);
+      prepareGeckoOverlaySurface(tab);
     });
   });
 }
@@ -922,13 +1020,49 @@ function prepareGeckoPageHotkeys(tab) {
       files: [
         'src/shared/gecko-runtime.js',
         'src/shared/settings.js',
-        'src/content/hotkey-listener.js'
+        'src/content/hotkey-listener.js',
+        'src/overlay/gecko-overlay-bridge.js'
       ]
     }, () => {
       void (chrome.runtime && chrome.runtime.lastError);
     });
   } catch (error) {
     // Restricted tabs (about:, AMO, etc.) cannot receive content scripts.
+  }
+}
+
+function prepareGeckoOverlaySurface(tab) {
+  if (!isGeckoRuntime() || !tab || typeof tab.id !== 'number') {
+    return;
+  }
+  if (!isHttpOrHttpsTab(tab)) {
+    return;
+  }
+  const files = getGeckoOverlayContentScriptFiles();
+  if (!files.length) {
+    return;
+  }
+  if (!chrome || !chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    return;
+  }
+  try {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: files
+    }, () => {
+      const error = chrome.runtime && chrome.runtime.lastError
+        ? chrome.runtime.lastError.message || 'unknown'
+        : '';
+      logHotkeyDebug(error ? 'gecko-overlay-preload-failed' : 'gecko-overlay-preload-ready', {
+        tabId: tab.id,
+        error: error
+      });
+    });
+  } catch (error) {
+    logHotkeyDebug('gecko-overlay-preload-failed', {
+      tabId: tab.id,
+      error: error && error.message ? error.message : String(error || 'unknown')
+    });
   }
 }
 
@@ -943,18 +1077,43 @@ function ensureGeckoCommandShortcuts() {
     'show-search-prefill-v': 'Alt+Shift+C',
     'show-tab-switcher': 'Alt+Q'
   };
-  Object.keys(defaults).forEach((name) => {
-    try {
-      chrome.commands.update({
-        name: name,
-        shortcut: defaults[name]
-      }, () => {
-        void (chrome.runtime && chrome.runtime.lastError);
-      });
-    } catch (error) {
-      // Temporary add-ons often start with empty shortcuts; ignore bind failures.
-    }
-  });
+  const bindMissing = (commands) => {
+    const known = Array.isArray(commands) ? commands : [];
+    Object.keys(defaults).forEach((name) => {
+      const current = known.find((item) => item && item.name === name);
+      const shortcut = current && typeof current.shortcut === 'string'
+        ? current.shortcut.trim()
+        : '';
+      if (shortcut) {
+        return;
+      }
+      try {
+        chrome.commands.update({
+          name: name,
+          shortcut: defaults[name]
+        }, () => {
+          const error = chrome.runtime && chrome.runtime.lastError
+            ? chrome.runtime.lastError.message || ''
+            : '';
+          logHotkeyDebug(error ? 'gecko-command-bind-failed' : 'gecko-command-bound', {
+            name: name,
+            shortcut: defaults[name],
+            error: error
+          });
+        });
+      } catch (error) {
+        // Temporary add-ons often start with empty shortcuts; ignore bind failures.
+      }
+    });
+  };
+  if (typeof chrome.commands.getAll === 'function') {
+    chrome.commands.getAll((commands) => {
+      void (chrome.runtime && chrome.runtime.lastError);
+      bindMissing(commands);
+    });
+    return;
+  }
+  bindMissing([]);
 }
 
 function findOpenTabSwitcherHostInWindow(windowId) {
@@ -4931,7 +5090,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
   }
   const overlayLoadingRecord = rememberOverlayLoadingRecord(activeTab, source, openOptions);
   shouldRetryPreCompleteFailure = Boolean(overlayLoadingRecord);
-  const shouldInjectOverlayCodexDebugSurface = Boolean(
+  const shouldInjectOverlayCodexDebugSurface = !isGeckoRuntime() && Boolean(
     codexDebugBridge && typeof codexDebugBridge.isEnabled === 'function' &&
     codexDebugBridge.isEnabled()
   );
@@ -5023,6 +5182,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
               if (openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
+                notifyGeckoHotkeyFailure(activeTab, 'command-bar');
               }
               finishOpenAttempt(false);
               return;
@@ -5041,6 +5201,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
               if (openOptions.loadingRecovery !== true &&
                   !overlayLoadingRecordsByTabId.has(activeTab.id)) {
                 openNewtabFallback({ sourceTab: activeTab });
+                notifyGeckoHotkeyFailure(activeTab, 'command-bar');
               }
               finishOpenAttempt(false);
               return;
@@ -5085,6 +5246,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
         if (openOptions.loadingRecovery !== true &&
             !overlayLoadingRecordsByTabId.has(activeTab.id)) {
           openNewtabFallbackForUrl(activeUrl, { sourceTab: activeTab });
+          notifyGeckoHotkeyFailure(activeTab, 'command-bar');
         }
         finishOpenAttempt(false);
         return;
@@ -5269,12 +5431,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
   const runDynamicSwitcherScript = (switcherContext) => {
     chrome.scripting.executeScript({
       target: { tabId: hostTab.id },
-      files: [
-        'src/shared/icon-font-preload.js',
-        'src/shared/codex-debug-surface.js',
-        'src/react/overlay-islands.js',
-        'src/overlay/tab-switcher.js'
-      ]
+      files: getTabSwitcherInjectionFiles()
     }, () => {
       if (chrome.runtime && chrome.runtime.lastError) {
         const errorMessage = chrome.runtime.lastError.message || 'unknown';
@@ -5284,6 +5441,7 @@ function injectTabSwitcherOnTab(hostTab, items, context) {
           source: context && context.source ? context.source : ''
         });
         openNewtabFallbackForUrl(getResolvedTabUrl(hostTab), { sourceTab: hostTab });
+        notifyGeckoHotkeyFailure(hostTab, 'tab-switcher');
         finishOpen(false, errorMessage);
         return;
       }

@@ -40,6 +40,33 @@
     }
   }
 
+  function tryOpenTabSwitcherLocally() {
+    if (window.top !== window) {
+      return false;
+    }
+    const gecko = globalThis.LumnoGeckoRuntime;
+    if (!gecko || typeof gecko.isGeckoRuntime !== 'function' || !gecko.isGeckoRuntime()) {
+      return false;
+    }
+    const open = window._x_extension_openLumnoTabSwitcher_2026_unique_;
+    if (typeof open !== 'function') {
+      return false;
+    }
+    try {
+      chrome.runtime.sendMessage({
+        action: 'triggerTabSwitcherFromGeckoHotkey',
+        documentUrl: location && location.href ? location.href : '',
+        observedAt: Date.now(),
+        preferLocal: true
+      }, () => {
+        void (chrome.runtime && chrome.runtime.lastError);
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   function notifyTopFrameDocumentStarted() {
     if (window.top !== window) {
       return;
@@ -162,6 +189,9 @@
     }
     event.preventDefault();
     event.stopPropagation();
+    if (tryOpenTabSwitcherLocally()) {
+      return true;
+    }
     try {
       chrome.runtime.sendMessage({
         action: 'triggerTabSwitcherFromGeckoHotkey',

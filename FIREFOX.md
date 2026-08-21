@@ -1,25 +1,31 @@
-# Lumno Firefox / Zen — 0.9.51-firefox-v1.1.0
+# Lumno Firefox / Zen — 0.9.51-firefox-v1.2.0
 
 This is a **clean rewrite** from upstream **0.9.51**. Chrome source stays 0.9.51. It is not a patch on 0.9.52–0.9.59.
 
-## Why v1.0.0 still had dead shortcuts
+## Why v1.1.0 still had dead shortcuts
 
-v1.0.0 was Manifest V2 (so host access is granted on load), but the command bar was still injected with `scripting.executeScript`. Firefox 101+ already exposes that API. The MV2 polyfill then **did nothing**, the 30-file inject failed, and Alt+K / Alt+Q had no fallback.
+v1.1.0 was Manifest V2 with the overlay preloaded as `http(s)` content scripts, but:
 
-v1.1.0:
+1. Static content scripts do **not** enter tabs that were already open when you Load Temporary Add-on. Alt+K / Alt+Q then fell through to `executeScript`.
+2. Tab Switcher fallback still injected `codex-debug-surface.js`. One failed file aborts the sequential MV2 inject, so Alt+Q stayed silent.
+3. Inject failures were swallowed (Gecko never opens the new-tab homepage).
 
-1. Always replaces `scripting.executeScript` with MV2 `tabs.executeScript` (one file at a time).
-2. Preloads the command bar and Tab Switcher as `http(s)` content scripts.
-3. Alt+K opens the overlay **in the page**. Toolbar / `chrome.commands` send a message to that same page.
+v1.2.0:
+
+1. On install, injects the overlay into **already-open** `http(s)` tabs. You no longer have to refresh first.
+2. Gecko Tab Switcher inject never includes the debug surface.
+3. Alt+Q opens in-page when the switcher is already loaded; background still supplies the tab list.
+4. If inject still fails, a short page toast appears instead of silence.
+5. `commands.getAll()` only binds **empty** shortcuts, so a user remap is kept.
 
 ## Install on Zen / Firefox
 
-Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0).
+Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including v1.0.0 / v1.1.0).
 
-1. Download `lumno-0.9.51-firefox-v1.1.0.zip` and unzip it.
+1. Download `lumno-0.9.51-firefox-v1.2.0.zip` and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
-4. Open a normal `https://` page (not `about:`) and **refresh once**.
+4. Open a normal `https://` page (not `about:`). Refresh is optional in v1.2.0.
 5. Press **Alt+K** (command bar) or **Alt+Q** (tab switcher). Toolbar icon is the same as Alt+K.
 
 Temporary add-ons disappear when the browser restarts.
@@ -44,9 +50,9 @@ Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q
 ## If a shortcut still does nothing
 
 1. Do not test on `about:` pages.
-2. Refresh the https page after loading the add-on.
-3. Click the toolbar icon.
-4. `about:addons` → gear → **Manage Extension Shortcuts**.
+2. Click the toolbar icon. If that opens the command bar, the page can host it — check `about:addons` → gear → **Manage Extension Shortcuts**.
+3. If a dark toast appears at the bottom, the page did not get the overlay. Refresh once.
+4. Unload every older Lumno, then load only v1.2.0.
 
 ## Development
 
