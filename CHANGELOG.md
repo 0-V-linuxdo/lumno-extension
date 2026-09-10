@@ -1,5 +1,17 @@
 Tags: Release
 
+## 0.9.55-firefox-v1.0.0
+
+Firefox / Zen port rebased onto upstream **0.9.55**. Chrome source in this repo is 0.9.55 MV3. The Firefox zip is still Manifest V2, packed by `scripts/package-firefox.js`.
+
+This is a new product line, not another 0.9.51-firefox-v1.x adapter bump. Do not install the abandoned `v0.9.52-firefox`–`v0.9.59-firefox` MV3 tags.
+
+Carries forward the working Gecko layer from 0.9.51-firefox-v1.8.0: MV2 persistent background, `<all_urls>` on load, Alt+K / Alt+Q, `globalThis`→`window` overlay mirror, restricted-page newtab / host-hop fallback, Nightly 156 `align-content: center` after `all: unset`.
+
+Absorbs upstream 0.9.52–0.9.55: search-first results, shortcut layout, aggregate search, Glass/Blocks/CRT wallpapers, Kagi (`kg` / `kagi`). Aggregate search tab grouping feature-detects `tabs.group` / `tabGroups.update` and opens ungrouped tabs when the API is missing. Firefox package still omits `tabGroups` so `strict_min_version` stays 109.0.
+
+Install `lumno-0.9.55-firefox-v1.0.0.zip`. Unload every older Lumno first. See `FIREFOX.md`.
+
 ## 0.9.51-firefox-v1.8.0
 
 Still based on upstream **0.9.51**. On Firefox Nightly 156 the command-bar search field (placeholder + caret) sat at the top of the 56px row; Zen 1.21.15b (Firefox 154) looked normal. Language did not matter.
@@ -92,40 +104,22 @@ Install from `lumno-0.9.51-firefox-v1.0.0.zip`. Do not use the Chrome zip or CRX
 
 ## Features
 
-- 搜索浮层、新标签页、设置页和引导页完成 React 迁移，并移除旧 UI 渲染回退路径。
-- 搜索范围菜单支持范围过滤、双 Tab 确认、退格返回和站内搜索图标展示；同时改善键盘、输入法和 Slash Command 交互。
-- 新标签页新增四套壁纸：印象派果园、点彩湖畔、3D 天文台和山水竹桥。
-- 为快捷方式加入高分辨率 favicon 解析、页面级 favicon 候选和本地缓存能力。
-- 补充站内搜索源的本地图标资源，包括 PNG 图标，并记录图标来源说明。
-- 新增 Codex 调试桥接能力，支持对扩展页面和交互表面进行受控检查与操作。
-- 改进新标签页响应式布局，在窗口调整时复用已加载数据，并平滑移动搜索框、快捷方式、书签和最近访问区域。
+- 新增 Kagi 内置搜索引擎，支持通过 `kg` 或 `kagi` 触发搜索，并提供与现有搜索源一致的本地图标和浏览器默认搜索引擎识别。
 
 ## Bug Fixes
 
-- 修复页面级 favicon 被旧主机缓存覆盖的问题，并改进缓存并发写入、策略变更失效和快捷方式图标清理。
-- 修复站内搜索 PNG 图标未被打包或未被声明为 web-accessible resource 的问题。
-- 改进搜索范围前缀的切换动画、尺寸过渡和文字对比度，提升浅色与深色主题下的可读性。
-- 修复新标签页调整窗口大小时最近访问区域闪烁或重复加载的问题。
-- 统一提示、光标 tooltip、站内搜索图标和页面过渡的视觉表现，并补充相应的多语言文案。
-- 加强 Manifest 资源、搜索范围、快捷方式 favicon、布局动画、调试桥接和商店打包内容的回归测试。
+- 修复搜索范围面板中鼠标悬停会覆盖键盘焦点描边的问题，使用方向键浏览搜索源时始终保留清晰的当前项提示。
+- 修复点击搜索源时原生焦点可能先滚动面板祖先的问题，避免指针选择造成搜索面板或页面位置跳动。
+- 调整 New Tab 壁纸效果的销毁时机，不再通过 `beforeunload` 提前移除画布，使同页导航期间的已绘制效果保持稳定。
 
 ---
 
 ## Features
 
-- Completed the React migration for the Command Bar, New Tab, Settings, and Onboarding pages, and removed the legacy UI renderer fallbacks.
-- Search scope menus now support scope filtering, double-Tab confirmation, Backspace navigation, and site-search icons, with improved keyboard, IME, and Slash Command interactions.
-- Added four New Tab wallpapers: Impressionist Orchard, Pointillist Lakeside, 3D Observatory, and Shanshui Bamboo Bridge.
-- Added high-resolution favicon resolution, page-specific favicon candidates, and local caching for shortcuts.
-- Added bundled local artwork for site-search providers, including PNG icons, with documented icon sources.
-- Added a controlled Codex debugging bridge for inspecting and operating extension pages and interaction surfaces.
-- Improved responsive New Tab layouts by reusing loaded data during window resizing and smoothly moving the search box, shortcuts, bookmarks, and recent-site sections.
+- Added Kagi as a built-in search engine with `kg` and `kagi` triggers, bundled local artwork, and default-browser search engine recognition consistent with the existing providers.
 
 ## Bug Fixes
 
-- Fixed page-specific favicons being overridden by stale host-level caches, and improved concurrent cache writes, policy invalidation, and shortcut-icon cleanup.
-- Fixed bundled site-search PNG icons not being packaged or declared as web-accessible resources.
-- Improved scope-prefix transitions, size changes, and text contrast for better readability in light and dark themes.
-- Fixed flashes and duplicate reloads in the Recent Sites section while resizing the New Tab window.
-- Unified the visual treatment of toasts, cursor tooltips, site-search icons, and page transitions, and added the corresponding localized copy.
-- Expanded regression coverage for manifest resources, search scopes, shortcut favicons, layout animations, the debugging bridge, and store packaging.
+- Fixed pointer hover overriding the keyboard focus border in the search-scope panel, so arrow-key navigation always retains a clear current-item indicator.
+- Prevented native pointer focus from scrolling panel ancestors before a search source is selected, avoiding unexpected panel or page movement.
+- Adjusted the New Tab wallpaper effect lifecycle so `beforeunload` no longer removes the canvas early, preserving the painted effect during same-tab navigation.

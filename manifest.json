@@ -38,7 +38,7 @@
    "content_scripts": [
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/content/hotkey-listener.js", "src/overlay/gecko-overlay-bridge.js" ],
+         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/shared/shortcut-key-matcher.js", "src/content/hotkey-listener.js", "src/overlay/gecko-overlay-bridge.js" ],
          "run_at": "document_start"
       },
       {
@@ -100,7 +100,7 @@
       ]
    },
    "chrome_url_overrides": {
-      "newtab": "src/newtab/newtab.html"
+      "newtab": "newtab.html"
    },
    "host_permissions": [ "\u003Call_urls>" ],
    "icons": {
@@ -124,5 +124,5 @@
    "name": "__MSG_ext_name__",
    "author": "Kubai087",
    "permissions": [ "scripting", "tabs", "tabGroups", "history", "topSites", "bookmarks", "storage", "search", "favicon" ],
-   "version": "0.9.51"
+   "version": "0.9.55"
 }

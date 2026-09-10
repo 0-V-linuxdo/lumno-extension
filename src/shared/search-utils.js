@@ -1077,6 +1077,73 @@
       : [...navigationSuggestions, ...keywordSuggestions];
   }
 
+  function composeSearchFirstSuggestionSlate(list, options) {
+    const suggestions = Array.isArray(list) ? list.filter(Boolean) : [];
+    const settings = options && typeof options === 'object' ? options : {};
+    const rawLimit = Number(settings.limit);
+    const fallbackLimit = Number(SEARCH_POLICY.displaySuggestionLimit) || 10;
+    const limit = Number.isInteger(rawLimit) && rawLimit >= 5 && rawLimit <= 12
+      ? rawLimit
+      : fallbackLimit;
+    const searchSlotTarget = Math.ceil(limit * 0.6);
+    const searchActions = suggestions.filter(isSearchActionSuggestion);
+    const engineSuggestions = suggestions.filter(isSearchEngineSuggestion);
+    const localSuggestions = suggestions.filter((suggestion) => !isKeywordSearchSuggestion(suggestion));
+    const selected = [];
+    const selectedSuggestions = new Set();
+
+    const take = (suggestion) => {
+      if (!suggestion || selectedSuggestions.has(suggestion) || selected.length >= limit) {
+        return false;
+      }
+      selected.push(suggestion);
+      selectedSuggestions.add(suggestion);
+      return true;
+    };
+
+    if (searchActions.length > 0) {
+      take(searchActions[0]);
+    }
+    for (let i = 0; i < engineSuggestions.length && selected.length < searchSlotTarget; i += 1) {
+      take(engineSuggestions[i]);
+    }
+
+    const localSlotTarget = Math.max(0, limit - searchSlotTarget);
+    const localSourceCap = Math.max(1, Math.ceil(localSlotTarget / 2));
+    const localSourceCounts = new Map();
+    const deferredLocalSuggestions = [];
+    for (let i = 0; i < localSuggestions.length && selected.length < limit; i += 1) {
+      const suggestion = localSuggestions[i];
+      const sourceType = suggestion && (suggestion.type === 'history' || suggestion.type === 'bookmark')
+        ? suggestion.type
+        : '';
+      const sourceCount = sourceType ? (localSourceCounts.get(sourceType) || 0) : 0;
+      if (sourceType && sourceCount >= localSourceCap) {
+        deferredLocalSuggestions.push(suggestion);
+        continue;
+      }
+      if (take(suggestion) && sourceType) {
+        localSourceCounts.set(sourceType, sourceCount + 1);
+      }
+    }
+
+    for (let i = 0; i < engineSuggestions.length && selected.length < limit; i += 1) {
+      take(engineSuggestions[i]);
+    }
+    for (let i = 0; i < deferredLocalSuggestions.length && selected.length < limit; i += 1) {
+      take(deferredLocalSuggestions[i]);
+    }
+    for (let i = 1; i < searchActions.length && selected.length < limit; i += 1) {
+      take(searchActions[i]);
+    }
+
+    suggestions.forEach(take);
+    return [
+      ...selected,
+      ...suggestions.filter((suggestion) => !selectedSuggestions.has(suggestion))
+    ];
+  }
+
   function pinExactSearchActionSecond(list) {
     const suggestions = Array.isArray(list) ? list.filter(Boolean) : [];
     if (suggestions.length < 2) {
@@ -1136,7 +1203,9 @@
       : SEARCH_POLICY.maxEngineSuggestionsWithLocalResults;
     return {
       hasLocalResults,
-      limit: hasLocalResults ? Math.min(localResultLimit, maxEngineSuggestions) : maxEngineSuggestions,
+      limit: hasLocalResults && settings.searchFirst !== true
+        ? Math.min(localResultLimit, maxEngineSuggestions)
+        : maxEngineSuggestions,
       score: hasLocalResults ? Math.min(baseScore, 1) : baseScore
     };
   }
@@ -2538,6 +2607,7 @@
     { key: 'bd', aliases: ['baidu', '百度'], name: 'Baidu', template: 'https://www.baidu.com/s?wd={query}', category: 'searchEngine' },
     { key: 'bi', aliases: ['bing'], name: 'Bing', template: 'https://www.bing.com/search?q={query}', category: 'searchEngine' },
     { key: 'gg', aliases: ['google'], name: 'Google', template: 'https://www.google.com/search?q={query}', category: 'searchEngine' },
+    { key: 'kg', aliases: ['kagi'], name: 'Kagi', template: 'https://kagi.com/search?q={query}', category: 'searchEngine' },
     { key: 'ddg', aliases: ['duckduckgo', 'duck'], name: 'DuckDuckGo', template: 'https://duckduckgo.com/?q={query}', category: 'searchEngine' },
     { key: 'br', aliases: ['brave', 'brave search'], name: 'Brave Search', template: 'https://search.brave.com/search?q={query}', category: 'searchEngine' },
     { key: 'eco', aliases: ['ecosia'], name: 'Ecosia', template: 'https://www.ecosia.org/search?q={query}', category: 'searchEngine' },
@@ -2642,6 +2712,7 @@
     'bd',
     'bi',
     'gg',
+    'kg',
     'ddg',
     'br',
     'eco',
@@ -2761,7 +2832,8 @@
     const aliasSource = Array.isArray(item && item.aliases)
       ? item.aliases
       : (Array.isArray(baseProvider && baseProvider.aliases) ? baseProvider.aliases : []);
-    return {
+    const provider = {
+      id: String((item && item.id) || (baseProvider && baseProvider.id) || '').trim(),
       key,
       aliases: aliasSource.filter(Boolean),
       name: String((item && item.name) || (baseProvider && baseProvider.name) || key).trim() || key,
@@ -2778,6 +2850,13 @@
       icon: String((item && item.icon) || (baseProvider && baseProvider.icon) || '').trim(),
       iconUrl: String((item && item.iconUrl) || (baseProvider && baseProvider.iconUrl) || '').trim()
     };
+    const builtinKey = String(
+      (item && item.builtinKey) || (baseProvider && baseProvider.builtinKey) || ''
+    ).trim().toLowerCase();
+    if (builtinKey) {
+      provider.builtinKey = builtinKey;
+    }
+    return provider;
   }
 
   function sanitizeSiteSearchProviders(items, baseItems) {
@@ -2786,7 +2865,11 @@
       item
     ]));
     return (Array.isArray(items) ? items : [])
-      .map((item) => normalizeSiteSearchProvider(item, baseMap.get(String(item && item.key ? item.key : '').toLowerCase())))
+      .map((item) => {
+        const key = String(item && item.key ? item.key : '').toLowerCase();
+        const builtinKey = String(item && item.builtinKey ? item.builtinKey : '').toLowerCase();
+        return normalizeSiteSearchProvider(item, baseMap.get(builtinKey || key));
+      })
       .filter(Boolean);
   }
 
@@ -2816,8 +2899,9 @@
         return;
       }
       seen.add(key);
+      const builtinKey = String(item && item.builtinKey ? item.builtinKey : '').toLowerCase();
       merged.push({
-        ...inheritSiteSearchProviderBehavior(item, baseMap.get(key)),
+        ...inheritSiteSearchProviderBehavior(item, baseMap.get(builtinKey || key)),
         _xIsCustom: true
       });
     });
@@ -2958,6 +3042,9 @@
       if (providerKey === key) {
         return true;
       }
+      if (provider && provider._xIsAggregateSearch === true) {
+        return false;
+      }
       const providerName = String(provider && provider.name || '').trim().toLowerCase();
       if (providerName === key) {
         return true;
@@ -3084,7 +3171,9 @@
       return false;
     }
     const allowPrefix = needle.length >= 2;
-    const tokens = [provider.key, provider.name].concat(provider.aliases || []);
+    const tokens = provider._xIsAggregateSearch === true
+      ? [provider.key]
+      : [provider.key, provider.name].concat(provider.aliases || []);
     for (let i = 0; i < tokens.length; i += 1) {
       const token = String(tokens[i] || '').toLowerCase();
       if (!token) {
@@ -3232,6 +3321,7 @@
     classifySearchIntent,
     collectSearchMatches,
     compareSearchSuggestions,
+    composeSearchFirstSuggestionSlate,
     composeSearchSuggestionSlate,
     createSearchSuggestion,
     areOnlyKeywordSearchSuggestions,

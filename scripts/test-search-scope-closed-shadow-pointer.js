@@ -111,10 +111,17 @@ const otherModeButton = controller.menuElement.querySelector(
 );
 assert.ok(otherModeButton, 'the alternate scope option should render');
 
-otherModeButton.dispatchEvent(new dom.window.MouseEvent('pointerdown', {
+const optionPointerDown = new dom.window.MouseEvent('pointerdown', {
   bubbles: true,
-  composed: true
-}));
+  composed: true,
+  cancelable: true
+});
+otherModeButton.dispatchEvent(optionPointerDown);
+assert.strictEqual(
+  optionPointerDown.defaultPrevented,
+  true,
+  'scope pointer selection must prevent native focus from scrolling panel ancestors'
+);
 assert.strictEqual(
   controller.isModeMenuVisible(),
   true,

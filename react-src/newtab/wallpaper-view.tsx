@@ -1,7 +1,9 @@
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import type { CSSProperties, ReactNode } from 'react';
-import { RangeSlider } from '../shared/range-slider';
+import {
+  RangeSliderField
+} from '../shared/range-slider';
 
 type WallpaperItem = {
   id: string;
@@ -127,6 +129,7 @@ function Scale({
           style={
             typeof tick.percent === 'number'
               ? ({
+                  '--x-nt-overlay-tick-percent': `${tick.percent}%`,
                   '--x-nt-search-width-tick-percent': `${tick.percent}%`
                 } as CSSProperties)
               : undefined
@@ -170,16 +173,23 @@ function SliderControl({
       <div className="x-nt-overlay-control-header">
         <span {...ref(labelRef)} className={labelClass} />
       </div>
-      <RangeSlider
+      <RangeSliderField
         {...ref(sliderRef)}
         className={wrapClass}
         inputClass={sliderClass}
         max="100"
         min="0"
+        rowClassName="x-nt-range-slider-row"
         step="1"
+        valueInputProps={{
+          ...ref(`${sliderRef}ValueInput`),
+          'aria-label': 'Slider value',
+          defaultValue: '50',
+          inputMode: 'numeric'
+        }}
       >
         <Scale ticks={ticks} />
-      </RangeSlider>
+      </RangeSliderField>
     </div>
   );
 }
@@ -285,6 +295,71 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
   const effectInkTones: EffectInkToneItem[] = Array.isArray(model.effectInkTones)
     ? model.effectInkTones
     : DEFAULT_EFFECT_INK_TONES;
+  const shortcutColumnsMin = Number(model.shortcutColumns?.min) || 4;
+  const shortcutColumnsMax = Math.max(
+    shortcutColumnsMin,
+    Number(model.shortcutColumns?.max) || 16
+  );
+  const shortcutColumnsDefault = Math.min(
+    shortcutColumnsMax,
+    Math.max(
+      shortcutColumnsMin,
+      Number(model.shortcutColumns?.defaultValue) || 10
+    )
+  );
+  const shortcutColumnTicks: RangeSliderTick[] = Array.isArray(
+    model.shortcutColumns?.ticks
+  )
+    ? model.shortcutColumns.ticks
+    : [
+        { align: 'start', label: '4', percent: 0 },
+        { label: '8', percent: 100 / 3 },
+        { label: '12', percent: 200 / 3 },
+        { align: 'end', label: '16', percent: 100 }
+      ];
+  const shortcutSizeMin = Number(model.shortcutSize?.min) || 48;
+  const shortcutSizeMax = Math.max(
+    shortcutSizeMin,
+    Number(model.shortcutSize?.max) || 80
+  );
+  const shortcutSizeDefault = Math.min(
+    shortcutSizeMax,
+    Math.max(shortcutSizeMin, Number(model.shortcutSize?.defaultValue) || 64)
+  );
+  const shortcutSizeTicks: RangeSliderTick[] = Array.isArray(
+    model.shortcutSize?.ticks
+  )
+    ? model.shortcutSize.ticks
+    : [
+        { align: 'start', label: '48', percent: 0 },
+        { label: '64', percent: 50 },
+        { align: 'end', label: '80', percent: 100 }
+      ];
+  const shortcutGapMin = Number.isFinite(Number(model.shortcutGap?.min))
+    ? Number(model.shortcutGap.min)
+    : 0;
+  const shortcutGapMax = Math.max(
+    shortcutGapMin,
+    Number(model.shortcutGap?.max) || 24
+  );
+  const shortcutGapModelValue = Number(model.shortcutGap?.defaultValue);
+  const shortcutGapDefault = Math.min(
+    shortcutGapMax,
+    Math.max(
+      shortcutGapMin,
+      Number.isFinite(shortcutGapModelValue) ? shortcutGapModelValue : 4
+    )
+  );
+  const shortcutGapTicks: RangeSliderTick[] = Array.isArray(
+    model.shortcutGap?.ticks
+  )
+    ? model.shortcutGap.ticks
+    : [
+        { align: 'start', label: '0', percent: 0 },
+        { label: '8', percent: 100 / 3 },
+        { label: '16', percent: 200 / 3 },
+        { align: 'end', label: '24', percent: 100 }
+      ];
   return (
     <>
       <div
@@ -369,25 +444,28 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                   {...ref('searchWidthLabel')}
                   className="x-nt-overlay-label"
                 />
-                <span
-                  {...ref('searchWidthValue')}
-                  className="x-nt-overlay-value"
-                />
               </div>
-              <RangeSlider
+              <RangeSliderField
                 {...ref('searchWidthSlider')}
                 className="x-nt-overlay-slider-wrap x-nt-search-width-slider-wrap"
                 data-value-suffix=" px"
                 inputClass="x-nt-overlay-slider x-nt-search-width-slider"
                 max={String(model.searchWidth.max)}
                 min={String(model.searchWidth.min)}
+                rowClassName="x-nt-range-slider-row"
                 step="1"
+                valueInputProps={{
+                  ...ref('searchWidthSliderValueInput'),
+                  'aria-label': 'Search box width value',
+                  defaultValue: String(model.searchWidth.min),
+                  inputMode: 'numeric'
+                }}
               >
                 <Scale
                   className="x-nt-search-width-scale"
                   ticks={model.searchWidth.ticks}
                 />
-              </RangeSlider>
+              </RangeSliderField>
               <div className="x-nt-appearance-setting-row">
                 <span className="x-nt-appearance-setting-title-group">
                   <span
@@ -407,6 +485,190 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                   ariaLabel="Automatically focus the search input"
                   name="inputAutoFocusToggle"
                 />
+              </div>
+              <div
+                {...ref('shortcutsAccordion')}
+                className="x-nt-shortcuts-accordion"
+                data-expanded="false"
+                data-enabled="true"
+              >
+                <div className="x-nt-appearance-setting-row x-nt-shortcuts-accordion-row">
+                  <button
+                    {...ref('shortcutsAccordionTrigger')}
+                    aria-controls="_x_extension_newtab_shortcuts_settings_2026_unique_"
+                    aria-expanded="false"
+                    className="x-nt-shortcuts-accordion-trigger"
+                    id="_x_extension_newtab_shortcuts_accordion_trigger_2026_unique_"
+                    type="button"
+                  >
+                    <span className="x-nt-appearance-setting-title-group">
+                      <span
+                        {...ref('shortcutsTitle')}
+                        className="x-nt-appearance-setting-title"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="x-nt-shortcuts-accordion-icon"
+                        dangerouslySetInnerHTML={{
+                          __html: String(model.icons?.arrow || '')
+                        }}
+                      />
+                    </span>
+                  </button>
+                  <Switch
+                    ariaLabel="Shortcuts"
+                    name="shortcutsToggle"
+                  />
+                </div>
+                <div
+                  {...ref('shortcutsDetails')}
+                  aria-hidden="true"
+                  aria-labelledby="_x_extension_newtab_shortcuts_accordion_trigger_2026_unique_"
+                  className="x-nt-shortcuts-accordion-details"
+                  data-visible="false"
+                  hidden
+                  id="_x_extension_newtab_shortcuts_settings_2026_unique_"
+                  role="region"
+                >
+                  <div className="x-nt-shortcuts-accordion-details-inner">
+                    <div className="x-nt-appearance-setting-row">
+                      <span
+                        {...ref('shortcutAddTitle')}
+                        className="x-nt-appearance-setting-title"
+                      />
+                      <Switch
+                        ariaLabel="Show “+”"
+                        name="shortcutAddToggle"
+                      />
+                    </div>
+                    <div className="x-nt-appearance-setting-row">
+                      <span
+                        {...ref('shortcutDockMagnificationTitle')}
+                        className="x-nt-appearance-setting-title"
+                      />
+                      <Switch
+                        ariaLabel="macOS Dock-style magnification"
+                        name="shortcutDockMagnificationToggle"
+                      />
+                    </div>
+                    <div
+                      {...ref('shortcutColumnsControl')}
+                      aria-hidden="true"
+                      className="x-nt-overlay-control x-nt-shortcut-columns-control"
+                      data-visible="false"
+                    >
+                      <div className="x-nt-overlay-control-header">
+                        <span
+                          {...ref('shortcutColumnsLabel')}
+                          className="x-nt-overlay-label"
+                        />
+                      </div>
+                      <RangeSliderField
+                        {...ref('shortcutColumnsSlider')}
+                        className="x-nt-overlay-slider-wrap x-nt-shortcut-columns-slider-wrap"
+                        defaultValue={String(shortcutColumnsDefault)}
+                        inputClass="x-nt-overlay-slider x-nt-shortcut-columns-slider"
+                        max={String(shortcutColumnsMax)}
+                        min={String(shortcutColumnsMin)}
+                        rowClassName="x-nt-range-slider-row"
+                        step="1"
+                        valueInputProps={{
+                          ...ref('shortcutColumnsSliderValueInput'),
+                          'aria-label': 'Shortcuts per row value',
+                          defaultValue: String(shortcutColumnsDefault),
+                          inputMode: 'numeric'
+                        }}
+                      >
+                        <Scale
+                          className="x-nt-shortcut-columns-scale x-nt-shortcut-layout-scale"
+                          ticks={shortcutColumnTicks}
+                        />
+                      </RangeSliderField>
+                    </div>
+                    <div
+                      {...ref('shortcutSizeControl')}
+                      aria-hidden="true"
+                      className="x-nt-overlay-control x-nt-shortcut-size-control"
+                      data-visible="false"
+                    >
+                      <div className="x-nt-overlay-control-header">
+                        <span
+                          {...ref('shortcutSizeLabel')}
+                          className="x-nt-overlay-label"
+                        />
+                      </div>
+                      <RangeSliderField
+                        {...ref('shortcutSizeSlider')}
+                        className="x-nt-overlay-slider-wrap x-nt-shortcut-size-slider-wrap"
+                        data-value-suffix=" px"
+                        defaultValue={String(shortcutSizeDefault)}
+                        inputClass="x-nt-overlay-slider x-nt-shortcut-size-slider"
+                        max={String(shortcutSizeMax)}
+                        min={String(shortcutSizeMin)}
+                        resetButtonProps={{
+                          ...ref('shortcutSizeResetButton'),
+                          'aria-label': 'Reset shortcut size',
+                          disabled: true,
+                          title: 'Reset shortcut size'
+                        }}
+                        rowClassName="x-nt-range-slider-row"
+                        step="1"
+                        valueInputProps={{
+                          ...ref('shortcutSizeSliderValueInput'),
+                          'aria-label': 'Shortcut size value',
+                          defaultValue: String(shortcutSizeDefault),
+                          inputMode: 'numeric'
+                        }}
+                      >
+                        <Scale
+                          className="x-nt-shortcut-layout-scale"
+                          ticks={shortcutSizeTicks}
+                        />
+                      </RangeSliderField>
+                    </div>
+                    <div
+                      {...ref('shortcutGapControl')}
+                      aria-hidden="true"
+                      className="x-nt-overlay-control x-nt-shortcut-gap-control"
+                      data-visible="false"
+                    >
+                      <div className="x-nt-overlay-control-header">
+                        <span
+                          {...ref('shortcutGapLabel')}
+                          className="x-nt-overlay-label"
+                        />
+                      </div>
+                      <RangeSliderField
+                        {...ref('shortcutGapSlider')}
+                        className="x-nt-overlay-slider-wrap x-nt-shortcut-gap-slider-wrap"
+                        data-value-suffix=" px"
+                        defaultValue={String(shortcutGapDefault)}
+                        inputClass="x-nt-overlay-slider x-nt-shortcut-gap-slider"
+                        max={String(shortcutGapMax)}
+                        min={String(shortcutGapMin)}
+                        resetButtonProps={{
+                          ...ref('shortcutGapResetButton'),
+                          'aria-label': 'Reset shortcut spacing',
+                          disabled: true,
+                          title: 'Reset shortcut spacing'
+                        }}
+                        rowClassName="x-nt-range-slider-row"
+                        step="1"
+                        valueInputProps={{
+                          ...ref('shortcutGapSliderValueInput'),
+                          'aria-label': 'Shortcut spacing value',
+                          defaultValue: String(shortcutGapDefault),
+                          inputMode: 'numeric'
+                        }}
+                      >
+                        <Scale
+                          className="x-nt-shortcut-layout-scale"
+                          ticks={shortcutGapTicks}
+                        />
+                      </RangeSliderField>
+                    </div>
+                  </div>
+                </div>
               </div>
               <a
                 {...ref('moreSettingsLink')}
@@ -654,6 +916,30 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
                   sliderRef="effectSpacingSlider"
                   ticks={defaultTicks}
                 />
+                <SliderControl
+                  controlRef="effectTextureControl"
+                  labelRef="effectTextureLabel"
+                  sliderRef="effectTextureSlider"
+                  ticks={defaultTicks}
+                />
+                <SliderControl
+                  controlRef="effectCrtBloomControl"
+                  labelRef="effectCrtBloomLabel"
+                  sliderRef="effectCrtBloomSlider"
+                  ticks={defaultTicks}
+                />
+                <SliderControl
+                  controlRef="effectCrtRgbOffsetControl"
+                  labelRef="effectCrtRgbOffsetLabel"
+                  sliderRef="effectCrtRgbOffsetSlider"
+                  ticks={defaultTicks}
+                />
+                <SliderControl
+                  controlRef="effectCrtCurvatureControl"
+                  labelRef="effectCrtCurvatureLabel"
+                  sliderRef="effectCrtCurvatureSlider"
+                  ticks={defaultTicks}
+                />
               </div>
             </div>
           </div>
@@ -702,24 +988,25 @@ function WallpaperPanel({ model }: { model: Record<string, any> }) {
             >
               <div className="x-nt-overlay-control-header">
                 <span {...ref('topContentWeightTitle')}>Time font weight</span>
-                <span
-                  {...ref('topContentWeightValue')}
-                  className="x-nt-overlay-value"
-                >
-                  {timeFontWeightDefault}
-                </span>
               </div>
-              <RangeSlider
+              <RangeSliderField
                 {...ref('topContentWeightSlider')}
                 className="x-nt-overlay-slider-wrap x-nt-time-weight-slider-wrap"
                 inputClass="x-nt-overlay-slider x-nt-time-weight-slider"
                 max={String(timeFontWeightMax)}
                 min={String(timeFontWeightMin)}
+                rowClassName="x-nt-range-slider-row"
                 step="1"
                 defaultValue={String(timeFontWeightDefault)}
+                valueInputProps={{
+                  ...ref('topContentWeightSliderValueInput'),
+                  'aria-label': 'Time font weight value',
+                  defaultValue: String(timeFontWeightDefault),
+                  inputMode: 'numeric'
+                }}
               >
                 <Scale ticks={timeFontWeightTicks} />
-              </RangeSlider>
+              </RangeSliderField>
             </div>
             <div
               {...ref('topContentSecondsRow')}

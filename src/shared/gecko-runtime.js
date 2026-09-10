@@ -19,8 +19,8 @@
     'show-tab-switcher': 'Alt+Q'
   });
   const RESERVED_SHORTCUT_PATTERN = /^(Ctrl|Control|Command|Cmd|MacCtrl)\+Shift\+[KCLI]$/i;
-  const PRODUCT_TAG = '0.9.51-firefox-v1.8.0';
-  const FIREFOX_MANIFEST_VERSION = '1.8.0';
+  const PRODUCT_TAG = '0.9.55-firefox-v1.0.0';
+  const FIREFOX_MANIFEST_VERSION = '1.0.0';
   const OVERLAY_CONTENT_SCRIPT_FILES = Object.freeze([
     'src/shared/gecko-runtime.js',
     'src/shared/icon-font-preload.js',
@@ -28,6 +28,8 @@
     'src/shared/navigation-disposition.js',
     'src/shared/search-utils.js',
     'src/shared/site-search-store.js',
+    'src/shared/aggregate-search-store.js',
+    'src/shared/aggregate-search-surface.js',
     'src/shared/suggestion-action-model.js',
     'src/shared/suggestion-navigation.js',
     'src/shared/suggestions-height-layout.js',
@@ -39,6 +41,7 @@
     'src/shared/shortcut-display.js',
     'src/shared/shortcut-favicon.js',
     'src/shared/community-links.js',
+    'src/shared/browser-profile.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
     'src/shared/engagement-notice.js',

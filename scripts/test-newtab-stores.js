@@ -136,6 +136,61 @@ async function testRecentStore() {
     16,
     'recent-site merging should stop normalizing candidates once the visible limit is full'
   );
+
+  let sourceSanitizedValueCount = 0;
+  const boundedSourceMerge = recentStore.mergeRecentSiteSources({
+    mode: 'latest',
+    limit: 8,
+    candidateLimit: 10_000,
+    pinned: [],
+    hidden: [],
+    historyItems: Array.from({ length: 10_000 }, (_, index) => ({
+      title: `History ${index}`,
+      url: `https://history-${index}.example/`,
+      lastVisitTime: 10_000 - index
+    })),
+    sanitizeDisplayText(value) {
+      sourceSanitizedValueCount += 1;
+      return String(value || '').trim();
+    }
+  });
+  assert.strictEqual(boundedSourceMerge.length, 8);
+  assert.strictEqual(
+    sourceSanitizedValueCount,
+    16,
+    'source merging should normalize each visible candidate once and stop when the result is full'
+  );
+
+  let budgetSanitizedValueCount = 0;
+  const candidateBudgetMerge = recentStore.mergeRecentSiteSources({
+    mode: 'latest',
+    limit: 4,
+    candidateLimit: 4,
+    pinned: [{ title: 'Pinned', url: 'https://candidate-0.example/' }],
+    hidden: [
+      { url: 'https://candidate-1.example/', lastVisitTime: 100 },
+      { url: 'https://candidate-2.example/', lastVisitTime: 100 }
+    ],
+    historyItems: Array.from({ length: 6 }, (_, index) => ({
+      title: `Candidate ${index}`,
+      url: `https://candidate-${index}.example/`,
+      lastVisitTime: 10 - index
+    })),
+    sanitizeDisplayText(value) {
+      budgetSanitizedValueCount += 1;
+      return String(value || '').trim();
+    }
+  });
+  assert.deepStrictEqual(
+    candidateBudgetMerge.map((item) => item.host),
+    ['candidate-0.example', 'candidate-3.example'],
+    'hidden and pinned duplicates should still consume the configured source candidate budget'
+  );
+  assert.strictEqual(
+    budgetSanitizedValueCount,
+    10,
+    'the collector should normalize one pinned item and no more than four source candidates'
+  );
 }
 
 function testBookmarkStore() {
@@ -267,47 +322,19 @@ function testBookmarkStore() {
   });
 }
 
-function testBookmarkCacheHydrationGuard() {
-  assert.strictEqual(
-    bookmarkStore.shouldApplyBookmarkCacheHydration(
-      { loadToken: 2 },
-      { loadToken: 2, loadedOnce: false, dataDirty: true }
-    ),
-    true
-  );
-  assert.strictEqual(
-    bookmarkStore.shouldApplyBookmarkCacheHydration(
-      { loadToken: 2 },
-      { loadToken: 3, loadedOnce: false, dataDirty: true }
-    ),
-    false
-  );
-  assert.strictEqual(
-    bookmarkStore.shouldApplyBookmarkCacheHydration(
-      { loadToken: 2 },
-      { loadToken: 2, loadedOnce: true, dataDirty: false }
-    ),
-    false
-  );
-}
-
-function testNewtabUsesBookmarkCacheHydrationGuard() {
+function testNewtabRejectsProvisionalSectionCacheHydration() {
   const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
-  assert.ok(
-    newtabJs.includes('shouldApplyBookmarkCacheHydration'),
-    'newtab should guard bookmark cache hydration against live loads'
-  );
-  assert.ok(
-    newtabJs.includes('bookmarkCacheHydrationLoadToken'),
-    'newtab should compare bookmark cache hydration against the load token captured at scheduling time'
+  assert.doesNotMatch(
+    newtabJs,
+    /shouldApplyBookmarkCacheHydration|hydrateSectionsFromCache|_x_extension_newtab_(?:recent|bookmark)_cache_2024_unique_/,
+    'newtab should not render provisional cached section geometry before authoritative startup data'
   );
 }
 
 testRecentStore()
   .then(() => {
     testBookmarkStore();
-    testBookmarkCacheHydrationGuard();
-    testNewtabUsesBookmarkCacheHydrationGuard();
+    testNewtabRejectsProvisionalSectionCacheHydration();
     console.log('newtab store tests passed');
   })
   .catch((error) => {

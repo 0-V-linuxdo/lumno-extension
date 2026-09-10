@@ -4,8 +4,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const geckoRuntime = require('../src/shared/gecko-runtime.js');
 
-const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.51-firefox-v1.8.0';
-const FIREFOX_MANIFEST_VERSION = geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.8.0';
+const PRODUCT_TAG = geckoRuntime.PRODUCT_TAG || '0.9.55-firefox-v1.0.0';
+const FIREFOX_MANIFEST_VERSION = geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.0.0';
 
 const repoRoot = process.cwd();
 const sourceManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'manifest.json'), 'utf8'));
@@ -25,11 +25,17 @@ const helperScripts = [
 ];
 const importOrder = [];
 const backgroundSource = fs.readFileSync(path.join(repoRoot, 'src/background/background.js'), 'utf8');
-const importMatches = [...backgroundSource.matchAll(/lumnoImportScript\('([^']+)'/g)];
-importMatches.forEach((match) => {
-  if (!helperScripts.includes(match[1]) && !importOrder.includes(match[1])) {
-    importOrder.push(match[1]);
-  }
+const importPatterns = [
+  /lumnoImportScript\('([^']+)'/g,
+  /importScripts\(chrome\.runtime\.getURL\('([^']+)'\)\)/g
+];
+importPatterns.forEach((pattern) => {
+  const importMatches = [...backgroundSource.matchAll(pattern)];
+  importMatches.forEach((match) => {
+    if (!helperScripts.includes(match[1]) && !importOrder.includes(match[1])) {
+      importOrder.push(match[1]);
+    }
+  });
 });
 
 firefoxManifest.background = {
@@ -123,6 +129,7 @@ if (overlayFiles.length) {
 const distDir = path.join(repoRoot, 'dist');
 const zipPath = path.join(distDir, `lumno-${PRODUCT_TAG}.zip`);
 const packageRoots = ['src', '_locales', 'assets'];
+const packageRootFiles = ['newtab.html'];
 
 fs.mkdirSync(distDir, { recursive: true });
 if (fs.existsSync(zipPath)) {
@@ -157,6 +164,12 @@ packageRoots.forEach((packageRoot) => {
     recursive: true,
     filter: shouldCopyPackagePath
   });
+});
+packageRootFiles.forEach((fileName) => {
+  const sourceFile = path.join(repoRoot, fileName);
+  if (fs.existsSync(sourceFile) && fs.statSync(sourceFile).isFile()) {
+    fs.copyFileSync(sourceFile, stagedPath(fileName));
+  }
 });
 fs.writeFileSync(stagedPath('manifest.json'), `${JSON.stringify(firefoxManifest, null, 2)}\n`);
 

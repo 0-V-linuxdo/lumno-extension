@@ -4,13 +4,17 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.js'), 'utf8');
-const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'newtab.html'), 'utf8');
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'newtab.html'), 'utf8');
 const bookmarksRuntimeJs = fs.readFileSync(
   path.join(repoRoot, 'src', 'newtab', 'bookmarks-runtime.js'),
   'utf8'
 );
 const bookmarkDragJs = fs.readFileSync(
   path.join(repoRoot, 'src', 'newtab', 'bookmark-drag.js'),
+  'utf8'
+);
+const bookmarkFolderIconJs = fs.readFileSync(
+  path.join(repoRoot, 'src', 'newtab', 'bookmark-folder-icon.js'),
   'utf8'
 );
 const cascadeJs = fs.readFileSync(path.join(repoRoot, 'src', 'newtab', 'bookmark-cascade-menu.js'), 'utf8');
@@ -543,8 +547,9 @@ assert.ok(
   'an open cascade should rebind its active folder card synchronously after bookmark rendering'
 );
 assert.ok(
-  newtabJs.includes('function setFolderPathMorphState(folderIcon, toHover)') &&
-    newtabJs.includes('morphOptions && morphOptions.instant === true') &&
+  bookmarkFolderIconJs.includes('function setFolderPathMorphState(folderIcon, toHover)') &&
+    bookmarkFolderIconJs.includes('morphOptions && morphOptions.instant === true') &&
+    newtabJs.includes('NEWTAB_BOOKMARK_FOLDER_ICON.setFolderPathMorphState') &&
     bookmarksViewJs.includes('options.playFolderPathMorph('),
   'a rebound folder icon should inherit its open state without replaying the morph animation'
 );

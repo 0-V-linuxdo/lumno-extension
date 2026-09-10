@@ -66,8 +66,8 @@ function assertKeywordOnlySuggestionsKeepSearchActionFirst(relativePath) {
   );
   assert.match(
     source,
-    /if \(!siteSearchState && query && !onlyKeywordSuggestions &&/,
-    `${relativePath} should not promote matched search-suggestion URLs through open-tab quick switch`
+    /if \(preferAutocompleteFirst &&\s*!siteSearchState && query && !onlyKeywordSuggestions &&/,
+    `${relativePath} should only let open-tab quick switch replace the first row in autocomplete-first mode`
   );
   assert.match(
     source,
@@ -292,6 +292,59 @@ assert.deepStrictEqual(
   ['Search A', 'Search query', 'Page A'],
   'search-first mode should move the whole search block instead of interleaving individual rows'
 );
+const searchFirstQuotaInput = [
+  { type: 'history', title: 'History 1' },
+  { type: 'history', title: 'History 2' },
+  { type: 'history', title: 'History 3' },
+  { type: 'bookmark', title: 'Bookmark 1' },
+  { type: 'bookmark', title: 'Bookmark 2' },
+  { type: 'topSite', title: 'Frequent 1' },
+  { type: 'googleSuggest', title: 'Suggestion 1' },
+  { type: 'googleSuggest', title: 'Suggestion 2' },
+  { type: 'googleSuggest', title: 'Suggestion 3' },
+  { type: 'googleSuggest', title: 'Suggestion 4' },
+  { type: 'googleSuggest', title: 'Suggestion 5' },
+  { type: 'newtab', title: 'Search query' }
+];
+const defaultSearchFirstSlate = search.composeSearchFirstSuggestionSlate(
+  searchFirstQuotaInput,
+  { limit: 10 }
+).slice(0, 10);
+assert.deepStrictEqual(
+  defaultSearchFirstSlate.map((item) => item.type),
+  [
+    'newtab',
+    'googleSuggest',
+    'googleSuggest',
+    'googleSuggest',
+    'googleSuggest',
+    'googleSuggest',
+    'history',
+    'history',
+    'bookmark',
+    'bookmark'
+  ],
+  'a ten-row search-first slate should reserve six search rows and cap history/bookmark to two initial local rows each'
+);
+assert.deepStrictEqual(
+  search.composeSearchFirstSuggestionSlate(searchFirstQuotaInput, { limit: 5 })
+    .slice(0, 5)
+    .map((item) => item.type),
+  ['newtab', 'googleSuggest', 'googleSuggest', 'history', 'bookmark'],
+  'a five-row search-first slate should keep the same sixty-percent search allocation'
+);
+assert.deepStrictEqual(
+  search.composeSearchFirstSuggestionSlate([
+    { type: 'history', title: 'History 1' },
+    { type: 'history', title: 'History 2' },
+    { type: 'history', title: 'History 3' },
+    { type: 'googleSuggest', title: 'Suggestion 1' },
+    { type: 'googleSuggest', title: 'Suggestion 2' },
+    { type: 'newtab', title: 'Search query' }
+  ], { limit: 5 }).slice(0, 5).map((item) => item.type),
+  ['newtab', 'googleSuggest', 'googleSuggest', 'history', 'history'],
+  'unused local-source quota should backfill instead of leaving the result list empty'
+);
 const pinnedExactSearchActionSuggestions = search.pinExactSearchActionSecond([
   { type: 'history', title: 'Local A' },
   { type: 'history', title: 'Local B' },
@@ -503,6 +556,15 @@ assert.strictEqual(
 assert.ok(
   enginePolicyWithLocalResults.score <= 1,
   'engine suggestion policy should keep supplemental items below local result scores'
+);
+assert.strictEqual(
+  search.getSearchEngineSuggestionPolicy(
+    search.buildSearchQueryContext('github'),
+    [{ type: 'history', title: 'GitHub', url: 'https://github.com/' }],
+    { maxEngineSuggestions: 5, searchFirst: true }
+  ).limit,
+  5,
+  'search-first mode should request the full engine-suggestion cap even when local results exist'
 );
 assert.strictEqual(
   search.getSearchEngineSuggestionPolicy(
@@ -785,7 +847,7 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   defaultSearchEngines.map((provider) => provider.key),
-  ['bd', 'bi', 'gg', 'ddg', 'br', 'eco', 'sg', 'yh', 'yx', 'sm'],
+  ['bd', 'bi', 'gg', 'kg', 'ddg', 'br', 'eco', 'sg', 'yh', 'yx', 'sm'],
   'built-in search engines should be explicitly classified and keep their intended order'
 );
 assert.strictEqual(
@@ -856,6 +918,11 @@ assert.strictEqual(
   'Brave Search should use its public result URL'
 );
 assert.strictEqual(
+  defaultSearchEngines.find((provider) => provider.key === 'kg').template,
+  'https://kagi.com/search?q={query}',
+  'Kagi should use its configured query URL'
+);
+assert.strictEqual(
   defaultSearchEngines.find((provider) => provider.key === 'eco').template,
   'https://www.ecosia.org/search?q={query}',
   'Ecosia should use its documented default-search URL'
@@ -869,6 +936,29 @@ const customizedGemini = search.normalizeSiteSearchProvider({
 }, geminiBase);
 assert.strictEqual(customizedGemini.action, 'openAndSubmit', 'customized provider should inherit action');
 assert.strictEqual(customizedGemini.submitStrategy, 'geminiPrompt', 'customized provider should inherit submit strategy');
+
+const renamedGemini = search.normalizeSiteSearchProvider({
+  key: 'gmx',
+  builtinKey: 'GM',
+  aliases: ['gemini'],
+  name: 'Gemini Renamed',
+  template: 'https://gemini.google.com/app'
+}, geminiBase);
+assert.strictEqual(
+  renamedGemini.builtinKey,
+  'gm',
+  'renamed built-in overrides should retain a normalized origin key'
+);
+assert.strictEqual(
+  renamedGemini.action,
+  'openAndSubmit',
+  'renamed built-in overrides should inherit their origin behavior'
+);
+assert.strictEqual(
+  search.sanitizeSiteSearchProviders([renamedGemini], [geminiBase])[0].submitStrategy,
+  'geminiPrompt',
+  'sanitization should resolve renamed overrides against their built-in origin'
+);
 
 const merged = search.mergeCustomProviders([geminiBase], [customizedGemini]);
 assert.strictEqual(merged.length, 1, 'custom provider should replace same-key built-in provider');
@@ -993,6 +1083,28 @@ assert.strictEqual(
   search.getSiteSearchTriggerCandidate('Code Forge', [namedProvider], null),
   namedProvider,
   'an exact multi-word provider title should expose the site-search trigger'
+);
+const aggregateProvider = {
+  key: 'tech',
+  aliases: [],
+  name: 'Technology search',
+  template: '',
+  _xIsAggregateSearch: true
+};
+assert.strictEqual(
+  search.findSiteSearchProvider('tech', [aggregateProvider]),
+  aggregateProvider,
+  'an aggregate search should match its configured trigger'
+);
+assert.strictEqual(
+  search.findSiteSearchProvider('Technology search', [aggregateProvider]),
+  null,
+  'an aggregate search name must not become an implicit alias'
+);
+assert.strictEqual(
+  search.getSiteSearchTriggerCandidate('tec', [aggregateProvider], null),
+  null,
+  'an aggregate trigger must require an exact match without implicit name aliases'
 );
 assert.strictEqual(
   search.findSiteSearchProviderByInput('docs.github.com lumno', [githubProvider]),

@@ -1,5 +1,5 @@
 (function(root) {
-  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-08-19-natural-result-height-v34';
+  const SEARCH_INPUT_MODE_RUNTIME_VERSION = '2026-09-02-scope-action-disabled-v35';
   if (root.LumnoSearchInputMode &&
       root.LumnoSearchInputMode.runtimeVersion === SEARCH_INPUT_MODE_RUNTIME_VERSION &&
       typeof root.LumnoSearchInputMode.createInputModeController === 'function') {
@@ -401,7 +401,19 @@
     let modeMenuDoubleTabTimer = 0;
     let modeTagRemovalConfirmationPending = false;
     let modeTagRemovalConfirmationTimer = 0;
+    let modeTagActive = false;
     let destroyed = false;
+
+    function setModeTagActive(active) {
+      const nextActive = Boolean(active);
+      if (modeTagActive === nextActive) {
+        return;
+      }
+      modeTagActive = nextActive;
+      if (typeof config.onModeTagActiveChange === 'function') {
+        config.onModeTagActiveChange(nextActive);
+      }
+    }
 
     function getModeMenuPlaceholder() {
       return formatMessage(
@@ -637,6 +649,10 @@
     modeMenu.tabIndex = -1;
     modeMenu.hidden = true;
     const modeMenuEdgeOffset = surface === 'newtab' ? '-6px' : '-1px';
+    const modeMenuPositionTransform = 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px)))';
+    const modeMenuClosedTransform = surface === 'newtab'
+      ? `${modeMenuPositionTransform} scale(0.96, 0.86)`
+      : 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px) - 6px)) scale(0.96, 0.86)';
     const modeMenuStyles = [
       ['position', 'absolute'],
       ['left', modeMenuEdgeOffset],
@@ -658,8 +674,8 @@
       ['z-index', '40'],
       ['--x-lumno-search-mode-menu-lift', '0px'],
       ['--x-lumno-search-mode-menu-result-offset', '0px'],
-      ['--x-extension-menu-surface-closed-transform', 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px) - 6px)) scale(0.96, 0.86)'],
-      ['--x-extension-menu-surface-open-transform', 'translateY(calc(var(--x-lumno-search-mode-menu-result-offset, 0px) + var(--x-lumno-search-mode-menu-lift, 0px))) scale(1, 1)'],
+      ['--x-extension-menu-surface-closed-transform', modeMenuClosedTransform],
+      ['--x-extension-menu-surface-open-transform', `${modeMenuPositionTransform} scale(1, 1)`],
       ['overscroll-behavior', 'contain']
     ];
     modeMenu.style.cssText = '';
@@ -2073,6 +2089,7 @@
       setInputModePrefixIdentity(nextPrefixText, nextOptions);
       const visual = applyInputModePrefixVisual(theme, nextOptions);
       setStyle(siteSearchPrefix, 'display', 'inline-flex', useImportantStyles);
+      setModeTagActive(true);
       if (shouldWaitForPendingText) {
         syncInputPlaceholder();
         setInputStyle(input, 'caret-color', visual.caretColor);
@@ -2127,14 +2144,23 @@
 
     function setProviderPrefix(provider, theme, providerOptions) {
       const isAi = isAiSiteSearchProvider(provider);
+      const isAggregate = Boolean(
+        provider && (
+          provider._xIsAggregateSearch === true ||
+          String(provider.action || '') === 'aggregateSearch' ||
+          String(provider.category || '') === 'aggregateSearch'
+        )
+      );
       const nextOptions = {
         ...(providerOptions || {}),
-        iconUrl: getProviderIcon(provider),
-        iconHost: getProviderThemeHost(provider),
-        iconClass: isAi ? 'ri-search-ai-line' : 'ri-global-line',
-        modeId: `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`,
+        iconUrl: isAggregate ? '' : getProviderIcon(provider),
+        iconHost: isAggregate ? '' : getProviderThemeHost(provider),
+        iconClass: isAggregate ? 'ri-stack-line' : (isAi ? 'ri-search-ai-line' : 'ri-global-line'),
+        modeId: isAggregate
+          ? `aggregate:${String(provider && provider.aggregateId ? provider.aggregateId : '')}`
+          : `provider:${provider && (provider.key || provider.name) ? (provider.key || provider.name) : ''}`,
         provider,
-        isAi
+        isAi: isAi && !isAggregate
       };
       setPrefixText(getSiteSearchPrefixText(provider), theme, nextOptions);
     }
@@ -2155,6 +2181,7 @@
       setStyle(siteSearchPrefixChevron, 'display', 'none', useImportantStyles);
       setInputModePrefixRestState({ transition: false });
       setStyle(siteSearchPrefix, 'display', 'none', useImportantStyles);
+      setModeTagActive(false);
       closeModeMenu(false);
       input.placeholder = getDefaultPlaceholder();
       setInputStyle(input, 'caret-color', defaultCaretColor);
@@ -3501,11 +3528,13 @@
       const button = target && typeof target.closest === 'function'
         ? target.closest('[role="menuitemradio"]')
         : null;
-      if (button) {
-        return;
-      }
+      // Native pointer focus can scroll the panel's ancestors before click
+      // returns focus to the input. All menu focus is managed with preventScroll.
       if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
+      }
+      if (button) {
+        return;
       }
       focusModeMenuSearch();
     }
@@ -3643,6 +3672,7 @@
       isModeMenuVisible,
       menuElement: modeMenu,
       getModeMenuFilterQuery: () => modeMenuFilterQuery,
+      hasActiveModeTag: () => modeTagActive,
       openModeMenu,
       refreshModeMenuLanguage,
       refreshModeMenu,

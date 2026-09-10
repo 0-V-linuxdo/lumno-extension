@@ -35,8 +35,8 @@ Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused br
   </a>
 </p>
 
-<p align="center">Current version: <code>0.9.51</code></p>
-<p align="center">Firefox / Zen port: <code>0.9.51-firefox-v1.8.0</code></p>
+<p align="center">Current version: <code>0.9.55</code></p>
+<p align="center">Firefox / Zen port: <code>0.9.55-firefox-v1.0.0</code></p>
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -45,6 +45,7 @@ Lumno is a Manifest V3 extension for Chromium browsers. It combines a focused br
 - Focused command bar: open an overlay on injectable pages to visit URLs, search keywords, switch open tabs, open browser internal pages, and jump into Lumno settings.
 - Smart search results: combines bookmarks, history, top sites, browser suggestions, and open tabs, with source filters, first-result priority, selection-based ranking, pinyin matching, and blacklist filtering.
 - Site search and AI search: ships with shortcuts for YouTube, Bilibili, GitHub, Google, Bing, Baidu, Zhihu, Douban, Juejin, Taobao, X, Reddit, Wikipedia, and more. AI entries include ChatGPT, Gemini, Doubao, Qianwen, Yuanbao, MiniMax, DeepSeek, and Kimi. Custom templates and aliases are supported.
+- Aggregate search: combine 2–10 built-in or custom search sources into one scope and run the same query across multiple tabs. A General setting controls whether results are placed in a tab group named after the query.
 - New tab page: includes a search box, recent/most-visited site cards, bookmark grids and cascading folder menus, bookmark paging, pinned/hidden recent sites, feedback links, and adjustable content width.
 - Appearance and wallpapers: supports system/light/dark themes, global or new-tab-only theme scope, built-in wallpapers, local wallpaper import, overlay opacity, grain/halftone/dither/ASCII filters, search-box width, and Lumno wordmark visibility.
 - Web Clip PiP: on supported HTTPS top-level pages, select part of a page and float it in a Document Picture-in-Picture window for reference and comparison.
@@ -78,7 +79,7 @@ Install from the Chrome Web Store: [Install Lumno on Chrome Web Store](https://c
 
 Do **not** install the Chrome zip with CRX Installer. Use the Firefox package:
 
-1. Download [`lumno-0.9.51-firefox-v1.8.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.51-firefox-v1.8.0) and unzip it.
+1. Download [`lumno-0.9.55-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.55-firefox-v1.0.0) and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
 4. Open a normal `https://` page (not `about:`). Refresh is optional in v1.2.0.
@@ -136,7 +137,7 @@ npm run test:package-firefox
 npm run package:firefox
 ```
 
-`npm run package:store` reads the version from `manifest.json` and creates `dist/lumno-store-v<version>.zip`. It requires `zip` and `zipinfo` to be available on the system. `npm run package:firefox` writes `dist/lumno-0.9.51-firefox-v1.8.0.zip`.
+`npm run package:store` reads the version from `manifest.json` and creates `dist/lumno-store-v<version>.zip`. It requires `zip` and `zipinfo` to be available on the system. `npm run package:firefox` writes `dist/lumno-0.9.55-firefox-v1.0.0.zip`.
 
 ## Project Structure
 

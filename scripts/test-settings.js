@@ -1,7 +1,25 @@
 const assert = require('assert');
 const settings = require('../src/shared/settings.js');
 
-assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 57);
+let registeredStorageListener = null;
+const storageListener = () => {};
+assert.strictEqual(settings.addStorageChangeListener({
+  storage: {
+    onChanged: {
+      addListener(listener) {
+        registeredStorageListener = listener;
+      }
+    }
+  }
+}, storageListener), true);
+assert.strictEqual(registeredStorageListener, storageListener);
+assert.strictEqual(settings.addStorageChangeListener(null, storageListener), false);
+assert.strictEqual(settings.addStorageChangeListener({ storage: {} }, storageListener), false);
+assert.strictEqual(settings.addStorageChangeListener({
+  storage: { onChanged: { addListener() {} } }
+}, null), false);
+
+assert.strictEqual(settings.CHROME_SYNC_STORAGE_KEYS.length, 65);
 assert.strictEqual(
   new Set(settings.CHROME_SYNC_STORAGE_KEYS).size,
   settings.CHROME_SYNC_STORAGE_KEYS.length
@@ -13,9 +31,18 @@ assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_number_shortcut_
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_macos_ctrl_suggestion_navigation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_overlay_page_theme_adaptation_enabled_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_input_auto_focus_enabled_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_time_font_weight_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_newtab_time_seconds_visible_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_search_result_display_limit_2026_unique_'));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.AGGREGATE_SEARCH_STORAGE_KEY));
+assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(
+  settings.AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY
+));
+assert.strictEqual(settings.normalizeAggregateSearchAutoGroupEnabled(undefined), true);
+assert.strictEqual(settings.normalizeAggregateSearchAutoGroupEnabled(false), false);
+assert.strictEqual(settings.normalizeAggregateSearchAutoGroupEnabled(true), true);
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes('_x_extension_bookmark_view_mode_2026_unique_'));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.NEWTAB_SHORTCUTS_CHUNK_2_STORAGE_KEY));
 assert(settings.CHROME_SYNC_STORAGE_KEYS.includes(settings.NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY));
@@ -122,6 +149,62 @@ assert.strictEqual(
   settings.NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
   '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_'
 );
+[
+  [
+    settings.NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY,
+    '_x_extension_newtab_feedback_button_visible_2026_unique_',
+    settings.normalizeNewtabFeedbackButtonVisible
+  ],
+  [
+    settings.NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY,
+    '_x_extension_newtab_appearance_button_visible_2026_unique_',
+    settings.normalizeNewtabAppearanceButtonVisible
+  ]
+].forEach(([storageKey, expectedStorageKey, normalize]) => {
+  assert.strictEqual(storageKey, expectedStorageKey);
+  assert.strictEqual(normalize(false), false);
+  assert.strictEqual(normalize(true), true);
+  assert.strictEqual(normalize(undefined), true);
+  assert.strictEqual(normalize('false'), true);
+});
+assert.strictEqual(
+  settings.NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY,
+  '_x_extension_newtab_shortcut_width_2026_unique_'
+);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_WIDTH_MIN, 360);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_WIDTH_MAX, 1440);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_WIDTH_DEFAULT, 920);
+assert.strictEqual(settings.normalizeNewtabShortcutWidth(undefined), 920);
+assert.strictEqual(settings.normalizeNewtabShortcutWidth(359), 360);
+assert.strictEqual(settings.normalizeNewtabShortcutWidth(920), 920);
+assert.strictEqual(settings.normalizeNewtabShortcutWidth(1441), 1440);
+assert.strictEqual(settings.normalizeNewtabShortcutWidth(720.5), 721);
+assert.strictEqual(
+  settings.NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY,
+  '_x_extension_newtab_shortcut_columns_2026_unique_'
+);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_COLUMNS_MIN, 4);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_COLUMNS_MAX, 16);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_COLUMNS_DEFAULT, 10);
+assert.strictEqual(settings.normalizeNewtabShortcutColumns(undefined), 10);
+assert.strictEqual(settings.normalizeNewtabShortcutColumns(3), 4);
+assert.strictEqual(settings.normalizeNewtabShortcutColumns(10.5), 11);
+assert.strictEqual(settings.normalizeNewtabShortcutColumns(17), 16);
+assert.strictEqual(settings.inferNewtabShortcutColumnsFromWidth(360), 4);
+assert.strictEqual(settings.inferNewtabShortcutColumnsFromWidth(920), 10);
+assert.strictEqual(settings.inferNewtabShortcutColumnsFromWidth(1440), 16);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_SIZE_MIN, 48);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_SIZE_MAX, 80);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_SIZE_DEFAULT, 64);
+assert.strictEqual(settings.normalizeNewtabShortcutSize(undefined), 64);
+assert.strictEqual(settings.normalizeNewtabShortcutSize(47), 48);
+assert.strictEqual(settings.normalizeNewtabShortcutSize(81), 80);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_GAP_MIN, 0);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_GAP_MAX, 24);
+assert.strictEqual(settings.NEWTAB_SHORTCUT_GAP_DEFAULT, 4);
+assert.strictEqual(settings.normalizeNewtabShortcutGap(undefined), 4);
+assert.strictEqual(settings.normalizeNewtabShortcutGap(-1), 0);
+assert.strictEqual(settings.normalizeNewtabShortcutGap(25), 24);
 
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(false), false);
 assert.strictEqual(settings.normalizeBookmarkFolderIconsVisible(true), true);
@@ -340,6 +423,36 @@ async function testProviderStorageRuntime() {
     await runtime.area.get([languageKey]),
     { [languageKey]: 'zh_CN' },
     'the runtime should keep reading the Chrome Sync value'
+  );
+
+  let multiWriteCount = 0;
+  let multiWritePayload = null;
+  const writtenValues = await settings.writeStorageValues({
+    set(payload, callback) {
+      multiWriteCount += 1;
+      multiWritePayload = payload;
+      callback();
+    }
+  }, { runtime: { lastError: null } }, {
+    customProviders: [{ id: 'source-1' }],
+    disabledProviders: ['builtin-1']
+  });
+  assert.strictEqual(multiWriteCount, 1, 'related storage keys must be written in one operation');
+  assert.deepStrictEqual(multiWritePayload, writtenValues);
+  assert.deepStrictEqual(writtenValues, {
+    customProviders: [{ id: 'source-1' }],
+    disabledProviders: ['builtin-1']
+  });
+
+  const chromeWithMultiWriteError = { runtime: { lastError: null } };
+  await assert.rejects(
+    settings.writeStorageValues({
+      set(_payload, callback) {
+        chromeWithMultiWriteError.runtime.lastError = { message: 'multi write failed' };
+        callback();
+      }
+    }, chromeWithMultiWriteError, { customProviders: [] }),
+    /multi write failed/
   );
 }
 

@@ -203,19 +203,19 @@ assert.match(
 
 assert.match(
   newtabSource,
-  /function getSearchModeMenuItems\(\) \{\s*return loadSiteSearchIconCache\(\)\.then\(buildSearchModeMenuItems\);/,
-  'newtab should finish the local cache read before rendering its provider menu'
+  /function getSearchModeMenuItems\(\) \{[\s\S]*?Promise\.all\(\[[\s\S]*?loadSiteSearchIconCache\(\)[\s\S]*?getAggregateSearches\(\)[\s\S]*?\]\)\.then\(buildSearchModeMenuItems\);/,
+  'newtab should finish the icon cache and aggregate configuration reads before rendering its provider menu'
 );
 
 assert.match(
   overlaySource,
-  /function getSearchModeMenuItems\(\) \{[\s\S]*?return loadSiteSearchIconCache\(\)\.then\(buildSearchModeMenuItems\);/,
-  'only opening the shortcut panel should wait for an unfinished local cache read'
+  /function getSearchModeMenuItems\(\) \{[\s\S]*?Promise\.all\(\[[\s\S]*?loadSiteSearchIconCache\(\)[\s\S]*?getAggregateSearches\(\)[\s\S]*?\]\)\.then\(buildSearchModeMenuItems\);/,
+  'opening the shortcut panel should wait for unfinished icon and aggregate configuration reads'
 );
 
 assert.match(
   overlaySource,
-  /siteSearchIconStorageListener[\s\S]*?setSiteSearchPrefix\(activeProvider,[\s\S]*?inputModeController\.refreshModeMenu\(\)/,
+  /storageChangeListeners\.add\(\(changes,\s*areaName\) => \{[\s\S]*?changes && changes\[SITE_SEARCH_ICON_CACHE_STORAGE_KEY\][\s\S]*?setSiteSearchPrefix\(activeProvider,[\s\S]*?inputModeController\.refreshModeMenu\(\)[\s\S]*?\}\);/,
   'an open overlay tag and menu should adopt background-warmed icons immediately'
 );
 

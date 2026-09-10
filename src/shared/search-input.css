@@ -157,6 +157,11 @@
   transition: background-color 140ms ease, color 140ms ease;
 }
 
+.x-lumno-search-input__icon[data-search-scope-action="true"][aria-disabled="true"] {
+  pointer-events: none;
+  cursor: default;
+}
+
 .x-lumno-search-input__icon[data-search-scope-action="true"][data-hover-active="true"] {
   background: var(--x-ext-input-icon-hover-bg, rgba(148, 163, 184, 0.16));
   color: var(--x-ext-input-icon-hover, #4b5563);
@@ -649,7 +654,7 @@
   outline: none !important;
 }
 
-.x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"]) {
+.x-lumno-search-input-mode__menu-item:hover:not([aria-checked="true"]):not(:focus-visible) {
   border-color: transparent !important;
 }
 

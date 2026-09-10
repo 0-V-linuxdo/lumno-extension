@@ -9,7 +9,7 @@ const newtabWallpaperJs = fs.readFileSync(
   path.join(repoRoot, 'src/newtab/wallpaper.js'),
   'utf8'
 );
-const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'newtab.html'), 'utf8');
 const overlaySearchPanelJs = fs.readFileSync(
   path.join(repoRoot, 'src/overlay/search-panel.js'),
   'utf8'
@@ -19,7 +19,7 @@ const overlaySuggestionsCss = fs.readFileSync(
   'utf8'
 );
 const htmlFiles = [
-  'src/newtab/newtab.html',
+  'newtab.html',
   'src/options/options.html',
   'src/onboarding/onboarding.html'
 ];
@@ -53,9 +53,9 @@ assertMatches(
   'options should finish indicator measurements before applying style writes'
 );
 assert.strictEqual(
-  (optionsJs.match(/^\s*chrome\.storage\.onChanged\.addListener/gm) || []).length,
+  (optionsJs.match(/SETTINGS\.addStorageChangeListener\(chrome, listener\)/g) || []).length,
   1,
-  'options storage listeners should register through the guarded helper'
+  'options storage listeners should register through the shared guarded helper'
 );
 assertMatches(
   optionsJs,
@@ -114,7 +114,8 @@ assertMatches(
   'visible-shortcuts',
   'recent-sites',
   'bookmarks',
-  'deferred-content'
+  'fonts',
+  'visual-ready'
 ].forEach((task) => {
   assert(
     newtabJs.includes(`observeNewtabStartupTask('${task}'`),
@@ -161,14 +162,19 @@ assertMatches(
   'new tab theme bootstrap should tolerate favicon runtime initialization still being pending'
 );
 assert.strictEqual(
-  (newtabJs.match(/^\s*chrome\.storage\.onChanged\.addListener/gm) || []).length,
+  (newtabJs.match(/SETTINGS\.addStorageChangeListener\(chrome, listener\)/g) || []).length,
   1,
-  'new tab storage listeners should register through the guarded helper'
+  'new tab storage listeners should register through the shared guarded helper'
 );
 assert.strictEqual(
   (newtabJs.match(/chrome\.runtime\.getURL\(/g) || []).length,
-  1,
-  'new tab extension resources should resolve through the guarded URL helper'
+  2,
+  'new tab extension resources should resolve through the guarded URL helper; Gecko own-page match uses getURL("")'
+);
+assert.match(
+  newtabJs,
+  /chrome\.runtime\.getURL\(''\)/,
+  'Gecko own-page detection should match via runtime.getURL root'
 );
 assertMatches(
   newtabJs,

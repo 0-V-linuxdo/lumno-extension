@@ -1,6 +1,6 @@
 {
   "name": "lumno-extension",
-  "version": "0.9.51",
+  "version": "0.9.55",
   "private": true,
   "engines": {
     "node": "20.x"
@@ -25,6 +25,7 @@
     "test:firefox-manifest": "node scripts/test-firefox-manifest.js",
     "test:gecko-runtime": "node scripts/test-gecko-runtime.js",
     "test:package-firefox": "node scripts/test-package-firefox.js",
+    "test:search-input-gecko-align": "node scripts/test-search-input-gecko-align.js",
     "test:package-store": "node scripts/test-package-store.js",
     "test:blacklist": "node scripts/test-blacklist.js",
     "test:url-guards": "node scripts/test-url-guards.js",

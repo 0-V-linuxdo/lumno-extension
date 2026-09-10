@@ -18,25 +18,85 @@
   };
   const PRELOAD_STORAGE_KEY = '_x_extension_newtab_wallpaper_preload_2026_unique_';
   const PRELOAD_STORAGE_VERSION = 4;
-  const WALLPAPER_EFFECT_MODE_STORAGE_VERSION = 4;
+  const WALLPAPER_EFFECT_MODE_STORAGE_VERSION = 11;
   const NEWTAB_TIME_FONT_WEIGHT_MIN = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MIN) || 300;
   const NEWTAB_TIME_FONT_WEIGHT_MAX = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_MAX) || 800;
   const NEWTAB_TIME_FONT_WEIGHT_DEFAULT = Number(SETTINGS.NEWTAB_TIME_FONT_WEIGHT_DEFAULT) || 320;
   const FALLBACK_WALLPAPER_EFFECT_PREFS = {
-    version: 4,
+    version: 11,
     type: 'none',
     inkTone: 'auto',
     strength: 50,
     size: 50,
-    spacing: 50
+    spacing: 50,
+    texture: 20,
+    blockSize: 1,
+    crtStrength: 20,
+    crtBloom: 15,
+    crtRgbOffset: 35,
+    crtCurvature: 18
   };
+  const CRT_PARAMETER_PHYSICAL_MAX = Object.freeze({
+    crtStrength: 20,
+    crtBloom: 20,
+    crtRgbOffset: 100,
+    crtCurvature: 35
+  });
+  const BLOCK_PARAMETER_MAX = 5;
+  const BLOCK_DEFAULT_SIZE_UI = 1;
 
-  function normalizeSingleWallpaperEffectPrefs(value) {
-    if (typeof WALLPAPER_EFFECTS.normalizePrefs === 'function') {
-      return WALLPAPER_EFFECTS.normalizePrefs(value);
+  function getCrtParameterPercent(key, value) {
+    const physicalMax = CRT_PARAMETER_PHYSICAL_MAX[key];
+    const number = Number(value);
+    if (!Number.isFinite(physicalMax) || !Number.isFinite(number) || physicalMax <= 0) {
+      return 0;
     }
-    const source = value && typeof value === 'object' ? value : {};
-    const type = ['none', 'grain', 'halftone', 'dither', 'ascii'].includes(source.type)
+    return Math.round(Math.max(0, Math.min(100, (number / physicalMax) * 100)));
+  }
+
+  function getCrtParameterPhysicalValue(key, percent) {
+    const physicalMax = CRT_PARAMETER_PHYSICAL_MAX[key];
+    const number = Number(percent);
+    if (!Number.isFinite(physicalMax) || !Number.isFinite(number) || physicalMax <= 0) {
+      return 0;
+    }
+    return Math.round((Math.max(0, Math.min(100, number)) / 100) * physicalMax * 1000) / 1000;
+  }
+
+  function normalizeSingleWallpaperEffectPrefs(value, inheritedVersion) {
+    if (typeof WALLPAPER_EFFECTS.normalizePrefs === 'function') {
+      return WALLPAPER_EFFECTS.normalizePrefs(value, inheritedVersion);
+    }
+    const rawSource = value && typeof value === 'object' ? value : {};
+    const ownVersion = Number(rawSource.version);
+    const fallbackVersion = Number(inheritedVersion);
+    const storedVersion = Number.isFinite(ownVersion) ? ownVersion : fallbackVersion;
+    const source = Object.assign({}, rawSource);
+    if (!Number.isFinite(storedVersion) || storedVersion < 11) {
+      if (source.type === 'blocks') {
+        const explicitBlockSize = Number(source.blockSize);
+        const legacySize = Number(source.size);
+        let blockSize = Number.isFinite(explicitBlockSize) ? explicitBlockSize : legacySize;
+        if ((!Number.isFinite(storedVersion) || storedVersion < 10) &&
+            Number.isFinite(blockSize) && blockSize > BLOCK_PARAMETER_MAX) {
+          blockSize /= 20;
+        }
+        source.blockSize = Number.isFinite(blockSize) ? blockSize : BLOCK_DEFAULT_SIZE_UI;
+        source.strength = FALLBACK_WALLPAPER_EFFECT_PREFS.strength;
+        source.size = FALLBACK_WALLPAPER_EFFECT_PREFS.size;
+        source.spacing = FALLBACK_WALLPAPER_EFFECT_PREFS.spacing;
+        source.texture = FALLBACK_WALLPAPER_EFFECT_PREFS.texture;
+      }
+      if (source.type === 'crt') {
+        source.crtStrength = Number.isFinite(Number(source.crtStrength))
+          ? source.crtStrength
+          : (Number.isFinite(Number(source.strength))
+            ? source.strength
+            : FALLBACK_WALLPAPER_EFFECT_PREFS.crtStrength);
+        source.strength = FALLBACK_WALLPAPER_EFFECT_PREFS.strength;
+      }
+    }
+    const type = ['none', 'blur', 'grain', 'blocks', 'halftone', 'dither', 'ascii', 'crt'].includes(source.type)
       ? source.type
       : FALLBACK_WALLPAPER_EFFECT_PREFS.type;
     const normalizePercent = (raw, fallback) => {
@@ -44,6 +104,16 @@
       return Number.isFinite(number)
         ? Math.max(0, Math.min(100, Math.round(number)))
         : fallback;
+    };
+    const normalizeCrtPhysical = (raw, fallback, max) => {
+      const number = Number(raw);
+      const bounded = Number.isFinite(number) ? Math.max(0, Math.min(max, number)) : fallback;
+      return Math.round(bounded * 1000) / 1000;
+    };
+    const normalizeBlockParameter = (raw, fallback) => {
+      const number = Number(raw);
+      if (!Number.isFinite(number)) return fallback;
+      return Math.max(0, Math.min(BLOCK_PARAMETER_MAX, Math.round(number)));
     };
     const rawSize = Number.isFinite(Number(source.size)) ? source.size : source.density;
     return {
@@ -54,22 +124,43 @@
         : FALLBACK_WALLPAPER_EFFECT_PREFS.inkTone,
       strength: normalizePercent(source.strength, FALLBACK_WALLPAPER_EFFECT_PREFS.strength),
       size: normalizePercent(rawSize, FALLBACK_WALLPAPER_EFFECT_PREFS.size),
-      spacing: normalizePercent(source.spacing, FALLBACK_WALLPAPER_EFFECT_PREFS.spacing)
+      spacing: normalizePercent(source.spacing, FALLBACK_WALLPAPER_EFFECT_PREFS.spacing),
+      texture: normalizePercent(source.texture, FALLBACK_WALLPAPER_EFFECT_PREFS.texture),
+      blockSize: normalizeBlockParameter(source.blockSize, BLOCK_DEFAULT_SIZE_UI),
+      crtStrength: normalizeCrtPhysical(
+        source.crtStrength,
+        FALLBACK_WALLPAPER_EFFECT_PREFS.crtStrength,
+        20
+      ),
+      crtBloom: normalizeCrtPhysical(source.crtBloom, FALLBACK_WALLPAPER_EFFECT_PREFS.crtBloom, 20),
+      crtRgbOffset: normalizePercent(
+        source.crtRgbOffset,
+        FALLBACK_WALLPAPER_EFFECT_PREFS.crtRgbOffset
+      ),
+      crtCurvature: normalizeCrtPhysical(
+        source.crtCurvature,
+        FALLBACK_WALLPAPER_EFFECT_PREFS.crtCurvature,
+        35
+      )
     };
   }
 
   function normalizeWallpaperEffectStoragePrefs(value) {
+    if (typeof WALLPAPER_EFFECTS.normalizeStoragePrefs === 'function') {
+      return WALLPAPER_EFFECTS.normalizeStoragePrefs(value);
+    }
     const source = value && typeof value === 'object' ? value : null;
     const hasModePrefs = Boolean(source &&
       ((source.light && typeof source.light === 'object') ||
         (source.dark && typeof source.dark === 'object')));
-    const shared = normalizeSingleWallpaperEffectPrefs(value);
+    const inheritedVersion = source && source.version;
+    const shared = normalizeSingleWallpaperEffectPrefs(value, inheritedVersion);
     const lightSource = hasModePrefs ? (source.light || source.dark) : shared;
     const darkSource = hasModePrefs ? (source.dark || source.light) : shared;
     return {
       version: WALLPAPER_EFFECT_MODE_STORAGE_VERSION,
-      light: normalizeSingleWallpaperEffectPrefs(lightSource),
-      dark: normalizeSingleWallpaperEffectPrefs(darkSource)
+      light: normalizeSingleWallpaperEffectPrefs(lightSource, inheritedVersion),
+      dark: normalizeSingleWallpaperEffectPrefs(darkSource, inheritedVersion)
     };
   }
 
@@ -137,6 +228,59 @@
       : function() { return searchWidthConfig.fallback; };
     const setSearchWidth = typeof options.setSearchWidth === 'function'
       ? options.setSearchWidth
+      : function() {};
+    const shortcutColumnsConfig = Object.assign({
+      min: 4,
+      max: 16,
+      fallback: 10
+    }, options.shortcutColumnsConfig || {});
+    const shortcutSizeConfig = Object.assign({
+      min: 48,
+      max: 80,
+      fallback: 64
+    }, options.shortcutSizeConfig || {});
+    const shortcutGapConfig = Object.assign({
+      min: 0,
+      max: 24,
+      fallback: 4
+    }, options.shortcutGapConfig || {});
+    const getShortcutsVisible = typeof options.getShortcutsVisible === 'function'
+      ? options.getShortcutsVisible
+      : function() { return true; };
+    const setShortcutsVisible = typeof options.setShortcutsVisible === 'function'
+      ? options.setShortcutsVisible
+      : function() {};
+    const getShortcutAddVisible = typeof options.getShortcutAddVisible === 'function'
+      ? options.getShortcutAddVisible
+      : function() { return true; };
+    const setShortcutAddVisible = typeof options.setShortcutAddVisible === 'function'
+      ? options.setShortcutAddVisible
+      : function() {};
+    const getShortcutDockMagnificationEnabled =
+      typeof options.getShortcutDockMagnificationEnabled === 'function'
+        ? options.getShortcutDockMagnificationEnabled
+        : function() { return true; };
+    const setShortcutDockMagnificationEnabled =
+      typeof options.setShortcutDockMagnificationEnabled === 'function'
+        ? options.setShortcutDockMagnificationEnabled
+        : function() {};
+    const getShortcutColumns = typeof options.getShortcutColumns === 'function'
+      ? options.getShortcutColumns
+      : function() { return shortcutColumnsConfig.fallback; };
+    const setShortcutColumns = typeof options.setShortcutColumns === 'function'
+      ? options.setShortcutColumns
+      : function() {};
+    const getShortcutSize = typeof options.getShortcutSize === 'function'
+      ? options.getShortcutSize
+      : function() { return shortcutSizeConfig.fallback; };
+    const setShortcutSize = typeof options.setShortcutSize === 'function'
+      ? options.setShortcutSize
+      : function() {};
+    const getShortcutGap = typeof options.getShortcutGap === 'function'
+      ? options.getShortcutGap
+      : function() { return shortcutGapConfig.fallback; };
+    const setShortcutGap = typeof options.setShortcutGap === 'function'
+      ? options.setShortcutGap
       : function() {};
     const featureHints = options.featureHints || globalThis.LumnoFeatureHints || {};
     const getInputAutoFocusEnabled = typeof options.getInputAutoFocusEnabled === 'function'
@@ -333,19 +477,28 @@
       dark: { top: 44, mid: 20, bottom: 50 }
     };
     const NEWTAB_WALLPAPER_EFFECT_DEFAULTS = WALLPAPER_EFFECTS.DEFAULT_PREFS || {
-      version: 4,
+      version: 11,
       type: 'none',
       inkTone: 'auto',
       strength: 50,
       size: 50,
-      spacing: 50
+      spacing: 50,
+      texture: 20,
+      blockSize: 1,
+      crtStrength: 20,
+      crtBloom: 15,
+      crtRgbOffset: 35,
+      crtCurvature: 18
     };
     const NEWTAB_WALLPAPER_EFFECT_TYPES = [
       { type: 'none', labelKey: 'newtab_wallpaper_effect_none', fallback: 'Off' },
+      { type: 'blur', labelKey: 'newtab_wallpaper_effect_blur', fallback: 'Glass blur' },
       { type: 'grain', labelKey: 'newtab_wallpaper_effect_grain', fallback: 'Grain' },
+      { type: 'blocks', labelKey: 'newtab_wallpaper_effect_blocks', fallback: 'Blocks' },
       { type: 'halftone', labelKey: 'newtab_wallpaper_effect_halftone', fallback: 'Halftone' },
       { type: 'dither', labelKey: 'newtab_wallpaper_effect_dither', fallback: 'Dither' },
-      { type: 'ascii', labelKey: 'newtab_wallpaper_effect_ascii', fallback: 'ASCII' }
+      { type: 'ascii', labelKey: 'newtab_wallpaper_effect_ascii', fallback: 'ASCII' },
+      { type: 'crt', labelKey: 'newtab_wallpaper_effect_crt', fallback: 'CRT' }
     ];
     const NEWTAB_WALLPAPER_EFFECT_INK_TONES = [
       { tone: 'dark', labelKey: 'newtab_wallpaper_effect_ink_dark', fallback: 'Shadows' },
@@ -392,6 +545,7 @@
     const WALLPAPER_PANEL_RESIZE_DURATION_MS = 260;
     const WALLPAPER_PANEL_RESIZE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
     const WALLPAPER_VISUAL_TRANSITION_MS = 220;
+    const WALLPAPER_FILTER_TRANSITION_MS = 180;
     const WALLPAPER_VISUAL_REFRESH_DELAY_MS = 80;
     const WALLPAPER_IMAGE_READY_CACHE_LIMIT = 8;
 
@@ -423,7 +577,6 @@
     let topContentOffTab = null;
     let topContentWeightControl = null;
     let topContentWeightTitle = null;
-    let topContentWeightValue = null;
     let topContentWeightSlider = null;
     let topContentSecondsRow = null;
     let topContentSecondsTitle = null;
@@ -434,16 +587,39 @@
     let wallpaperAppearanceOptions = null;
     let wallpaperSearchWidthControl = null;
     let wallpaperSearchWidthLabel = null;
-    let wallpaperSearchWidthValue = null;
     let wallpaperSearchWidthSlider = null;
     let wallpaperInputAutoFocusTitle = null;
     let wallpaperInputAutoFocusInfoButton = null;
     let wallpaperInputAutoFocusToggle = null;
     let wallpaperInputAutoFocusHintController = null;
     let inputAutoFocusReadyResolved = false;
+    let wallpaperShortcutsAccordion = null;
+    let wallpaperShortcutsAccordionTrigger = null;
+    let wallpaperShortcutsTitle = null;
+    let wallpaperShortcutsDetails = null;
+    let wallpaperShortcutsToggle = null;
+    let wallpaperShortcutAddTitle = null;
+    let wallpaperShortcutAddToggle = null;
+    let wallpaperShortcutDockMagnificationTitle = null;
+    let wallpaperShortcutDockMagnificationToggle = null;
+    let wallpaperShortcutColumnsControl = null;
+    let wallpaperShortcutColumnsLabel = null;
+    let wallpaperShortcutColumnsSlider = null;
+    let wallpaperShortcutSizeControl = null;
+    let wallpaperShortcutSizeLabel = null;
+    let wallpaperShortcutSizeSlider = null;
+    let wallpaperShortcutSizeResetButton = null;
+    let wallpaperShortcutGapControl = null;
+    let wallpaperShortcutGapLabel = null;
+    let wallpaperShortcutGapSlider = null;
+    let wallpaperShortcutGapResetButton = null;
+    let wallpaperShortcutsAccordionExpanded = false;
     let wallpaperAppearanceMoreSettingsLink = null;
     let wallpaperAppearanceMoreSettingsText = null;
     let wallpaperSearchWidthSaveTimer = null;
+    let wallpaperShortcutColumnsSaveTimer = null;
+    let wallpaperShortcutSizeSaveTimer = null;
+    let wallpaperShortcutGapSaveTimer = null;
     let wallpaperOverlayLabel = null;
     let wallpaperOverlaySlider = null;
     let wallpaperEffectLabel = null;
@@ -461,6 +637,18 @@
     let wallpaperEffectSpacingControl = null;
     let wallpaperEffectSpacingLabel = null;
     let wallpaperEffectSpacingSlider = null;
+    let wallpaperEffectTextureControl = null;
+    let wallpaperEffectTextureLabel = null;
+    let wallpaperEffectTextureSlider = null;
+    let wallpaperEffectCrtBloomControl = null;
+    let wallpaperEffectCrtBloomLabel = null;
+    let wallpaperEffectCrtBloomSlider = null;
+    let wallpaperEffectCrtRgbOffsetControl = null;
+    let wallpaperEffectCrtRgbOffsetLabel = null;
+    let wallpaperEffectCrtRgbOffsetSlider = null;
+    let wallpaperEffectCrtCurvatureControl = null;
+    let wallpaperEffectCrtCurvatureLabel = null;
+    let wallpaperEffectCrtCurvatureSlider = null;
     let newtabFaviconTitle = null;
     let newtabFaviconOptions = null;
     let newtabFaviconThemeQueryList = null;
@@ -1361,9 +1549,31 @@
       const layer = document.createElement('div');
       layer.className = 'x-nt-wallpaper-transition-layer';
       layer.style.backgroundColor = computedStyle.backgroundColor;
-      layer.style.backgroundImage = computedStyle.backgroundImage;
-      layer.style.backgroundSize = computedStyle.backgroundSize;
-      layer.style.backgroundPosition = computedStyle.backgroundPosition;
+      if (document.body.getAttribute('data-wallpaper-effect') === 'blur') {
+        layer.setAttribute('data-wallpaper-effect', 'blur');
+        layer.style.backgroundImage =
+          computedStyle.getPropertyValue('--x-nt-wallpaper-image').trim() || 'none';
+        layer.style.backgroundSize =
+          computedStyle.getPropertyValue('--x-nt-wallpaper-size').trim() || 'cover';
+        layer.style.backgroundPosition =
+          computedStyle.getPropertyValue('--x-nt-wallpaper-position').trim() || 'center center';
+        [
+          '--x-nt-wallpaper-blur-overscan',
+          '--x-nt-wallpaper-blur-radius',
+          '--x-nt-wallpaper-blur-saturate',
+          '--x-nt-wallpaper-blur-brightness',
+          '--x-nt-wallpaper-blur-contrast'
+        ].forEach((propertyName) => {
+          const propertyValue = computedStyle.getPropertyValue(propertyName).trim();
+          if (propertyValue) {
+            layer.style.setProperty(propertyName, propertyValue);
+          }
+        });
+      } else {
+        layer.style.backgroundImage = computedStyle.backgroundImage;
+        layer.style.backgroundSize = computedStyle.backgroundSize;
+        layer.style.backgroundPosition = computedStyle.backgroundPosition;
+      }
       layer.style.backgroundRepeat = computedStyle.backgroundRepeat;
       layer.style.backgroundAttachment = 'fixed';
       document.body.insertBefore(layer, document.body.firstChild);
@@ -1380,7 +1590,9 @@
           if (layer.parentNode) {
             layer.parentNode.removeChild(layer);
           }
-        }, WALLPAPER_VISUAL_TRANSITION_MS + 80);
+        }, (layer.getAttribute('data-wallpaper-filter-transition') === 'true'
+          ? WALLPAPER_FILTER_TRANSITION_MS
+          : WALLPAPER_VISUAL_TRANSITION_MS) + 80);
       });
     }
 
@@ -2017,12 +2229,27 @@
       if (!slider) {
         return;
       }
+      if (typeof config.dynamicRange === 'boolean') {
+        if (config.dynamicRange) {
+          slider.setAttribute('data-wallpaper-dynamic-range', 'true');
+          slider.step = 'any';
+        } else {
+          slider.removeAttribute('data-wallpaper-dynamic-range');
+          slider.min = String(Number.isFinite(Number(config.min)) ? Number(config.min) : 0);
+          slider.max = String(Number.isFinite(Number(config.max)) ? Number(config.max) : 100);
+          slider.step = '1';
+        }
+      }
       const value = Number(config.value);
       const normalizedValue = Number.isFinite(value) ? value : 0;
+      ensureDynamicWallpaperSliderRange(slider, normalizedValue, false);
       slider.value = String(normalizedValue);
-      slider.style.setProperty('--x-nt-overlay-slider-percent', `${normalizedValue}%`);
+      updateWallpaperSliderFill(slider, normalizedValue);
       slider.setAttribute('aria-valuenow', String(normalizedValue));
-      slider.setAttribute('aria-valuetext', `${normalizedValue}%`);
+      slider.setAttribute(
+        'aria-valuetext',
+        config.percent === true ? `${normalizedValue}%` : String(normalizedValue)
+      );
       if (typeof config.enabled === 'boolean') {
         slider.disabled = !config.enabled;
         if (slider.parentElement) {
@@ -2032,7 +2259,185 @@
       if (config.labelKey) {
         slider.setAttribute('aria-label', t(config.labelKey, config.fallback));
       }
+      syncWallpaperSliderValueInput(slider);
       syncWallpaperSliderValueBubble(slider);
+      const sliderRow = typeof slider.closest === 'function'
+        ? slider.closest('.x-nt-range-slider-row')
+        : null;
+      if (sliderRow) {
+        if (config.percent === true) {
+          sliderRow.setAttribute('data-value-suffix', '%');
+          slider.setAttribute('data-value-suffix', '%');
+        } else {
+          sliderRow.removeAttribute('data-value-suffix');
+          slider.removeAttribute('data-value-suffix');
+        }
+      }
+      const endTick = sliderRow
+        ? sliderRow.querySelector('.x-nt-overlay-tick[data-align="end"]')
+        : null;
+      if (endTick && !isDynamicWallpaperSlider(slider)) {
+        endTick.textContent = Number(slider.max) === 100 ? '100%' : slider.max;
+      }
+      const middleTick = sliderRow
+        ? sliderRow.querySelector('.x-nt-overlay-tick[data-overlay-tick="default"]')
+        : null;
+      if (middleTick && !isDynamicWallpaperSlider(slider)) {
+        middleTick.textContent = config.percent === true
+          ? `${Math.round((Number(slider.min) + Number(slider.max)) / 2)}%`
+          : Number(slider.max) === 100
+          ? t('newtab_wallpaper_overlay_default_tick', 'Default')
+          : String(Math.round((Number(slider.min) + Number(slider.max)) / 2));
+      }
+    }
+
+    function getWallpaperSliderValueInput(slider) {
+      if (!slider || typeof slider.closest !== 'function') {
+        return null;
+      }
+      const row = slider.closest('.x-nt-range-slider-row');
+      return row
+        ? row.querySelector('._x_extension_range_slider_value_input_2026_unique_')
+        : null;
+    }
+
+    function isDynamicWallpaperSlider(slider) {
+      return Boolean(slider && slider.getAttribute('data-wallpaper-dynamic-range') === 'true');
+    }
+
+    function ensureDynamicWallpaperSliderRange(slider, value, recenterAtEdge) {
+      if (!isDynamicWallpaperSlider(slider) || !Number.isFinite(Number(value))) {
+        return false;
+      }
+      const number = Number(value);
+      const currentMin = Number(slider.min);
+      const currentMax = Number(slider.max);
+      const hasRange = Number.isFinite(currentMin) && Number.isFinite(currentMax) && currentMax > currentMin;
+      const outside = !hasRange || number < currentMin || number > currentMax;
+      const atEdge = hasRange && (number <= currentMin || number >= currentMax);
+      if (!outside && !(recenterAtEdge && atEdge)) {
+        return false;
+      }
+      const currentRadius = hasRange ? (currentMax - currentMin) / 2 : 50;
+      const radius = Math.max(50, Math.abs(number) * 0.25, currentRadius);
+      const rawMin = number - radius;
+      const rawMax = number + radius;
+      const nextMin = Number.isFinite(rawMin) ? rawMin : -Number.MAX_VALUE;
+      const nextMax = Number.isFinite(rawMax) ? rawMax : Number.MAX_VALUE;
+      if (!(nextMax > nextMin)) {
+        return false;
+      }
+      slider.min = String(nextMin);
+      slider.max = String(nextMax);
+      return true;
+    }
+
+    function updateWallpaperSliderFill(slider, value) {
+      if (!slider || !slider.style) {
+        return;
+      }
+      const min = Number(slider.min);
+      const max = Number(slider.max);
+      const number = Number(value);
+      const percent = Number.isFinite(number) && Number.isFinite(min) && Number.isFinite(max) && max > min
+        ? ((number - min) / (max - min)) * 100
+        : 0;
+      slider.style.setProperty('--x-nt-overlay-slider-percent', `${percent}%`);
+    }
+
+    function syncWallpaperSliderValueInput(slider) {
+      const valueInput = getWallpaperSliderValueInput(slider);
+      if (!valueInput) {
+        return;
+      }
+      if (isDynamicWallpaperSlider(slider)) {
+        valueInput.removeAttribute('min');
+        valueInput.removeAttribute('max');
+        valueInput.step = 'any';
+      } else {
+        valueInput.min = slider.min;
+        valueInput.max = slider.max;
+        valueInput.step = slider.step;
+      }
+      valueInput.value = slider.value;
+      valueInput.disabled = Boolean(slider.disabled);
+      const label = String(slider.getAttribute('aria-label') || '').trim();
+      if (label) {
+        valueInput.setAttribute('aria-label', `${label} value`);
+      }
+    }
+
+    function commitWallpaperSliderValueInput(slider) {
+      const valueInput = getWallpaperSliderValueInput(slider);
+      if (!slider || !valueInput) {
+        return;
+      }
+      const draft = String(valueInput.value || '').trim();
+      const number = Number(draft);
+      if (!draft || !Number.isFinite(number)) {
+        syncWallpaperSliderValueInput(slider);
+        return;
+      }
+      const min = Number(slider.min);
+      const max = Number(slider.max);
+      const step = Number(slider.step);
+      const dynamicRange = isDynamicWallpaperSlider(slider);
+      if (dynamicRange) {
+        ensureDynamicWallpaperSliderRange(slider, number, false);
+      }
+      const bounded = dynamicRange
+        ? number
+        : Math.min(
+          Number.isFinite(max) ? max : number,
+          Math.max(Number.isFinite(min) ? min : number, number)
+        );
+      const nextValue = !dynamicRange && Number.isFinite(step) && step > 0 && Number.isFinite(min)
+        ? min + Math.round((bounded - min) / step) * step
+        : bounded;
+      slider.value = String(nextValue);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      syncWallpaperSliderValueInput(slider);
+    }
+
+    function bindWallpaperSliderValueInput(slider) {
+      const valueInput = getWallpaperSliderValueInput(slider);
+      if (!slider || !valueInput || valueInput.dataset.sliderValueInputBound === 'true') {
+        return;
+      }
+      valueInput.dataset.sliderValueInputBound = 'true';
+      slider.addEventListener('input', () => {
+        syncWallpaperSliderValueInput(slider);
+      });
+      slider.addEventListener('change', () => {
+        syncWallpaperSliderValueInput(slider);
+      });
+      valueInput.addEventListener('input', () => {
+        if (isDynamicWallpaperSlider(slider)) {
+          return;
+        }
+        const number = Number(valueInput.value);
+        const min = Number(slider.min);
+        const max = Number(slider.max);
+        if (!Number.isFinite(number)) {
+          return;
+        }
+        if (Number.isFinite(min) && number < min) {
+          valueInput.value = String(min);
+        } else if (Number.isFinite(max) && number > max) {
+          valueInput.value = String(max);
+        }
+      });
+      valueInput.addEventListener('blur', () => {
+        commitWallpaperSliderValueInput(slider);
+      });
+      valueInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          valueInput.blur();
+        }
+      });
+      syncWallpaperSliderValueInput(slider);
     }
 
     function updateWallpaperOverlayControlUi() {
@@ -2153,7 +2558,7 @@
     }
 
     function doesWallpaperEffectSupportSize(type) {
-      return type === 'halftone' || type === 'dither' || type === 'ascii';
+      return type === 'blocks' || type === 'halftone' || type === 'dither' || type === 'ascii';
     }
 
     function doesWallpaperEffectSupportSpacing(type) {
@@ -2628,12 +3033,28 @@
     }
 
     function applyWallpaperEffectForResolvedMode() {
-      currentAppliedWallpaperEffectPrefs = getWallpaperEffectPrefsForMode(getResolvedWallpaperMode());
+      const previousType = currentAppliedWallpaperEffectPrefs.type;
+      const nextPrefs = getWallpaperEffectPrefsForMode(getResolvedWallpaperMode());
+      const transitionLayer = previousType !== nextPrefs.type
+        ? createWallpaperTransitionLayer()
+        : null;
+      if (transitionLayer) {
+        transitionLayer.setAttribute('data-wallpaper-filter-transition', 'true');
+      }
+      currentAppliedWallpaperEffectPrefs = nextPrefs;
       if (document.body) {
         document.body.setAttribute('data-wallpaper-effect', currentAppliedWallpaperEffectPrefs.type);
       }
-      if (wallpaperEffects) {
-        wallpaperEffects.apply(currentAppliedWallpaperEffectPrefs);
+      const effectRenderReady = wallpaperEffects
+        ? wallpaperEffects.apply(currentAppliedWallpaperEffectPrefs)
+        : null;
+      if (transitionLayer && effectRenderReady && typeof effectRenderReady.then === 'function') {
+        Promise.resolve(effectRenderReady).then(
+          () => releaseWallpaperTransitionLayer(transitionLayer),
+          () => releaseWallpaperTransitionLayer(transitionLayer)
+        );
+      } else {
+        releaseWallpaperTransitionLayer(transitionLayer);
       }
       updateWallpaperEffectControlUi();
     }
@@ -2647,9 +3068,13 @@
     function getWallpaperEffectControlVisibility(prefs) {
       return {
         inkTone: doesWallpaperEffectSupportInkTone(prefs.type),
-        strength: prefs.type !== 'none',
+        strength: prefs.type !== 'none' && prefs.type !== 'blocks',
         size: doesWallpaperEffectSupportSize(prefs.type),
-        spacing: doesWallpaperEffectSupportSpacing(prefs.type)
+        spacing: doesWallpaperEffectSupportSpacing(prefs.type),
+        texture: prefs.type === 'blur',
+        crtBloom: prefs.type === 'crt',
+        crtRgbOffset: prefs.type === 'crt',
+        crtCurvature: prefs.type === 'crt'
       };
     }
 
@@ -2663,13 +3088,21 @@
         [wallpaperEffectInkToneControl, visibility.inkTone],
         [wallpaperEffectStrengthControl, visibility.strength],
         [wallpaperEffectSizeControl, visibility.size],
-        [wallpaperEffectSpacingControl, visibility.spacing]
+        [wallpaperEffectSpacingControl, visibility.spacing],
+        [wallpaperEffectTextureControl, visibility.texture],
+        [wallpaperEffectCrtBloomControl, visibility.crtBloom],
+        [wallpaperEffectCrtRgbOffsetControl, visibility.crtRgbOffset],
+        [wallpaperEffectCrtCurvatureControl, visibility.crtCurvature]
       ].some((item) => isWallpaperEffectControlVisibilityChanged(item[0], item[1]));
       const applyVisibility = () => {
         setWallpaperEffectSliderControlVisible(wallpaperEffectInkToneControl, visibility.inkTone);
         setWallpaperEffectSliderControlVisible(wallpaperEffectStrengthControl, visibility.strength);
         setWallpaperEffectSliderControlVisible(wallpaperEffectSizeControl, visibility.size);
         setWallpaperEffectSliderControlVisible(wallpaperEffectSpacingControl, visibility.spacing);
+        setWallpaperEffectSliderControlVisible(wallpaperEffectTextureControl, visibility.texture);
+        setWallpaperEffectSliderControlVisible(wallpaperEffectCrtBloomControl, visibility.crtBloom);
+        setWallpaperEffectSliderControlVisible(wallpaperEffectCrtRgbOffsetControl, visibility.crtRgbOffset);
+        setWallpaperEffectSliderControlVisible(wallpaperEffectCrtCurvatureControl, visibility.crtCurvature);
       };
       if (changed) {
         animateWallpaperPanelResize(applyVisibility);
@@ -2724,40 +3157,121 @@
       );
     }
 
-    function updateWallpaperEffectSlidersUi(prefs, visibility) {
-      updateWallpaperSliderElement(wallpaperEffectSlider, {
-        value: prefs.strength,
-        enabled: visibility.strength,
-        labelKey: 'newtab_wallpaper_effect_strength',
-        fallback: 'Sampling strength'
-      });
-      updateWallpaperSliderElement(wallpaperEffectSizeSlider, {
-        value: prefs.size,
-        enabled: visibility.size,
-        labelKey: 'newtab_wallpaper_effect_size',
-        fallback: 'Size'
-      });
-      updateWallpaperSliderElement(wallpaperEffectSpacingSlider, {
-        value: prefs.spacing,
-        enabled: visibility.spacing,
-        labelKey: 'newtab_wallpaper_effect_spacing',
-        fallback: 'Spacing'
-      });
+    function getWallpaperEffectStrengthLabel(prefs) {
+      if (prefs.type === 'blur') {
+        return { labelKey: 'newtab_wallpaper_effect_blur_strength', fallback: 'Blur strength' };
+      }
+      if (prefs.type === 'crt') {
+        return { labelKey: 'newtab_wallpaper_effect_crt_strength', fallback: 'Display intensity' };
+      }
+      return { labelKey: 'newtab_wallpaper_effect_strength', fallback: 'Sampling strength' };
     }
 
-    function updateWallpaperEffectTextUi() {
+    function getWallpaperEffectSizeLabel(prefs) {
+      if (prefs.type === 'blocks') {
+        return { labelKey: 'newtab_wallpaper_effect_blocks_size', fallback: 'Block size' };
+      }
+      return { labelKey: 'newtab_wallpaper_effect_size', fallback: 'Size' };
+    }
+
+    function getWallpaperEffectSpacingLabel(prefs) {
+      return { labelKey: 'newtab_wallpaper_effect_spacing', fallback: 'Spacing' };
+    }
+
+    function getWallpaperEffectTextureLabel() {
+      return { labelKey: 'newtab_wallpaper_effect_texture', fallback: 'Texture' };
+    }
+
+    function updateWallpaperEffectSlidersUi(prefs, visibility) {
+      const strengthLabel = getWallpaperEffectStrengthLabel(prefs);
+      const sizeLabel = getWallpaperEffectSizeLabel(prefs);
+      const spacingLabel = getWallpaperEffectSpacingLabel(prefs);
+      const textureLabel = getWallpaperEffectTextureLabel();
+      updateWallpaperSliderElement(wallpaperEffectSlider, {
+        value: prefs.type === 'crt'
+          ? getCrtParameterPercent('crtStrength', prefs.crtStrength)
+          : prefs.strength,
+        enabled: visibility.strength,
+        dynamicRange: false,
+        min: 0,
+        max: 100,
+        percent: prefs.type === 'crt',
+        labelKey: strengthLabel.labelKey,
+        fallback: strengthLabel.fallback
+      });
+      updateWallpaperSliderElement(wallpaperEffectSizeSlider, {
+        value: prefs.type === 'blocks' ? prefs.blockSize : prefs.size,
+        enabled: visibility.size,
+        dynamicRange: false,
+        min: 0,
+        max: prefs.type === 'blocks' ? BLOCK_PARAMETER_MAX : 100,
+        percent: false,
+        labelKey: sizeLabel.labelKey,
+        fallback: sizeLabel.fallback
+      });
+      updateWallpaperSliderElement(wallpaperEffectSpacingSlider, {
+        value: Math.round(clampNumber(prefs.spacing, 0, prefs.type === 'blocks' ? 5 : 100)),
+        enabled: visibility.spacing,
+        dynamicRange: false,
+        min: 0,
+        max: prefs.type === 'blocks' ? BLOCK_PARAMETER_MAX : 100,
+        percent: true,
+        labelKey: spacingLabel.labelKey,
+        fallback: spacingLabel.fallback
+      });
+      updateWallpaperSliderElement(wallpaperEffectTextureSlider, {
+        value: prefs.texture,
+        enabled: visibility.texture,
+        dynamicRange: false,
+        labelKey: textureLabel.labelKey,
+        fallback: textureLabel.fallback
+      });
+      [
+        { prefKey: 'crtBloom', slider: wallpaperEffectCrtBloomSlider, value: prefs.crtBloom, enabled: visibility.crtBloom, key: 'newtab_wallpaper_effect_crt_bloom', fallback: 'Bloom' },
+        { prefKey: 'crtRgbOffset', slider: wallpaperEffectCrtRgbOffsetSlider, value: prefs.crtRgbOffset, enabled: visibility.crtRgbOffset, key: 'newtab_wallpaper_effect_crt_rgb_offset', fallback: 'RGB offset' },
+        { prefKey: 'crtCurvature', slider: wallpaperEffectCrtCurvatureSlider, value: prefs.crtCurvature, enabled: visibility.crtCurvature, key: 'newtab_wallpaper_effect_crt_curvature', fallback: 'Screen curvature' }
+      ].forEach((item) => updateWallpaperSliderElement(item.slider, {
+        value: getCrtParameterPercent(item.prefKey, item.value),
+        enabled: item.enabled,
+        dynamicRange: false,
+        min: 0,
+        max: 100,
+        percent: true,
+        labelKey: item.key,
+        fallback: item.fallback
+      }));
+    }
+
+    function updateWallpaperEffectTextUi(prefs) {
       if (wallpaperEffectLabel) {
         wallpaperEffectLabel.textContent = t('newtab_wallpaper_effect_title', 'Wallpaper filter');
       }
       if (wallpaperEffectStrengthLabel) {
-        wallpaperEffectStrengthLabel.textContent = t('newtab_wallpaper_effect_strength', 'Sampling strength');
+        const strengthLabel = getWallpaperEffectStrengthLabel(prefs);
+        wallpaperEffectStrengthLabel.textContent = t(
+          strengthLabel.labelKey,
+          strengthLabel.fallback
+        );
       }
       if (wallpaperEffectSizeLabel) {
-        wallpaperEffectSizeLabel.textContent = t('newtab_wallpaper_effect_size', 'Size');
+        const sizeLabel = getWallpaperEffectSizeLabel(prefs);
+        wallpaperEffectSizeLabel.textContent = t(sizeLabel.labelKey, sizeLabel.fallback);
       }
       if (wallpaperEffectSpacingLabel) {
-        wallpaperEffectSpacingLabel.textContent = t('newtab_wallpaper_effect_spacing', 'Spacing');
+        const spacingLabel = getWallpaperEffectSpacingLabel(prefs);
+        wallpaperEffectSpacingLabel.textContent = t(spacingLabel.labelKey, spacingLabel.fallback);
       }
+      if (wallpaperEffectTextureLabel) {
+        const textureLabel = getWallpaperEffectTextureLabel();
+        wallpaperEffectTextureLabel.textContent = t(textureLabel.labelKey, textureLabel.fallback);
+      }
+      [
+        [wallpaperEffectCrtBloomLabel, 'newtab_wallpaper_effect_crt_bloom', 'Bloom'],
+        [wallpaperEffectCrtRgbOffsetLabel, 'newtab_wallpaper_effect_crt_rgb_offset', 'RGB offset'],
+        [wallpaperEffectCrtCurvatureLabel, 'newtab_wallpaper_effect_crt_curvature', 'Screen curvature']
+      ].forEach((item) => {
+        if (item[0]) item[0].textContent = t(item[1], item[2]);
+      });
     }
 
     function updateWallpaperEffectControlUi() {
@@ -2767,7 +3281,7 @@
       updateWallpaperEffectOptionsUi(prefs);
       updateWallpaperEffectInkToneUi(prefs);
       updateWallpaperEffectSlidersUi(prefs, visibility);
-      updateWallpaperEffectTextUi();
+      updateWallpaperEffectTextUi(prefs);
     }
 
     function persistWallpaperEffectPrefs(partial) {
@@ -2916,9 +3430,6 @@
         topContentWeightControl.setAttribute('data-visible', visible ? 'true' : 'false');
         topContentWeightControl.setAttribute('aria-hidden', visible ? 'false' : 'true');
       }
-      if (topContentWeightValue) {
-        topContentWeightValue.textContent = String(currentTimeFontWeight);
-      }
       if (topContentWeightSlider) {
         const percent = (currentTimeFontWeight - NEWTAB_TIME_FONT_WEIGHT_MIN) /
           (NEWTAB_TIME_FONT_WEIGHT_MAX - NEWTAB_TIME_FONT_WEIGHT_MIN) * 100;
@@ -2932,6 +3443,7 @@
         );
         topContentWeightSlider.setAttribute('aria-valuenow', String(currentTimeFontWeight));
         topContentWeightSlider.setAttribute('aria-valuetext', String(currentTimeFontWeight));
+        syncWallpaperSliderValueInput(topContentWeightSlider);
       }
     }
 
@@ -3174,9 +3686,7 @@
       wallpaperSearchWidthSlider.style.setProperty('--x-nt-overlay-slider-percent', `${getSearchWidthPercent(value)}%`);
       wallpaperSearchWidthSlider.setAttribute('aria-valuenow', String(value));
       wallpaperSearchWidthSlider.setAttribute('aria-valuetext', formatSearchWidthValue(value));
-      if (wallpaperSearchWidthValue) {
-        wallpaperSearchWidthValue.textContent = formatSearchWidthValue(value);
-      }
+      syncWallpaperSliderValueInput(wallpaperSearchWidthSlider);
     }
 
     function setSearchWidthControlVisible(visible) {
@@ -3252,6 +3762,421 @@
       wallpaperSearchWidthSaveTimer = window.setTimeout(persist, 140);
     }
 
+    function getShortcutColumnsMin() {
+      return Number.isFinite(Number(shortcutColumnsConfig.min))
+        ? Number(shortcutColumnsConfig.min)
+        : 4;
+    }
+
+    function getShortcutColumnsMax() {
+      const min = getShortcutColumnsMin();
+      const max = Number.isFinite(Number(shortcutColumnsConfig.max))
+        ? Number(shortcutColumnsConfig.max)
+        : 16;
+      return Math.max(min, max);
+    }
+
+    function normalizeShortcutColumnsValue(value) {
+      const min = getShortcutColumnsMin();
+      const max = getShortcutColumnsMax();
+      const fallback = Number.isFinite(Number(shortcutColumnsConfig.fallback))
+        ? Number(shortcutColumnsConfig.fallback)
+        : 10;
+      const number = Number(value);
+      if (!Number.isFinite(number)) {
+        return Math.min(max, Math.max(min, Math.round(fallback)));
+      }
+      return Math.min(max, Math.max(min, Math.round(number)));
+    }
+
+    function getShortcutColumnsTickValues() {
+      return [4, 8, 12, 16].map(normalizeShortcutColumnsValue)
+        .filter((value, index, array) => array.indexOf(value) === index)
+        .sort((a, b) => a - b);
+    }
+
+    function getShortcutColumnsPercent(value) {
+      const min = getShortcutColumnsMin();
+      const max = getShortcutColumnsMax();
+      if (max <= min) {
+        return 0;
+      }
+      return ((normalizeShortcutColumnsValue(value) - min) / (max - min)) * 100;
+    }
+
+    function updateShortcutColumnsSliderElements(columns) {
+      const value = normalizeShortcutColumnsValue(columns);
+      if (wallpaperShortcutColumnsSlider) {
+        wallpaperShortcutColumnsSlider.min = String(getShortcutColumnsMin());
+        wallpaperShortcutColumnsSlider.max = String(getShortcutColumnsMax());
+        wallpaperShortcutColumnsSlider.step = '1';
+        wallpaperShortcutColumnsSlider.value = String(value);
+        wallpaperShortcutColumnsSlider.style.setProperty(
+          '--x-nt-overlay-slider-percent',
+          `${getShortcutColumnsPercent(value)}%`
+        );
+        wallpaperShortcutColumnsSlider.setAttribute('aria-valuenow', String(value));
+        wallpaperShortcutColumnsSlider.setAttribute('aria-valuetext', String(value));
+        syncWallpaperSliderValueInput(wallpaperShortcutColumnsSlider);
+      }
+    }
+
+    function persistShortcutColumnsFromSlider(value, options) {
+      const config = options || {};
+      const final = Boolean(config.final);
+      const columns = normalizeShortcutColumnsValue(value);
+      setShortcutColumns(columns, { persist: false });
+      updateShortcutColumnsSliderElements(columns);
+      if (wallpaperShortcutColumnsSaveTimer !== null) {
+        window.clearTimeout(wallpaperShortcutColumnsSaveTimer);
+        wallpaperShortcutColumnsSaveTimer = null;
+      }
+      const persist = () => {
+        wallpaperShortcutColumnsSaveTimer = null;
+        setShortcutColumns(columns, { persist: true });
+      };
+      if (final) {
+        persist();
+        return;
+      }
+      wallpaperShortcutColumnsSaveTimer = window.setTimeout(persist, 140);
+    }
+
+    function getShortcutLayoutMin(config, fallback) {
+      return Number.isFinite(Number(config && config.min))
+        ? Number(config.min)
+        : fallback;
+    }
+
+    function getShortcutLayoutMax(config, fallbackMin, fallbackMax) {
+      const min = getShortcutLayoutMin(config, fallbackMin);
+      const max = Number.isFinite(Number(config && config.max))
+        ? Number(config.max)
+        : fallbackMax;
+      return Math.max(min, max);
+    }
+
+    function getShortcutLayoutDefault(config, fallbackMin, fallbackMax, fallbackValue) {
+      const min = getShortcutLayoutMin(config, fallbackMin);
+      const max = getShortcutLayoutMax(config, fallbackMin, fallbackMax);
+      const value = Number.isFinite(Number(config && config.fallback))
+        ? Number(config.fallback)
+        : fallbackValue;
+      return Math.min(max, Math.max(min, Math.round(value)));
+    }
+
+    function normalizeShortcutLayoutValue(
+      value,
+      config,
+      fallbackMin,
+      fallbackMax,
+      fallbackValue
+    ) {
+      const min = getShortcutLayoutMin(config, fallbackMin);
+      const max = getShortcutLayoutMax(config, fallbackMin, fallbackMax);
+      const fallback = getShortcutLayoutDefault(
+        config,
+        fallbackMin,
+        fallbackMax,
+        fallbackValue
+      );
+      const number = Number(value);
+      return Math.min(
+        max,
+        Math.max(min, Number.isFinite(number) ? Math.round(number) : fallback)
+      );
+    }
+
+    function getShortcutLayoutPercent(
+      value,
+      config,
+      fallbackMin,
+      fallbackMax,
+      fallbackValue
+    ) {
+      const min = getShortcutLayoutMin(config, fallbackMin);
+      const max = getShortcutLayoutMax(config, fallbackMin, fallbackMax);
+      if (max <= min) {
+        return 0;
+      }
+      const normalized = normalizeShortcutLayoutValue(
+        value,
+        config,
+        fallbackMin,
+        fallbackMax,
+        fallbackValue
+      );
+      return ((normalized - min) / (max - min)) * 100;
+    }
+
+    function updateShortcutLayoutSliderElements(slider, resetButton, value, config) {
+      if (!slider) {
+        return;
+      }
+      const normalized = normalizeShortcutLayoutValue(
+        value,
+        config.source,
+        config.min,
+        config.max,
+        config.fallback
+      );
+      const defaultValue = getShortcutLayoutDefault(
+        config.source,
+        config.min,
+        config.max,
+        config.fallback
+      );
+      slider.min = String(getShortcutLayoutMin(config.source, config.min));
+      slider.max = String(getShortcutLayoutMax(config.source, config.min, config.max));
+      slider.step = '1';
+      slider.value = String(normalized);
+      slider.style.setProperty(
+        '--x-nt-overlay-slider-percent',
+        `${getShortcutLayoutPercent(
+          normalized,
+          config.source,
+          config.min,
+          config.max,
+          config.fallback
+        )}%`
+      );
+      slider.setAttribute('aria-valuenow', String(normalized));
+      slider.setAttribute('aria-valuetext', `${normalized} px`);
+      syncWallpaperSliderValueInput(slider);
+      if (resetButton) {
+        resetButton.disabled = Boolean(slider.disabled || normalized === defaultValue);
+      }
+    }
+
+    function normalizeShortcutSizeValue(value) {
+      return normalizeShortcutLayoutValue(value, shortcutSizeConfig, 48, 80, 64);
+    }
+
+    function normalizeShortcutGapValue(value) {
+      return normalizeShortcutLayoutValue(value, shortcutGapConfig, 0, 24, 4);
+    }
+
+    function updateShortcutSizeSliderElements(value) {
+      updateShortcutLayoutSliderElements(
+        wallpaperShortcutSizeSlider,
+        wallpaperShortcutSizeResetButton,
+        value,
+        { source: shortcutSizeConfig, min: 48, max: 80, fallback: 64 }
+      );
+    }
+
+    function updateShortcutGapSliderElements(value) {
+      updateShortcutLayoutSliderElements(
+        wallpaperShortcutGapSlider,
+        wallpaperShortcutGapResetButton,
+        value,
+        { source: shortcutGapConfig, min: 0, max: 24, fallback: 4 }
+      );
+    }
+
+    function persistShortcutSizeFromSlider(value, options) {
+      const final = Boolean(options && options.final);
+      const size = normalizeShortcutSizeValue(value);
+      setShortcutSize(size, { persist: false });
+      updateShortcutSizeSliderElements(size);
+      if (wallpaperShortcutSizeSaveTimer !== null) {
+        window.clearTimeout(wallpaperShortcutSizeSaveTimer);
+        wallpaperShortcutSizeSaveTimer = null;
+      }
+      const persist = () => {
+        wallpaperShortcutSizeSaveTimer = null;
+        setShortcutSize(size, { persist: true });
+      };
+      if (final) {
+        persist();
+        return;
+      }
+      wallpaperShortcutSizeSaveTimer = window.setTimeout(persist, 140);
+    }
+
+    function persistShortcutGapFromSlider(value, options) {
+      const final = Boolean(options && options.final);
+      const gap = normalizeShortcutGapValue(value);
+      setShortcutGap(gap, { persist: false });
+      updateShortcutGapSliderElements(gap);
+      if (wallpaperShortcutGapSaveTimer !== null) {
+        window.clearTimeout(wallpaperShortcutGapSaveTimer);
+        wallpaperShortcutGapSaveTimer = null;
+      }
+      const persist = () => {
+        wallpaperShortcutGapSaveTimer = null;
+        setShortcutGap(gap, { persist: true });
+      };
+      if (final) {
+        persist();
+        return;
+      }
+      wallpaperShortcutGapSaveTimer = window.setTimeout(persist, 140);
+    }
+
+    function applyWallpaperShortcutsAccordionUi() {
+      const enabled = Boolean(getShortcutsVisible());
+      const expanded = Boolean(wallpaperShortcutsAccordionExpanded && enabled);
+      wallpaperShortcutsAccordionExpanded = expanded;
+      if (wallpaperShortcutsAccordion) {
+        wallpaperShortcutsAccordion.setAttribute('data-expanded', expanded ? 'true' : 'false');
+        wallpaperShortcutsAccordion.setAttribute('data-enabled', enabled ? 'true' : 'false');
+      }
+      if (wallpaperShortcutsAccordionTrigger) {
+        wallpaperShortcutsAccordionTrigger.disabled = !enabled;
+        wallpaperShortcutsAccordionTrigger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        wallpaperShortcutsAccordionTrigger.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      }
+      if (wallpaperShortcutsDetails) {
+        wallpaperShortcutsDetails.hidden = !expanded;
+        wallpaperShortcutsDetails.setAttribute('data-visible', expanded ? 'true' : 'false');
+        wallpaperShortcutsDetails.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+      }
+      [
+        wallpaperShortcutColumnsControl,
+        wallpaperShortcutSizeControl,
+        wallpaperShortcutGapControl
+      ].forEach((control) => {
+        if (control) {
+          control.setAttribute('data-visible', expanded ? 'true' : 'false');
+          control.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+        }
+      });
+      [wallpaperShortcutAddToggle, wallpaperShortcutDockMagnificationToggle].forEach((toggle) => {
+        if (!toggle) {
+          return;
+        }
+        toggle.disabled = !enabled || !expanded;
+        toggle.setAttribute('aria-checked', toggle.checked ? 'true' : 'false');
+      });
+      [
+        wallpaperShortcutColumnsSlider,
+        getWallpaperSliderValueInput(wallpaperShortcutColumnsSlider),
+        wallpaperShortcutSizeSlider,
+        getWallpaperSliderValueInput(wallpaperShortcutSizeSlider),
+        wallpaperShortcutGapSlider,
+        getWallpaperSliderValueInput(wallpaperShortcutGapSlider)
+      ].forEach((input) => {
+        if (input) {
+          input.disabled = !enabled || !expanded;
+        }
+      });
+      updateShortcutSizeSliderElements(getShortcutSize());
+      updateShortcutGapSliderElements(getShortcutGap());
+    }
+
+    function setWallpaperShortcutsAccordionExpanded(expanded, options) {
+      const nextExpanded = Boolean(expanded && getShortcutsVisible());
+      const changed = wallpaperShortcutsAccordionExpanded !== nextExpanded;
+      wallpaperShortcutsAccordionExpanded = nextExpanded;
+      if (!changed || !options || options.animate === false) {
+        applyWallpaperShortcutsAccordionUi();
+        return;
+      }
+      animateWallpaperPanelResize(() => {
+        applyWallpaperShortcutsAccordionUi();
+      });
+    }
+
+    function updateWallpaperShortcutsUi() {
+      const enabled = Boolean(getShortcutsVisible());
+      if (!enabled) {
+        wallpaperShortcutsAccordionExpanded = false;
+      }
+      if (wallpaperShortcutsTitle) {
+        wallpaperShortcutsTitle.textContent = t('settings_newtab_shortcuts_title', 'Shortcuts');
+      }
+      if (wallpaperShortcutsToggle) {
+        wallpaperShortcutsToggle.checked = enabled;
+        wallpaperShortcutsToggle.setAttribute('aria-label', t(
+          'settings_newtab_shortcuts_title',
+          'Shortcuts'
+        ));
+        wallpaperShortcutsToggle.setAttribute('aria-checked', enabled ? 'true' : 'false');
+      }
+      if (wallpaperShortcutsAccordionTrigger) {
+        wallpaperShortcutsAccordionTrigger.setAttribute('aria-label', t(
+          'settings_newtab_shortcuts_title',
+          'Shortcuts'
+        ));
+      }
+      if (wallpaperShortcutAddTitle) {
+        wallpaperShortcutAddTitle.textContent = t(
+          'settings_newtab_shortcut_add_title',
+          'Show “+”'
+        );
+      }
+      if (wallpaperShortcutAddToggle) {
+        wallpaperShortcutAddToggle.checked = Boolean(getShortcutAddVisible());
+        wallpaperShortcutAddToggle.setAttribute('aria-label', t(
+          'settings_newtab_shortcut_add_title',
+          'Show “+”'
+        ));
+      }
+      if (wallpaperShortcutDockMagnificationTitle) {
+        wallpaperShortcutDockMagnificationTitle.textContent = t(
+          'settings_newtab_shortcut_dock_magnification_title',
+          'macOS Dock-style magnification'
+        );
+      }
+      if (wallpaperShortcutDockMagnificationToggle) {
+        wallpaperShortcutDockMagnificationToggle.checked = Boolean(
+          getShortcutDockMagnificationEnabled()
+        );
+        wallpaperShortcutDockMagnificationToggle.setAttribute('aria-label', t(
+          'settings_newtab_shortcut_dock_magnification_title',
+          'macOS Dock-style magnification'
+        ));
+      }
+      if (wallpaperShortcutColumnsLabel || wallpaperShortcutColumnsSlider) {
+        const label = t('settings_newtab_shortcut_columns_title', 'Shortcuts per row');
+        if (wallpaperShortcutColumnsLabel) {
+          wallpaperShortcutColumnsLabel.textContent = label;
+        }
+        if (wallpaperShortcutColumnsSlider) {
+          wallpaperShortcutColumnsSlider.setAttribute('aria-label', label);
+        }
+      }
+      if (wallpaperShortcutSizeLabel || wallpaperShortcutSizeSlider) {
+        const label = t('settings_newtab_shortcut_size_title', 'Shortcut size');
+        const resetLabel = t(
+          'settings_newtab_shortcut_size_reset',
+          'Reset shortcut size'
+        );
+        if (wallpaperShortcutSizeLabel) {
+          wallpaperShortcutSizeLabel.textContent = label;
+        }
+        if (wallpaperShortcutSizeSlider) {
+          wallpaperShortcutSizeSlider.setAttribute('aria-label', label);
+        }
+        if (wallpaperShortcutSizeResetButton) {
+          wallpaperShortcutSizeResetButton.setAttribute('aria-label', resetLabel);
+          wallpaperShortcutSizeResetButton.setAttribute('title', resetLabel);
+        }
+      }
+      if (wallpaperShortcutGapLabel || wallpaperShortcutGapSlider) {
+        const label = t('settings_newtab_shortcut_gap_title', 'Shortcut spacing');
+        const resetLabel = t(
+          'settings_newtab_shortcut_gap_reset',
+          'Reset shortcut spacing'
+        );
+        if (wallpaperShortcutGapLabel) {
+          wallpaperShortcutGapLabel.textContent = label;
+        }
+        if (wallpaperShortcutGapSlider) {
+          wallpaperShortcutGapSlider.setAttribute('aria-label', label);
+        }
+        if (wallpaperShortcutGapResetButton) {
+          wallpaperShortcutGapResetButton.setAttribute('aria-label', resetLabel);
+          wallpaperShortcutGapResetButton.setAttribute('title', resetLabel);
+        }
+      }
+      updateShortcutColumnsSliderElements(getShortcutColumns());
+      updateShortcutSizeSliderElements(getShortcutSize());
+      updateShortcutGapSliderElements(getShortcutGap());
+      applyWallpaperShortcutsAccordionUi();
+    }
+
     function updateWallpaperAppearanceSelectionUi() {
       updateWallpaperAppearanceScopeTabsUi(getThemeScope());
       if (wallpaperAppearanceOptions) {
@@ -3262,6 +4187,7 @@
         });
       }
       updateWallpaperSearchWidthControlUi();
+      updateWallpaperShortcutsUi();
     }
 
     function updateCustomWallpaperUploadTile() {
@@ -4096,6 +5022,7 @@
           typeof wallpaperInputAutoFocusHintController.updateLanguage === 'function') {
         wallpaperInputAutoFocusHintController.updateLanguage();
       }
+      updateWallpaperShortcutsUi();
       if (wallpaperAppearanceScopeTabs) {
         wallpaperAppearanceScopeTabs.setAttribute('aria-label', t('newtab_theme_scope_label', 'Theme scope'));
         wallpaperAppearanceScopeTabs.querySelectorAll('.x-nt-appearance-scope-tab').forEach((button) => {
@@ -4241,7 +5168,7 @@
         return `${chrome.runtime.getURL('src/options/options.html')}#appearance`;
       }
       try {
-        return new URL('../options/options.html#appearance', window.location.href).toString();
+        return new URL('../options/options.html#appearance', document.baseURI || window.location.href).toString();
       } catch (e) {
         return '../options/options.html#appearance';
       }
@@ -4315,6 +5242,50 @@
           max: getSearchWidthMax(),
           ticks: searchWidthTicks
         },
+        shortcutColumns: {
+          defaultValue: normalizeShortcutColumnsValue(getShortcutColumns()),
+          min: getShortcutColumnsMin(),
+          max: getShortcutColumnsMax(),
+          ticks: getShortcutColumnsTickValues().map((value, index, values) => ({
+            align: index === 0 ? 'start' : (index === values.length - 1 ? 'end' : 'center'),
+            label: String(value),
+            percent: getShortcutColumnsPercent(value)
+          }))
+        },
+        shortcutSize: {
+          defaultValue: normalizeShortcutSizeValue(getShortcutSize()),
+          min: getShortcutLayoutMin(shortcutSizeConfig, 48),
+          max: getShortcutLayoutMax(shortcutSizeConfig, 48, 80),
+          ticks: [48, 64, 80]
+            .map(normalizeShortcutSizeValue)
+            .filter((value, index, values) => values.indexOf(value) === index)
+            .sort((a, b) => a - b)
+            .map((value, index, values) => ({
+              align: index === 0 ? 'start' : (index === values.length - 1 ? 'end' : 'center'),
+              label: String(value),
+              percent: getShortcutLayoutPercent(
+                value,
+                shortcutSizeConfig,
+                48,
+                80,
+                64
+              )
+            }))
+        },
+        shortcutGap: {
+          defaultValue: normalizeShortcutGapValue(getShortcutGap()),
+          min: getShortcutLayoutMin(shortcutGapConfig, 0),
+          max: getShortcutLayoutMax(shortcutGapConfig, 0, 24),
+          ticks: [0, 8, 16, 24]
+            .map(normalizeShortcutGapValue)
+            .filter((value, index, values) => values.indexOf(value) === index)
+            .sort((a, b) => a - b)
+            .map((value, index, values) => ({
+              align: index === 0 ? 'start' : (index === values.length - 1 ? 'end' : 'center'),
+              label: String(value),
+              percent: getShortcutLayoutPercent(value, shortcutGapConfig, 0, 24, 4)
+            }))
+        },
         wallpapers: NEWTAB_WALLPAPER_OPTIONS.map((item) => ({
           id: item.id,
           path: getWallpaperLocalPath(item),
@@ -4339,7 +5310,6 @@
       topContentOffTab = refs.topContentOffTab;
       topContentWeightControl = refs.topContentWeightControl;
       topContentWeightTitle = refs.topContentWeightTitle;
-      topContentWeightValue = refs.topContentWeightValue;
       topContentWeightSlider = refs.topContentWeightSlider;
       topContentSecondsRow = refs.topContentSecondsRow;
       topContentSecondsTitle = refs.topContentSecondsTitle;
@@ -4350,11 +5320,30 @@
       wallpaperAppearanceOptions = refs.appearanceOptions;
       wallpaperSearchWidthControl = refs.searchWidthControl;
       wallpaperSearchWidthLabel = refs.searchWidthLabel;
-      wallpaperSearchWidthValue = refs.searchWidthValue;
       wallpaperSearchWidthSlider = refs.searchWidthSlider;
       wallpaperInputAutoFocusTitle = refs.inputAutoFocusTitle;
       wallpaperInputAutoFocusInfoButton = refs.inputAutoFocusInfoButton;
       wallpaperInputAutoFocusToggle = refs.inputAutoFocusToggle;
+      wallpaperShortcutsAccordion = refs.shortcutsAccordion;
+      wallpaperShortcutsAccordionTrigger = refs.shortcutsAccordionTrigger;
+      wallpaperShortcutsTitle = refs.shortcutsTitle;
+      wallpaperShortcutsDetails = refs.shortcutsDetails;
+      wallpaperShortcutsToggle = refs.shortcutsToggle;
+      wallpaperShortcutAddTitle = refs.shortcutAddTitle;
+      wallpaperShortcutAddToggle = refs.shortcutAddToggle;
+      wallpaperShortcutDockMagnificationTitle = refs.shortcutDockMagnificationTitle;
+      wallpaperShortcutDockMagnificationToggle = refs.shortcutDockMagnificationToggle;
+      wallpaperShortcutColumnsControl = refs.shortcutColumnsControl;
+      wallpaperShortcutColumnsLabel = refs.shortcutColumnsLabel;
+      wallpaperShortcutColumnsSlider = refs.shortcutColumnsSlider;
+      wallpaperShortcutSizeControl = refs.shortcutSizeControl;
+      wallpaperShortcutSizeLabel = refs.shortcutSizeLabel;
+      wallpaperShortcutSizeSlider = refs.shortcutSizeSlider;
+      wallpaperShortcutSizeResetButton = refs.shortcutSizeResetButton;
+      wallpaperShortcutGapControl = refs.shortcutGapControl;
+      wallpaperShortcutGapLabel = refs.shortcutGapLabel;
+      wallpaperShortcutGapSlider = refs.shortcutGapSlider;
+      wallpaperShortcutGapResetButton = refs.shortcutGapResetButton;
       wallpaperAppearanceMoreSettingsLink = refs.moreSettingsLink;
       wallpaperAppearanceMoreSettingsText = refs.moreSettingsText;
       wallpaperOverlayLabel = refs.overlayLabel;
@@ -4374,6 +5363,18 @@
       wallpaperEffectSpacingControl = refs.effectSpacingControl;
       wallpaperEffectSpacingLabel = refs.effectSpacingLabel;
       wallpaperEffectSpacingSlider = refs.effectSpacingSlider;
+      wallpaperEffectTextureControl = refs.effectTextureControl;
+      wallpaperEffectTextureLabel = refs.effectTextureLabel;
+      wallpaperEffectTextureSlider = refs.effectTextureSlider;
+      wallpaperEffectCrtBloomControl = refs.effectCrtBloomControl;
+      wallpaperEffectCrtBloomLabel = refs.effectCrtBloomLabel;
+      wallpaperEffectCrtBloomSlider = refs.effectCrtBloomSlider;
+      wallpaperEffectCrtRgbOffsetControl = refs.effectCrtRgbOffsetControl;
+      wallpaperEffectCrtRgbOffsetLabel = refs.effectCrtRgbOffsetLabel;
+      wallpaperEffectCrtRgbOffsetSlider = refs.effectCrtRgbOffsetSlider;
+      wallpaperEffectCrtCurvatureControl = refs.effectCrtCurvatureControl;
+      wallpaperEffectCrtCurvatureLabel = refs.effectCrtCurvatureLabel;
+      wallpaperEffectCrtCurvatureSlider = refs.effectCrtCurvatureSlider;
       newtabFaviconTitle = refs.faviconTitle;
       newtabFaviconOptions = refs.faviconOptions;
       customWallpaperUploadTile = refs.uploadTile;
@@ -4395,10 +5396,12 @@
       return refs;
     }
 
-    function bindReactWallpaperSlider(slider, getFallbackValue, persist) {
+    function bindReactWallpaperSlider(slider, getFallbackValue, persist, options) {
       if (!slider) {
         return;
       }
+      const snapWhileDragging = !options || options.snapWhileDragging !== false;
+      const supportsDynamicRange = Boolean(options && options.dynamicRange);
       slider.addEventListener('pointerdown', () => {
         setWallpaperActiveSlider(slider);
       });
@@ -4415,15 +5418,29 @@
         const fallbackValue = typeof getFallbackValue === 'function'
           ? getFallbackValue()
           : Number(slider.value);
-        const value = wallpaperActiveSlider === slider
-          ? snapWallpaperOverlaySliderValue(slider.value)
-          : normalizeWallpaperOverlayOpacity(slider.value, fallbackValue);
+        const rawValue = Number(slider.value);
+        const dynamicRange = supportsDynamicRange && isDynamicWallpaperSlider(slider);
+        const value = dynamicRange
+          ? (Number.isFinite(rawValue) ? rawValue : Number(fallbackValue))
+          : (wallpaperActiveSlider === slider && snapWhileDragging
+            ? snapWallpaperOverlaySliderValue(slider.value)
+            : normalizeWallpaperOverlayOpacity(slider.value, fallbackValue));
         if (String(value) !== slider.value) {
           slider.value = String(value);
         }
         persist(value);
       });
+      if (supportsDynamicRange) {
+        slider.addEventListener('change', () => {
+          const value = Number(slider.value);
+          if (ensureDynamicWallpaperSliderRange(slider, value, true)) {
+            updateWallpaperSliderFill(slider, value);
+            syncWallpaperSliderValueInput(slider);
+          }
+        });
+      }
       bindWallpaperSliderValueBubble(slider);
+      bindWallpaperSliderValueInput(slider);
     }
 
     function bindReactWallpaperPanel() {
@@ -4485,10 +5502,102 @@
         persistSearchWidthFromSlider(wallpaperSearchWidthSlider.value, { final: true });
       });
       bindWallpaperSliderValueBubble(wallpaperSearchWidthSlider);
+      bindWallpaperSliderValueInput(wallpaperSearchWidthSlider);
       if (wallpaperInputAutoFocusToggle) {
         wallpaperInputAutoFocusToggle.addEventListener('change', () => {
           setInputAutoFocusEnabled(wallpaperInputAutoFocusToggle.checked);
           updateInputAutoFocusUi();
+        });
+      }
+      if (wallpaperShortcutsAccordionTrigger) {
+        wallpaperShortcutsAccordionTrigger.addEventListener('click', () => {
+          if (!getShortcutsVisible()) {
+            return;
+          }
+          setWallpaperShortcutsAccordionExpanded(
+            !wallpaperShortcutsAccordionExpanded,
+            { animate: true }
+          );
+        });
+      }
+      if (wallpaperShortcutsToggle) {
+        wallpaperShortcutsToggle.addEventListener('change', () => {
+          setShortcutsVisible(wallpaperShortcutsToggle.checked, { persist: true });
+          updateWallpaperShortcutsUi();
+        });
+      }
+      if (wallpaperShortcutAddToggle) {
+        wallpaperShortcutAddToggle.addEventListener('change', () => {
+          setShortcutAddVisible(wallpaperShortcutAddToggle.checked, { persist: true });
+          updateWallpaperShortcutsUi();
+        });
+      }
+      if (wallpaperShortcutDockMagnificationToggle) {
+        wallpaperShortcutDockMagnificationToggle.addEventListener('change', () => {
+          setShortcutDockMagnificationEnabled(
+            wallpaperShortcutDockMagnificationToggle.checked,
+            { persist: true }
+          );
+          updateWallpaperShortcutsUi();
+        });
+      }
+      if (wallpaperShortcutColumnsSlider) {
+        wallpaperShortcutColumnsSlider.addEventListener('input', () => {
+          persistShortcutColumnsFromSlider(wallpaperShortcutColumnsSlider.value, {
+            final: false
+          });
+        });
+        wallpaperShortcutColumnsSlider.addEventListener('change', () => {
+          persistShortcutColumnsFromSlider(wallpaperShortcutColumnsSlider.value, {
+            final: true
+          });
+        });
+      }
+      if (wallpaperShortcutColumnsSlider) {
+        bindWallpaperSliderValueInput(wallpaperShortcutColumnsSlider);
+      }
+      if (wallpaperShortcutSizeSlider) {
+        wallpaperShortcutSizeSlider.addEventListener('input', () => {
+          persistShortcutSizeFromSlider(wallpaperShortcutSizeSlider.value, {
+            final: false
+          });
+        });
+        wallpaperShortcutSizeSlider.addEventListener('change', () => {
+          persistShortcutSizeFromSlider(wallpaperShortcutSizeSlider.value, {
+            final: true
+          });
+        });
+        bindWallpaperSliderValueInput(wallpaperShortcutSizeSlider);
+      }
+      if (wallpaperShortcutSizeResetButton) {
+        wallpaperShortcutSizeResetButton.addEventListener('click', () => {
+          persistShortcutSizeFromSlider(
+            getShortcutLayoutDefault(shortcutSizeConfig, 48, 80, 64),
+            { final: true }
+          );
+          wallpaperShortcutSizeResetButton.blur();
+        });
+      }
+      if (wallpaperShortcutGapSlider) {
+        wallpaperShortcutGapSlider.addEventListener('input', () => {
+          persistShortcutGapFromSlider(wallpaperShortcutGapSlider.value, {
+            final: false
+          });
+        });
+        wallpaperShortcutGapSlider.addEventListener('change', () => {
+          persistShortcutGapFromSlider(wallpaperShortcutGapSlider.value, {
+            final: true
+          });
+        });
+        bindWallpaperSliderValueInput(wallpaperShortcutGapSlider);
+      }
+      if (wallpaperShortcutGapResetButton) {
+        wallpaperShortcutGapResetButton.addEventListener('click', () => {
+          persistShortcutGapFromSlider(
+            getShortcutLayoutDefault(shortcutGapConfig, 0, 24, 4),
+            { final: true }
+          );
+          wallpaperShortcutGapResetButton.blur();
         });
       }
       wallpaperEnabledToggle.addEventListener('change', () => {
@@ -4524,9 +5633,8 @@
       });
       wallpaperEffectOptions.querySelectorAll('[data-wallpaper-effect-type]').forEach((button) => {
         button.addEventListener('click', () => {
-          persistWallpaperEffectPrefs({
-            type: button.getAttribute('data-wallpaper-effect-type')
-          });
+          const type = button.getAttribute('data-wallpaper-effect-type');
+          persistWallpaperEffectPrefs({ type });
         });
       });
       wallpaperEffectInkToneOptions.querySelectorAll('[data-wallpaper-effect-ink-tone]').forEach((button) => {
@@ -4544,21 +5652,62 @@
       [
         {
           key: 'strength',
+          resolveKey: (prefs) => prefs.type === 'crt' ? 'crtStrength' : 'strength',
           slider: wallpaperEffectSlider
         },
         {
           key: 'size',
+          resolveKey: (prefs) => prefs.type === 'blocks' ? 'blockSize' : 'size',
           slider: wallpaperEffectSizeSlider
         },
         {
           key: 'spacing',
           slider: wallpaperEffectSpacingSlider
-        }
+        },
+        {
+          key: 'texture',
+          slider: wallpaperEffectTextureSlider
+        },
+        {
+          key: 'crtBloom',
+          slider: wallpaperEffectCrtBloomSlider
+        },
+        {
+          key: 'crtRgbOffset',
+          slider: wallpaperEffectCrtRgbOffsetSlider
+        },
+        {
+          key: 'crtCurvature',
+          slider: wallpaperEffectCrtCurvatureSlider
+        },
       ].forEach((entry) => {
         bindReactWallpaperSlider(
           entry.slider,
-          () => getWallpaperEffectPrefsForEditMode()[entry.key],
-          (value) => persistWallpaperEffectPrefs({ [entry.key]: value })
+          () => {
+            const currentPrefs = getWallpaperEffectPrefsForEditMode();
+            const key = typeof entry.resolveKey === 'function'
+              ? entry.resolveKey(currentPrefs)
+              : entry.key;
+            if (currentPrefs.type === 'crt' && CRT_PARAMETER_PHYSICAL_MAX[key]) {
+              return getCrtParameterPercent(key, currentPrefs[key]);
+            }
+            return currentPrefs[key];
+          },
+          (value) => {
+            const currentPrefs = getWallpaperEffectPrefsForEditMode();
+            const key = typeof entry.resolveKey === 'function'
+              ? entry.resolveKey(currentPrefs)
+              : entry.key;
+            let persistedValue = value;
+            if (currentPrefs.type === 'crt' && CRT_PARAMETER_PHYSICAL_MAX[key]) {
+              persistedValue = getCrtParameterPhysicalValue(key, value);
+            }
+            persistWallpaperEffectPrefs({ [key]: persistedValue });
+          },
+          {
+            dynamicRange: false,
+            snapWhileDragging: entry.key === 'strength'
+          }
         );
       });
       newtabFaviconOptions.querySelectorAll('[data-newtab-favicon-id]').forEach((tile) => {
@@ -4571,6 +5720,7 @@
           persistTimeFontWeight(topContentWeightSlider.value);
         });
         bindWallpaperSliderValueBubble(topContentWeightSlider);
+        bindWallpaperSliderValueInput(topContentWeightSlider);
       }
       if (topContentSecondsToggle) {
         topContentSecondsToggle.addEventListener('change', () => {
@@ -4599,6 +5749,7 @@
       updateWallpaperModeControlsUi({ animate: false });
       updateWallpaperAppearanceSelectionUi();
       updateInputAutoFocusUi();
+      updateWallpaperShortcutsUi();
       updateNewtabFaviconSelectionUi();
     }
 
@@ -4798,6 +5949,7 @@
       updateLanguageStrings: updateWallpaperLanguageStrings,
       updateAppearanceSelectionUi: updateWallpaperAppearanceSelectionUi,
       updateSearchWidthUi: updateWallpaperSearchWidthControlUi,
+      updateShortcutsUi: updateWallpaperShortcutsUi,
       updateInputAutoFocusUi,
       updateTopContentModeUi,
       updateTimeFontWeightUi,

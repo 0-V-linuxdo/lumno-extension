@@ -13,6 +13,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-MV3-111827?style=flat-square" alt="Manifest V3" />
   <img src="https://img.shields.io/badge/Browser-Chromium-2563eb?style=flat-square" alt="Chromium" />
+  <img src="https://img.shields.io/badge/Firefox-MV2_port-ff7139?style=flat-square" alt="Firefox MV2 port" />
   <img src="https://img.shields.io/badge/Language-JavaScript-f59e0b?style=flat-square" alt="JavaScript" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-16a34a?style=flat-square" alt="GPL-3.0" />
 </p>
@@ -25,7 +26,9 @@
 
 Lumno は Chromium ブラウザ向けの Manifest V3 拡張機能です。集中して使えるブラウザコマンドバーとミニマルな新しいタブを組み合わせ、ブックマーク、履歴、よく使うサイト、開いているタブ、サイト内検索、AI アシスタントをひとつの入口から探せます。
 
-現在のバージョン：`0.9.51`
+現在のバージョン：`0.9.55`
+
+Firefox / Zen 移植：`0.9.55-firefox-v1.0.0`
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -34,6 +37,7 @@ Lumno は Chromium ブラウザ向けの Manifest V3 拡張機能です。集中
 - 集中コマンドバー：注入可能なページ上でオーバーレイ検索を開き、URL への移動、キーワード検索、開いているタブへの切り替え、ブラウザ内部ページや Lumno 設定への移動ができます。
 - スマート検索結果：ブックマーク、履歴、よく使うサイト、ブラウザ候補、開いているタブを統合し、結果ソースの絞り込み、先頭結果の優先度、選択履歴によるランキング、ピンイン検索、ブラックリスト除外に対応します。
 - サイト内検索 / AI 検索：YouTube、Bilibili、GitHub、Google、Bing、Baidu、Zhihu、Douban、Juejin、Taobao、X、Reddit、Wikipedia などのショートカットを内蔵。AI 入口として ChatGPT、Gemini、豆包、千問、元宝、MiniMax、DeepSeek、Kimi も利用できます。カスタムテンプレートと別名も追加できます。
+- 集約検索：2～10 個の内蔵またはカスタム検索ソースを 1 つの検索範囲にまとめ、同じクエリを複数のタブで同時に実行できます。結果をクエリ名のタブグループへ自動的にまとめることもできます。
 - 新しいタブ：検索ボックス、最近/よく使うサイトカード、ブックマークのグリッドとフォルダ階層メニュー、ブックマークページング、最近サイトの固定/非表示、フィードバック入口、コンテンツ幅の調整を備えています。
 - 外観と壁紙：システム/ライト/ダークテーマ、全体または新しいタブのみのテーマ適用、内蔵壁紙、ローカル壁紙、オーバーレイ透明度、粒子/ハーフトーン/ディザ/ASCII フィルター、検索ボックス幅、Lumno ロゴ表示の切り替えに対応します。
 - Web Clip PiP：対応している HTTPS のトップレベルページでページの一部を選択し、Document Picture-in-Picture ウィンドウとして浮かせて参照や比較に使えます。
@@ -61,6 +65,18 @@ Lumno は Chromium ブラウザ向けの Manifest V3 拡張機能です。集中
 ## インストール
 
 Chrome Web Store からインストールできます：[Install Lumno on Chrome Web Store](https://chromewebstore.google.com/detail/nggfkkbmogmadfoikakkfegkoilfcfao?utm_source=item-share-cb)
+
+### Firefox / Zen
+
+Chrome 用 zip を CRX Installer で入れないでください。Firefox パッケージを使います：
+
+1. [`lumno-0.9.55-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.55-firefox-v1.0.0) をダウンロードして解凍します。
+2. `about:debugging#/runtime/this-firefox` を開きます。
+3. **一時的なアドオンを読み込む…** → 解凍した `manifest.json` を選びます。
+4. 通常の `https://` ページを開きます（`about:` では試さないでください）。
+5. **Alt+K**（コマンドバー）または **Alt+Q**（タブスイッチャー）を押します。ツールバーアイコンも Alt+K と同じです。
+
+詳細、永続インストール、トラブルシュートは [FIREFOX.md](./FIREFOX.md) を参照してください。
 
 手動インストール：
 
