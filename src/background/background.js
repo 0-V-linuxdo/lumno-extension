@@ -3462,10 +3462,27 @@ function isPageVisibleSafeFaviconUrl(url) {
     if (protocol === 'http:' || protocol === 'https:') {
       return true;
     }
-    return protocol === 'chrome-extension:' &&
+    if (!isBrowserExtensionProtocol(protocol)) {
+      return false;
+    }
+    const originHost = typeof FAVICON_UTILS.resolveOwnExtensionOriginHost === 'function'
+      ? String(FAVICON_UTILS.resolveOwnExtensionOriginHost({ chromeApi: chrome }) || '')
+      : '';
+    if (originHost) {
+      return String(parsed.hostname || '') === originHost;
+    }
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      const root = String(chrome.runtime.getURL('') || '');
+      if (root && raw.indexOf(root) === 0) {
+        return true;
+      }
+    }
+    return Boolean(
       chrome &&
       chrome.runtime &&
-      String(parsed.hostname || '') === String(chrome.runtime.id || '');
+      chrome.runtime.id &&
+      String(parsed.hostname || '') === String(chrome.runtime.id)
+    );
   } catch (error) {
     return false;
   }
@@ -3478,7 +3495,14 @@ function buildSwitcherTabFavicon(tab, url) {
     return candidate;
   }
   const fallback = typeof tab.favIconUrl === 'string' ? tab.favIconUrl.trim() : '';
-  return isPageVisibleSafeFaviconUrl(fallback) ? fallback : '';
+  if (!fallback) {
+    return '';
+  }
+  const rewritten = typeof FAVICON_UTILS.rewritePrivilegedBrowserFaviconUrl === 'function'
+    ? String(FAVICON_UTILS.rewritePrivilegedBrowserFaviconUrl(fallback, resolved, { chromeApi: chrome }) || '')
+    : '';
+  const next = rewritten || fallback;
+  return isPageVisibleSafeFaviconUrl(next) ? next : '';
 }
 
 function getSwitcherRegistrableThemeHost(host) {

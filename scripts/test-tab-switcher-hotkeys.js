@@ -1361,6 +1361,31 @@ assert.match(
   /function buildSwitcherTabFavicon\(tab,\s*url\)[\s\S]*getPageFaviconCandidateUrl\(url\)/,
   'Alt+Q should use the shared favicon resolver for tab icons'
 );
+const switcherFaviconBlock = getFunctionBlock(
+  backgroundSource,
+  'function buildSwitcherTabFavicon(tab, url)',
+  'function getSwitcherRegistrableThemeHost(host)'
+);
+assert.match(
+  switcherFaviconBlock,
+  /rewritePrivilegedBrowserFaviconUrl/,
+  'Alt+Q must rewrite privileged chrome://mozapps favicons before painting'
+);
+const faviconSafetyBlock = getFunctionBlock(
+  backgroundSource,
+  'function isPageVisibleSafeFaviconUrl(url)',
+  'function buildSwitcherTabFavicon(tab, url)'
+);
+assert.match(
+  faviconSafetyBlock,
+  /resolveOwnExtensionOriginHost|runtime\.getURL\(''\)/,
+  'Tab Switcher favicon safety must allow the getURL origin host, not only runtime.id'
+);
+assert.doesNotMatch(
+  faviconSafetyBlock,
+  /protocol === 'chrome-extension:' &&/,
+  'Tab Switcher favicon safety must not be chrome-extension-only'
+);
 const switcherPayloadBlock = getFunctionBlock(
   backgroundSource,
   'function normalizeSwitcherTabForPayload(tab, currentTabId)',

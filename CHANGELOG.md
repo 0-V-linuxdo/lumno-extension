@@ -1,5 +1,13 @@
 Tags: Release
 
+## 0.9.55-firefox-v1.2.0
+
+v1.1.0 mapped `chrome://` / `about:` pages to bundled icons, but Gecko's `runtime.id` (`lumno@…`) is **not** the `moz-extension://` hostname (a per-install UUID). Reconstructing `moz-extension://lumno@…/assets/…` produced unloadable URLs. Tab Switcher large preview cards have no remix placeholder, so `about:addons` painted as empty navy tiles.
+
+v1.2.0 identifies the own origin from `runtime.getURL('')` hostname, never from `runtime.id`, rewrites privileged `chrome://mozapps/…` favicons at paint, and still never emits `_favicon` / `chrome://favicon2` on Gecko. Chromium `_favicon` is unchanged.
+
+Install `lumno-0.9.55-firefox-v1.2.0.zip`. Unload v1.1.0 first. See `FIREFOX.md`.
+
 ## 0.9.55-firefox-v1.0.0
 
 Firefox / Zen port rebased onto upstream **0.9.55**. Chrome source in this repo is 0.9.55 MV3. The Firefox zip is still Manifest V2, packed by `scripts/package-firefox.js`.

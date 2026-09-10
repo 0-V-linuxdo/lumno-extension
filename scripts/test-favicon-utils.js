@@ -1,5 +1,6 @@
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 const vm = require('vm');
 
 const sandbox = {
@@ -103,6 +104,15 @@ assert.strictEqual(
   ),
   true,
   'strict favicon mode should keep the shared bundled site-search PNG tiles'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    'chrome-extension://abc/assets/images/browser-pages/extensions.svg',
+    false,
+    { ownExtensionId: 'abc' }
+  ),
+  true,
+  'strict favicon mode should keep bundled browser-page icons on Chromium'
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
@@ -328,6 +338,166 @@ assert.strictEqual(
   'chrome://favicon2/?pageUrl=chrome%3A%2F%2Fextensions%2F&size=128',
   'browser-internal render candidates should keep chrome://favicon2 as fallback'
 );
+
+const GECKO_ADDON_ID = 'lumno@0-v-linuxdo.github.io';
+const GECKO_ORIGIN_UUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+assert.notStrictEqual(
+  GECKO_ADDON_ID,
+  GECKO_ORIGIN_UUID,
+  'Gecko tests must keep runtime.id distinct from the moz-extension hostname'
+);
+function geckoGetRuntimeUrl(assetPath) {
+  const normalized = String(assetPath || '').replace(/^\/+/, '');
+  return `moz-extension://${GECKO_ORIGIN_UUID}/${normalized}`;
+}
+const geckoChromeApi = {
+  runtime: {
+    id: GECKO_ADDON_ID,
+    getURL: geckoGetRuntimeUrl
+  }
+};
+const geckoExtensionsAsset = `moz-extension://${GECKO_ORIGIN_UUID}/assets/images/browser-pages/extensions.svg`;
+const geckoOptions = {
+  chromeApi: geckoChromeApi,
+  getRuntimeUrl: geckoGetRuntimeUrl
+};
+
+assert.strictEqual(
+  utils.resolveOwnExtensionOriginHost(geckoOptions),
+  GECKO_ORIGIN_UUID,
+  'Gecko origin host must come from getURL hostname, not runtime.id'
+);
+assert.notStrictEqual(
+  utils.resolveOwnExtensionOriginHost(geckoOptions),
+  GECKO_ADDON_ID
+);
+const geckoRuntimeInfo = utils.getOwnExtensionRuntimeInfo(geckoOptions, geckoGetRuntimeUrl);
+assert.strictEqual(geckoRuntimeInfo.originHost, GECKO_ORIGIN_UUID);
+assert.strictEqual(geckoRuntimeInfo.id, GECKO_ORIGIN_UUID);
+assert.strictEqual(geckoRuntimeInfo.addonId, GECKO_ADDON_ID);
+assert.strictEqual(geckoRuntimeInfo.protocol, 'moz-extension:');
+assert.strictEqual(
+  utils.getOwnExtensionAssetUrl('assets/images/browser-pages/extensions.svg', geckoRuntimeInfo, geckoOptions),
+  geckoExtensionsAsset,
+  'Gecko asset URLs must pass getURL through unchanged when the hostname matches the origin UUID'
+);
+assert.ok(!geckoExtensionsAsset.includes(GECKO_ADDON_ID));
+
+assert.strictEqual(
+  utils.getBrowserInternalPageIconPath('chrome://extensions/'),
+  'assets/images/browser-pages/extensions.svg',
+  'chrome://extensions should map to the bundled extensions icon'
+);
+assert.strictEqual(
+  utils.getBrowserInternalPageIconPath('about:addons'),
+  'assets/images/browser-pages/extensions.svg',
+  'about:addons should share the bundled extensions icon'
+);
+assert.strictEqual(
+  utils.getBrowserPageFaviconUrl('chrome://extensions/', geckoOptions),
+  geckoExtensionsAsset,
+  'Gecko chrome://extensions must use the bundled icon on the UUID origin'
+);
+assert.strictEqual(
+  utils.getBrowserPageFaviconUrl('about:addons', geckoOptions),
+  geckoExtensionsAsset,
+  'Gecko about:addons must use the bundled icon on the UUID origin'
+);
+[
+  utils.getBrowserPageFaviconUrl('chrome://extensions/', geckoOptions),
+  utils.getBrowserPageFaviconUrl('about:addons', geckoOptions)
+].forEach((url) => {
+  assert.ok(url.startsWith(`moz-extension://${GECKO_ORIGIN_UUID}/`));
+  assert.ok(!url.includes(GECKO_ADDON_ID), 'Gecko favicon URLs must never reconstruct from runtime.id');
+  assert.ok(!url.includes('_favicon'));
+  assert.ok(!url.includes('chrome://favicon2'));
+  assert.ok(!url.includes('chrome://mozapps'));
+});
+assert.strictEqual(
+  utils.getChromeFaviconUrl('chrome://extensions/', geckoOptions),
+  '',
+  'Gecko must not emit chrome://favicon2'
+);
+assert.strictEqual(
+  utils.getExtensionFaviconUrl('https://example.com/', geckoOptions),
+  '',
+  'Gecko must not emit the stripped _favicon endpoint for HTTP pages'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(geckoExtensionsAsset, false, geckoOptions),
+  true,
+  'strict favicon mode should keep bundled Gecko browser-page icons on the UUID origin'
+);
+assert.strictEqual(
+  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
+    `moz-extension://${GECKO_ADDON_ID}/assets/images/browser-pages/extensions.svg`,
+    true,
+    geckoOptions
+  ),
+  false,
+  'Gecko must reject reconstructed addon-id moz-extension URLs as another origin'
+);
+assert.strictEqual(
+  utils.rewritePrivilegedBrowserFaviconUrl(
+    'chrome://mozapps/skin/extensions/extension.svg',
+    'about:addons',
+    geckoOptions
+  ),
+  geckoExtensionsAsset,
+  'privileged chrome://mozapps favicons must rewrite to the bundled UUID asset'
+);
+
+const geckoResolver = utils.createFaviconUrlResolver(geckoOptions);
+assert.strictEqual(
+  geckoResolver.getPageFaviconCandidateUrl('chrome://extensions/'),
+  geckoExtensionsAsset,
+  'Gecko chrome://extensions candidates must be bundled UUID assets'
+);
+assert.strictEqual(
+  geckoResolver.getPageFaviconCandidateUrl('about:addons'),
+  geckoExtensionsAsset,
+  'Gecko about:addons candidates must be bundled UUID assets'
+);
+const geckoExtensionsRender = geckoResolver.getPageFaviconRenderCandidates('chrome://extensions/', '');
+assert.strictEqual(geckoExtensionsRender.primaryUrl, geckoExtensionsAsset);
+assert.strictEqual(
+  geckoExtensionsRender.browserUrl,
+  '',
+  'Gecko chrome://extensions must not fall back to chrome://favicon2'
+);
+assert.ok(!String(geckoExtensionsRender.primaryUrl).includes('_favicon'));
+assert.ok(!String(geckoExtensionsRender.browserUrl).includes('chrome://favicon2'));
+assert.ok(!String(geckoExtensionsRender.primaryUrl).includes(GECKO_ADDON_ID));
+
+const geckoAddonsRender = geckoResolver.getPageFaviconRenderCandidates('about:addons', '');
+assert.strictEqual(
+  geckoAddonsRender.primaryUrl,
+  geckoExtensionsAsset,
+  'Gecko about:addons candidates must be bundled UUID assets'
+);
+assert.strictEqual(geckoAddonsRender.browserUrl, '');
+assert.ok(!String(geckoAddonsRender.primaryUrl).includes('_favicon'));
+assert.ok(!String(geckoAddonsRender.browserUrl).includes('chrome://favicon2'));
+assert.ok(!String(geckoAddonsRender.primaryUrl).includes(GECKO_ADDON_ID));
+
+const geckoMozappsRender = geckoResolver.getPageFaviconRenderCandidates(
+  'about:addons',
+  'chrome://mozapps/skin/extensions/extension.svg'
+);
+assert.strictEqual(
+  geckoMozappsRender.primaryUrl,
+  geckoExtensionsAsset,
+  'Gecko should rewrite privileged chrome://mozapps URLs to the bundled UUID icon'
+);
+assert.ok(!String(geckoMozappsRender.primaryUrl).includes('chrome://mozapps'));
+assert.ok(!String(geckoMozappsRender.primaryUrl).includes(GECKO_ADDON_ID));
+
+['extensions.svg', 'settings.svg', 'default.svg'].forEach((name) => {
+  const iconPath = path.join(__dirname, '..', 'assets', 'images', 'browser-pages', name);
+  assert.ok(fs.existsSync(iconPath), `bundled browser-page icon missing: ${name}`);
+  const svg = fs.readFileSync(iconPath, 'utf8');
+  assert.ok(!svg.includes('currentColor'), `${name} must use opaque fills, not currentColor`);
+});
 assert.strictEqual(
   resolver.getPageFaviconCandidateUrl('chrome-extension://abc/src/options/options.html'),
   'chrome-extension://abc/assets/images/lumno.png',

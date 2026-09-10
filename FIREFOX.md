@@ -1,4 +1,4 @@
-# Lumno Firefox / Zen — 0.9.55-firefox-v1.0.0
+# Lumno Firefox / Zen — 0.9.55-firefox-v1.2.0
 
 This is a **clean rewrite** of the Gecko adapter on upstream **0.9.55**. Chrome source stays 0.9.55 Manifest V3. The installable Firefox zip is Manifest V2.
 
@@ -15,6 +15,7 @@ Upstream 0.9.52–0.9.55, with the same Gecko layer:
 - Kagi (`kg` / `kagi`)
 - Nightly 156 overlay search-field centering (`align-content: center` after `all: unset`)
 - Restricted-page fallbacks from v1.7.0: Alt+K opens Lumno newtab; Alt+Q hops to a hostable https tab
+- Built-in page icons (`about:addons`, `chrome://extensions`, …) as bundled `moz-extension://<install-uuid>/assets/images/browser-pages/*.svg`. Gecko has no `_favicon` / `chrome://favicon2`, and `tab.favIconUrl` `chrome://mozapps/…` cannot load in moz-extension pages. v1.1.0 reconstructed those URLs from `runtime.id` (`lumno@…`) which is **not** the UUID hostname; v1.2.0 uses `runtime.getURL('')` as-is.
 
 ## Restricted pages
 
@@ -28,7 +29,7 @@ Content scripts **cannot** inject into privileged pages (`about:debugging`, `abo
 
 Do **not** use the Chrome zip or CRX Installer. Unload any old Lumno first (including 0.9.51-firefox-v1.0.0–v1.8.0 and the 0.9.52–0.9.59 Firefox tags).
 
-1. Download `lumno-0.9.55-firefox-v1.0.0.zip` and unzip it.
+1. Download `lumno-0.9.55-firefox-v1.2.0.zip` and unzip it.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. **Load Temporary Add-on…** → select the unzipped `manifest.json`.
 4. Open a normal `https://` page (not `about:` and not the add-on page). **Refresh once** after loading the add-on.
@@ -60,7 +61,7 @@ Zen does **not** bind Alt+K or Alt+Q by default (`Ctrl+K` is search, `Alt+Ctrl+Q
 1. Confirm the address bar is `https://…` for in-page overlay. Restricted pages open a new tab instead.
 2. Refresh that tab once after loading the add-on.
 3. Click the toolbar icon. If that opens the command bar, check **Manage Extension Shortcuts**.
-4. Unload every older Lumno, then load only 0.9.55-firefox-v1.0.0.
+4. Unload every older Lumno, then load only 0.9.55-firefox-v1.2.0.
 
 ## Development
 

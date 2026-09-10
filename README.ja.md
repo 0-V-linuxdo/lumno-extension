@@ -28,7 +28,7 @@ Lumno は Chromium ブラウザ向けの Manifest V3 拡張機能です。集中
 
 現在のバージョン：`0.9.55`
 
-Firefox / Zen 移植：`0.9.55-firefox-v1.0.0`
+Firefox / Zen 移植：`0.9.55-firefox-v1.2.0`
 
 <img width="1200" height="480" alt="Lumno command bar preview" src="./assets/images/readme/banner.webp" decoding="async" />
 
@@ -70,7 +70,7 @@ Chrome Web Store からインストールできます：[Install Lumno on Chrome
 
 Chrome 用 zip を CRX Installer で入れないでください。Firefox パッケージを使います：
 
-1. [`lumno-0.9.55-firefox-v1.0.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.55-firefox-v1.0.0) をダウンロードして解凍します。
+1. [`lumno-0.9.55-firefox-v1.2.0.zip`](https://github.com/0-V-linuxdo/lumno-extension/releases/tag/0.9.55-firefox-v1.2.0) をダウンロードして解凍します。
 2. `about:debugging#/runtime/this-firefox` を開きます。
 3. **一時的なアドオンを読み込む…** → 解凍した `manifest.json` を選びます。
 4. 通常の `https://` ページを開きます（`about:` では試さないでください）。

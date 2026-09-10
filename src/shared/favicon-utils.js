@@ -85,12 +85,11 @@
         return enhancedFetchEnabled === true;
       }
       const config = options || {};
-      const runtime = config.chromeApi && config.chromeApi.runtime ? config.chromeApi.runtime : null;
-      const ownExtensionId = String(config.ownExtensionId || (runtime && runtime.id) || '').trim();
+      const originHost = resolveOwnExtensionOriginHost(config);
       const isOwnExtensionUrl = Boolean(
-        ownExtensionId &&
+        originHost &&
         isBrowserExtensionProtocol(parsed.protocol) &&
-        String(parsed.hostname || '') === ownExtensionId
+        String(parsed.hostname || '') === originHost
       );
       if (!isOwnExtensionUrl) {
         return false;
@@ -98,7 +97,8 @@
       const pathname = String(parsed.pathname || '').toLowerCase();
       return pathname.startsWith('/_favicon/') ||
         pathname === `/${LUMNO_EXTENSION_ICON_PATH.toLowerCase()}` ||
-        /^\/assets\/images\/site-search\/[^/]+\.(?:svg|png)$/.test(pathname);
+        /^\/assets\/images\/site-search\/[^/]+\.(?:svg|png)$/.test(pathname) ||
+        /^\/assets\/images\/browser-pages\/[^/]+\.(?:svg|png)$/.test(pathname);
     } catch (e) {
       return enhancedFetchEnabled === true;
     }
@@ -267,6 +267,9 @@
     if (!pageUrl || !/^https?:\/\//i.test(pageUrl)) {
       return '';
     }
+    if (isGeckoFaviconRuntime(options)) {
+      return '';
+    }
     const getRuntimeUrl = options && typeof options.getRuntimeUrl === 'function'
       ? options.getRuntimeUrl
       : null;
@@ -308,6 +311,9 @@
   }
 
   function getChromeFaviconUrl(pageUrl, options) {
+    if (isGeckoFaviconRuntime(options)) {
+      return '';
+    }
     const page = String(pageUrl || '').trim();
     if (!page) {
       return '';
@@ -342,17 +348,158 @@
       normalized === 'ms-browser-extension:';
   }
 
+  const BROWSER_PAGE_ICON_DIRECTORY = 'assets/images/browser-pages';
+  const DEFAULT_BROWSER_PAGE_ICON_FILE = 'default.svg';
+  const BROWSER_PAGE_ICON_FILES = Object.freeze({
+    addons: 'extensions.svg',
+    bookmarks: 'bookmarks.svg',
+    config: 'settings.svg',
+    debugging: 'inspect.svg',
+    downloads: 'downloads.svg',
+    experiments: 'flags.svg',
+    extensions: 'extensions.svg',
+    flags: 'flags.svg',
+    history: 'history.svg',
+    home: 'newtab.svg',
+    inspect: 'inspect.svg',
+    logins: 'passwords.svg',
+    newtab: 'newtab.svg',
+    'password-manager': 'passwords.svg',
+    passwords: 'passwords.svg',
+    performance: 'inspect.svg',
+    policies: 'settings.svg',
+    preferences: 'settings.svg',
+    privatebrowsing: 'newtab.svg',
+    processes: 'inspect.svg',
+    profiler: 'inspect.svg',
+    settings: 'settings.svg',
+    welcome: 'newtab.svg'
+  });
+
+  function getRuntimeUrlFromOptions(options) {
+    const config = options || {};
+    if (typeof config.getRuntimeUrl === 'function') {
+      return config.getRuntimeUrl;
+    }
+    if (config.chromeApi && config.chromeApi.runtime &&
+        typeof config.chromeApi.runtime.getURL === 'function') {
+      return config.chromeApi.runtime.getURL.bind(config.chromeApi.runtime);
+    }
+    return null;
+  }
+
+  function isGeckoRuntimeUrl(getRuntimeUrl) {
+    if (typeof getRuntimeUrl !== 'function') {
+      return false;
+    }
+    try {
+      const root = String(getRuntimeUrl('') || getRuntimeUrl('/') || '').trim().toLowerCase();
+      return root.indexOf('moz-extension:') === 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isGeckoFaviconRuntime(options) {
+    const config = options || {};
+    if (config.isGeckoRuntime === true) {
+      return true;
+    }
+    return isGeckoRuntimeUrl(getRuntimeUrlFromOptions(config));
+  }
+
+  function resolveOwnExtensionOriginHost(options, getRuntimeUrl) {
+    const config = options || {};
+    const explicit = String(config.ownExtensionOriginHost || '').trim();
+    if (explicit) {
+      return explicit;
+    }
+    const resolver = typeof getRuntimeUrl === 'function'
+      ? getRuntimeUrl
+      : getRuntimeUrlFromOptions(config);
+    if (typeof resolver === 'function') {
+      const roots = ['', '/'];
+      for (let index = 0; index < roots.length; index += 1) {
+        let runtimeUrl = '';
+        try {
+          runtimeUrl = String(resolver(roots[index]) || '').trim();
+        } catch (e) {
+          runtimeUrl = '';
+        }
+        if (!runtimeUrl) {
+          continue;
+        }
+        try {
+          const parsed = new URL(runtimeUrl);
+          if (isBrowserExtensionProtocol(parsed.protocol) && parsed.hostname) {
+            return String(parsed.hostname);
+          }
+        } catch (e) {
+          // Try the next root path.
+        }
+      }
+    }
+    const ownId = String(config.ownExtensionId || '').trim();
+    if (ownId) {
+      return ownId;
+    }
+    const runtime = config.chromeApi && config.chromeApi.runtime ? config.chromeApi.runtime : null;
+    return runtime && runtime.id ? String(runtime.id) : '';
+  }
+
+  function getBrowserInternalPageKey(pageUrl) {
+    const raw = String(pageUrl || '').trim();
+    if (!raw) {
+      return '';
+    }
+    try {
+      const parsed = new URL(raw);
+      const protocol = String(parsed.protocol || '').toLowerCase();
+      if (protocol === 'about:') {
+        return String(parsed.pathname || '')
+          .toLowerCase()
+          .replace(/^\/+|\/+$/g, '')
+          .split('/')[0] || '';
+      }
+      return String(parsed.hostname || '').toLowerCase();
+    } catch (e) {
+      const aboutMatch = String(raw).toLowerCase().match(/^about:([^/?#]+)/);
+      return aboutMatch ? aboutMatch[1] : '';
+    }
+  }
+
+  function getBrowserInternalPageIconPath(pageUrl) {
+    if (!isBrowserInternalPageUrl(pageUrl)) {
+      return '';
+    }
+    const key = getBrowserInternalPageKey(pageUrl);
+    const fileName = (key && BROWSER_PAGE_ICON_FILES[key]) || DEFAULT_BROWSER_PAGE_ICON_FILE;
+    return `${BROWSER_PAGE_ICON_DIRECTORY}/${fileName}`;
+  }
+
   function getBrowserPageFaviconUrl(pageUrl, options) {
     const page = String(pageUrl || '').trim();
     if (!isBrowserInternalPageUrl(page)) {
       return '';
+    }
+    if (isGeckoFaviconRuntime(options)) {
+      const iconPath = getBrowserInternalPageIconPath(page);
+      if (!iconPath) {
+        return '';
+      }
+      const getRuntimeUrl = getRuntimeUrlFromOptions(options);
+      return getOwnExtensionAssetUrl(
+        iconPath,
+        getOwnExtensionRuntimeInfo(options, getRuntimeUrl),
+        Object.assign({}, options || {}, { getRuntimeUrl })
+      );
     }
     const size = Number.isFinite(Number(options && options.size))
       ? Math.max(1, Math.round(Number(options.size)))
       : 128;
     const getRuntimeUrl = options && typeof options.getRuntimeUrl === 'function'
       ? options.getRuntimeUrl
-      : null;
+      : getRuntimeUrlFromOptions(options);
     if (getRuntimeUrl) {
       try {
         const faviconUrl = new URL(getRuntimeUrl('/_favicon/'));
@@ -364,6 +511,38 @@
       }
     }
     return getChromeFaviconUrl(page, { size });
+  }
+
+  function rewritePrivilegedBrowserFaviconUrl(url, pageUrl, options) {
+    const raw = String(url || '').trim();
+    if (!raw) {
+      return '';
+    }
+    const lower = raw.toLowerCase();
+    const isMozapps = lower.indexOf('chrome://mozapps/') === 0;
+    const isMonogram = isChromeMonogramFaviconUrl(raw);
+    if (!isMozapps && !isMonogram) {
+      return '';
+    }
+    if (isMonogram && !isGeckoFaviconRuntime(options)) {
+      return '';
+    }
+    const page = String(pageUrl || '').trim();
+    let iconPath = '';
+    if (isBrowserInternalPageUrl(page)) {
+      iconPath = getBrowserInternalPageIconPath(page);
+    } else if (isMozapps) {
+      iconPath = `${BROWSER_PAGE_ICON_DIRECTORY}/extensions.svg`;
+    }
+    if (!iconPath) {
+      return '';
+    }
+    const getRuntimeUrl = getRuntimeUrlFromOptions(options);
+    return getOwnExtensionAssetUrl(
+      iconPath,
+      getOwnExtensionRuntimeInfo(options, getRuntimeUrl),
+      Object.assign({}, options || {}, { getRuntimeUrl })
+    );
   }
 
   function normalizeFaviconThemePreference(theme) {
@@ -412,20 +591,27 @@
   }
 
   function getOwnExtensionRuntimeInfo(options, getRuntimeUrl) {
-    const runtime = options && options.chromeApi && options.chromeApi.runtime
-      ? options.chromeApi.runtime
+    const config = options || {};
+    const runtime = config.chromeApi && config.chromeApi.runtime
+      ? config.chromeApi.runtime
       : null;
+    const resolver = typeof getRuntimeUrl === 'function'
+      ? getRuntimeUrl
+      : getRuntimeUrlFromOptions(config);
+    const originHost = resolveOwnExtensionOriginHost(config, resolver);
     const info = {
-      id: runtime && runtime.id ? String(runtime.id) : '',
+      id: originHost,
+      originHost,
+      addonId: runtime && runtime.id ? String(runtime.id) : '',
       protocol: 'chrome-extension:'
     };
-    if (typeof getRuntimeUrl !== 'function') {
+    if (typeof resolver !== 'function') {
       return info;
     }
     ['', '/'].some((path) => {
       let runtimeUrl = '';
       try {
-        runtimeUrl = String(getRuntimeUrl(path) || '').trim();
+        runtimeUrl = String(resolver(path) || '').trim();
       } catch (e) {
         return false;
       }
@@ -437,11 +623,10 @@
         if (!isBrowserExtensionProtocol(parsed.protocol)) {
           return false;
         }
-        if (!info.id && parsed.hostname) {
-          info.id = parsed.hostname;
-        }
-        if (!info.protocol || !info.id || parsed.hostname === info.id) {
-          info.protocol = parsed.protocol;
+        info.protocol = parsed.protocol;
+        if (parsed.hostname) {
+          info.originHost = String(parsed.hostname);
+          info.id = info.originHost;
         }
         return Boolean(info.id);
       } catch (e) {
@@ -456,20 +641,34 @@
     if (!assetPath) {
       return '';
     }
-    const runtimeUrl = getRuntimeFaviconUrl(assetPath, options);
+    const config = Object.assign({}, options || {});
+    if (runtimeInfo && runtimeInfo.originHost) {
+      config.ownExtensionOriginHost = runtimeInfo.originHost;
+    }
+    if (runtimeInfo && runtimeInfo.id && !config.ownExtensionId) {
+      config.ownExtensionId = runtimeInfo.id;
+    }
+    const originHost = resolveOwnExtensionOriginHost(config);
+    const protocol = (runtimeInfo && runtimeInfo.protocol) ||
+      (isGeckoFaviconRuntime(config) ? 'moz-extension:' : 'chrome-extension:');
+    const runtimeUrl = getRuntimeFaviconUrl(assetPath, config);
     if (runtimeUrl) {
       try {
         const parsed = new URL(runtimeUrl);
         if (isBrowserExtensionProtocol(parsed.protocol) &&
-            (!runtimeInfo || !runtimeInfo.id || parsed.hostname === runtimeInfo.id)) {
+            originHost &&
+            String(parsed.hostname || '') === originHost) {
           return runtimeUrl;
         }
       } catch (e) {
         // Fall through to constructing the known extension asset URL below.
       }
     }
-    if (runtimeInfo && runtimeInfo.id) {
-      return `${runtimeInfo.protocol || 'chrome-extension:'}//${runtimeInfo.id}/${assetPath}`;
+    if (originHost) {
+      if (String(protocol).toLowerCase() === 'moz-extension:' && originHost.indexOf('@') !== -1) {
+        return '';
+      }
+      return `${protocol}//${originHost}/${assetPath}`;
     }
     return runtimeUrl;
   }
@@ -1170,7 +1369,10 @@
       const policyPageUrl = getCanonicalFaviconPage(pageUrl || url);
       return isFaviconSourceAllowedByEnhancedFetchPolicy(url, isEnhancedFaviconFetchEnabled(policyPageUrl), {
         chromeApi: config.chromeApi,
-        ownExtensionId: ownExtensionRuntime.id
+        getRuntimeUrl,
+        ownExtensionId: ownExtensionRuntime.id,
+        ownExtensionOriginHost: ownExtensionRuntime.originHost || ownExtensionRuntime.id,
+        isGeckoRuntime: config.isGeckoRuntime
       });
     }
 
@@ -1187,13 +1389,25 @@
       if (!page || !/^https?:\/\//i.test(page)) {
         return '';
       }
+      if (isGeckoFaviconRuntime({
+        getRuntimeUrl,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      })) {
+        return '';
+      }
       if (customExtensionFaviconUrl) {
         const configured = String(customExtensionFaviconUrl(page) || '').trim();
         if (configured) {
           return configured;
         }
       }
-      return getExtensionFaviconUrl(page, { getRuntimeUrl, size });
+      return getExtensionFaviconUrl(page, {
+        getRuntimeUrl,
+        size,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      });
     }
 
     function getResolverBrowserPageFaviconUrl(pageUrl) {
@@ -1207,7 +1421,12 @@
           return configured;
         }
       }
-      return getBrowserPageFaviconUrl(page, { getRuntimeUrl, size });
+      return getBrowserPageFaviconUrl(page, {
+        getRuntimeUrl,
+        size,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      });
     }
 
     function getResolverGstaticFaviconUrl(pageUrl) {
@@ -1229,13 +1448,25 @@
       if (!page) {
         return '';
       }
+      if (isGeckoFaviconRuntime({
+        getRuntimeUrl,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      })) {
+        return '';
+      }
       if (customChromeFaviconUrl) {
         const configured = String(customChromeFaviconUrl(page) || '').trim();
         if (configured) {
           return configured;
         }
       }
-      return getChromeFaviconUrl(page, { size });
+      return getChromeFaviconUrl(page, {
+        size,
+        getRuntimeUrl,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      });
     }
 
     function isResolverOwnExtensionPageUrl(pageUrl) {
@@ -1266,7 +1497,10 @@
       if (!isResolverOwnExtensionPageUrl(pageUrl)) {
         return '';
       }
-      return getOwnExtensionAssetUrl(LUMNO_EXTENSION_ICON_PATH, ownExtensionRuntime, { getRuntimeUrl });
+      return getOwnExtensionAssetUrl(LUMNO_EXTENSION_ICON_PATH, ownExtensionRuntime, {
+        getRuntimeUrl,
+        chromeApi: config.chromeApi
+      });
     }
 
     function isBlockedFaviconPageUrl(pageUrl) {
@@ -1315,14 +1549,20 @@
       if (isResolverOtherExtensionPageUrl(pageUrl)) {
         return '';
       }
-      if (!raw || isBlockedFaviconUrl(raw, pageUrl, candidateKind)) {
+      const rewritten = rewritePrivilegedBrowserFaviconUrl(raw, pageUrl, {
+        getRuntimeUrl,
+        chromeApi: config.chromeApi,
+        isGeckoRuntime: config.isGeckoRuntime
+      });
+      const candidate = rewritten || raw;
+      if (!candidate || isBlockedFaviconUrl(candidate, pageUrl, candidateKind)) {
         return '';
       }
-      if (raw.startsWith('data:')) {
-        return raw;
+      if (candidate.startsWith('data:')) {
+        return candidate;
       }
       try {
-        const parsed = new URL(raw);
+        const parsed = new URL(candidate);
         if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
             shouldBlockDirectFaviconHost(parsed.hostname, {
               shouldBlockFaviconForHost: shouldBlockHost,
@@ -1330,7 +1570,7 @@
             })) {
           return '';
         }
-        return raw;
+        return candidate;
       } catch (e) {
         return '';
       }
@@ -1485,9 +1725,14 @@
     createFaviconDecisionLogger,
     createFaviconUrlResolver,
     getBrowserPageFaviconUrl,
+    getBrowserInternalPageIconPath,
     getExtensionFaviconUrl,
     getGstaticFaviconUrl,
     getChromeFaviconUrl,
+    getOwnExtensionAssetUrl,
+    getOwnExtensionRuntimeInfo,
+    rewritePrivilegedBrowserFaviconUrl,
+    resolveOwnExtensionOriginHost,
     getCanonicalFaviconHost,
     getCanonicalPageUrlForFavicon,
     getFaviconPersistCacheKey,
