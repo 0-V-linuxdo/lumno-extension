@@ -1,6 +1,5 @@
 const assert = require('assert');
 const fs = require('fs');
-const path = require('path');
 const vm = require('vm');
 
 const sandbox = {
@@ -104,33 +103,6 @@ assert.strictEqual(
   ),
   true,
   'strict favicon mode should keep the shared bundled site-search PNG tiles'
-);
-assert.strictEqual(
-  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
-    'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-    false,
-    { ownExtensionId: 'lumno-id' }
-  ),
-  true,
-  'strict favicon mode should keep bundled Gecko browser-page icons'
-);
-assert.strictEqual(
-  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
-    'chrome-extension://abc/assets/images/browser-pages/extensions.svg',
-    false,
-    { ownExtensionId: 'abc' }
-  ),
-  true,
-  'strict favicon mode should keep bundled browser-page icons on Chromium too'
-);
-assert.strictEqual(
-  utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
-    'moz-extension://other/assets/images/browser-pages/extensions.svg',
-    true,
-    { ownExtensionId: 'lumno-id' }
-  ),
-  false,
-  'enhanced favicon mode should reject another extension\'s browser-page icons'
 );
 assert.strictEqual(
   utils.isFaviconSourceAllowedByEnhancedFetchPolicy(
@@ -356,98 +328,6 @@ assert.strictEqual(
   'chrome://favicon2/?pageUrl=chrome%3A%2F%2Fextensions%2F&size=128',
   'browser-internal render candidates should keep chrome://favicon2 as fallback'
 );
-
-const geckoGetRuntimeUrl = (assetPath) => `moz-extension://lumno-id${assetPath}`;
-assert.strictEqual(
-  utils.getBrowserInternalPageIconPath('chrome://extensions/'),
-  'assets/images/browser-pages/extensions.svg',
-  'chrome://extensions should map to the bundled extensions icon'
-);
-assert.strictEqual(
-  utils.getBrowserInternalPageIconPath('about:addons'),
-  'assets/images/browser-pages/extensions.svg',
-  'about:addons should share the bundled extensions icon'
-);
-assert.strictEqual(
-  utils.getBrowserPageFaviconUrl('chrome://extensions/', { getRuntimeUrl: geckoGetRuntimeUrl }),
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-  'Gecko chrome://extensions must use the bundled icon, not _favicon'
-);
-assert.strictEqual(
-  utils.getBrowserPageFaviconUrl('about:addons', { getRuntimeUrl: geckoGetRuntimeUrl }),
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-  'Gecko about:addons must use the bundled icon, not _favicon'
-);
-assert.strictEqual(
-  utils.getBrowserPageFaviconUrl('chrome://extensions/', { getRuntimeUrl: geckoGetRuntimeUrl }).includes('_favicon'),
-  false
-);
-assert.strictEqual(
-  utils.getChromeFaviconUrl('chrome://extensions/', { getRuntimeUrl: geckoGetRuntimeUrl }),
-  '',
-  'Gecko must not emit chrome://favicon2'
-);
-assert.strictEqual(
-  utils.getExtensionFaviconUrl('https://example.com/', { getRuntimeUrl: geckoGetRuntimeUrl }),
-  '',
-  'Gecko must not emit the stripped _favicon endpoint for HTTP pages'
-);
-
-const geckoResolver = utils.createFaviconUrlResolver({
-  getRuntimeUrl: geckoGetRuntimeUrl
-});
-assert.strictEqual(
-  geckoResolver.getPageFaviconCandidateUrl('chrome://extensions/'),
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-  'Gecko chrome://extensions candidates must be bundled assets'
-);
-assert.ok(
-  !geckoResolver.getPageFaviconCandidateUrl('chrome://extensions/').includes('_favicon'),
-  'Gecko chrome://extensions candidates must never be _favicon'
-);
-const geckoExtensionsRender = geckoResolver.getPageFaviconRenderCandidates('chrome://extensions/', '');
-assert.strictEqual(
-  geckoExtensionsRender.primaryUrl,
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg'
-);
-assert.strictEqual(
-  geckoExtensionsRender.browserUrl,
-  '',
-  'Gecko chrome://extensions must not fall back to chrome://favicon2'
-);
-assert.ok(!String(geckoExtensionsRender.primaryUrl).includes('_favicon'));
-assert.ok(!String(geckoExtensionsRender.browserUrl).includes('chrome://favicon2'));
-
-const geckoAddonsRender = geckoResolver.getPageFaviconRenderCandidates('about:addons', '');
-assert.strictEqual(
-  geckoAddonsRender.primaryUrl,
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-  'Gecko about:addons candidates must be bundled assets'
-);
-assert.strictEqual(
-  geckoAddonsRender.browserUrl,
-  '',
-  'Gecko about:addons must not fall back to chrome://favicon2'
-);
-assert.ok(!String(geckoAddonsRender.primaryUrl).includes('_favicon'));
-assert.ok(!String(geckoAddonsRender.browserUrl).includes('chrome://favicon2'));
-
-const geckoMozappsRender = geckoResolver.getPageFaviconRenderCandidates(
-  'about:addons',
-  'chrome://mozapps/skin/extensions/extension.svg'
-);
-assert.strictEqual(
-  geckoMozappsRender.primaryUrl,
-  'moz-extension://lumno-id/assets/images/browser-pages/extensions.svg',
-  'Gecko should prefer the bundled addons icon over privileged chrome://mozapps URLs'
-);
-
-['extensions.svg', 'settings.svg', 'default.svg'].forEach((name) => {
-  assert.ok(
-    fs.existsSync(path.join(__dirname, '..', 'assets', 'images', 'browser-pages', name)),
-    `bundled browser-page icon missing: ${name}`
-  );
-});
 assert.strictEqual(
   resolver.getPageFaviconCandidateUrl('chrome-extension://abc/src/options/options.html'),
   'chrome-extension://abc/assets/images/lumno.png',

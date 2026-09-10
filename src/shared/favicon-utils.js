@@ -98,8 +98,7 @@
       const pathname = String(parsed.pathname || '').toLowerCase();
       return pathname.startsWith('/_favicon/') ||
         pathname === `/${LUMNO_EXTENSION_ICON_PATH.toLowerCase()}` ||
-        /^\/assets\/images\/site-search\/[^/]+\.(?:svg|png)$/.test(pathname) ||
-        /^\/assets\/images\/browser-pages\/[^/]+\.(?:svg|png)$/.test(pathname);
+        /^\/assets\/images\/site-search\/[^/]+\.(?:svg|png)$/.test(pathname);
     } catch (e) {
       return enhancedFetchEnabled === true;
     }
@@ -268,9 +267,6 @@
     if (!pageUrl || !/^https?:\/\//i.test(pageUrl)) {
       return '';
     }
-    if (isGeckoFaviconRuntime(options)) {
-      return '';
-    }
     const getRuntimeUrl = options && typeof options.getRuntimeUrl === 'function'
       ? options.getRuntimeUrl
       : null;
@@ -312,9 +308,6 @@
   }
 
   function getChromeFaviconUrl(pageUrl, options) {
-    if (isGeckoFaviconRuntime(options)) {
-      return '';
-    }
     const page = String(pageUrl || '').trim();
     if (!page) {
       return '';
@@ -342,86 +335,6 @@
       lower.startsWith('about:');
   }
 
-  const BROWSER_PAGE_ICON_DIRECTORY = 'assets/images/browser-pages';
-  const DEFAULT_BROWSER_PAGE_ICON_FILE = 'default.svg';
-  const BROWSER_PAGE_ICON_FILES = Object.freeze({
-    addons: 'extensions.svg',
-    bookmarks: 'bookmarks.svg',
-    config: 'settings.svg',
-    debugging: 'inspect.svg',
-    downloads: 'downloads.svg',
-    experiments: 'flags.svg',
-    extensions: 'extensions.svg',
-    flags: 'flags.svg',
-    history: 'history.svg',
-    home: 'newtab.svg',
-    inspect: 'inspect.svg',
-    logins: 'passwords.svg',
-    newtab: 'newtab.svg',
-    'password-manager': 'passwords.svg',
-    passwords: 'passwords.svg',
-    performance: 'inspect.svg',
-    policies: 'settings.svg',
-    preferences: 'settings.svg',
-    privatebrowsing: 'newtab.svg',
-    processes: 'inspect.svg',
-    profiler: 'inspect.svg',
-    settings: 'settings.svg',
-    welcome: 'newtab.svg'
-  });
-
-  function getBrowserInternalPageKey(pageUrl) {
-    const raw = String(pageUrl || '').trim();
-    if (!raw) {
-      return '';
-    }
-    try {
-      const parsed = new URL(raw);
-      const protocol = String(parsed.protocol || '').toLowerCase();
-      if (protocol === 'about:') {
-        return String(parsed.pathname || '')
-          .toLowerCase()
-          .replace(/^\/+|\/+$/g, '')
-          .split('/')[0] || '';
-      }
-      return String(parsed.hostname || '').toLowerCase();
-    } catch (e) {
-      const aboutMatch = String(raw).toLowerCase().match(/^about:([^/?#]+)/);
-      return aboutMatch ? aboutMatch[1] : '';
-    }
-  }
-
-  function getBrowserInternalPageIconPath(pageUrl) {
-    if (!isBrowserInternalPageUrl(pageUrl)) {
-      return '';
-    }
-    const key = getBrowserInternalPageKey(pageUrl);
-    const fileName = (key && BROWSER_PAGE_ICON_FILES[key]) || DEFAULT_BROWSER_PAGE_ICON_FILE;
-    return `${BROWSER_PAGE_ICON_DIRECTORY}/${fileName}`;
-  }
-
-  function isGeckoRuntimeUrl(getRuntimeUrl) {
-    if (typeof getRuntimeUrl !== 'function') {
-      return false;
-    }
-    try {
-      const root = String(getRuntimeUrl('') || getRuntimeUrl('/') || '').trim().toLowerCase();
-      return root.indexOf('moz-extension:') === 0;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function isGeckoFaviconRuntime(options) {
-    const config = options || {};
-    if (config.isGeckoRuntime === true) {
-      return true;
-    }
-    return isGeckoRuntimeUrl(
-      typeof config.getRuntimeUrl === 'function' ? config.getRuntimeUrl : null
-    );
-  }
-
   function isBrowserExtensionProtocol(protocol) {
     const normalized = String(protocol || '').toLowerCase();
     return normalized === 'chrome-extension:' ||
@@ -433,20 +346,6 @@
     const page = String(pageUrl || '').trim();
     if (!isBrowserInternalPageUrl(page)) {
       return '';
-    }
-    if (isGeckoFaviconRuntime(options)) {
-      const iconPath = getBrowserInternalPageIconPath(page);
-      if (!iconPath) {
-        return '';
-      }
-      const getRuntimeUrl = options && typeof options.getRuntimeUrl === 'function'
-        ? options.getRuntimeUrl
-        : null;
-      return getOwnExtensionAssetUrl(
-        iconPath,
-        getOwnExtensionRuntimeInfo(options, getRuntimeUrl),
-        { getRuntimeUrl }
-      );
     }
     const size = Number.isFinite(Number(options && options.size))
       ? Math.max(1, Math.round(Number(options.size)))
@@ -1294,11 +1193,7 @@
           return configured;
         }
       }
-      return getExtensionFaviconUrl(page, {
-        getRuntimeUrl,
-        size,
-        isGeckoRuntime: config.isGeckoRuntime
-      });
+      return getExtensionFaviconUrl(page, { getRuntimeUrl, size });
     }
 
     function getResolverBrowserPageFaviconUrl(pageUrl) {
@@ -1312,12 +1207,7 @@
           return configured;
         }
       }
-      return getBrowserPageFaviconUrl(page, {
-        getRuntimeUrl,
-        size,
-        chromeApi: config.chromeApi,
-        isGeckoRuntime: config.isGeckoRuntime
-      });
+      return getBrowserPageFaviconUrl(page, { getRuntimeUrl, size });
     }
 
     function getResolverGstaticFaviconUrl(pageUrl) {
@@ -1337,12 +1227,6 @@
     function getResolverChromeFaviconUrl(pageUrl) {
       const page = getCanonicalFaviconPage(pageUrl);
       if (!page) {
-        return '';
-      }
-      if (isGeckoFaviconRuntime({
-        getRuntimeUrl,
-        isGeckoRuntime: config.isGeckoRuntime
-      })) {
         return '';
       }
       if (customChromeFaviconUrl) {
@@ -1601,7 +1485,6 @@
     createFaviconDecisionLogger,
     createFaviconUrlResolver,
     getBrowserPageFaviconUrl,
-    getBrowserInternalPageIconPath,
     getExtensionFaviconUrl,
     getGstaticFaviconUrl,
     getChromeFaviconUrl,

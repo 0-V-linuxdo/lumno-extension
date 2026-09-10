@@ -1,15 +1,5 @@
 Tags: Release
 
-## 0.9.55-firefox-v1.1.0
-
-Gecko built-in page favicons. Chrome still uses `_favicon` + `chrome://favicon2`. Firefox has neither (Bug 1315616), and `about:addons` `tab.favIconUrl` is a privileged `chrome://mozapps/...` SVG that `moz-extension` pages cannot load (Bug 1792254). The fork was emitting `moz-extension://…/_favicon/` (404) and `chrome://favicon2` (Chromium-only), so new-tab cards for `chrome://extensions` / `about:addons` fell through to the puzzle placeholder.
-
-v1.1.0 maps Gecko internal pages to bundled `assets/images/browser-pages/*.svg` and never generates `_favicon` or `chrome://favicon2` on `moz-extension://`. Chromium source is unchanged.
-
-Does **not** rewrite `0.9.55-firefox-v1.0.0`. Firefox shortcut `about:` path remapping (`extensions` → `addons`) is still deferred.
-
-Install `lumno-0.9.55-firefox-v1.1.0.zip`. Unload every older Lumno first. See `FIREFOX.md`.
-
 ## 0.9.55-firefox-v1.0.0
 
 Firefox / Zen port rebased onto upstream **0.9.55**. Chrome source in this repo is 0.9.55 MV3. The Firefox zip is still Manifest V2, packed by `scripts/package-firefox.js`.
