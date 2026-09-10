@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.0.0');
+assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.1.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
@@ -51,6 +51,14 @@ assert.strictEqual(packagedManifest.commands['show-search'].suggested_key.defaul
 assert.strictEqual(packagedManifest.commands['show-tab-switcher'].suggested_key.default, 'Alt+Q');
 assert.ok(Array.isArray(packagedManifest.web_accessible_resources));
 assert.ok(!packagedManifest.web_accessible_resources.includes('_favicon/*'));
+assert.ok(
+  packagedManifest.web_accessible_resources.includes('assets/images/browser-pages/*.svg'),
+  'Firefox package must expose bundled browser-page icons to overlay pages'
+);
+assert.ok(
+  fs.existsSync(path.join(extractDir, 'assets/images/browser-pages/extensions.svg')),
+  'Firefox zip must contain the bundled extensions icon'
+);
 assert.ok(
   fs.existsSync(path.join(extractDir, 'src/background/gecko-mv2-polyfill.js')),
   'Firefox zip must contain the MV2 scripting polyfill'
