@@ -168,6 +168,13 @@
       "category": "searchEngine"
     },
     {
+      "key": "kg",
+      "aliases": ["kagi"],
+      "name": "Kagi",
+      "template": "https://kagi.com/search?q={query}",
+      "category": "searchEngine"
+    },
+    {
       "key": "ddg",
       "aliases": ["duckduckgo", "duck"],
       "name": "DuckDuckGo",

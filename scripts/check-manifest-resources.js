@@ -4,6 +4,7 @@ const path = require('path');
 const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const missing = [];
 const injectedScriptFiles = [
+  'src/background/aggregate-search.js',
   'src/background/codex-debug-bridge.js',
   'src/background/extension-pages.js',
   'src/background/message-router.js',
@@ -16,8 +17,11 @@ const injectedScriptFiles = [
   'src/shared/codex-debug-surface.js',
   'src/shared/navigation-disposition.js',
   'src/shared/community-links.js',
+  'src/shared/browser-profile.js',
   'src/shared/settings.js',
   'src/shared/search-utils.js',
+  'src/shared/aggregate-search-store.js',
+  'src/shared/aggregate-search-surface.js',
   'src/shared/site-search-store.js',
   'src/shared/suggestion-action-model.js',
   'src/shared/suggestion-navigation.js',
@@ -218,19 +222,28 @@ function checkRuntimeGetUrlReferences() {
 }
 
 function checkHtmlReferences() {
-  const files = listHtmlFiles('src');
+  const files = [...listHtmlFiles('src'), 'newtab.html'];
   const referencePattern = /\b(?:src|href)=["']([^"']+)["']/g;
   files.forEach((file) => {
     const source = fs.readFileSync(file, 'utf8');
-    checkCssUrlReferences(file, source);
+    const baseMatch = source.match(/<base\s+[^>]*href=["']([^"']+)["']/i);
+    const baseHref = baseMatch ? baseMatch[1] : '';
+    const referenceBase = baseHref
+      ? path.normalize(path.join(path.dirname(file), baseHref))
+      : path.dirname(file);
+    const referenceFile = path.join(referenceBase, path.basename(file));
+    checkCssUrlReferences(referenceFile, source);
     let match = null;
     while ((match = referencePattern.exec(source))) {
       const value = match[1];
       if (!value || /^(https?:|data:|mailto:|tel:|#|__MSG_)/.test(value)) {
         continue;
       }
+      if (baseHref && value === baseHref) {
+        continue;
+      }
       const cleanValue = value.split(/[?#]/)[0];
-      const resolved = path.normalize(path.join(path.dirname(file), cleanValue));
+      const resolved = path.normalize(path.join(referenceBase, cleanValue));
       checkPath(resolved);
     }
   });

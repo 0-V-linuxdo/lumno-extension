@@ -27,7 +27,6 @@
       }
       .x-nt-shortcut-dialog {
         --x-nt-shortcut-dialog-enter-x: 0px;
-        --x-nt-shortcut-dialog-enter-y: 12px;
         --input-focus-color: rgba(59, 130, 246, 0.65);
         --input-focus-shadow: rgba(59, 130, 246, 0.2);
         --input-placeholder: rgba(100, 116, 139, 0.7);
@@ -52,8 +51,8 @@
         overflow: hidden auto;
         overscroll-behavior: contain;
         filter: blur(6px);
-        transform: translate3d(var(--x-nt-shortcut-dialog-enter-x, 0px), var(--x-nt-shortcut-dialog-enter-y, 12px), 0) scale(0.98);
-        transform-origin: center bottom;
+        transform: translateX(var(--x-nt-shortcut-dialog-enter-x, 0px)) scale(0.98);
+        transform-origin: center center;
         transition:
           opacity 160ms ease,
           transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -63,7 +62,7 @@
       .x-nt-shortcut-dialog-backdrop[data-open="true"] .x-nt-shortcut-dialog {
         opacity: 1;
         filter: blur(0);
-        transform: translate3d(0, 0, 0) scale(1);
+        transform: translateX(0) scale(1);
         will-change: transform, opacity, filter;
       }
       .x-nt-shortcut-dialog-backdrop[data-preparing="true"] .x-nt-shortcut-dialog {
@@ -213,7 +212,7 @@
         border-color: var(--input-focus-color);
         background: var(--input-focus-bg);
       }
-      .x-nt-shortcut-dialog ._x_extension_shortcut_input_2024_unique_ {
+      ._x_extension_shortcut_input_2024_unique_ {
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid var(--tab-border);
@@ -241,13 +240,25 @@
         border: none;
         background: transparent;
       }
-      .x-nt-shortcut-dialog ._x_extension_shortcut_input_2024_unique_::placeholder {
+      ._x_extension_shortcut_input_2024_unique_::placeholder {
         color: var(--input-placeholder);
       }
-      .x-nt-shortcut-dialog ._x_extension_shortcut_input_2024_unique_:hover,
-      .x-nt-shortcut-dialog ._x_extension_shortcut_input_2024_unique_:focus {
+      ._x_extension_shortcut_input_2024_unique_:hover,
+      ._x_extension_shortcut_input_2024_unique_:focus {
         border-color: var(--input-focus-color);
         background: var(--input-focus-bg);
+      }
+      ._x_extension_shortcut_input_2024_unique_._x_extension_range_slider_value_input_2026_unique_ {
+        appearance: textfield;
+        -moz-appearance: textfield;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      ._x_extension_range_slider_value_input_2026_unique_::-webkit-inner-spin-button,
+      ._x_extension_range_slider_value_input_2026_unique_::-webkit-outer-spin-button {
+        margin: 0;
+        appearance: none;
+        -webkit-appearance: none;
       }
       .x-nt-shortcut-error {
         min-height: 16px;
@@ -384,7 +395,7 @@
         }
         .x-nt-shortcut-dialog {
           filter: none;
-          transform: translate3d(0, 0, 0) scale(1);
+          transform: translateX(0) scale(1);
           transition: opacity 120ms ease;
           will-change: auto;
         }

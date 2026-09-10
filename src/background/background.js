@@ -39,7 +39,11 @@ lumnoImportScript('src/shared/selection-intent.js', 'Lumno: failed to load selec
 
 lumnoImportScript('src/shared/site-search-store.js', 'Lumno: failed to load site search store.');
 
+lumnoImportScript('src/shared/aggregate-search-store.js', 'Lumno: failed to load aggregate search store.');
+
 lumnoImportScript('src/background/ai-provider-submit.js', 'Lumno: failed to load AI provider submit runtime.');
+
+lumnoImportScript('src/background/aggregate-search.js', 'Lumno: failed to load aggregate search runtime.');
 
 lumnoImportScript('src/background/extension-pages.js', 'Lumno: failed to load extension page helpers.');
 
@@ -54,6 +58,8 @@ lumnoImportScript('src/background/selection-quick-action-provider.js', 'Lumno: f
 lumnoImportScript('src/background/message-router.js', 'Lumno: failed to load background message router.');
 
 lumnoImportScript('src/background/newtab-fallback.js', 'Lumno: failed to load newtab fallback helpers.');
+
+lumnoImportScript('src/shared/browser-profile.js', 'Lumno: failed to load browser profile helpers.');
 
 lumnoImportScript('src/background/shortcut-rules.js', 'Lumno: failed to load shortcut rules helpers.');
 
@@ -84,6 +90,7 @@ const BACKGROUND_MESSAGE_ROUTER = globalThis.LumnoBackgroundMessageRouter || {};
 const BOOKMARK_TAB_GROUPS = globalThis.LumnoBookmarkTabGroups || {};
 const EXTENSION_ROUTES = globalThis.LumnoExtensionRoutes || {};
 const UPDATE_NOTICE = globalThis.LumnoUpdateNotice || {};
+const SETTINGS = globalThis.LumnoSettings || {};
 const COMMAND_TARGET_POLICY = globalThis.LumnoCommandTargetPolicy || {};
 const FAVICON_UTILS = globalThis.LumnoFaviconUtils || {};
 const FAVICON_CACHE = globalThis.LumnoFaviconCache || {};
@@ -1404,7 +1411,7 @@ function isLumnoNewtabUrl(url) {
   const prefixes = routeBuilders.length > 0
     ? routeBuilders.map((builder) => builder(chrome))
     : [
-        chrome.runtime.getURL('src/newtab/newtab.html'),
+        chrome.runtime.getURL('newtab.html'),
         chrome.runtime.getURL('src/newtab/lumno-newtab.html')
       ];
   return prefixes.some((prefix) => value === prefix || value.startsWith(`${prefix}?`));
@@ -1453,7 +1460,7 @@ function isLumnoBrowserOverrideNewtabUrl(url) {
   }
   const newtabPrefix = typeof EXTENSION_ROUTES.buildNewtabUrl === 'function'
     ? EXTENSION_ROUTES.buildNewtabUrl(chrome)
-    : chrome.runtime.getURL('src/newtab/newtab.html');
+    : chrome.runtime.getURL('newtab.html');
   return value === newtabPrefix || value.startsWith(`${newtabPrefix}?`);
 }
 
@@ -1891,7 +1898,7 @@ const HOTKEY_DUP_GUARD_MS = 180;
 const GECKO_HOTKEY_DUP_GUARD_MS = 700;
 let lastGlobalHotkeyInvokeAt = 0;
 const OVERLAY_OPENING_GUARD_MS = 5000;
-const OVERLAY_RUNTIME_VERSION = '2026-08-20-current-page-provider-v13';
+const OVERLAY_RUNTIME_VERSION = '2026-08-31-provider-load-race-v15';
 const OVERLAY_HOST_ID = '_x_extension_overlay_host_2026_unique_';
 const OVERLAY_NAVIGATION_STATE_STORAGE_PREFIX =
   '_x_extension_overlay_navigation_state_2026_unique_:';
@@ -3455,10 +3462,27 @@ function isPageVisibleSafeFaviconUrl(url) {
     if (protocol === 'http:' || protocol === 'https:') {
       return true;
     }
-    return protocol === 'chrome-extension:' &&
+    if (!isBrowserExtensionProtocol(protocol)) {
+      return false;
+    }
+    const originHost = typeof FAVICON_UTILS.resolveOwnExtensionOriginHost === 'function'
+      ? String(FAVICON_UTILS.resolveOwnExtensionOriginHost({ chromeApi: chrome }) || '')
+      : '';
+    if (originHost) {
+      return String(parsed.hostname || '') === originHost;
+    }
+    if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      const root = String(chrome.runtime.getURL('') || '');
+      if (root && raw.indexOf(root) === 0) {
+        return true;
+      }
+    }
+    return Boolean(
       chrome &&
       chrome.runtime &&
-      String(parsed.hostname || '') === String(chrome.runtime.id || '');
+      chrome.runtime.id &&
+      String(parsed.hostname || '') === String(chrome.runtime.id)
+    );
   } catch (error) {
     return false;
   }
@@ -3471,7 +3495,14 @@ function buildSwitcherTabFavicon(tab, url) {
     return candidate;
   }
   const fallback = typeof tab.favIconUrl === 'string' ? tab.favIconUrl.trim() : '';
-  return isPageVisibleSafeFaviconUrl(fallback) ? fallback : '';
+  if (!fallback) {
+    return '';
+  }
+  const rewritten = typeof FAVICON_UTILS.rewritePrivilegedBrowserFaviconUrl === 'function'
+    ? String(FAVICON_UTILS.rewritePrivilegedBrowserFaviconUrl(fallback, resolved, { chromeApi: chrome }) || '')
+    : '';
+  const next = rewritten || fallback;
+  return isPageVisibleSafeFaviconUrl(next) ? next : '';
 }
 
 function getSwitcherRegistrableThemeHost(host) {
@@ -3650,7 +3681,7 @@ function warmSwitcherTabThemeColor(host, url) {
       const sharedHost = getSwitcherRegistrableThemeHost(normalizedHost);
       if (accentRgb && sharedHost && sharedHost !== normalizedHost) {
         const sharedKey = `${sharedHost}::${parsed.origin}::auto`;
-        setBoundedBackgroundCacheEntry(
+        FAVICON_UTILS.setBoundedCacheEntry(
           siteThemeColorCache,
           sharedKey,
           result,
@@ -5156,12 +5187,15 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     codexDebugBridge.isEnabled()
   );
   const overlayInjectionFiles = [
+    ...(isGeckoRuntime() ? ['src/shared/gecko-runtime.js'] : []),
     'src/shared/icon-font-preload.js',
     ...(shouldInjectOverlayCodexDebugSurface ? ['src/shared/codex-debug-surface.js'] : []),
     'src/shared/settings.js',
     'src/shared/navigation-disposition.js',
     'src/shared/search-utils.js',
     'src/shared/site-search-store.js',
+    'src/shared/aggregate-search-store.js',
+    'src/shared/aggregate-search-surface.js',
     'src/shared/suggestion-action-model.js',
     'src/shared/suggestion-navigation.js',
     'src/shared/suggestions-height-layout.js',
@@ -5173,6 +5207,7 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     'src/shared/shortcut-display.js',
     'src/shared/shortcut-favicon.js',
     'src/shared/community-links.js',
+    'src/shared/browser-profile.js',
     'src/shared/feature-hints.js',
     'src/shared/update-notice.js',
     'src/shared/engagement-notice.js',
@@ -5188,7 +5223,9 @@ function openOverlayOnTab(activeTab, tabs, source, options) {
     'src/overlay/site-fixes.js',
     'src/overlay/page-theme.js',
     'src/react/overlay-islands.js',
-    'src/overlay/search-panel.js'
+    ...(isGeckoRuntime() ? ['src/shared/gecko-content-globals.js'] : []),
+    'src/overlay/search-panel.js',
+    ...(isGeckoRuntime() ? ['src/overlay/gecko-overlay-bridge.js'] : [])
   ];
   const runOverlayScript = (tabZoomFactor) => {
       const prefillQuery = getOverlayPrefillQueryForSource(activeTab, source);
@@ -6888,6 +6925,38 @@ function runInteractiveSiteSearchProvider(provider, query, sender, disposition) 
   });
 }
 
+let aggregateSearchQueryRunner = null;
+function runAggregateSearchQuery(aggregateId, query, sender, disposition) {
+  if (!aggregateSearchQueryRunner) {
+    if (typeof AGGREGATE_SEARCH.createAggregateSearchQueryRunner !== 'function') {
+      return Promise.resolve({ ok: false, reason: 'aggregate-search-runtime-unavailable' });
+    }
+    aggregateSearchQueryRunner = AGGREGATE_SEARCH.createAggregateSearchQueryRunner({
+      aggregateSearchStore: AGGREGATE_SEARCH_STORE,
+      chromeApi: chrome,
+      storageArea,
+      storageKey: AGGREGATE_SEARCH_STORAGE_KEY,
+      loadSiteSearchProviders,
+      loadAggregateSearchAutoGroupEnabled() {
+        if (typeof SETTINGS.readStorageValue !== 'function') {
+          return Promise.resolve(undefined);
+        }
+        return SETTINGS.readStorageValue(
+          storageArea,
+          chrome,
+          AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY
+        );
+      },
+      openAggregateSearch: AGGREGATE_SEARCH.openAggregateSearch,
+      getEntryUrl: getSiteSearchProviderEntryUrl,
+      isInteractiveProvider: isInteractiveSiteSearchProvider,
+      waitForTabComplete,
+      submitPromptInTab: AI_PROVIDER_SUBMIT.submitPromptInTab
+    });
+  }
+  return aggregateSearchQueryRunner(aggregateId, query, sender, disposition);
+}
+
 // Route message actions by feature area before invoking the original handlers.
 const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   tabs: {
@@ -6941,7 +7010,8 @@ const BACKGROUND_MESSAGE_ROUTE_GROUPS = Object.freeze({
   siteSearch: {
     actions: [
       'getSiteSearchProviders',
-      'runSiteSearchProviderQuery'
+      'runSiteSearchProviderQuery',
+      'runAggregateSearchQuery'
     ],
     handler: handleSiteSearchMessage
   },
@@ -7418,7 +7488,8 @@ function handleSearchMessage(request, sender, sendResponse) {
       const controller = requestRecord.controller;
       getSearchEngineSuggestions(query, request.localSuggestions, {
         signal: controller.signal,
-        rawEngineSuggestionsPromise: startSearchEngineSuggestionRequest(requestRecord)
+        rawEngineSuggestionsPromise: startSearchEngineSuggestionRequest(requestRecord),
+        searchFirst: request.searchFirst === true
       }).then((suggestions) => {
         const isCurrent = searchEngineSuggestionRequests.get(requestKey) === requestRecord;
         const hasRemoteSuggestions = isCurrent && !controller.signal.aborted && suggestions.some((suggestion) => (
@@ -7485,6 +7556,11 @@ function handleSiteSearchMessage(request, sender, sendResponse) {
     case 'getSiteSearchProviders': {
       loadSiteSearchProviders().then((items) => {
         sendResponse({ items: items });
+      }).catch(() => {
+        sendResponse({
+          items: [],
+          reason: 'site-search-provider-load-failed'
+        });
       });
       return true;
     }
@@ -7504,6 +7580,20 @@ function handleSiteSearchMessage(request, sender, sendResponse) {
         sendResponse({
           ok: false,
           reason: error && error.message ? error.message : 'interactive-site-search-failed'
+        });
+      });
+      return true;
+    }
+    case 'runAggregateSearchQuery': {
+      runAggregateSearchQuery(
+        request.aggregateId,
+        request.query,
+        sender,
+        request.disposition
+      ).then(sendResponse).catch((error) => {
+        sendResponse({
+          ok: false,
+          reason: error && error.message ? error.message : 'aggregate-search-failed'
         });
       });
       return true;
@@ -7777,6 +7867,7 @@ function handleFaviconMessage(request, sender, sendResponse) {
 
 let siteSearchCache = null;
 let siteSearchPromise = null;
+let siteSearchLoadGeneration = 0;
 let searchBlacklistCache = null;
 let searchBlacklistPromise = null;
 let faviconRequestBlacklistCache = null;
@@ -7818,6 +7909,13 @@ let bookmarkTreeCacheListenersBound = false;
 const searchEngineSuggestionRequests = new Map();
 const SITE_SEARCH_STORAGE_KEY = '_x_extension_site_search_custom_2024_unique_';
 const SITE_SEARCH_DISABLED_STORAGE_KEY = '_x_extension_site_search_disabled_2024_unique_';
+const AGGREGATE_SEARCH_STORE = globalThis.LumnoAggregateSearchStore || {};
+const AGGREGATE_SEARCH = globalThis.LumnoBackgroundAggregateSearch || {};
+const AGGREGATE_SEARCH_STORAGE_KEY = AGGREGATE_SEARCH_STORE.STORAGE_KEY ||
+  '_x_extension_aggregate_searches_2026_unique_';
+const AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY =
+  SETTINGS.AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY ||
+  '_x_extension_aggregate_search_auto_group_enabled_2026_unique_';
 const SEARCH_BLACKLIST_STORAGE_KEY = '_x_extension_search_blacklist_2026_unique_';
 const FAVICON_REQUEST_BLACKLIST_STORAGE_KEY = '_x_extension_favicon_request_blacklist_2026_unique_';
 const FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY = '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_';
@@ -7889,28 +7987,6 @@ const logBackgroundFaviconDecision = typeof FAVICON_UTILS.createFaviconDecisionL
   ? FAVICON_UTILS.createFaviconDecisionLogger({ surface: 'background' })
   : (() => false);
 
-function setBoundedBackgroundCacheEntry(cache, key, value, maxEntries) {
-  if (typeof FAVICON_UTILS.setBoundedCacheEntry === 'function') {
-    return FAVICON_UTILS.setBoundedCacheEntry(cache, key, value, maxEntries);
-  }
-  if (!cache || typeof cache.set !== 'function') {
-    return value;
-  }
-  if (typeof cache.delete === 'function' && typeof cache.has === 'function' && cache.has(key)) {
-    cache.delete(key);
-  }
-  cache.set(key, value);
-  while (cache.size > maxEntries && typeof cache.keys === 'function' &&
-      typeof cache.delete === 'function') {
-    const oldest = cache.keys().next();
-    if (!oldest || oldest.done) {
-      break;
-    }
-    cache.delete(oldest.value);
-  }
-  return value;
-}
-
 function logBlockedLocalFavicon(url, candidateKind, reason, pageUrl) {
   return logBackgroundFaviconDecision(url, reason || 'local-rule', {
     pageUrl: pageUrl || url,
@@ -7967,6 +8043,13 @@ const SEARCH_ENGINE_DEFS = [
     hostMatches: ['google.'],
     searchTemplate: 'https://www.google.com/search?q={query}',
     searchUrl: (query) => `https://www.google.com/search?q=${encodeURIComponent(query)}`
+  },
+  {
+    id: 'kagi',
+    name: 'Kagi',
+    hostMatches: ['kagi.com'],
+    searchTemplate: 'https://kagi.com/search?q={query}',
+    searchUrl: (query) => `https://kagi.com/search?q=${encodeURIComponent(query)}`
   },
   {
     id: 'bing',
@@ -8912,7 +8995,7 @@ function fetchShortcutFaviconData(pageUrl, preferredTheme, explicitIconUrl) {
     ).finally(() => clearTimeout(timeoutId));
   }).then((result) => {
     if (policyRevision === shortcutFaviconPolicyRevision) {
-      setBoundedBackgroundCacheEntry(
+      FAVICON_UTILS.setBoundedCacheEntry(
         shortcutFaviconDataCache,
         cacheKey,
         result || null,
@@ -9272,7 +9355,7 @@ function fetchFaviconData(url, pageUrl) {
       })
       .then((dataUrl) => {
         if (dataUrl) {
-          setBoundedBackgroundCacheEntry(
+          FAVICON_UTILS.setBoundedCacheEntry(
             faviconDataCache,
             url,
             dataUrl,
@@ -9337,7 +9420,8 @@ function sanitizeSiteSearchProviders(items) {
     .filter((item) => item && item.key && item.template)
     .map((item) => {
       const template = normalizeSiteSearchTemplate(item.template);
-      return {
+      const provider = {
+        id: String(item.id || '').trim(),
         key: String(item.key).trim(),
         aliases: Array.isArray(item.aliases) ? item.aliases.filter(Boolean) : [],
         name: item.name || item.key,
@@ -9346,35 +9430,37 @@ function sanitizeSiteSearchProviders(items) {
         submitStrategy: String(item.submitStrategy || '').trim(),
         category: String(item.category || '').trim()
       };
+      const builtinKey = String(item.builtinKey || '').trim().toLowerCase();
+      if (builtinKey) {
+        provider.builtinKey = builtinKey;
+      }
+      return provider;
     })
     .filter((item) => item.key && item.template && (item.template.includes('{query}') || isAiSiteSearchProvider(item)));
 }
 
 function loadCustomSiteSearchProviders() {
-  return new Promise((resolve) => {
-    if (!storageArea) {
-      resolve([]);
-      return;
-    }
-    storageArea.get([SITE_SEARCH_STORAGE_KEY], (result) => {
-      const items = sanitizeSiteSearchProviders(result[SITE_SEARCH_STORAGE_KEY]);
-      resolve(items);
-    });
-  });
+  if (typeof SETTINGS.readStorageValue === 'function') {
+    return SETTINGS.readStorageValue(
+      storageArea,
+      chrome,
+      SITE_SEARCH_STORAGE_KEY
+    ).then(sanitizeSiteSearchProviders);
+  }
+  return Promise.resolve([]);
 }
 
 function loadDisabledSiteSearchKeys() {
-  return new Promise((resolve) => {
-    if (!storageArea) {
-      resolve([]);
-      return;
-    }
-    storageArea.get([SITE_SEARCH_DISABLED_STORAGE_KEY], (result) => {
-      const items = Array.isArray(result[SITE_SEARCH_DISABLED_STORAGE_KEY])
-        ? result[SITE_SEARCH_DISABLED_STORAGE_KEY]
-        : [];
-      resolve(items.map((item) => String(item).toLowerCase()).filter(Boolean));
-    });
+  if (typeof SETTINGS.readStorageValue !== 'function') {
+    return Promise.resolve([]);
+  }
+  return SETTINGS.readStorageValue(
+    storageArea,
+    chrome,
+    SITE_SEARCH_DISABLED_STORAGE_KEY
+  ).then((value) => {
+    const items = Array.isArray(value) ? value : [];
+    return items.map((item) => String(item).toLowerCase()).filter(Boolean);
   });
 }
 
@@ -9711,10 +9797,12 @@ function mergeCustomProviders(baseItems, customItems) {
       return;
     }
     seen.add(key);
+    const builtinKey = String(item && item.builtinKey ? item.builtinKey : '').toLowerCase();
+    const baseProvider = baseMap.get(builtinKey || key);
     merged.push({
       ...item,
-      action: String(item.action || (baseMap.get(key) && baseMap.get(key).action) || '').trim(),
-      submitStrategy: String(item.submitStrategy || (baseMap.get(key) && baseMap.get(key).submitStrategy) || '').trim(),
+      action: String(item.action || (baseProvider && baseProvider.action) || '').trim(),
+      submitStrategy: String(item.submitStrategy || (baseProvider && baseProvider.submitStrategy) || '').trim(),
       _xIsCustom: true
     });
   });
@@ -9797,6 +9885,12 @@ function parseBangList(text) {
   }
 }
 
+function invalidateSiteSearchProviderCache() {
+  siteSearchLoadGeneration += 1;
+  siteSearchCache = null;
+  siteSearchPromise = null;
+}
+
 function loadSiteSearchProviders() {
   if (siteSearchCache) {
     return Promise.resolve(siteSearchCache);
@@ -9808,32 +9902,53 @@ function loadSiteSearchProviders() {
   const fallbackDefaults = typeof SEARCH_UTILS.getDefaultSiteSearchProviders === 'function'
     ? SEARCH_UTILS.getDefaultSiteSearchProviders()
     : [];
-  siteSearchPromise = fetch(localUrl)
+  const loadGeneration = siteSearchLoadGeneration;
+  const loadTask = fetch(localUrl)
     .then((response) => response.json())
     .then((data) => {
       const items = data && Array.isArray(data.items) ? data.items : [];
       const source = items.length > 0 ? items : fallbackDefaults;
       return sanitizeSiteSearchProviders(source);
     })
-    .catch(() => sanitizeSiteSearchProviders(fallbackDefaults));
-  siteSearchPromise = siteSearchPromise.then((localItems) => {
-    return localItems;
-  }).then((items) => Promise.all([loadCustomSiteSearchProviders(), loadDisabledSiteSearchKeys()])
+    .catch(() => sanitizeSiteSearchProviders(fallbackDefaults))
+    .then((items) => Promise.all([loadCustomSiteSearchProviders(), loadDisabledSiteSearchKeys()])
     .then(([customItems, disabledKeys]) => {
+      const baseMap = new Map(items.map((item) => [
+        String(item && item.key ? item.key : '').toLowerCase(),
+        item
+      ]));
+      const hydratedCustom = customItems.map((item) => {
+        const key = String(item && item.key ? item.key : '').toLowerCase();
+        const builtinKey = String(item && item.builtinKey ? item.builtinKey : '').toLowerCase();
+        const baseProvider = baseMap.get(builtinKey || key);
+        return {
+          ...item,
+          action: String(item.action || (baseProvider && baseProvider.action) || '').trim(),
+          submitStrategy: String(
+            item.submitStrategy || (baseProvider && baseProvider.submitStrategy) || ''
+          ).trim()
+        };
+      });
       const filteredBase = items.filter((item) => {
         const key = String(item && item.key ? item.key : '').toLowerCase();
         return key && !disabledKeys.includes(key);
       });
-      const merged = mergeCustomProviders(filteredBase, customItems);
-      siteSearchCache = merged;
-      return merged;
-    })).catch(() => {
-    return loadCustomSiteSearchProviders().then((customItems) => {
-      siteSearchCache = customItems;
-      return customItems;
+      const merged = mergeCustomProviders(filteredBase, hydratedCustom);
+      if (loadGeneration === siteSearchLoadGeneration &&
+          siteSearchPromise === loadTask) {
+        siteSearchCache = merged;
+        return merged;
+      }
+      return siteSearchCache || [];
+    })).catch((error) => {
+      if (loadGeneration === siteSearchLoadGeneration &&
+          siteSearchPromise === loadTask) {
+        siteSearchPromise = null;
+      }
+      throw error;
     });
-  });
-  return siteSearchPromise;
+  siteSearchPromise = loadTask;
+  return loadTask;
 }
 
 function warmSiteSearchProviderIcons() {
@@ -9885,8 +10000,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
   }
   if (changes[SITE_SEARCH_STORAGE_KEY] || changes[SITE_SEARCH_DISABLED_STORAGE_KEY]) {
-    siteSearchCache = null;
-    siteSearchPromise = null;
+    invalidateSiteSearchProviderCache();
     warmSiteSearchProviderIcons();
   }
   if (changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
@@ -10454,7 +10568,7 @@ function buildTitlePinyinIndex(title) {
     initials: initials,
     chineseLength: chineseChars.length
   };
-  setBoundedBackgroundCacheEntry(
+  FAVICON_UTILS.setBoundedCacheEntry(
     titlePinyinCache,
     rawTitle,
     result,
@@ -10987,7 +11101,10 @@ async function getSearchEngineSuggestions(query, localSuggestions, options) {
       .filter((item) => item && item.toLowerCase() !== context.queryLower)
       .slice(0, searchPolicy.maxEngineSuggestions || 5);
   const engineSuggestionPolicy = typeof searchUtils.getSearchEngineSuggestionPolicy === 'function'
-    ? searchUtils.getSearchEngineSuggestionPolicy(context, normalizedLocalSuggestions, searchPolicy)
+    ? searchUtils.getSearchEngineSuggestionPolicy(context, normalizedLocalSuggestions, {
+      ...searchPolicy,
+      searchFirst: settings.searchFirst === true
+    })
     : {
       limit: normalizedLocalSuggestions.length > 0
         ? Math.min(
@@ -11039,11 +11156,27 @@ async function getSearchEngineSuggestions(query, localSuggestions, options) {
     finalSuggestions = searchUtils.filterSearchSuggestionsBySourceTypes(finalSuggestions, sourceTypes);
   }
   if (typeof searchUtils.applySearchSuggestionHostDiversity === 'function') {
-    finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions, { context });
+    if (settings.searchFirst === true) {
+      const engineCandidates = finalSuggestions.filter((suggestion) => (
+        suggestion && suggestion.type === 'googleSuggest'
+      ));
+      const localCandidates = searchUtils.applySearchSuggestionHostDiversity(
+        finalSuggestions.filter((suggestion) => !suggestion || suggestion.type !== 'googleSuggest'),
+        { context }
+      );
+      finalSuggestions = [...localCandidates, ...engineCandidates];
+    } else {
+      finalSuggestions = searchUtils.applySearchSuggestionHostDiversity(finalSuggestions, { context });
+    }
   } else {
     finalSuggestions = finalSuggestions.slice(0, searchPolicy.finalSuggestionLimit || 12);
   }
-  if (typeof searchUtils.composeSearchSuggestionSlate === 'function') {
+  if (settings.searchFirst === true &&
+      typeof searchUtils.composeSearchFirstSuggestionSlate === 'function') {
+    finalSuggestions = searchUtils.composeSearchFirstSuggestionSlate(finalSuggestions, {
+      limit: searchPolicy.finalSuggestionLimit || 12
+    }).slice(0, searchPolicy.finalSuggestionLimit || 12);
+  } else if (typeof searchUtils.composeSearchSuggestionSlate === 'function') {
     finalSuggestions = searchUtils.composeSearchSuggestionSlate(finalSuggestions, context);
   }
   return finalSuggestions;

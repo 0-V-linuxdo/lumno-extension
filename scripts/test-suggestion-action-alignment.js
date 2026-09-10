@@ -4,7 +4,7 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const newtabHtml = fs.readFileSync(
-  path.join(repoRoot, 'src/newtab/newtab.html'),
+  path.join(repoRoot, 'newtab.html'),
   'utf8'
 );
 const overlayCss = fs.readFileSync(
@@ -169,8 +169,8 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /groupSearchSuggestionsByKind\(defaultSuggestions,\s*\{\s*searchFirst: searchResultPriorityMode === 'search'\s*\}\)/,
-  'the rendered list should group webpages and keyword-search suggestions instead of interleaving them'
+  /searchResultPriorityMode === 'search'[\s\S]*?composeSearchFirstSuggestionSlate\(allSuggestions, \{\s*limit: searchResultDisplayLimit\s*\}\)/,
+  'search-first rendering should use the shared quota slate instead of interleaving local and keyword-search rows'
 );
 
 console.log('suggestion action alignment tests passed');

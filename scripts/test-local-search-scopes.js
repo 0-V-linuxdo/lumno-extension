@@ -9,7 +9,7 @@ const overlaySource = readSource('src/overlay/search-panel.js');
 const backgroundSource = readSource('src/background/background.js');
 const inputModeSource = readSource('src/shared/search-input-mode.js');
 const inputModeCss = readSource('src/shared/search-input.css');
-const newtabHtml = readSource('src/newtab/newtab.html');
+const newtabHtml = readSource('newtab.html');
 const manifestSource = readSource('manifest.json');
 const overlaySuggestionsCss = readSource('src/overlay/suggestions-view.css');
 
@@ -92,8 +92,13 @@ assert.match(
 );
 assert.match(
   inputModeCss,
+  /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\):not\(:focus-visible\)\s*\{[\s\S]*?border-color:\s*transparent !important;/,
+  'scope menu hover should keep its border transparent without overriding keyboard focus'
+);
+assert.doesNotMatch(
+  inputModeCss,
   /\.x-lumno-search-input-mode__menu-item:hover:not\(\[aria-checked="true"\]\)\s*\{[\s\S]*?border-color:\s*transparent !important;/,
-  'scope menu hover should keep its border transparent'
+  'a hovered keyboard-focus target should retain its focus border'
 );
 assert.doesNotMatch(
   inputModeCss,

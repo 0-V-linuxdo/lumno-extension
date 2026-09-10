@@ -1,7 +1,7 @@
 'use strict';
 
 window._x_extension_search_overlay_runtime_version_2026_unique_ =
-  '2026-08-20-current-page-provider-v13';
+  '2026-08-31-provider-load-race-v15';
 window._x_extension_search_overlay_open_2026_unique_ = false;
 
 window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayContext) {
@@ -22,28 +22,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       // Ignore mirror failures; helper lookups below still run.
     }
   }
+  const BROWSER_PROFILE = globalThis.LumnoBrowserProfile || {};
   let captureTabHandler = null;
-  let overlayThemeStorageListener = null;
-  let overlayLanguageStorageListener = null;
-  let overlaySearchEngineStorageListener = null;
-  let overlaySearchResultPriorityStorageListener = null;
-  let overlaySearchResultSourceTypesStorageListener = null;
-  let overlaySearchResultDisplayLimitStorageListener = null;
-  let overlayNumberShortcutInstantStorageListener = null;
-  let overlayMacosCtrlSuggestionNavigationStorageListener = null;
-  let overlaySimpleModeStorageListener = null;
-  let overlaySearchBlacklistStorageListener = null;
-  let overlayFaviconEnhancedFetchStorageListener = null;
-  let overlayOpenTabsDefaultVisibleStorageListener = null;
-  let overlayDocumentPipStorageListener = null;
-  let overlaySizeStorageListener = null;
-  let overlayTabPriorityStorageListener = null;
-  let overlayTabScoreDebugStorageListener = null;
   let overlayThemeMediaListener = null;
   let overlayPageThemeObserver = null;
   let overlayPageThemeSyncRaf = null;
-  let siteSearchStorageListener = null;
-  let siteSearchIconStorageListener = null;
   let keydownHandler = null;
   let keyupHandler = null;
   let overlayKeyCaptureHandler = null;
@@ -93,6 +76,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const NAVIGATION_DISPOSITION = window.LumnoNavigationDisposition || {};
   const SEARCH_UTILS = window.LumnoSearchUtils || {};
   const SITE_SEARCH_STORE = window.LumnoSiteSearchStore || {};
+  const AGGREGATE_SEARCH_STORE = window.LumnoAggregateSearchStore || {};
+  const AGGREGATE_SEARCH_SURFACE = window.LumnoAggregateSearchSurface || {};
   const SHORTCUT_FAVICON = window.LumnoShortcutFavicon || {};
   const SUGGESTION_ACTION_MODEL = window.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = window.LumnoSuggestionNavigation || {};
@@ -153,10 +138,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       typeof overlayLifecycle.createFrameTracker !== 'function' ||
       typeof overlayLifecycle.createViewportSizeSync !== 'function' ||
       typeof overlayLifecycle.createMountConnectionGuard !== 'function' ||
-      typeof overlayLifecycle.createAntiTranslateGuard !== 'function') {
+      typeof overlayLifecycle.createAntiTranslateGuard !== 'function' ||
+      typeof overlayLifecycle.createChromeEventListenerRegistry !== 'function') {
     console.warn('Lumno: overlay lifecycle helper not available.');
     return;
   }
+  const storageChangeListeners = overlayLifecycle.createChromeEventListenerRegistry(
+    chrome && chrome.storage ? chrome.storage.onChanged : null
+  );
   if (!overlayFaviconView ||
       typeof overlayFaviconView.createOverlayFaviconViewRuntime !== 'function') {
     console.warn('Lumno: overlay favicon view helper not available.');
@@ -306,6 +295,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
   const OVERLAY_OPEN_TABS_PREFIX_FEEDBACK_DELAY_MS = 120;
   const SITE_SEARCH_STORAGE_KEY = overlayStorageKeys.siteSearchCustom;
   const SITE_SEARCH_DISABLED_STORAGE_KEY = overlayStorageKeys.siteSearchDisabled;
+  const AGGREGATE_SEARCH_STORAGE_KEY = overlayStorageKeys.aggregateSearches ||
+    AGGREGATE_SEARCH_STORE.STORAGE_KEY ||
+    '_x_extension_aggregate_searches_2026_unique_';
   const SITE_SEARCH_ICON_CACHE_STORAGE_KEY = overlayStorageKeys.siteSearchIconCache ||
     SHORTCUT_FAVICON.SITE_SEARCH_STORAGE_KEY ||
     '_x_extension_site_search_icon_cache_canonical_2026_unique_';
@@ -1668,70 +1660,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       window.removeEventListener('blur', overlayModifierBlurHandler);
       overlayModifierBlurHandler = null;
     }
-    if (overlayThemeStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayThemeStorageListener);
-      overlayThemeStorageListener = null;
-    }
-    if (overlayLanguageStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayLanguageStorageListener);
-      overlayLanguageStorageListener = null;
-    }
-    if (overlaySearchEngineStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySearchEngineStorageListener);
-      overlaySearchEngineStorageListener = null;
-    }
-    if (overlaySearchResultPriorityStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySearchResultPriorityStorageListener);
-      overlaySearchResultPriorityStorageListener = null;
-    }
-    if (overlaySearchResultSourceTypesStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySearchResultSourceTypesStorageListener);
-      overlaySearchResultSourceTypesStorageListener = null;
-    }
-    if (overlaySearchResultDisplayLimitStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySearchResultDisplayLimitStorageListener);
-      overlaySearchResultDisplayLimitStorageListener = null;
-    }
-    if (overlayNumberShortcutInstantStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayNumberShortcutInstantStorageListener);
-      overlayNumberShortcutInstantStorageListener = null;
-    }
-    if (overlayMacosCtrlSuggestionNavigationStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayMacosCtrlSuggestionNavigationStorageListener);
-      overlayMacosCtrlSuggestionNavigationStorageListener = null;
-    }
-    if (overlaySimpleModeStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySimpleModeStorageListener);
-      overlaySimpleModeStorageListener = null;
-    }
-    if (overlaySearchBlacklistStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySearchBlacklistStorageListener);
-      overlaySearchBlacklistStorageListener = null;
-    }
-    if (overlayFaviconEnhancedFetchStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayFaviconEnhancedFetchStorageListener);
-      overlayFaviconEnhancedFetchStorageListener = null;
-    }
-    if (overlayOpenTabsDefaultVisibleStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayOpenTabsDefaultVisibleStorageListener);
-      overlayOpenTabsDefaultVisibleStorageListener = null;
-    }
-    if (overlayDocumentPipStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayDocumentPipStorageListener);
-      overlayDocumentPipStorageListener = null;
-    }
-    if (overlayTabPriorityStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayTabPriorityStorageListener);
-      overlayTabPriorityStorageListener = null;
-    }
-    if (overlayTabScoreDebugStorageListener) {
-      chrome.storage.onChanged.removeListener(overlayTabScoreDebugStorageListener);
-      overlayTabScoreDebugStorageListener = null;
-    }
-    if (overlaySizeStorageListener) {
-      chrome.storage.onChanged.removeListener(overlaySizeStorageListener);
-      overlaySizeStorageListener = null;
-    }
+    storageChangeListeners.clear();
     if (overlayThemeMediaListener) {
       overlayMediaQuery.removeEventListener('change', overlayThemeMediaListener);
       overlayThemeMediaListener = null;
@@ -1743,14 +1672,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       overlayScrollPauseHandler = null;
     }
     stopOverlayPageThemeObserver();
-    if (siteSearchStorageListener) {
-      chrome.storage.onChanged.removeListener(siteSearchStorageListener);
-      siteSearchStorageListener = null;
-    }
-    if (siteSearchIconStorageListener) {
-      chrome.storage.onChanged.removeListener(siteSearchIconStorageListener);
-      siteSearchIconStorageListener = null;
-    }
     if (inputModeController) {
       inputModeController.destroy();
       inputModeController = null;
@@ -2307,6 +2228,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         overlayStyleRoot.insertBefore(noticeElement, overlay);
       } else if (document.body) {
         document.body.appendChild(noticeElement);
+      }
+      if (overlayUpdateNoticeController &&
+          typeof overlayUpdateNoticeController.recordExposure === 'function') {
+        overlayUpdateNoticeController.recordExposure();
       }
       syncOverlayUpdateNoticeFrame(overlay);
       if (animateMount) {
@@ -3030,9 +2955,32 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!searchScopeIcon) {
         return;
       }
-      searchScopeIcon.dataset.hoverActive = active ? 'true' : 'false';
+      const enabled = searchScopeIcon.getAttribute('aria-disabled') !== 'true';
+      searchScopeIcon.dataset.hoverActive = active && enabled ? 'true' : 'false';
+    };
+    const setSearchScopeIconEnabled = (enabled) => {
+      if (!searchScopeIcon) {
+        return;
+      }
+      const nextEnabled = enabled !== false;
+      searchScopeIcon.setAttribute('aria-disabled', nextEnabled ? 'false' : 'true');
+      searchScopeIcon.setAttribute('tabindex', nextEnabled ? '0' : '-1');
+      searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
+      if (nextEnabled) {
+        searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+        return;
+      }
+      searchScopeIcon.removeAttribute('data-tooltip');
+      hideInputActionCursorTooltip();
+      setSearchScopeIconVisualState(false);
+      if (typeof searchScopeIcon.blur === 'function') {
+        searchScopeIcon.blur();
+      }
     };
     const activateSearchScopeIcon = (event) => {
+      if (!searchScopeIcon || searchScopeIcon.getAttribute('aria-disabled') === 'true') {
+        return;
+      }
       if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
       }
@@ -3053,9 +3001,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     if (searchScopeIcon) {
       searchScopeIcon.dataset.searchScopeAction = 'true';
       searchScopeIcon.setAttribute('role', 'button');
-      searchScopeIcon.setAttribute('tabindex', '0');
-      searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
-      searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+      setSearchScopeIconEnabled(true);
       setSearchScopeIconVisualState(false);
       searchScopeIcon.addEventListener('mouseenter', () => {
         setSearchScopeIconVisualState(true);
@@ -3145,6 +3091,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     let siteSearchProvidersCache = initialSiteSearchProviders.length > 0
       ? initialSiteSearchProviders
       : null;
+    let siteSearchProvidersLoadPromise = null;
+    let siteSearchProvidersLoadVersion = 0;
+    let aggregateSearchesCache = null;
+    let aggregateSearchesLoadPromise = null;
+    let aggregateSearchesLoadVersion = 0;
+    let aggregateSearchRequestController = null;
     let pendingProviderReload = false;
     const siteSearchIconCacheOptions = SHORTCUT_FAVICON.SITE_SEARCH_CACHE_OPTIONS || {
       cacheTtlMs: 1000 * 60 * 60 * 24 * 180,
@@ -3206,29 +3158,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     window._x_extension_theme_host_cache_2024_unique_ = themeHostCache;
     const OVERLAY_THEME_COLOR_CACHE_MAX_ENTRIES = 384;
     const OVERLAY_THEME_HOST_CACHE_MAX_ENTRIES = 256;
-    function setBoundedOverlayCacheEntry(cache, key, value, maxEntries) {
-      if (typeof FAVICON_UTILS.setBoundedCacheEntry === 'function') {
-        return FAVICON_UTILS.setBoundedCacheEntry(cache, key, value, maxEntries);
-      }
-      if (!cache || typeof cache.set !== 'function') {
-        return value;
-      }
-      if (typeof cache.delete === 'function' && typeof cache.has === 'function' && cache.has(key)) {
-        cache.delete(key);
-      }
-      cache.set(key, value);
-      while (cache.size > maxEntries && typeof cache.keys === 'function' &&
-          typeof cache.delete === 'function') {
-        const oldest = cache.keys().next();
-        if (!oldest || oldest.done) {
-          break;
-        }
-        cache.delete(oldest.value);
-      }
-      return value;
-    }
     function cacheOverlayThemeColor(key, value) {
-      return setBoundedOverlayCacheEntry(
+      return FAVICON_UTILS.setBoundedCacheEntry(
         themeColorCache,
         key,
         value,
@@ -3236,7 +3167,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       );
     }
     function cacheOverlayThemeHost(key, value) {
-      return setBoundedOverlayCacheEntry(
+      return FAVICON_UTILS.setBoundedCacheEntry(
         themeHostCache,
         key,
         value,
@@ -3874,7 +3805,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       applyOverlayTheme(initialThemeMode);
       return initialThemeMode;
     });
-    overlayThemeStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || (
         !changes[THEME_STORAGE_KEY] &&
         !changes[OVERLAY_PAGE_THEME_ADAPTATION_ENABLED_STORAGE_KEY]
@@ -3890,23 +3821,21 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ? changes[THEME_STORAGE_KEY].newValue || 'system'
         : overlayThemeMode;
       applyOverlayTheme(nextMode);
-    };
-    chrome.storage.onChanged.addListener(overlayThemeStorageListener);
+    });
 
-    overlayLanguageStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName)) {
         return;
       }
       if (changes[LANGUAGE_STORAGE_KEY]) {
         applyLanguageMode(changes[LANGUAGE_STORAGE_KEY].newValue || 'system');
       }
-    };
-    chrome.storage.onChanged.addListener(overlayLanguageStorageListener);
+    });
 
     overlaySearchEngineStateReady = loadOverlaySearchEngineState(
       refreshOverlaySuggestionsFromLastResponse
     );
-    overlaySearchEngineStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[DEFAULT_SEARCH_ENGINE_STORAGE_KEY]) {
         return;
       }
@@ -3919,8 +3848,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);
         }
       }
-    };
-    chrome.storage.onChanged.addListener(overlaySearchEngineStorageListener);
+    });
 
     function updatePendingSearchSuggestions(query) {
       if (suggestionsContainer.getAttribute('data-collapsed') === 'true' ||
@@ -3947,10 +3875,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       const requestSeq = ++overlaySuggestionRequestSeq;
       const requestStartedAt = Date.now();
-      const remoteMixState = {
-        settled: false,
-        hasFinalSuggestions: false
-      };
+      const requestSearchFirst = overlaySearchResultPriorityMode === 'search';
+      const showExactSearchPendingState = requestSearchFirst &&
+        !requestLocalSearchScope &&
+        !getDirectUrlSuggestion(requestQuery);
+      const remoteMixState = { settled: false };
       if (overlayRemoteSuggestionDebounceTimer) {
         clearTimeout(overlayRemoteSuggestionDebounceTimer);
         overlayRemoteSuggestionDebounceTimer = null;
@@ -3958,6 +3887,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (overlayFirstResultRevealTimer) {
         clearTimeout(overlayFirstResultRevealTimer);
         overlayFirstResultRevealTimer = null;
+      }
+      if (showExactSearchPendingState) {
+        updateSearchSuggestions([], requestQuery, { remoteMixState });
       }
       chrome.runtime.sendMessage({
         action: 'getSearchSuggestions',
@@ -3979,12 +3911,10 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           updateSearchSuggestions(localSuggestions, requestQuery);
           return;
         }
-        // A collapsed surface has no useful intermediate height to preserve.
-        // Give the remote mix one short response budget so the first visible
-        // result set is committed once at its final height. If that budget is
-        // missed, reveal local results and ignore the late mix instead of
-        // moving the whole result surface a second time.
-        const waitForFirstResultMix =
+        // Search-first already shows the exact search action while remote
+        // suggestions are pending. Autocomplete-first keeps its short mix
+        // budget so a collapsed result surface still opens only once.
+        const waitForFirstResultMix = !requestSearchFirst &&
           suggestionsContainer.getAttribute('data-collapsed') === 'true';
         if (waitForFirstResultMix) {
           overlayFirstResultRevealTimer = setTimeout(() => {
@@ -4000,12 +3930,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               finalRemoteMix: true
             });
           }, OVERLAY_FIRST_RESULT_REVEAL_DELAY_MS);
-        } else {
+        } else if (!showExactSearchPendingState) {
           updateSearchSuggestions(localSuggestions, requestQuery, {
             remoteMixState
           });
         }
-        const remoteDelay = waitForFirstResultMix
+        const remoteDelay = (requestSearchFirst || waitForFirstResultMix)
           ? 0
           : Math.max(0, 120 - (Date.now() - requestStartedAt));
         overlayRemoteSuggestionDebounceTimer = setTimeout(function() {
@@ -4017,7 +3947,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             action: 'getSearchEngineSuggestions',
             query: requestQuery,
             context: 'overlay',
-            localSuggestions: localSuggestions
+            localSuggestions: localSuggestions,
+            searchFirst: requestSearchFirst
           }, function(remoteResponse) {
             if (requestSeq !== overlaySuggestionRequestSeq || requestQuery !== latestOverlayQuery) {
               return;
@@ -4062,7 +3993,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
               return;
             }
             remoteMixState.settled = true;
-            remoteMixState.hasFinalSuggestions = true;
             if (waitForFirstResultMix) {
               if (remoteMixState.visualSettled) {
                 return;
@@ -4096,7 +4026,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
     loadOverlaySearchBlacklistItems(refreshOverlaySuggestionsFromLastResponse);
-    overlaySearchResultPriorityStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_PRIORITY_STORAGE_KEY]) {
         return;
       }
@@ -4104,9 +4034,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(overlaySearchResultPriorityStorageListener);
-    overlaySearchResultSourceTypesStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_SOURCE_TYPES_STORAGE_KEY]) {
         return;
       }
@@ -4120,9 +4049,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         requestOverlaySearchSuggestions(latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(overlaySearchResultSourceTypesStorageListener);
-    overlaySearchResultDisplayLimitStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY]) {
         return;
       }
@@ -4134,9 +4062,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       refreshOverlaySuggestionsFromLastResponse();
-    };
-    chrome.storage.onChanged.addListener(overlaySearchResultDisplayLimitStorageListener);
-    overlayNumberShortcutInstantStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) ||
           !changes[NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY]) {
         return;
@@ -4146,9 +4073,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ? SETTINGS.normalizeNumberShortcutInstantEnabled(rawValue)
         : rawValue === true;
       SUGGESTION_NAVIGATION.cancelNumberShortcuts(suggestionsContainer);
-    };
-    chrome.storage.onChanged.addListener(overlayNumberShortcutInstantStorageListener);
-    overlayMacosCtrlSuggestionNavigationStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) ||
           !changes[MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY]) {
         return;
@@ -4158,9 +4084,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         typeof SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled === 'function'
           ? SETTINGS.normalizeMacosCtrlSuggestionNavigationEnabled(rawValue)
           : rawValue === true;
-    };
-    chrome.storage.onChanged.addListener(overlayMacosCtrlSuggestionNavigationStorageListener);
-    overlaySimpleModeStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SIMPLE_MODE_ENABLED_STORAGE_KEY]) {
         return;
       }
@@ -4177,9 +4102,8 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           forceFullRerender: true
         });
       }
-    };
-    chrome.storage.onChanged.addListener(overlaySimpleModeStorageListener);
-    overlaySearchBlacklistStorageListener = (changes, areaName) => {
+    });
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[SEARCH_BLACKLIST_STORAGE_KEY]) {
         return;
       }
@@ -4189,8 +4113,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(overlaySearchBlacklistStorageListener);
+    });
     if (storageArea) {
       initialFaviconEnhancedFetchReady = initialOverlaySettingsReady.then((result) => {
         faviconEnhancedFetchEnabled = normalizeFaviconEnhancedFetchEnabled(
@@ -4201,7 +4124,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         );
       });
     }
-    overlayFaviconEnhancedFetchStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || (
         !changes[FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY] &&
         !changes[FAVICON_REQUEST_BLACKLIST_STORAGE_KEY]
@@ -4219,8 +4142,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         );
       }
       refreshOverlayFaviconsForPolicyChange();
-    };
-    chrome.storage.onChanged.addListener(overlayFaviconEnhancedFetchStorageListener);
+    });
     if (storageArea) {
       initialOverlayOpenTabsDefaultVisibleReady = initialOverlaySettingsReady.then((result) => {
         const rawValue = result ? result[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY] : undefined;
@@ -4232,7 +4154,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
       });
     }
-    overlayOpenTabsDefaultVisibleStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_OPEN_TABS_DEFAULT_VISIBLE_STORAGE_KEY]) {
         return;
       }
@@ -4251,8 +4173,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       } else {
         clearDefaultOpenTabsSuggestions();
       }
-    };
-    chrome.storage.onChanged.addListener(overlayOpenTabsDefaultVisibleStorageListener);
+    });
     if (storageArea) {
       storageArea.get([DOCUMENT_PIP_ENABLED_STORAGE_KEY], (result) => {
         documentPipEnabled = result && result[DOCUMENT_PIP_ENABLED_STORAGE_KEY] === true;
@@ -4261,7 +4182,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         }
       });
     }
-    overlayDocumentPipStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[DOCUMENT_PIP_ENABLED_STORAGE_KEY]) {
         return;
       }
@@ -4269,15 +4190,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(overlayDocumentPipStorageListener);
+    });
 
     if (storageArea) {
       storageArea.get([OVERLAY_TAB_PRIORITY_STORAGE_KEY], (result) => {
         overlayTabQuickSwitchEnabled = normalizeOverlayTabPriorityMode(result[OVERLAY_TAB_PRIORITY_STORAGE_KEY]);
       });
     }
-    overlayTabPriorityStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_TAB_PRIORITY_STORAGE_KEY]) {
         return;
       }
@@ -4285,27 +4205,25 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         updateSearchSuggestions(lastSuggestionResponse, latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(overlayTabPriorityStorageListener);
+    });
     const initialOverlaySizeReady = initialOverlaySettingsReady.then((result) => {
       overlaySizeMode = normalizeOverlaySizeMode(result[OVERLAY_SIZE_MODE_STORAGE_KEY]);
       applyOverlaySizeForPageZoom(overlay);
       return overlaySizeMode;
     });
-    overlaySizeStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[OVERLAY_SIZE_MODE_STORAGE_KEY]) {
         return;
       }
       overlaySizeMode = normalizeOverlaySizeMode(changes[OVERLAY_SIZE_MODE_STORAGE_KEY].newValue);
       applyOverlaySizeForPageZoom(overlay);
-    };
-    chrome.storage.onChanged.addListener(overlaySizeStorageListener);
+    });
     if (storageArea) {
       storageArea.get([TAB_RANK_SCORE_DEBUG_STORAGE_KEY], (result) => {
         overlayTabScoreDebugEnabled = normalizeTabRankScoreDebugMode(result[TAB_RANK_SCORE_DEBUG_STORAGE_KEY]);
       });
     }
-    overlayTabScoreDebugStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       if (!isPrimaryStorageAreaName(areaName) || !changes[TAB_RANK_SCORE_DEBUG_STORAGE_KEY]) {
         return;
       }
@@ -4313,8 +4231,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (!latestOverlayQuery || !latestOverlayQuery.trim()) {
         requestTabsAndRender();
       }
-    };
-    chrome.storage.onChanged.addListener(overlayTabScoreDebugStorageListener);
+    });
 
     function isOverlayDarkMode() {
       return overlay && overlay.getAttribute('data-theme') === 'dark';
@@ -5098,6 +5015,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         ));
       },
       onModeTagRemovalConfirmationReset: hideOverlayToast,
+      onModeTagActiveChange: (active) => {
+        setSearchScopeIconEnabled(!active);
+      },
       onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
       isTabHintSuppressed: () => Boolean(
         siteSearchState ||
@@ -5668,6 +5588,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return Boolean(provider && String(provider.category || '').trim() === 'searchEngine');
     }
 
+    function isAggregateSearchProvider(provider) {
+      if (typeof AGGREGATE_SEARCH_STORE.isAggregateSearchProvider === 'function') {
+        return AGGREGATE_SEARCH_STORE.isAggregateSearchProvider(provider);
+      }
+      return Boolean(provider && provider._xIsAggregateSearch === true);
+    }
+
     function isInteractiveSiteSearchProvider(provider) {
       if (typeof SEARCH_UTILS.isInteractiveSiteSearchProvider === 'function') {
         return SEARCH_UTILS.isInteractiveSiteSearchProvider(provider);
@@ -5678,9 +5605,54 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       );
     }
 
+    function getAggregateSearchRequestController() {
+      if (aggregateSearchRequestController) {
+        return aggregateSearchRequestController;
+      }
+      if (typeof AGGREGATE_SEARCH_SURFACE.createAggregateSearchRequestController !== 'function') {
+        return null;
+      }
+      aggregateSearchRequestController = AGGREGATE_SEARCH_SURFACE.createAggregateSearchRequestController({
+        chromeApi: chrome,
+        onFeedback(descriptor) {
+          showOverlayToast(t(descriptor.messageKey, descriptor.fallback), descriptor.isError);
+        }
+      });
+      return aggregateSearchRequestController;
+    }
+
     function openSiteSearchProviderQuery(provider, query, event) {
       const trimmedQuery = String(query || '').trim();
       if (!provider || !trimmedQuery) {
+        return false;
+      }
+      if (isAggregateSearchProvider(provider) && provider.aggregateId) {
+        const disposition = getSearchResultNewTabDisposition(event);
+        const controller = getAggregateSearchRequestController();
+        if (!controller) {
+          showOverlayToast(t('toast_error', 'Operation failed. Please try again.'), true);
+          return false;
+        }
+        controller.run({
+          aggregateId: String(provider.aggregateId),
+          disposition,
+          query: trimmedQuery
+        }, {
+          onSuccess(response) {
+            const feedbackDelayMs = typeof AGGREGATE_SEARCH_SURFACE.getSuccessFeedbackDelayMs === 'function'
+              ? AGGREGATE_SEARCH_SURFACE.getSuccessFeedbackDelayMs(response)
+              : (response.activationDeferred === true
+                ? Math.max(0, Number(response.activationDelayMs) || 0)
+                : 0);
+            if (feedbackDelayMs > 0) {
+              setTimeout(() => {
+                finishOverlayResultActivation(event, true);
+              }, feedbackDelayMs);
+              return;
+            }
+            finishOverlayResultActivation(event, true);
+          }
+        });
         return false;
       }
       if (isInteractiveSiteSearchProvider(provider)) {
@@ -5816,11 +5788,48 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return true;
     }
 
+    function beginSiteSearchProviderLoad(loader, options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      if (settings.invalidate === true) {
+        siteSearchProvidersLoadVersion += 1;
+        siteSearchProvidersLoadPromise = null;
+      }
+      const loadVersion = siteSearchProvidersLoadVersion;
+      let loadTask = null;
+      loadTask = Promise.resolve().then(() => loader()).then((items) => {
+        const normalizedItems = Array.isArray(items) ? items : [];
+        if (loadVersion === siteSearchProvidersLoadVersion &&
+            siteSearchProvidersLoadPromise === loadTask) {
+          siteSearchProvidersCache = normalizedItems;
+          return normalizedItems;
+        }
+        return siteSearchProvidersCache || [];
+      }).catch(() => {
+        if (loadVersion === siteSearchProvidersLoadVersion &&
+            siteSearchProvidersLoadPromise === loadTask) {
+          siteSearchProvidersCache = null;
+        }
+        return siteSearchProvidersCache || [];
+      }).finally(() => {
+        if (siteSearchProvidersLoadPromise === loadTask) {
+          siteSearchProvidersLoadPromise = null;
+        }
+      });
+      siteSearchProvidersLoadPromise = loadTask;
+      return {
+        promise: loadTask,
+        version: loadVersion
+      };
+    }
+
     function getSiteSearchProviders() {
+      if (siteSearchProvidersLoadPromise) {
+        return siteSearchProvidersLoadPromise;
+      }
       if (siteSearchProvidersCache) {
         return Promise.resolve(siteSearchProvidersCache);
       }
-      return SITE_SEARCH_STORE.loadSiteSearchProviders({
+      return beginSiteSearchProviderLoad(() => SITE_SEARCH_STORE.loadSiteSearchProviders({
         chromeApi: chrome,
         storageArea,
         storageKeys: {
@@ -5830,41 +5839,155 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         defaultProviders: defaultSiteSearchProviders,
         mergeCustomProviders: SEARCH_UTILS.mergeCustomProviders,
         getStorageValues: getStorageValuesAsync
-      }).then((items) => {
-        siteSearchProvidersCache = items;
-        return items;
-      });
+      })).promise;
     }
 
-    getSiteSearchProviders();
-
-    siteSearchStorageListener = (changes, areaName) => {
-      if (!isPrimaryStorageAreaName(areaName) ||
-          (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY])) {
-        return;
-      }
-      if (!storageArea) {
-        return;
-      }
-      storageArea.get([SITE_SEARCH_STORAGE_KEY, SITE_SEARCH_DISABLED_STORAGE_KEY], (result) => {
-        const customItems = Array.isArray(result[SITE_SEARCH_STORAGE_KEY]) ? result[SITE_SEARCH_STORAGE_KEY] : [];
+    function reloadSiteSearchProvidersFromStorage() {
+      return beginSiteSearchProviderLoad(() => getStorageValuesAsync([
+        SITE_SEARCH_STORAGE_KEY,
+        SITE_SEARCH_DISABLED_STORAGE_KEY
+      ]).then((result) => {
+        const customItems = Array.isArray(result[SITE_SEARCH_STORAGE_KEY])
+          ? result[SITE_SEARCH_STORAGE_KEY]
+          : [];
         const disabledKeys = Array.isArray(result[SITE_SEARCH_DISABLED_STORAGE_KEY])
           ? result[SITE_SEARCH_DISABLED_STORAGE_KEY]
           : [];
-        siteSearchProvidersCache = SITE_SEARCH_STORE.mergeStoredProviders(
+        return SITE_SEARCH_STORE.mergeStoredProviders(
           defaultSiteSearchProviders,
           customItems,
           disabledKeys,
           SEARCH_UTILS.mergeCustomProviders
         );
+      }), { invalidate: true });
+    }
+
+    function getAggregateSearches() {
+      if (aggregateSearchesCache) {
+        return Promise.resolve(aggregateSearchesCache);
+      }
+      if (aggregateSearchesLoadPromise) {
+        return aggregateSearchesLoadPromise;
+      }
+      if (typeof AGGREGATE_SEARCH_STORE.loadAggregateSearches !== 'function') {
+        aggregateSearchesCache = [];
+        return Promise.resolve(aggregateSearchesCache);
+      }
+      const loadVersion = aggregateSearchesLoadVersion;
+      const loadTask = AGGREGATE_SEARCH_STORE.loadAggregateSearches(
+        storageArea,
+        AGGREGATE_SEARCH_STORAGE_KEY,
+        chrome
+      ).then((items) => {
+        if (loadVersion === aggregateSearchesLoadVersion) {
+          aggregateSearchesCache = items;
+          return items;
+        }
+        return aggregateSearchesCache || [];
+      }).catch(() => {
+        if (loadVersion === aggregateSearchesLoadVersion) {
+          aggregateSearchesCache = null;
+          return [];
+        }
+        return aggregateSearchesCache || [];
+      }).finally(() => {
+        if (aggregateSearchesLoadPromise === loadTask) {
+          aggregateSearchesLoadPromise = null;
+        }
+      });
+      aggregateSearchesLoadPromise = loadTask;
+      return loadTask;
+    }
+
+    function createAggregateSearchScopeProvider(definition) {
+      return typeof AGGREGATE_SEARCH_STORE.createScopeProvider === 'function'
+        ? AGGREGATE_SEARCH_STORE.createScopeProvider(definition)
+        : null;
+    }
+
+    getSiteSearchProviders();
+    getAggregateSearches().then(() => {
+      if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+        inputModeController.refreshModeMenu();
+      }
+      if (searchInput && searchInput.value) {
+        syncSearchTriggerHintFromInput(searchInput.value);
+      }
+      if (latestOverlayQuery) {
+        requestOverlaySearchSuggestions(latestOverlayQuery);
+      }
+    });
+
+    storageChangeListeners.add((changes, areaName) => {
+      if (!isPrimaryStorageAreaName(areaName) || !(
+        changes[SITE_SEARCH_STORAGE_KEY] ||
+        changes[SITE_SEARCH_DISABLED_STORAGE_KEY] ||
+        changes[AGGREGATE_SEARCH_STORAGE_KEY]
+      )) {
+        return;
+      }
+      if (changes[AGGREGATE_SEARCH_STORAGE_KEY]) {
+        aggregateSearchesLoadVersion += 1;
+        aggregateSearchesLoadPromise = null;
+        aggregateSearchesCache = typeof AGGREGATE_SEARCH_STORE.normalizeAggregateSearches === 'function'
+          ? AGGREGATE_SEARCH_STORE.normalizeAggregateSearches(
+            changes[AGGREGATE_SEARCH_STORAGE_KEY].newValue
+          )
+          : [];
+        if (isAggregateSearchProvider(siteSearchState)) {
+          const currentId = String(siteSearchState.aggregateId || '');
+          const updatedDefinition = aggregateSearchesCache.find(
+            (item) => String(item && item.id ? item.id : '') === currentId
+          );
+          const updatedProvider = isAggregateSearchDefinitionAvailable(
+            updatedDefinition,
+            getSearchModeProviders()
+          )
+            ? createAggregateSearchScopeProvider(updatedDefinition)
+            : null;
+          if (updatedProvider) {
+            siteSearchState = updatedProvider;
+            setSiteSearchPrefix(updatedProvider, defaultTheme, { animate: false });
+          } else {
+            clearSiteSearch();
+          }
+        }
+        if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+          inputModeController.refreshModeMenu();
+        }
+        if (latestOverlayQuery) {
+          requestOverlaySearchSuggestions(latestOverlayQuery);
+        }
+      }
+      if (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY]) {
+        return;
+      }
+      if (!storageArea) {
+        return;
+      }
+      const providerReload = reloadSiteSearchProvidersFromStorage();
+      providerReload.promise.then(() => {
+        if (providerReload.version !== siteSearchProvidersLoadVersion) {
+          return;
+        }
+        if (isAggregateSearchProvider(siteSearchState)) {
+          const activeDefinition = (aggregateSearchesCache || []).find((item) => (
+            String(item && item.id ? item.id : '') === String(siteSearchState.aggregateId || '')
+          ));
+          if (!isAggregateSearchDefinitionAvailable(activeDefinition, siteSearchProvidersCache)) {
+            clearSiteSearch();
+          }
+        }
+        if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+          inputModeController.refreshModeMenu();
+        }
         if (latestOverlayQuery) {
           requestOverlaySearchSuggestions(latestOverlayQuery);
         }
       });
-    };
-    chrome.storage.onChanged.addListener(siteSearchStorageListener);
+    });
 
-    siteSearchIconStorageListener = (changes, areaName) => {
+    storageChangeListeners.add((changes, areaName) => {
       const iconChange = changes && changes[SITE_SEARCH_ICON_CACHE_STORAGE_KEY];
       if (areaName !== 'local' || !iconChange) {
         return;
@@ -5896,8 +6019,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       if (latestOverlayQuery) {
         requestOverlaySearchSuggestions(latestOverlayQuery);
       }
-    };
-    chrome.storage.onChanged.addListener(siteSearchIconStorageListener);
+    });
 
     function getSiteSearchDisplayName(provider) {
       if (!provider) {
@@ -5915,6 +6037,14 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     function getSiteSearchActionTitle(provider, query) {
       const site = getSiteSearchDisplayName(provider);
       const queryText = String(query || '').trim();
+      if (isAggregateSearchProvider(provider)) {
+        return queryText
+          ? formatMessage('aggregate_search_action_query', '使用{name}搜索“{query}”', {
+              name: site,
+              query: queryText
+            })
+          : formatMessage('aggregate_search_action', '使用{name}搜索', { name: site });
+      }
       if (isAiSiteSearchProvider(provider)) {
         return queryText
           ? formatMessage('ask_ai_provider_query', '向 {site} 提问 "{query}"', { site, query: queryText })
@@ -6117,13 +6247,62 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       return [defaultProvider].concat(providers);
     }
 
+    function isAggregateSearchDefinitionAvailable(definition, providers) {
+      if (typeof AGGREGATE_SEARCH_STORE.isAggregateSearchAvailable !== 'function') {
+        return Boolean(createAggregateSearchScopeProvider(definition));
+      }
+      return AGGREGATE_SEARCH_STORE.isAggregateSearchAvailable(
+        definition,
+        Array.isArray(providers) ? providers : getSearchModeProviders()
+      );
+    }
+
+    function getSearchTriggerProviders(providers, definitions) {
+      const sourceProviders = Array.isArray(providers) ? providers : [];
+      const availableDefinitions = (Array.isArray(definitions) ? definitions : [])
+        .filter((definition) => isAggregateSearchDefinitionAvailable(
+          definition,
+          sourceProviders
+        ));
+      return typeof AGGREGATE_SEARCH_STORE.mergeTriggerProviders === 'function'
+        ? AGGREGATE_SEARCH_STORE.mergeTriggerProviders(
+          sourceProviders,
+          availableDefinitions
+        )
+        : sourceProviders;
+    }
+
     function buildSearchModeMenuItems() {
       const engineGroup = t('search_scope_group_engines', '搜索引擎');
       const localGroup = t('search_scope_group_local', '浏览器内容');
       const aiGroup = t('search_scope_group_ai', 'AI 搜索');
       const siteGroup = t('search_scope_group_sites', '站内搜索');
+      const aggregateGroup = t('search_scope_group_aggregates', '聚合搜索');
       const items = [];
       const providers = getSearchModeProviders();
+      (aggregateSearchesCache || []).forEach((definition) => {
+        if (!isAggregateSearchDefinitionAvailable(definition, providers)) {
+          return;
+        }
+        const provider = createAggregateSearchScopeProvider(definition);
+        if (!provider) {
+          return;
+        }
+        items.push({
+          id: `aggregate:${definition.id}`,
+          kind: 'aggregate',
+          aggregate: definition,
+          provider,
+          label: definition.name,
+          group: aggregateGroup,
+          iconClass: 'ri-stack-line',
+          searchTerms: [definition.name].concat(definition.sourceRefs || []),
+          active: Boolean(
+            isAggregateSearchProvider(siteSearchState) &&
+            String(siteSearchState.aggregateId || '') === String(definition.id || '')
+          )
+        });
+      });
       providers
         .filter((provider) => isSearchEngineSiteSearchProvider(provider))
         .concat(providers.filter((provider) => (
@@ -6179,10 +6358,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
     }
 
     function getSearchModeMenuItems() {
-      if (siteSearchIconCacheLoaded) {
-        return buildSearchModeMenuItems();
-      }
-      return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+      return Promise.all([
+        siteSearchIconCacheLoaded
+          ? Promise.resolve(siteSearchIconCache)
+          : loadSiteSearchIconCache(),
+        getSiteSearchProviders(),
+        getAggregateSearches()
+      ]).then(buildSearchModeMenuItems);
     }
 
     function openSearchModeMenuFromDoubleTab() {
@@ -6262,6 +6444,11 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           { sourceType: item.sourceType },
           { preserveResults }
         );
+        restoreSearchModeQuery(rawQuery);
+        return;
+      }
+      if (item.kind === 'aggregate' && item.provider) {
+        activateSiteSearch(item.provider, { preserveResults });
         restoreSearchModeQuery(rawQuery);
         return;
       }
@@ -6489,9 +6676,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
 
-      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+      const siteProviders = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
         ? siteSearchProvidersCache
         : defaultSiteSearchProviders;
+      const providers = getSearchTriggerProviders(
+        siteProviders,
+        aggregateSearchesCache
+      );
       if (getInlineSiteSearchCandidate(triggerInput, providers)) {
         clearPendingSearchTriggerHint();
         return;
@@ -6727,9 +6918,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       }
       if (triggerInput) {
         e.preventDefault();
-        const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+        const siteProviders = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
           ? siteSearchProvidersCache
           : defaultSiteSearchProviders;
+        const providers = getSearchTriggerProviders(
+          siteProviders,
+          aggregateSearchesCache
+        );
         const topSiteMatch = getTopSiteMatchCandidate(currentSuggestions, triggerInput);
         const directProvider = getSiteSearchTriggerCandidate(triggerInput, providers, topSiteMatch);
         if (directProvider) {
@@ -6742,13 +6937,21 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           activateLocalSearchScope(directLocalScope);
           return true;
         }
-        Promise.all([getSiteSearchProviders(), getShortcutRules()]).then(([items, rules]) => {
+        Promise.all([
+          getSiteSearchProviders(),
+          getAggregateSearches(),
+          getShortcutRules()
+        ]).then(([items, definitions, rules]) => {
           if (siteSearchState || localSearchScopeState || openTabsSearchModeActive ||
               String(searchInput.value || '').trim() !== triggerInput) {
             return;
           }
           const asyncTopSiteMatch = getTopSiteMatchCandidate(currentSuggestions, triggerInput);
-          const asyncProvider = getSiteSearchTriggerCandidate(triggerInput, items, asyncTopSiteMatch);
+          const asyncProvider = getSiteSearchTriggerCandidate(
+            triggerInput,
+            getSearchTriggerProviders(items, definitions),
+            asyncTopSiteMatch
+          );
           if (asyncProvider) {
             activateSiteSearch(asyncProvider);
             return;
@@ -7189,8 +7392,12 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             return;
           }
           if (siteSearchState) {
+            const activeAggregateSearch = isAggregateSearchProvider(siteSearchState);
             if (openSiteSearchProviderQuery(siteSearchState, query, e)) {
               finishOverlayResultActivation(e, true);
+              return;
+            }
+            if (activeAggregateSearch) {
               return;
             }
           }
@@ -7467,12 +7674,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return;
       }
       if (suggestion.provider && suggestion.searchQuery) {
-        openSiteSearchProviderQuery(
+        if (openSiteSearchProviderQuery(
           suggestion.provider,
           suggestion.searchQuery,
           event
-        );
-        finishOverlayResultActivation(event, true);
+        )) {
+          finishOverlayResultActivation(event, true);
+        }
         return;
       }
       if (suggestion.forceSearch && suggestion.searchQuery) {
@@ -7693,6 +7901,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         return `local:${localSearchScopeState.sourceType}`;
       }
       if (siteSearchState) {
+        if (isAggregateSearchProvider(siteSearchState)) {
+          return `aggregate:${String(siteSearchState.aggregateId || '')}`;
+        }
         return `provider:${getSearchModeProviderId(siteSearchState)}`;
       }
       return 'default';
@@ -7757,82 +7968,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
       });
     }
 
-    function getBrowserInternalScheme() {
-      const ua = navigator.userAgent || '';
-      if (ua.includes('Edg/')) {
-        return 'edge://';
-      }
-      if (ua.includes('Brave')) {
-        return 'brave://';
-      }
-      if (ua.includes('Vivaldi')) {
-        return 'vivaldi://';
-      }
-      if (ua.includes('OPR/') || ua.includes('Opera')) {
-        return 'opera://';
-      }
-      return 'chrome://';
-    }
-
-    function normalizeBrandName(brand) {
-      return String(brand || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function isGreaseBrandName(brand) {
-      const compact = normalizeBrandName(brand).toLowerCase().replace(/[^a-z]/g, '');
-      return compact.includes('not') && compact.includes('brand');
-    }
-
-    function isChromiumEngineBrandName(brand) {
-      return normalizeBrandName(brand).toLowerCase() === 'chromium';
-    }
-
-    function getClientHintBrowserName(userAgentData) {
-      const brands = userAgentData && Array.isArray(userAgentData.brands)
-        ? userAgentData.brands
-        : [];
-      const names = brands
-        .map((item) => normalizeBrandName(item && item.brand))
-        .filter((name) => name && !isGreaseBrandName(name));
-      const productName = names.find((name) => {
-        const lower = name.toLowerCase();
-        return !isChromiumEngineBrandName(name) &&
-          lower !== 'google chrome' &&
-          lower !== 'chrome';
-      });
-      if (productName) {
-        return productName;
-      }
-      return names.find((name) => !isChromiumEngineBrandName(name)) ||
-        names.find((name) => isChromiumEngineBrandName(name)) ||
-        '';
-    }
-
-    function getFallbackBrowserName(scheme) {
-      if (scheme === 'edge://') {
-        return 'Microsoft Edge';
-      }
-      if (scheme === 'brave://') {
-        return 'Brave';
-      }
-      if (scheme === 'vivaldi://') {
-        return 'Vivaldi';
-      }
-      if (scheme === 'opera://') {
-        return 'Opera';
-      }
-      return 'Chrome';
-    }
-
-    function getBrowserInternalProfile() {
-      const scheme = getBrowserInternalScheme();
-      return {
-        scheme,
-        name: getClientHintBrowserName(navigator.userAgentData) ||
-          getFallbackBrowserName(scheme)
-      };
-    }
-
     function getBrowserPageSuggestionTitle(browserProfile, targetUrl) {
       const browserName = browserProfile && browserProfile.name ? browserProfile.name : '';
       if (browserName) {
@@ -7874,7 +8009,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
     function buildKeywordSuggestions(input, rules) {
       const queryLower = input.toLowerCase();
-      const browserProfile = getBrowserInternalProfile();
+      const browserProfile = BROWSER_PROFILE.getBrowserInternalProfile(navigator);
       const scheme = browserProfile.scheme;
       const matches = [];
       rules.forEach((rule) => {
@@ -8092,8 +8227,7 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
         if (query !== latestOverlayQuery) {
           return;
         }
-        if (!finalRemoteMix && remoteMixState &&
-            remoteMixState.settled && remoteMixState.hasFinalSuggestions) {
+        if (!finalRemoteMix && remoteMixState && remoteMixState.settled) {
           return;
         }
         const commandMatches = (slashCommandModeActive && !modeCommandActive && !siteSearchQueryModeActive)
@@ -8116,9 +8250,13 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           preSuggestions.push(...keywordSuggestions);
         }
 
-        const providersForTags = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+        const siteProvidersForTags = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
           ? siteSearchProvidersCache
           : defaultSiteSearchProviders;
+        const providersForTags = getSearchTriggerProviders(
+          siteProvidersForTags,
+          aggregateSearchesCache
+        );
         if (!siteSearchProvidersCache && !pendingProviderReload) {
           pendingProviderReload = true;
           getSiteSearchProviders().then((items) => {
@@ -8126,7 +8264,6 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             if (query !== latestOverlayQuery) {
               return;
             }
-            siteSearchProvidersCache = items;
             updateSearchSuggestions(lastSuggestionResponse, query);
           });
         }
@@ -8152,15 +8289,18 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
 
         const siteSearchSuggestion = siteSearchQueryModeActive
           ? (() => {
-              const siteUrl = buildSearchUrl(siteSearchState.template, query);
-              if (!siteUrl) {
+              const aggregateSearch = isAggregateSearchProvider(siteSearchState);
+              const siteUrl = aggregateSearch
+                ? ''
+                : buildSearchUrl(siteSearchState.template, query);
+              if (!aggregateSearch && !siteUrl) {
                 return null;
               }
               return {
                 type: 'siteSearch',
                 title: getSiteSearchActionTitle(siteSearchState, query),
                 url: siteUrl,
-                favicon: getProviderIcon(siteSearchState),
+                favicon: aggregateSearch ? '' : getProviderIcon(siteSearchState),
                 provider: siteSearchState,
                 searchQuery: query
               };
@@ -8191,6 +8331,20 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
           }
         });
         allSuggestions = filterOverlayBlacklistedSuggestions(allSuggestions, query);
+        const hasDirectUrlSuggestion = preSuggestions.some((suggestion) => (
+          suggestion && suggestion.type === 'directUrl'
+        ));
+        if (overlaySearchResultPriorityMode === 'search' &&
+            !localSearchQueryModeActive &&
+            !slashCommandModeActive &&
+            !modeCommandActive &&
+            !siteSearchQueryModeActive &&
+            !hasDirectUrlSuggestion &&
+            typeof SEARCH_UTILS.composeSearchFirstSuggestionSlate === 'function') {
+          allSuggestions = SEARCH_UTILS.composeSearchFirstSuggestionSlate(allSuggestions, {
+            limit: overlaySearchResultDisplayLimit
+          });
+        }
         const keywordSuggestionState = getKeywordSearchSuggestionState(allSuggestions);
         const onlyKeywordSuggestions = keywordSuggestionState.onlyKeywordSuggestions;
 
@@ -8252,7 +8406,9 @@ window._x_extension_toggleSearchOverlay_2026_unique_ = function(tabs, overlayCon
             primaryHighlightIndex = 0;
             primaryHighlightReason = 'topSite';
           }
-          if (!siteSearchState && query && !onlyKeywordSuggestions && (overlayTabQuickSwitchEnabled || prioritizeCurrentPageMatch)) {
+          if (preferAutocompleteFirst &&
+              !siteSearchState && query && !onlyKeywordSuggestions &&
+              (overlayTabQuickSwitchEnabled || prioritizeCurrentPageMatch)) {
             const openTabMatch = typeof SEARCH_UTILS.findSearchOpenTabMatchIndex === 'function'
               ? SEARCH_UTILS.findSearchOpenTabMatchIndex(allSuggestions, {
                 rawQuery: latestRawInputValue.trim(),

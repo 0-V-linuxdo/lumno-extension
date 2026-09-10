@@ -17,7 +17,7 @@ const switcherBridgeSource = fs.existsSync(switcherBridgePath)
   ? fs.readFileSync(switcherBridgePath, 'utf8')
   : '';
 const manifestSource = fs.readFileSync('manifest.json', 'utf8');
-const newtabHtmlSource = fs.readFileSync('src/newtab/newtab.html', 'utf8');
+const newtabHtmlSource = fs.readFileSync('newtab.html', 'utf8');
 const optionsHtmlSource = fs.readFileSync('src/options/options.html', 'utf8');
 const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
 const onboardingHtmlSource = fs.readFileSync('src/onboarding/onboarding.html', 'utf8');
@@ -1360,6 +1360,31 @@ assert.match(
   backgroundSource,
   /function buildSwitcherTabFavicon\(tab,\s*url\)[\s\S]*getPageFaviconCandidateUrl\(url\)/,
   'Alt+Q should use the shared favicon resolver for tab icons'
+);
+const switcherFaviconBlock = getFunctionBlock(
+  backgroundSource,
+  'function buildSwitcherTabFavicon(tab, url)',
+  'function getSwitcherRegistrableThemeHost(host)'
+);
+assert.match(
+  switcherFaviconBlock,
+  /rewritePrivilegedBrowserFaviconUrl/,
+  'Alt+Q must rewrite privileged chrome://mozapps favicons before painting'
+);
+const faviconSafetyBlock = getFunctionBlock(
+  backgroundSource,
+  'function isPageVisibleSafeFaviconUrl(url)',
+  'function buildSwitcherTabFavicon(tab, url)'
+);
+assert.match(
+  faviconSafetyBlock,
+  /resolveOwnExtensionOriginHost|runtime\.getURL\(''\)/,
+  'Tab Switcher favicon safety must allow the getURL origin host, not only runtime.id'
+);
+assert.doesNotMatch(
+  faviconSafetyBlock,
+  /protocol === 'chrome-extension:' &&/,
+  'Tab Switcher favicon safety must not be chrome-extension-only'
 );
 const switcherPayloadBlock = getFunctionBlock(
   backgroundSource,

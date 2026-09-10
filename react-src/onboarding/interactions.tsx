@@ -6,6 +6,7 @@ import type {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import { RemixIcon as Icon } from '../shared/remix-icon';
 
 interface InteractionLink {
   actionId?: string;
@@ -39,6 +40,7 @@ export interface InteractionSlot {
   accordionId?: string;
   actionId?: string;
   browserAvatars?: unknown;
+  description?: string;
   icon?: string;
   id: string;
   infoTooltip?: InteractionInfoTooltip;
@@ -67,15 +69,6 @@ export interface InteractionsControllerOptions {
     browserAvatars: unknown
   ): void;
   onToggleAccordion(accordionId: string): void;
-}
-
-function Icon({ className }: { className: string }) {
-  return (
-    <i
-      aria-hidden="true"
-      className={`ri-icon ${className || 'ri-arrow-right-line'}`}
-    />
-  );
 }
 
 function getAccordionId(slot: InteractionSlot): string {
@@ -322,6 +315,11 @@ function InteractionSlotCopy({
             />
           </>
         )}
+        {slot.description ? (
+          <span className="interaction-description">
+            {slot.description}
+          </span>
+        ) : null}
         {hasInfoTooltip && slot.infoTooltip ? (
           <InteractionInfoButton
             browserAvatars={slot.browserAvatars}

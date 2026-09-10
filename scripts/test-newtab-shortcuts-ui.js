@@ -5,7 +5,7 @@ const vm = require('vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
-const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'newtab.html'), 'utf8');
 const pageStructureReact = fs.readFileSync(
   path.join(repoRoot, 'react-src/newtab/page-structure.tsx'),
   'utf8'
@@ -22,6 +22,11 @@ const shortcutDialogCss = fs.readFileSync(path.join(repoRoot, 'src/newtab/shortc
 const wallpaperAdaptiveToneJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper-adaptive-tone.js'), 'utf8');
 const tooltipJs = fs.readFileSync(path.join(repoRoot, 'src/shared/tooltip.js'), 'utf8');
 const optionsHtml = fs.readFileSync(path.join(repoRoot, 'src/options/options.html'), 'utf8');
+const wallpaperSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper.js'), 'utf8');
+const wallpaperViewSource = fs.readFileSync(
+  path.join(repoRoot, 'react-src/newtab/wallpaper-view.tsx'),
+  'utf8'
+);
 const locales = ['zh_CN', 'zh_TW', 'en', 'ja'].map((locale) => ({
   locale,
   messages: JSON.parse(fs.readFileSync(path.join(repoRoot, `_locales/${locale}/messages.json`), 'utf8'))
@@ -153,7 +158,7 @@ function getTestContrastRatio(firstColor, secondColor) {
     (Math.min(firstLuminance, secondLuminance) + 0.05);
 }
 
-async function assertDarkWallpaperShortcutAdaptiveTone() {
+async function assertDarkWallpaperKeepsShortcutThemeBackground() {
   const wordmark = createToneElement({
     left: 390,
     top: 54,
@@ -166,6 +171,7 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   const addTile = createToneElement();
   const disabledTarget = createToneElement();
   shortcutTile.setAttribute('data-shortcut-theme-default', 'true');
+  shortcutTile.style.setProperty('--x-nt-shortcut-icon-bg', 'rgb(220 233 253)');
   disabledTarget.setAttribute('data-wallpaper-ink', 'light');
   disabledTarget.setAttribute('data-wallpaper-icon-bg', 'true');
   disabledTarget.style.setProperty('--x-nt-wallpaper-icon-solid-bg', 'rgb(20 28 45)');
@@ -260,8 +266,7 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
           sampleElement: shortcutTile,
           minWidth: 42,
           minHeight: 42,
-          iconButton: true,
-          forcedIconBackground: 'default-theme'
+          iconButton: true
         },
         {
           element: addTile,
@@ -305,12 +310,6 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   const wordmarkColor = parseSolidRgb(
     wordmark.style.getPropertyValue('--x-nt-wallpaper-wordmark-ink')
   );
-  const shortcutBackground = parseSolidRgb(
-    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg')
-  );
-  const shortcutForeground = parseSolidRgb(
-    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-color')
-  );
   const addBackground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-bg'));
   const addForeground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-color'));
   assert.strictEqual(disabledTarget.getAttribute('data-wallpaper-ink'), null);
@@ -324,17 +323,19 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
     getTestContrastRatio(wordmarkColor, pixel) >= 3.25,
     'wallpaper wordmark should keep accessible contrast on a similarly colored dark background'
   );
-  assert.ok(
-    getTestColorLuminance(shortcutBackground) < 0.36,
-    'dark wallpaper URL fallback shortcut backgrounds should stay in the dark-mode surface range'
+  assert.strictEqual(
+    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg'),
+    '',
+    'dark wallpapers should not override a favicon theme background'
   );
   assert.ok(
     getTestColorLuminance(addBackground) < 0.42,
     'dark wallpaper add shortcut background should stay dark instead of becoming white'
   );
-  assert.ok(
-    getTestColorLuminance(shortcutForeground) > 0.72,
-    'dark wallpaper URL fallback shortcut icon should remain light on the dark surface'
+  assert.strictEqual(
+    shortcutTile.style.getPropertyValue('--x-nt-shortcut-icon-bg'),
+    'rgb(220 233 253)',
+    'dark wallpapers should preserve the favicon light-theme background'
   );
   assert.ok(
     getTestColorLuminance(addForeground) > 0.72,
@@ -342,7 +343,7 @@ async function assertDarkWallpaperShortcutAdaptiveTone() {
   );
 }
 
-async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
+async function assertDarkThemeKeepsShortcutThemeBackground() {
   const wordmark = createToneElement({
     left: 390,
     top: 54,
@@ -354,6 +355,7 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
   const shortcutTile = createToneElement();
   const addTile = createToneElement();
   shortcutTile.setAttribute('data-shortcut-theme-default', 'true');
+  shortcutTile.style.setProperty('--x-nt-shortcut-icon-bg', 'rgb(33 52 85)');
   const pixel = { red: 238, green: 242, blue: 247 };
   const canvas = {
     width: 0,
@@ -446,8 +448,7 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
           sampleElement: shortcutTile,
           minWidth: 42,
           minHeight: 42,
-          iconButton: true,
-          forcedIconBackground: 'default-theme'
+          iconButton: true
         },
         {
           element: addTile,
@@ -483,12 +484,6 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
   const wordmarkColor = parseSolidRgb(
     wordmark.style.getPropertyValue('--x-nt-wallpaper-wordmark-ink')
   );
-  const shortcutBackground = parseSolidRgb(
-    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg')
-  );
-  const shortcutForeground = parseSolidRgb(
-    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-color')
-  );
   const addBackground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-bg'));
   const addForeground = parseSolidRgb(addTile.style.getPropertyValue('--x-nt-shortcut-add-color'));
 
@@ -496,17 +491,19 @@ async function assertDarkThemeLightWallpaperShortcutAdaptiveTone() {
     getTestContrastRatio(wordmarkColor, pixel) >= 3.25,
     'wallpaper wordmark should keep accessible contrast on a similarly colored light background'
   );
-  assert.ok(
-    getTestColorLuminance(shortcutBackground) < 0.36,
-    'dark theme URL fallback shortcut backgrounds should stay dark even on a light wallpaper'
+  assert.strictEqual(
+    shortcutTile.style.getPropertyValue('--x-nt-shortcut-wallpaper-icon-bg'),
+    '',
+    'light wallpapers should not override a favicon dark-theme background'
   );
   assert.ok(
     getTestColorLuminance(addBackground) < 0.42,
     'dark theme add shortcut background should stay dark even on a light wallpaper'
   );
-  assert.ok(
-    getTestColorLuminance(shortcutForeground) > 0.72,
-    'dark theme URL fallback shortcut icon should remain light on the dark surface'
+  assert.strictEqual(
+    shortcutTile.style.getPropertyValue('--x-nt-shortcut-icon-bg'),
+    'rgb(33 52 85)',
+    'light wallpapers should preserve the favicon dark-theme background'
   );
   assert.ok(
     getTestColorLuminance(addForeground) > 0.72,
@@ -589,6 +586,7 @@ assert.match(
 );
 
 const wallpaperPanelRule = getCssRuleBlock(newtabHtml, '.x-nt-wallpaper-panel');
+const newtabRootRule = getCssRuleBlock(newtabHtml, ':root');
 const shortcutDialogRule = getCssRuleBlock(shortcutDialogCss, '.x-nt-shortcut-dialog');
 const settingsPanelRule = getCssRuleBlock(optionsHtml, '#_x_extension_settings_panel_2024_unique_');
 [
@@ -599,6 +597,19 @@ const settingsPanelRule = getCssRuleBlock(optionsHtml, '#_x_extension_settings_p
     getCssDeclaration(shortcutDialogRule, property),
     getCssDeclaration(wallpaperPanelRule, property),
     `shortcut dialog ${property} should match the bottom-right floating panel`
+  );
+});
+
+[
+  '--input-focus-color',
+  '--input-focus-shadow',
+  '--input-placeholder',
+  '--input-focus-bg'
+].forEach((property) => {
+  assert.strictEqual(
+    getCssDeclaration(newtabRootRule, property),
+    getCssDeclaration(settingsPanelRule, property),
+    `New Tab ${property} should keep shared inputs aligned with Options`
   );
 });
 
@@ -625,8 +636,8 @@ assert.strictEqual(
 
 assertContains(
   shortcutDialogCss,
-  'transform: translate3d(var(--x-nt-shortcut-dialog-enter-x, 0px), var(--x-nt-shortcut-dialog-enter-y, 12px), 0) scale(0.98);',
-  'shortcut dialog should open from a trigger-aware direction'
+  'transform: translateX(var(--x-nt-shortcut-dialog-enter-x, 0px)) scale(0.98);',
+  'shortcut dialog should keep its trigger-aware horizontal entry direction'
 );
 
 assertContains(
@@ -723,39 +734,111 @@ assertContains(
 );
 
 assertContains(
-  optionsHtml,
-  '_x_extension_newtab_shortcuts_toggle_2026_unique_',
-  'appearance settings should include a New Tab shortcuts visibility toggle'
+  wallpaperViewSource,
+  'name="shortcutsToggle"',
+  'New Tab appearance should include a shortcuts visibility toggle'
+);
+
+assertContains(
+  wallpaperViewSource,
+  "ref('shortcutsAccordionTrigger')",
+  'New Tab shortcuts should expose an accordion trigger'
+);
+
+assertContains(
+  wallpaperViewSource,
+  'aria-expanded="false"',
+  'New Tab shortcuts accordion should start collapsed'
+);
+
+assertContains(
+  wallpaperViewSource,
+  "ref('shortcutsDetails')",
+  'New Tab shortcuts should expose an accordion details region'
+);
+
+assertContains(
+  wallpaperViewSource,
+  'role="region"',
+  'New Tab shortcuts accordion details should be announced as a region'
+);
+
+assertContains(
+  wallpaperViewSource,
+  'name="shortcutAddToggle"',
+  'New Tab shortcuts should include the nested add shortcut visibility toggle'
+);
+
+assertContains(
+  wallpaperViewSource,
+  'name="shortcutDockMagnificationToggle"',
+  'New Tab shortcuts should include the nested Dock magnification toggle'
+);
+
+assertContains(
+  wallpaperViewSource,
+  "ref('shortcutColumnsSlider')",
+  'New Tab shortcuts should expose a per-row shortcut slider'
+);
+
+assertContains(
+  wallpaperViewSource,
+  "ref('shortcutColumnsSliderValueInput')",
+  'New Tab shortcuts should expose an editable numeric slider value'
+);
+
+assertContains(
+  wallpaperViewSource,
+  "label: '8', percent: 100 / 3",
+  'New Tab shortcuts should render the 4-step slider ticks'
+);
+
+assertContains(
+  wallpaperSource,
+  'function updateWallpaperShortcutsUi()',
+  'wallpaper runtime should centralize shortcut appearance control updates'
+);
+
+assertContains(
+  wallpaperSource,
+  'function setWallpaperShortcutsAccordionExpanded',
+  'wallpaper runtime should own shortcut accordion expansion state'
+);
+
+assertContains(
+  wallpaperSource,
+  'wallpaperShortcutsAccordionTrigger.disabled = !enabled',
+  'shortcut accordion should be disabled when shortcuts are turned off'
 );
 
 assertContains(
   optionsHtml,
-  'data-i18n="settings_newtab_shortcuts_title"',
-  'appearance settings should label the New Tab shortcuts visibility toggle'
+  '_x_extension_newtab_shortcuts_toggle_2026_unique_',
+  'Options should keep the New Tab shortcuts visibility control'
 );
 
 assertContains(
   optionsHtml,
   '_x_extension_newtab_shortcut_add_toggle_2026_unique_',
-  'appearance settings should include a nested add shortcut visibility toggle'
-);
-
-assertContains(
-  optionsHtml,
-  'data-i18n="settings_newtab_shortcut_add_title"',
-  'appearance settings should label the nested add shortcut visibility toggle'
+  'Options should keep the add shortcut visibility control'
 );
 
 assertContains(
   optionsHtml,
   '_x_extension_newtab_shortcut_dock_magnification_toggle_2026_unique_',
-  'appearance settings should include a nested shortcut Dock magnification toggle'
+  'Options should keep the shortcut Dock magnification control'
 );
 
 assertContains(
-  optionsHtml,
-  'data-i18n="settings_newtab_shortcut_dock_magnification_title"',
-  'appearance settings should label the nested shortcut Dock magnification toggle'
+  newtabHtml,
+  '.x-nt-shortcuts-accordion-details[hidden]',
+  'collapsed shortcut details should override the authored display declaration'
+);
+
+assertContains(
+  newtabHtml,
+  'gap: var(--x-nt-panel-item-gap);',
+  'shortcut details should inherit the appearance panel global item gap'
 );
 
 assertContains(
@@ -790,19 +873,19 @@ assertContains(
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcut-tile-size: 64px;',
+  '--x-nt-shortcut-user-tile-size: 64px;',
   'shortcut tiles should define a compact dock-sized hit target'
 );
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcut-icon-size: 48px;',
+  '--x-nt-shortcut-user-icon-size: 48px;',
   'shortcut icons should start smaller before dock magnification'
 );
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcut-favicon-size: 28px;',
+  '--x-nt-shortcut-user-favicon-size: 28px;',
   'shortcut favicons should scale down with the compact icon size'
 );
 
@@ -820,7 +903,7 @@ assertContains(
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcut-icon-radius: 16px;',
+  '--x-nt-shortcut-user-icon-radius: 16px;',
   'shortcut icons should define a smooth rounded-rectangle radius'
 );
 
@@ -933,7 +1016,19 @@ const shortcutGridRule = getCssRuleBlock(newtabHtml, '.x-nt-shortcuts-grid');
 assertContains(
   shortcutGridRule,
   'display: flex;',
-  'shortcut rail should use a dock-like flex row'
+  'shortcut rail should use a wrapping row constrained by the selected count'
+);
+
+assertContains(
+  shortcutGridRule,
+  'flex-wrap: wrap;',
+  'shortcut rail should wrap by the selected per-row count while adapting on narrow screens'
+);
+
+assertContains(
+  shortcutGridRule,
+  'justify-content: center;',
+  'shortcut rail should center incomplete rows'
 );
 
 assertContains(
@@ -950,13 +1045,13 @@ assertContains(
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcuts-grid-row-gap: 10px;',
+  '--x-nt-shortcut-user-row-gap: 10px;',
   'shortcut rail should define its default row gap token'
 );
 
 assertContains(
   newtabHtml,
-  '--x-nt-shortcuts-grid-column-gap: 4px;',
+  '--x-nt-shortcut-user-column-gap: 4px;',
   'shortcut rail should define its default column gap token'
 );
 
@@ -1634,7 +1729,7 @@ assertContains(
 assertContains(
   newtabJs,
   "tile.setAttribute('data-shortcut-theme-default', isDefaultTheme ? 'true' : 'false');",
-  'shortcut tiles should mark whether their URL background needs a forced wallpaper contrast color'
+  'shortcut tiles should retain default-theme classification for diagnostics'
 );
 
 const applyThemeModeSource = getFunctionSource(newtabJs, 'applyThemeMode');
@@ -1671,13 +1766,19 @@ assertContains(
 assertContains(
   newtabJs,
   "return theme._xThemeNeutral === true ||",
-  'neutral favicon themes should still receive the wallpaper-adaptive URL fallback background'
+  'neutral favicon themes should remain identifiable without changing their stable theme background'
+);
+
+assertNotContains(
+  newtabJs,
+  "forcedIconBackground: 'default-theme'",
+  'favicon tiles should not receive wallpaper-forced backgrounds'
 );
 
 assertContains(
-  newtabJs,
-  "forcedIconBackground: 'default-theme'",
-  'shortcut wallpaper tone targets should only force backgrounds for default-theme URL tiles'
+  getFunctionSource(newtabJs, 'applyShortcutTileTheme'),
+  "tile.style.removeProperty('--x-nt-shortcut-wallpaper-icon-bg');",
+  'favicon theme application should clear stale wallpaper background overrides'
 );
 
 assertContains(
@@ -2190,6 +2291,18 @@ assertContains(
 );
 
 assertContains(
+  getFunctionSource(newtabJs, 'getShortcutContextMenuOptions'),
+  "label: t('newtab_open_in_new_tab', 'Open in new tab')",
+  'shortcut context menu should put Open in new tab first'
+);
+
+assertContains(
+  getFunctionSource(newtabJs, 'getShortcutContextMenuOptions'),
+  'dividerBefore: true',
+  'shortcut context menu should separate opening from Edit and Remove'
+);
+
+assertContains(
   newtabJs,
   "label: t('shortcuts_remove', 'Remove')",
   'shortcut context menu should include a Remove action'
@@ -2363,10 +2476,10 @@ assertContains(
   'shortcut dialog should write a trigger-aware x enter offset'
 );
 
-assertContains(
-  shortcutDialogJs,
-  "'--x-nt-shortcut-dialog-enter-y'",
-  'shortcut dialog should write a trigger-aware y enter offset'
+assert.ok(
+  !shortcutDialogCss.includes('--x-nt-shortcut-dialog-enter-y') &&
+    !shortcutDialogJs.includes("'--x-nt-shortcut-dialog-enter-y'"),
+  'shortcut dialog should not derive or apply a vertical enter offset'
 );
 
 assertContains(
@@ -2443,25 +2556,25 @@ assert.match(
 
 assert.match(
   newtabJs,
-  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?shortcutPreferencesReadyPromise[\s\S]*?\]\)\.then\(\(\) => \{[\s\S]*?markNewtabReady\(\);[\s\S]*?\}\);/,
-  'newtab ready transition should branch after lightweight visual preferences resolve'
+  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?initialShortcutsReadyTask[\s\S]*?\]\)\.catch[\s\S]*?loadRecentSites\(\{[\s\S]*?force: true[\s\S]*?loadBookmarks\(\{[\s\S]*?force: true[\s\S]*?markNewtabReady\(\);/,
+  'newtab ready transition should wait for shortcut and authoritative section geometry'
 );
 
 const initialVisualDependencyBlock = newtabJs.slice(
   newtabJs.indexOf('const initialVisualReadyPromise = Promise.all(['),
-  newtabJs.indexOf(']).then(() => {',
+  newtabJs.indexOf(']).catch((error) => {',
     newtabJs.indexOf('const initialVisualReadyPromise = Promise.all(['))
 );
-assert.doesNotMatch(
+assert.match(
   initialVisualDependencyBlock,
-  /bootstrapInitialWallpaper|shortcutsReadyPromise|loadVisibleShortcuts|loadShortcutIcons/,
-  'newtab ready transition should not wait for wallpaper or shortcut asset payloads'
+  /initialShortcutsReadyTask/,
+  'newtab ready transition should reserve final shortcut geometry before first paint'
 );
 
-assert.match(
+assert.doesNotMatch(
   newtabJs,
-  /initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);\s*return;\s*\}[\s\S]*?initialShortcutsReadyTask[\s\S]*?markNewtabReady\(\);/,
-  'animated new tabs should reveal immediately while motion-free entry waits for shortcut content'
+  /initialNewtabSkipsEntryMotion|hydrateSectionsFromCache/,
+  'animated and motion-free new tabs should share the same stable first-paint geometry'
 );
 
 assertContains(
@@ -2546,6 +2659,7 @@ assertContains(
   'newtab_shortcuts_removed',
   'newtab_shortcuts_edit_dialog_title',
   'newtab_shortcuts_context_menu_label',
+  'newtab_open_in_new_tab',
   'settings_newtab_shortcuts_title',
   'settings_newtab_shortcut_add_title',
   'settings_newtab_shortcut_dock_magnification_title',
@@ -2562,8 +2676,8 @@ assert.strictEqual(
 );
 
 Promise.all([
-  assertDarkWallpaperShortcutAdaptiveTone(),
-  assertDarkThemeLightWallpaperShortcutAdaptiveTone()
+  assertDarkWallpaperKeepsShortcutThemeBackground(),
+  assertDarkThemeKeepsShortcutThemeBackground()
 ]).catch((error) => {
   console.error(error);
   process.exitCode = 1;

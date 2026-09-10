@@ -13,6 +13,27 @@
   const NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY = '_x_extension_newtab_shortcuts_chunk_3_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
+  const NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY = '_x_extension_newtab_feedback_button_visible_2026_unique_';
+  const NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY = '_x_extension_newtab_appearance_button_visible_2026_unique_';
+  const NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY = '_x_extension_newtab_shortcut_width_2026_unique_';
+  const NEWTAB_SHORTCUT_WIDTH_MIN = 360;
+  const NEWTAB_SHORTCUT_WIDTH_MAX = 1440;
+  const NEWTAB_SHORTCUT_WIDTH_DEFAULT = 920;
+  const NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY =
+    '_x_extension_newtab_shortcut_columns_2026_unique_';
+  const NEWTAB_SHORTCUT_COLUMNS_MIN = 4;
+  const NEWTAB_SHORTCUT_COLUMNS_MAX = 16;
+  const NEWTAB_SHORTCUT_COLUMNS_DEFAULT = 10;
+  const NEWTAB_SHORTCUT_SIZE_STORAGE_KEY =
+    '_x_extension_newtab_shortcut_size_2026_unique_';
+  const NEWTAB_SHORTCUT_SIZE_MIN = 48;
+  const NEWTAB_SHORTCUT_SIZE_MAX = 80;
+  const NEWTAB_SHORTCUT_SIZE_DEFAULT = 64;
+  const NEWTAB_SHORTCUT_GAP_STORAGE_KEY =
+    '_x_extension_newtab_shortcut_gap_2026_unique_';
+  const NEWTAB_SHORTCUT_GAP_MIN = 0;
+  const NEWTAB_SHORTCUT_GAP_MAX = 24;
+  const NEWTAB_SHORTCUT_GAP_DEFAULT = 4;
   const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
   const BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY = '_x_extension_bookmark_folder_icons_visible_2026_unique_';
   const UPDATE_NOTICE_ENABLED_STORAGE_KEY = '_x_extension_update_notice_enabled_2026_unique_';
@@ -29,6 +50,9 @@
   const SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_enabled_2026_unique_';
   const SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY = '_x_extension_selection_quick_actions_provider_2026_unique_';
   const SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY = '_x_extension_selection_quick_actions_group_enabled_2026_unique_';
+  const AGGREGATE_SEARCH_STORAGE_KEY = '_x_extension_aggregate_searches_2026_unique_';
+  const AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY =
+    '_x_extension_aggregate_search_auto_group_enabled_2026_unique_';
   // Device-specific appearance. Never import these values from Chrome Sync.
   const BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS = Object.freeze([
     '_x_extension_bookmark_topbar_surface_mode_2026_unique_',
@@ -68,6 +92,12 @@
     '_x_extension_newtab_shortcuts_visible_2026_unique_',
     '_x_extension_newtab_shortcut_add_visible_2026_unique_',
     '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_',
+    NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY,
+    NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY,
+    NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY,
+    NEWTAB_SHORTCUT_SIZE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_GAP_STORAGE_KEY,
     '_x_extension_update_notice_enabled_2026_unique_',
     '_x_extension_motion_effects_enabled_2026_unique_',
     '_x_extension_simple_mode_enabled_2026_unique_',
@@ -92,6 +122,8 @@
     '_x_extension_fallback_hotkey_2024_unique_',
     '_x_extension_site_search_custom_2024_unique_',
     '_x_extension_site_search_disabled_2024_unique_',
+    AGGREGATE_SEARCH_STORAGE_KEY,
+    AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY,
     '_x_extension_search_blacklist_2026_unique_',
     '_x_extension_favicon_request_blacklist_2026_unique_',
     '_x_extension_favicon_enhanced_fetch_enabled_2026_unique_',
@@ -208,6 +240,113 @@
 
   function normalizeNewtabShortcutDockMagnificationEnabled(value) {
     return value !== false;
+  }
+
+  function normalizeNewtabFeedbackButtonVisible(value) {
+    return value !== false;
+  }
+
+  function normalizeNewtabAppearanceButtonVisible(value) {
+    return value !== false;
+  }
+
+  function normalizeNewtabShortcutWidth(value, options) {
+    const config = options || {};
+    const min = Number.isFinite(Number(config.min)) ? Number(config.min) : NEWTAB_SHORTCUT_WIDTH_MIN;
+    const max = Number.isFinite(Number(config.max)) ? Number(config.max) : NEWTAB_SHORTCUT_WIDTH_MAX;
+    const fallback = Number.isFinite(Number(config.fallback))
+      ? Number(config.fallback)
+      : NEWTAB_SHORTCUT_WIDTH_DEFAULT;
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return Math.min(max, Math.max(min, Math.round(fallback)));
+    }
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function normalizeNewtabShortcutColumns(value, options) {
+    const config = options || {};
+    const min = Number.isFinite(Number(config.min))
+      ? Number(config.min)
+      : NEWTAB_SHORTCUT_COLUMNS_MIN;
+    const max = Number.isFinite(Number(config.max))
+      ? Number(config.max)
+      : NEWTAB_SHORTCUT_COLUMNS_MAX;
+    const fallback = Number.isFinite(Number(config.fallback))
+      ? Number(config.fallback)
+      : NEWTAB_SHORTCUT_COLUMNS_DEFAULT;
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return Math.min(max, Math.max(min, Math.round(fallback)));
+    }
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function normalizeNewtabShortcutSize(value, options) {
+    const config = options || {};
+    const min = Number.isFinite(Number(config.min))
+      ? Number(config.min)
+      : NEWTAB_SHORTCUT_SIZE_MIN;
+    const max = Number.isFinite(Number(config.max))
+      ? Number(config.max)
+      : NEWTAB_SHORTCUT_SIZE_MAX;
+    const fallback = Number.isFinite(Number(config.fallback))
+      ? Number(config.fallback)
+      : NEWTAB_SHORTCUT_SIZE_DEFAULT;
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return Math.min(max, Math.max(min, Math.round(fallback)));
+    }
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function normalizeNewtabShortcutGap(value, options) {
+    const config = options || {};
+    const min = Number.isFinite(Number(config.min))
+      ? Number(config.min)
+      : NEWTAB_SHORTCUT_GAP_MIN;
+    const max = Number.isFinite(Number(config.max))
+      ? Number(config.max)
+      : NEWTAB_SHORTCUT_GAP_MAX;
+    const fallback = Number.isFinite(Number(config.fallback))
+      ? Number(config.fallback)
+      : NEWTAB_SHORTCUT_GAP_DEFAULT;
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return Math.min(max, Math.max(min, Math.round(fallback)));
+    }
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function inferNewtabShortcutColumnsFromWidth(value, options) {
+    const config = options || {};
+    const widthMin = Number.isFinite(Number(config.widthMin))
+      ? Number(config.widthMin)
+      : NEWTAB_SHORTCUT_WIDTH_MIN;
+    const widthMax = Number.isFinite(Number(config.widthMax))
+      ? Number(config.widthMax)
+      : NEWTAB_SHORTCUT_WIDTH_MAX;
+    const columnsMin = Number.isFinite(Number(config.columnsMin))
+      ? Number(config.columnsMin)
+      : NEWTAB_SHORTCUT_COLUMNS_MIN;
+    const columnsMax = Number.isFinite(Number(config.columnsMax))
+      ? Number(config.columnsMax)
+      : NEWTAB_SHORTCUT_COLUMNS_MAX;
+    const width = normalizeNewtabShortcutWidth(value, {
+      min: widthMin,
+      max: widthMax,
+      fallback: NEWTAB_SHORTCUT_WIDTH_DEFAULT
+    });
+    const range = Math.max(1, widthMax - widthMin);
+    const ratio = (width - widthMin) / range;
+    return normalizeNewtabShortcutColumns(
+      columnsMin + ratio * (columnsMax - columnsMin),
+      {
+        min: columnsMin,
+        max: columnsMax,
+        fallback: NEWTAB_SHORTCUT_COLUMNS_DEFAULT
+      }
+    );
   }
 
   function normalizeNewtabInputAutoFocusEnabled(value) {
@@ -362,6 +501,10 @@
     return value === true;
   }
 
+  function normalizeAggregateSearchAutoGroupEnabled(value) {
+    return value !== false;
+  }
+
   function normalizeThemePreference(value) {
     if (value === 'dark') {
       return 'dark';
@@ -383,6 +526,97 @@
     return {
       [THEME_STORAGE_KEY]: normalizeThemeMode(mode)
     };
+  }
+
+  function readStorageValue(storageArea, chromeApi, key) {
+    return new Promise((resolve, reject) => {
+      if (!storageArea || typeof storageArea.get !== 'function') {
+        resolve(undefined);
+        return;
+      }
+      let settled = false;
+      const finish = (error, result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        if (!result || typeof result !== 'object') {
+          reject(new Error('storage-read-failed'));
+          return;
+        }
+        resolve(result[key]);
+      };
+      const callback = (result) => {
+        const runtimeError = chromeApi && chromeApi.runtime
+          ? chromeApi.runtime.lastError
+          : null;
+        finish(
+          runtimeError
+            ? new Error(String(runtimeError.message || 'storage-read-failed'))
+            : null,
+          result
+        );
+      };
+      try {
+        const maybePromise = storageArea.get([key], callback);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then((result) => finish(null, result)).catch((error) => finish(error));
+        }
+      } catch (error) {
+        finish(error);
+      }
+    });
+  }
+
+  function writeStorageValues(storageArea, chromeApi, values) {
+    const payload = values && typeof values === 'object' && !Array.isArray(values)
+      ? { ...values }
+      : {};
+    return new Promise((resolve, reject) => {
+      if (!storageArea || typeof storageArea.set !== 'function') {
+        resolve(payload);
+        return;
+      }
+      let settled = false;
+      const finish = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        resolve(payload);
+      };
+      const callback = () => {
+        const runtimeError = chromeApi && chromeApi.runtime
+          ? chromeApi.runtime.lastError
+          : null;
+        finish(runtimeError
+          ? new Error(String(runtimeError.message || 'storage-write-failed'))
+          : null);
+      };
+      try {
+        const maybePromise = storageArea.set(payload, callback);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(() => {
+            Promise.resolve().then(() => finish(null));
+          }).catch(finish);
+        }
+      } catch (error) {
+        finish(error);
+      }
+    });
+  }
+
+  function writeStorageValue(storageArea, chromeApi, key, value) {
+    return writeStorageValues(storageArea, chromeApi, { [key]: value })
+      .then(() => value);
   }
 
   function createStorageReadBatch(area) {
@@ -592,6 +826,16 @@
     });
   }
 
+  function addStorageChangeListener(chromeApi, listener) {
+    const onChanged = chromeApi && chromeApi.storage && chromeApi.storage.onChanged;
+    if (!onChanged || typeof onChanged.addListener !== 'function' ||
+        typeof listener !== 'function') {
+      return false;
+    }
+    onChanged.addListener(listener);
+    return true;
+  }
+
   return Object.freeze({
     THEME_STORAGE_KEY,
     NEWTAB_THEME_MODE_STORAGE_KEY,
@@ -601,6 +845,24 @@
     NEWTAB_SHORTCUTS_CHUNK_3_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
+    NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY,
+    NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY,
+    NEWTAB_SHORTCUT_WIDTH_MIN,
+    NEWTAB_SHORTCUT_WIDTH_MAX,
+    NEWTAB_SHORTCUT_WIDTH_DEFAULT,
+    NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY,
+    NEWTAB_SHORTCUT_COLUMNS_MIN,
+    NEWTAB_SHORTCUT_COLUMNS_MAX,
+    NEWTAB_SHORTCUT_COLUMNS_DEFAULT,
+    NEWTAB_SHORTCUT_SIZE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_SIZE_MIN,
+    NEWTAB_SHORTCUT_SIZE_MAX,
+    NEWTAB_SHORTCUT_SIZE_DEFAULT,
+    NEWTAB_SHORTCUT_GAP_STORAGE_KEY,
+    NEWTAB_SHORTCUT_GAP_MIN,
+    NEWTAB_SHORTCUT_GAP_MAX,
+    NEWTAB_SHORTCUT_GAP_DEFAULT,
     NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
     BOOKMARK_FOLDER_ICONS_VISIBLE_STORAGE_KEY,
     UPDATE_NOTICE_ENABLED_STORAGE_KEY,
@@ -616,6 +878,8 @@
     SELECTION_QUICK_ACTIONS_ENABLED_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_PROVIDER_STORAGE_KEY,
     SELECTION_QUICK_ACTIONS_GROUP_ENABLED_STORAGE_KEY,
+    AGGREGATE_SEARCH_STORAGE_KEY,
+    AGGREGATE_SEARCH_AUTO_GROUP_ENABLED_STORAGE_KEY,
     BOOKMARK_TOPBAR_LOCAL_STORAGE_KEYS,
     CHROME_SYNC_STORAGE_KEYS,
     SELECTION_QUICK_ACTIONS_PROVIDER_KEYS,
@@ -639,6 +903,13 @@
     normalizeNewtabShortcutsVisible,
     normalizeNewtabShortcutAddVisible,
     normalizeNewtabShortcutDockMagnificationEnabled,
+    normalizeNewtabFeedbackButtonVisible,
+    normalizeNewtabAppearanceButtonVisible,
+    normalizeNewtabShortcutWidth,
+    normalizeNewtabShortcutColumns,
+    normalizeNewtabShortcutSize,
+    normalizeNewtabShortcutGap,
+    inferNewtabShortcutColumnsFromWidth,
     normalizeNewtabInputAutoFocusEnabled,
     normalizeBookmarkCount,
     normalizeBookmarkColumns,
@@ -663,10 +934,15 @@
     normalizeSelectionQuickActionsEnabled,
     normalizeSelectionQuickActionsProvider,
     normalizeSelectionQuickActionsGroupEnabled,
+    normalizeAggregateSearchAutoGroupEnabled,
     normalizeThemePreference,
     normalizeThemeMode,
     createGlobalThemeModeStorageUpdate,
+    readStorageValue,
+    writeStorageValue,
+    writeStorageValues,
     createStorageReadBatch,
-    createProviderStorageRuntime
+    createProviderStorageRuntime,
+    addStorageChangeListener
   });
 });

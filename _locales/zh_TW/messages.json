@@ -1,6 +1,6 @@
 {
   "ext_name": {
-    "message": "Lumno | 聚焦搜索&新标签页"
+    "message": "Lumno｜搜尋與新分頁"
   },
   "ext_description": {
     "message": "在任何網頁一鍵喚起指令浮層，快速搜尋、直達網址、切換分頁，並強化新分頁體驗。"
@@ -556,6 +556,12 @@
   "newtab_time_show_seconds_title": {
     "message": "顯示秒數"
   },
+  "settings_newtab_feedback_button_visible_title": {
+    "message": "顯示意見回饋按鈕"
+  },
+  "settings_newtab_appearance_button_visible_title": {
+    "message": "顯示外觀按鈕"
+  },
   "settings_newtab_shortcuts_title": {
     "message": "快捷方式"
   },
@@ -564,6 +570,24 @@
   },
   "settings_newtab_shortcut_dock_magnification_title": {
     "message": "仿 macOS Dock 程式塢縮放效果"
+  },
+  "settings_newtab_shortcut_width_title": {
+    "message": "捷徑寬度"
+  },
+  "settings_newtab_shortcut_columns_title": {
+    "message": "每行捷徑數量"
+  },
+  "settings_newtab_shortcut_size_title": {
+    "message": "捷徑大小"
+  },
+  "settings_newtab_shortcut_gap_title": {
+    "message": "捷徑間距"
+  },
+  "settings_newtab_shortcut_size_reset": {
+    "message": "恢復預設大小"
+  },
+  "settings_newtab_shortcut_gap_reset": {
+    "message": "恢復預設間距"
   },
   "settings_wallpaper_title": {
     "message": "新分頁壁紙"
@@ -880,17 +904,36 @@
   "newtab_wallpaper_effect_strength": {
     "message": "取樣強度"
   },
+  "newtab_wallpaper_effect_blur_strength": {
+    "message": "模糊強度"
+  },
   "newtab_wallpaper_effect_size": {
     "message": "大小"
   },
   "newtab_wallpaper_effect_spacing": {
     "message": "間距"
   },
+  "newtab_wallpaper_effect_texture": {
+    "message": "紋理"
+  },
+  "newtab_wallpaper_effect_blocks_size": { "message": "積木尺寸" },
+  "newtab_wallpaper_effect_crt_strength": {
+    "message": "顯示強度"
+  },
+  "newtab_wallpaper_effect_crt_bloom": { "message": "光暈" },
+  "newtab_wallpaper_effect_crt_rgb_offset": { "message": "RGB 偏移" },
+  "newtab_wallpaper_effect_crt_curvature": { "message": "螢幕曲率" },
   "newtab_wallpaper_effect_none": {
     "message": "關閉"
   },
+  "newtab_wallpaper_effect_blur": {
+    "message": "毛玻璃"
+  },
   "newtab_wallpaper_effect_grain": {
     "message": "顆粒"
+  },
+  "newtab_wallpaper_effect_blocks": {
+    "message": "積木"
   },
   "newtab_wallpaper_effect_halftone": {
     "message": "網點"
@@ -900,6 +943,9 @@
   },
   "newtab_wallpaper_effect_ascii": {
     "message": "ASCII"
+  },
+  "newtab_wallpaper_effect_crt": {
+    "message": "CRT"
   },
   "newtab_wallpaper_effect_select_label": {
     "message": "使用 {effect} 壁紙濾鏡"
@@ -1315,6 +1361,9 @@
   "bookmarks_open_in_new_tab_group": {
     "message": "在新分頁群組中開啟"
   },
+  "newtab_open_in_new_tab": {
+    "message": "在新分頁開啟"
+  },
   "bookmarks_open_group_confirm_title": {
     "message": "開啟 {count} 個分頁？"
   },
@@ -1674,6 +1723,96 @@
   },
   "search_scope_group_sites": {
     "message": "站內搜尋"
+  },
+  "search_scope_group_aggregates": {
+    "message": "彙整搜尋"
+  },
+  "aggregate_search_action": {
+    "message": "使用{name}搜尋"
+  },
+  "aggregate_search_action_query": {
+    "message": "使用{name}搜尋「{query}」"
+  },
+  "aggregate_search_group_title": {
+    "message": "彙整搜尋"
+  },
+  "aggregate_search_add": {
+    "message": "新增彙整搜尋"
+  },
+  "aggregate_search_clear": {
+    "message": "清空彙整搜尋"
+  },
+  "confirm_clear_aggregate_search": {
+    "message": "確認清空彙整搜尋？"
+  },
+  "aggregate_search_name_label": {
+    "message": "名稱"
+  },
+  "aggregate_search_name_required_error": {
+    "message": "請填寫彙整搜尋名稱。"
+  },
+  "aggregate_search_key_placeholder": {
+    "message": "例如 tech"
+  },
+  "aggregate_search_default_name": {
+    "message": "彙整搜尋"
+  },
+  "aggregate_search_sources_label": {
+    "message": "搜尋來源"
+  },
+  "aggregate_search_selected_count": {
+    "message": "已選 {count}/{max}"
+  },
+  "aggregate_search_min_sources_error": {
+    "message": "請至少選擇 2 個搜尋來源。"
+  },
+  "aggregate_search_max_sources_error": {
+    "message": "最多可選擇 10 個搜尋來源。"
+  },
+  "settings_aggregate_search_auto_group_title": {
+    "message": "彙整搜尋自動建立分頁群組"
+  },
+  "settings_aggregate_search_auto_group_desc": {
+    "message": "開啟後，彙整搜尋所開啟的所有分頁會歸入同一群組，並以搜尋關鍵字命名"
+  },
+  "aggregate_search_badge": {
+    "message": "彙整"
+  },
+  "aggregate_search_source_summary": {
+    "message": "{count} 個搜尋來源"
+  },
+  "aggregate_search_source_summary_unavailable": {
+    "message": "{count} 個搜尋來源 · {unavailable} 個無法使用 · 需要更新"
+  },
+  "aggregate_search_sources_unavailable_error": {
+    "message": "此彙整搜尋包含已移除或已停用的搜尋來源，請先到設定中更新。"
+  },
+  "aggregate_search_in_progress": {
+    "message": "此彙整搜尋正在執行，請勿重複觸發。"
+  },
+  "aggregate_search_partial_failure": {
+    "message": "部分彙整搜尋結果無法開啟。"
+  },
+  "aggregate_search_degraded_success": {
+    "message": "搜尋結果已開啟，但分頁群組、命名或切換未完全完成。"
+  },
+  "aggregate_search_storage_unavailable_error": {
+    "message": "彙整搜尋讀取失敗，請重新載入設定頁後再試。"
+  },
+  "aggregate_search_source_selection_unavailable_error": {
+    "message": "請移除無法使用的搜尋來源，並至少選擇 2 個可用的搜尋來源。"
+  },
+  "aggregate_search_unavailable_group": {
+    "message": "無法使用的搜尋來源"
+  },
+  "aggregate_search_unavailable_name": {
+    "message": "無法使用的搜尋來源（{source}）"
+  },
+  "aggregate_search_name_duplicate_error": {
+    "message": "已有同名的彙整搜尋。"
+  },
+  "aggregate_search_max_items_error": {
+    "message": "最多可建立 8 個彙整搜尋。"
   },
   "overlay_empty_open_tabs": {
     "message": "暫無分頁"

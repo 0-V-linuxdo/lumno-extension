@@ -137,14 +137,23 @@ assert(
   'existing tabs should start warming the icon font before Overlay React/runtime injection'
 );
 
-const switcherInjectionStart = backgroundSource.indexOf('const runDynamicSwitcherScript = (switcherContext) => {');
-const switcherInjectionEnd = backgroundSource.indexOf('runDynamicSwitcherScript(switcherContext);', switcherInjectionStart);
-const switcherInjectionBlock = backgroundSource.slice(switcherInjectionStart, switcherInjectionEnd);
+const switcherFilesStart = backgroundSource.indexOf('function getTabSwitcherInjectionFiles()');
+const switcherFilesEnd = backgroundSource.indexOf('\nfunction geckoHotkeyFailureMessage', switcherFilesStart);
+const switcherFilesBlock = backgroundSource.slice(
+  switcherFilesStart,
+  switcherFilesEnd > switcherFilesStart ? switcherFilesEnd : switcherFilesStart + 800
+);
+assert(switcherFilesStart >= 0, 'tab switcher inject file list should remain discoverable');
 assert(
-  switcherInjectionBlock.indexOf("'src/shared/icon-font-preload.js'") >= 0 &&
-    switcherInjectionBlock.indexOf("'src/shared/icon-font-preload.js'") <
-      switcherInjectionBlock.indexOf("'src/react/overlay-islands.js'"),
+  switcherFilesBlock.indexOf("'src/shared/icon-font-preload.js'") >= 0 &&
+    switcherFilesBlock.indexOf("'src/shared/icon-font-preload.js'") <
+      switcherFilesBlock.indexOf("'src/react/overlay-islands.js'"),
   'the standalone tab switcher should also warm the icon font before rendering'
+);
+assert.match(
+  backgroundSource,
+  /files:\s*getTabSwitcherInjectionFiles\(\)/,
+  'dynamic tab switcher inject should use the shared file list'
 );
 assert(
   optionsHtml.indexOf('<script src="../shared/icon-font-preload.js"></script>') >= 0 &&

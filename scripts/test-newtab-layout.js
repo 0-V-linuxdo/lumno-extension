@@ -7,7 +7,7 @@ require('../src/newtab/layout.js');
 
 const layoutRuntime = globalThis.LumnoNewtabLayout;
 const repoRoot = path.resolve(__dirname, '..');
-const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'newtab.html'), 'utf8');
 const newtabSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
 const wallpaperSource = fs.readFileSync(path.join(repoRoot, 'src/newtab/wallpaper.js'), 'utf8');
 const newtabRedirectSource = fs.readFileSync(
@@ -18,7 +18,30 @@ const sharedSearchInputCss = fs.readFileSync(
   path.join(repoRoot, 'src/shared/search-input.css'),
   'utf8'
 );
+const featureHintsCss = fs.readFileSync(
+  path.join(repoRoot, 'src/shared/feature-hints.css'),
+  'utf8'
+);
 const dockReactSource = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/dock.tsx'), 'utf8');
+
+function getCssBlock(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  assert.ok(markerIndex >= 0, `missing CSS block: ${marker}`);
+  const openIndex = source.indexOf('{', markerIndex);
+  assert.ok(openIndex >= 0, `missing CSS block opening brace: ${marker}`);
+  let depth = 0;
+  for (let index = openIndex; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      depth += 1;
+    } else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(markerIndex, index + 1);
+      }
+    }
+  }
+  assert.fail(`missing CSS block closing brace: ${marker}`);
+}
 
 function testNewtabRedirectFocusHintIsConsumedOnce() {
   assert.match(
@@ -32,8 +55,13 @@ function testNewtabRedirectFocusHintIsConsumedOnce() {
   );
   assert.match(
     recoverySource,
-    /let forceInitialFocusPending = hasExplicitFocusHint;[\s\S]*?const focused = tryFocusSearchInput\(forceInitialFocusPending\);[\s\S]*?if \(focused\) \{\s*forceInitialFocusPending = false;/,
+    /let forceInitialFocusPending = hasExplicitFocusHint;[\s\S]*?const focused = tryFocusSearchInput\(forceInitialFocusPending\);[\s\S]*?if \(focused\) \{[\s\S]*?forceInitialFocusPending = false;/,
     'the explicit New Tab focus hint should be consumed after the first successful input focus'
+  );
+  assert.match(
+    recoverySource,
+    /url\.searchParams\.delete\('focus'\);[\s\S]*?window\.history\.replaceState\([\s\S]*?if \(consumedExplicitFocusHint\) \{\s*clearExplicitFocusQuery\(\);/,
+    'the consumed focus hint should be removed without a second navigation'
   );
   assert.doesNotMatch(
     recoverySource,
@@ -875,8 +903,18 @@ function testContinuousResizeKeepsDockDensityStableUntilSettle() {
 function testInitialEntryMotionIsStaggeredAndTransient() {
   assert.match(
     newtabSource,
-    /const initialWallpaperOverlayReadyTask = bootstrapInitialWallpaperOverlay\(\);[\s\S]*?const initialWallpaperVisualReadyTask = Promise\.all\(\[\s*bootstrapInitialThemeMode\(\),\s*initialWallpaperOverlayReadyTask\.then\(\(\) => bootstrapInitialWallpaper\(\)\),\s*initialWallpaperOverlayReadyTask,\s*bootstrapInitialWallpaperEffect\(\)\s*\]\)\.then\(\(\) => waitForInitialWallpaperEffectVisual\(\)\)[\s\S]*?markInitialWallpaperVisualReady\(\);[\s\S]*?const initialAppearanceReadyTask = Promise\.all\(\[\s*initialWallpaperVisualReadyTask,\s*bootstrapInitialNewtabFavicon\(\)[\s\S]*?const initialLanguageReadyTask = bootstrapInitialLanguageMode\(\);[\s\S]*?const initialMotionPreferenceReadyTask[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[\s*initialAppearanceReadyTask,\s*initialBookmarkViewModeReadyPromise,[\s\S]*?initialMotionPreferenceReadyTask[\s\S]*?initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*?if \(!initialNewtabSkipsEntryMotion\) \{[\s\S]*?markNewtabReady\(\);[\s\S]*?Promise\.all\(\[\s*initialVisualReadyPromise,\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise\s*\]\)/,
-    'critical appearance and motion preference state should settle before the mode-specific entry path'
+    /const initialLayoutStorageReadyTask = startupStorageReadBatch[\s\S]*?startupStorageReadBatch\.ready[\s\S]*?const initialFontsReadyTask = document\.fonts[\s\S]*?document\.fonts\.ready[\s\S]*?const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?initialLanguageReadyTask,[\s\S]*?sectionPolicyReadyPromise,[\s\S]*?initialShortcutsReadyTask,[\s\S]*?initialPinnedRecentSitesReadyTask,[\s\S]*?initialHiddenRecentSitesReadyTask,[\s\S]*?initialLayoutStorageReadyTask,[\s\S]*?initialFontsReadyTask[\s\S]*?sectionDataRevision \+= 1;[\s\S]*?loadRecentSites\(\{[\s\S]*?force: true,[\s\S]*?sectionDataRevision: initialSectionDataRevision[\s\S]*?loadBookmarks\(\{[\s\S]*?force: true,[\s\S]*?sectionDataRevision: initialSectionDataRevision[\s\S]*?Promise\.all\(\[recentSitesReadyTask, bookmarksReadyTask\]\)[\s\S]*?markNewtabReady\(\)/,
+    'all layout preferences, fonts, shortcuts, and authoritative section data should settle before New Tab becomes visible'
+  );
+  assert.match(
+    newtabSource,
+    /function loadBookmarks\(options\)[\s\S]*?requestedSectionDataRevision[\s\S]*?requestedSectionDataRevision !== sectionDataRevision[\s\S]*?function loadRecentSites\(options\)[\s\S]*?requestedSectionDataRevision[\s\S]*?requestedSectionDataRevision !== sectionDataRevision/,
+    'late section requests from provisional startup preferences should not overwrite the authoritative first layout'
+  );
+  assert.doesNotMatch(
+    newtabSource,
+    /hydrateSectionsFromCache|_x_extension_newtab_(?:recent|bookmark)_cache_2024_unique_/,
+    'stale section caches should not paint a provisional dock geometry before authoritative data'
   );
   assert.match(
     newtabSource,
@@ -967,6 +1005,33 @@ function testInitialEntryMotionIsStaggeredAndTransient() {
     /filter:\s*blur/,
     'the backdrop-filtered search panel should stay on compositor-only opacity and scale motion'
   );
+  [
+    '_x_nt_wordmark_enter_2026_unique_',
+    '_x_nt_shortcut_entry_2026_unique_',
+    '_x_nt_content_section_entry_2026_unique_',
+    '_x_nt_corner_control_entry_2026_unique_'
+  ].forEach((name) => {
+    assert.doesNotMatch(
+      getCssBlock(newtabHtml, `@keyframes ${name}`),
+      /translate(?:3d|Y)?\s*[:(]/,
+      `${name} should preserve its final vertical position throughout entry`
+    );
+  });
+  [
+    ['.x-lumno-feature-hint--newtab-wallpaper', 'translateY(-50%)'],
+    ['.x-lumno-feature-hint--newtab-ai-quick-jump', 'translateX(-50%)'],
+    ['.x-lumno-feature-hint--newtab-tab-switcher', ''],
+    ['.x-lumno-feature-hint--newtab-input-auto-focus', ''],
+    ['.x-lumno-feature-hint--update-notice-newtab', '']
+  ].forEach(([selector, allowedPositionTransform]) => {
+    const block = getCssBlock(featureHintsCss, selector);
+    const transforms = block.match(/translate(?:X|Y)?\([^)]*\)/g) || [];
+    assert.deepStrictEqual(
+      transforms,
+      allowedPositionTransform ? [allowedPositionTransform] : [],
+      `${selector} should keep only its fixed positioning transform during entry`
+    );
+  });
   assert.match(
     newtabHtml,
     /body\[data-nt-enter="run"\] \.x-nt-shortcuts-section\[data-visible="true"\] \.x-nt-shortcut-tile\s*\{[\s\S]*?calc\(80ms \+ \(var\(--x-nt-shortcut-enter-index\) \* 18ms\)\) both;/,
@@ -1063,12 +1128,12 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
   );
   assert.match(
     newtabHtml,
-    /body\[data-nt-bottom-dock-density="compact"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*54px;[\s\S]*?--x-nt-shortcut-icon-size:\s*36px;/,
+    /body\[data-nt-bottom-dock-density="compact"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*54px;[\s\S]*?--x-nt-shortcut-icon-size:\s*min\(var\(--x-nt-shortcut-user-icon-size\),\s*36px\);/,
     'compact dock density should also reduce the shortcut dock footprint'
   );
   assert.match(
     newtabHtml,
-    /body\[data-nt-bottom-dock-density="tiny"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*42px;[\s\S]*?--x-nt-shortcut-icon-size:\s*28px;/,
+    /body\[data-nt-bottom-dock-density="tiny"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*42px;[\s\S]*?--x-nt-shortcut-icon-size:\s*min\(var\(--x-nt-shortcut-user-icon-size\),\s*28px\);/,
     'tiny dock density should aggressively reduce shortcut dock footprint'
   );
   assert.match(
@@ -1128,7 +1193,7 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
   );
   assert.match(
     newtabHtml,
-    /@media \(min-width:\s*641px\) and \(max-width:\s*900px\) and \(max-height:\s*560px\)[\s\S]*?body\[data-nt-bottom-dock-density="tiny"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*50px;[\s\S]*?--x-nt-shortcut-tile-size:\s*44px;[\s\S]*?#_x_extension_newtab_bottom_dock_2024_unique_\[data-density="tiny"\]\s*\{[\s\S]*?--x-nt-dock-bookmark-card-height:\s*44px;[\s\S]*?\.x-nt-wallpaper-button,\s*\.x-nt-feedback-button\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/,
+    /@media \(min-width:\s*641px\) and \(max-width:\s*900px\) and \(max-height:\s*560px\)[\s\S]*?body\[data-nt-bottom-dock-density="tiny"\]\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*50px;[\s\S]*?--x-nt-shortcut-tile-size:\s*min\(var\(--x-nt-shortcut-user-tile-size\),\s*44px\);[\s\S]*?#_x_extension_newtab_bottom_dock_2024_unique_\[data-density="tiny"\]\s*\{[\s\S]*?--x-nt-dock-bookmark-card-height:\s*44px;[\s\S]*?\.x-nt-wallpaper-button,\s*\.x-nt-feedback-button\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/,
     'narrow landscape should not let tiny density shrink interactive rows below 44px'
   );
   assert.match(
@@ -1143,7 +1208,7 @@ function testBottomDockCssDefinesAdaptiveDensityVariables() {
   );
   assert.match(
     newtabHtml,
-    /@media \(max-width:\s*640px\)[\s\S]*?:root\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*64px;[\s\S]*?--x-nt-shortcuts-section-margin-top:\s*10px;[\s\S]*?--x-nt-shortcut-tile-size:\s*52px;[\s\S]*?--x-nt-shortcut-icon-size:\s*40px;/,
+    /@media \(max-width:\s*640px\)[\s\S]*?:root\s*\{[\s\S]*?--x-nt-shortcuts-reserved-height:\s*64px;[\s\S]*?--x-nt-shortcuts-section-margin-top:\s*10px;[\s\S]*?--x-nt-shortcut-tile-size:\s*min\(var\(--x-nt-shortcut-user-tile-size\),\s*52px\);[\s\S]*?--x-nt-shortcut-icon-size:\s*min\(var\(--x-nt-shortcut-user-icon-size\),\s*40px\);/,
     'mobile shortcuts should use the compact touch-safe footprint'
   );
   assert.match(

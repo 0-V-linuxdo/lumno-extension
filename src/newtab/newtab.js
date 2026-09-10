@@ -78,19 +78,15 @@
       : Boolean(storageAreaName) && areaName === storageAreaName;
   }
   function addStorageChangeListener(listener) {
-    if (!chrome || !chrome.storage || !chrome.storage.onChanged ||
-        typeof chrome.storage.onChanged.addListener !== 'function') {
-      return false;
-    }
-    chrome.storage.onChanged.addListener(listener);
-    return true;
+    return SETTINGS.addStorageChangeListener(chrome, listener);
   }
   function getExtensionResourceUrl(resourcePath) {
     const normalizedPath = String(resourcePath || '').replace(/^\/+/, '');
     if (chrome && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
       return chrome.runtime.getURL(normalizedPath);
     }
-    return new URL(`../../${normalizedPath}`, window.location.href).href;
+    const baseUrl = document.baseURI || window.location.href;
+    return new URL(`../../${normalizedPath}`, baseUrl).href;
   }
   function sendRuntimeMessage(message, callback) {
     if (typeof chrome === 'undefined' ||
@@ -151,6 +147,8 @@
   }
 
   const SETTINGS = settingsRuntimeApi;
+  const BROWSER_PROFILE = globalThis.LumnoBrowserProfile || {};
+  const SHORTCUT_KEY_MATCHER = globalThis.LumnoShortcutKeyMatcher || {};
   const THEME_STORAGE_KEY = '_x_extension_theme_mode_2024_unique_';
   const LANGUAGE_STORAGE_KEY = '_x_extension_language_2024_unique_';
   const RECENT_MODE_STORAGE_KEY = '_x_extension_recent_mode_2024_unique_';
@@ -159,6 +157,10 @@
   const NEWTAB_SEARCH_WIDTH_STORAGE_KEY = '_x_extension_newtab_search_width_2026_unique_';
   const NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY = SETTINGS.NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY ||
     '_x_extension_newtab_input_auto_focus_enabled_2026_unique_';
+  const NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY = SETTINGS.NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY ||
+    '_x_extension_newtab_feedback_button_visible_2026_unique_';
+  const NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY = SETTINGS.NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY ||
+    '_x_extension_newtab_appearance_button_visible_2026_unique_';
   const NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY = SETTINGS.NUMBER_SHORTCUT_INSTANT_ENABLED_STORAGE_KEY ||
     '_x_extension_number_shortcut_instant_enabled_2026_unique_';
   const MACOS_CTRL_SUGGESTION_NAVIGATION_ENABLED_STORAGE_KEY =
@@ -220,6 +222,9 @@
   const EXTENSION_ROUTES = globalThis.LumnoExtensionRoutes || {};
   const NAVIGATION_DISPOSITION = globalThis.LumnoNavigationDisposition || {};
   const SEARCH_UTILS = globalThis.LumnoSearchUtils || {};
+  const AGGREGATE_SEARCH_STORE = globalThis.LumnoAggregateSearchStore || {};
+  const AGGREGATE_SEARCH_SURFACE = globalThis.LumnoAggregateSearchSurface || {};
+  const SITE_DISPLAY_NAME = globalThis.LumnoSiteDisplayName || {};
   const SITE_SEARCH_STORE = globalThis.LumnoSiteSearchStore || {};
   const SUGGESTION_ACTION_MODEL = globalThis.LumnoSuggestionActionModel || {};
   const SUGGESTION_NAVIGATION = globalThis.LumnoSuggestionNavigation || {};
@@ -246,6 +251,7 @@
   );
   const NEWTAB_BOOKMARK_MOVE_HISTORY = globalThis.LumnoNewtabBookmarkMoveHistory || {};
   const NEWTAB_BOOKMARK_DRAG = globalThis.LumnoNewtabBookmarkDrag || {};
+  const NEWTAB_BOOKMARK_FOLDER_ICON = globalThis.LumnoNewtabBookmarkFolderIcon || {};
   const NEWTAB_PAGE_NOTICE = globalThis.LumnoNewtabPageNotice || {};
   const NEWTAB_TOAST = globalThis.LumnoNewtabToast || {};
   const NEWTAB_LAYOUT = globalThis.LumnoNewtabLayout || {};
@@ -279,10 +285,12 @@
       typeof NEWTAB_FAVICON_THEME.buildTheme !== 'function' ||
       typeof NEWTAB_FAVICON_VIEW.createFaviconViewRuntime !== 'function' ||
       typeof SEARCH_INPUT_MODE.createInputModeController !== 'function' ||
+      typeof SHORTCUT_KEY_MATCHER.parseShortcut !== 'function' ||
+      typeof SHORTCUT_KEY_MATCHER.eventMatchesShortcut !== 'function' ||
+      typeof SITE_DISPLAY_NAME.getSiteDisplayName !== 'function' ||
       typeof NEWTAB_RECENT_STORE.normalizeRecentSiteItem !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.buildBookmarkFolderCache !== 'function' ||
       typeof NEWTAB_BOOKMARKS_STORE.collectFolderBookmarkUrls !== 'function' ||
-      typeof NEWTAB_BOOKMARKS_STORE.shouldApplyBookmarkCacheHydration !== 'function' ||
       typeof NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime !== 'function' ||
       typeof NEWTAB_BOOKMARKS_TOPBAR.createBookmarksTopbar !== 'function' ||
       typeof NEWTAB_BOOKMARK_BREADCRUMB.createBookmarkBreadcrumbController !== 'function' ||
@@ -298,6 +306,10 @@
       typeof NEWTAB_BOOKMARK_DRAG.isPointInsideElement !== 'function' ||
       typeof NEWTAB_BOOKMARK_DRAG.removePreview !== 'function' ||
       typeof NEWTAB_BOOKMARK_DRAG.updateVisualPosition !== 'function' ||
+      typeof NEWTAB_BOOKMARK_FOLDER_ICON.getFigmaFolderSvg !== 'function' ||
+      typeof NEWTAB_BOOKMARK_FOLDER_ICON.initFolderPathMorph !== 'function' ||
+      typeof NEWTAB_BOOKMARK_FOLDER_ICON.playFolderPathMorph !== 'function' ||
+      typeof NEWTAB_BOOKMARK_FOLDER_ICON.setFolderPathMorphState !== 'function' ||
       typeof NEWTAB_PAGE_NOTICE.renderPageNotice !== 'function' ||
       typeof NEWTAB_TOAST.createToastController !== 'function' ||
       typeof NEWTAB_LAYOUT.createLayoutController !== 'function' ||
@@ -339,6 +351,21 @@
     console.warn('Lumno: newtab helpers not available.');
     return;
   }
+  const SITE_DISPLAY_NAME_OPTIONS = Object.freeze({
+    getBrandName(brandHost, fallback) {
+      if (brandHost === 'mp.weixin.qq.com') {
+        return t('site_brand_wechat_official', '微信公众号');
+      }
+      if (brandHost === 'weibo.com') {
+        return t('site_search_name_weibo', '微博');
+      }
+      return fallback;
+    }
+  });
+  const getFigmaFolderSvg = NEWTAB_BOOKMARK_FOLDER_ICON.getFigmaFolderSvg;
+  const initFolderPathMorph = NEWTAB_BOOKMARK_FOLDER_ICON.initFolderPathMorph;
+  const playFolderPathMorph = NEWTAB_BOOKMARK_FOLDER_ICON.playFolderPathMorph;
+  const setFolderPathMorphState = NEWTAB_BOOKMARK_FOLDER_ICON.setFolderPathMorphState;
   const normalizeHost = NEWTAB_FAVICON_THEME.normalizeHost;
   const bookmarksRuntime = NEWTAB_BOOKMARKS_RUNTIME.createBookmarksRuntime({
     chromeApi: typeof chrome !== 'undefined' ? chrome : null,
@@ -352,8 +379,6 @@
   const THEME_RESOLUTION_BATCH_SIZE = 2;
   const THEME_RESOLUTION_BATCH_DELAY_MS = 160;
   const RESTORE_SEARCH_LAYOUT_LOCK_MS = 900;
-  const NEWTAB_RECENT_CACHE_STORAGE_KEY = '_x_extension_newtab_recent_cache_2024_unique_';
-  const NEWTAB_BOOKMARK_CACHE_STORAGE_KEY = '_x_extension_newtab_bookmark_cache_2024_unique_';
   const PINNED_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_pinned_recent_sites_2026_unique_';
   const HIDDEN_RECENT_SITES_STORAGE_KEY = '_x_extension_newtab_hidden_recent_sites_2026_unique_';
   const NEWTAB_SHORTCUTS_STORAGE_KEY = '_x_extension_newtab_shortcuts_2026_unique_';
@@ -362,6 +387,56 @@
   const NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcuts_visible_2026_unique_';
   const NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY = '_x_extension_newtab_shortcut_add_visible_2026_unique_';
   const NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY = '_x_extension_newtab_shortcut_dock_magnification_enabled_2026_unique_';
+  const NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_width_2026_unique_';
+  const NEWTAB_SHORTCUT_WIDTH_MIN = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_MIN))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_MIN)
+    : 360;
+  const NEWTAB_SHORTCUT_WIDTH_MAX = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_MAX))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_MAX)
+    : 1440;
+  const NEWTAB_SHORTCUT_WIDTH_DEFAULT = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_DEFAULT))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_WIDTH_DEFAULT)
+    : 920;
+  const NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_columns_2026_unique_';
+  const NEWTAB_SHORTCUT_COLUMNS_MIN = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_MIN))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_MIN)
+    : 4;
+  const NEWTAB_SHORTCUT_COLUMNS_MAX = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_MAX))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_MAX)
+    : 16;
+  const NEWTAB_SHORTCUT_COLUMNS_DEFAULT = Number.isFinite(
+    Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_DEFAULT)
+  )
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_COLUMNS_DEFAULT)
+    : 10;
+  const NEWTAB_SHORTCUT_SIZE_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUT_SIZE_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_size_2026_unique_';
+  const NEWTAB_SHORTCUT_SIZE_MIN = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_MIN))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_MIN)
+    : 48;
+  const NEWTAB_SHORTCUT_SIZE_MAX = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_MAX))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_MAX)
+    : 80;
+  const NEWTAB_SHORTCUT_SIZE_DEFAULT = Number.isFinite(
+    Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_DEFAULT)
+  )
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_SIZE_DEFAULT)
+    : 64;
+  const NEWTAB_SHORTCUT_GAP_STORAGE_KEY = SETTINGS.NEWTAB_SHORTCUT_GAP_STORAGE_KEY ||
+    '_x_extension_newtab_shortcut_gap_2026_unique_';
+  const NEWTAB_SHORTCUT_GAP_MIN = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_GAP_MIN))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_GAP_MIN)
+    : 0;
+  const NEWTAB_SHORTCUT_GAP_MAX = Number.isFinite(Number(SETTINGS.NEWTAB_SHORTCUT_GAP_MAX))
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_GAP_MAX)
+    : 24;
+  const NEWTAB_SHORTCUT_GAP_DEFAULT = Number.isFinite(
+    Number(SETTINGS.NEWTAB_SHORTCUT_GAP_DEFAULT)
+  )
+    ? Number(SETTINGS.NEWTAB_SHORTCUT_GAP_DEFAULT)
+    : 4;
   const NEWTAB_SHORTCUT_ICONS_STORAGE_KEY =
     NEWTAB_SHORTCUT_ICON_STORE.DEFAULT_STORAGE_KEY ||
     '_x_extension_newtab_shortcut_icons_2026_unique_';
@@ -397,7 +472,6 @@
   const BOOKMARK_DRAG_CLICK_SUPPRESS_MS = 420;
   const BOOKMARK_DRAG_PAGE_SWITCH_DELAY_MS = 640;
   const BOOKMARK_DRAG_FOLDER_SWITCH_DELAY_MS = 640;
-  const NEWTAB_SECTION_CACHE_TTL_MS = 1000 * 60 * 5;
   const NEWTAB_EXTERNAL_CHANGE_DEBOUNCE_MS = 120;
   const NEWTAB_RESIZE_DENSITY_SETTLE_MS = 140;
   const NEWTAB_INITIAL_VIEWPORT_SETTLE_MS = 32;
@@ -450,6 +524,8 @@
   let recentSourceItems = [];
   let pinnedRecentSites = [];
   let hiddenRecentSites = [];
+  let initialPinnedRecentSitesReadyTask = Promise.resolve([]);
+  let initialHiddenRecentSitesReadyTask = Promise.resolve([]);
   let searchBlacklistItems = [];
   let currentMessages = null;
   let currentLanguageMode = 'system';
@@ -513,6 +589,8 @@
   let newtabTimeFontWeight = NEWTAB_TIME_FONT_WEIGHT_DEFAULT;
   let newtabTimeSecondsVisible = false;
   let newtabInputAutoFocusEnabled = false;
+  let newtabFeedbackButtonVisible = true;
+  let newtabAppearanceButtonVisible = true;
   let numberShortcutInstantEnabled = false;
   let macosCtrlSuggestionNavigationEnabled = false;
   let simpleModeEnabled = false;
@@ -566,6 +644,9 @@
   let newtabShortcutsVisible = true;
   let newtabShortcutAddVisible = true;
   let newtabShortcutDockMagnificationEnabled = true;
+  let newtabShortcutColumns = NEWTAB_SHORTCUT_COLUMNS_DEFAULT;
+  let newtabShortcutSize = NEWTAB_SHORTCUT_SIZE_DEFAULT;
+  let newtabShortcutGap = NEWTAB_SHORTCUT_GAP_DEFAULT;
   let shortcutStorageReloadTimer = null;
   let shortcutPersistenceInFlightCount = 0;
   let shortcutDockPointerFrame = 0;
@@ -576,6 +657,7 @@
   const SHORTCUT_DIALOG_MODE_EDIT = NEWTAB_SHORTCUT_DIALOG.MODE_EDIT || 'edit';
   const SHORTCUT_DIALOG_ITEM_BOOKMARK = 'bookmark';
   const SHORTCUT_DIALOG_ITEM_FOLDER = 'folder';
+  const NEWTAB_CONTEXT_MENU_OPEN_VALUE = 'open-in-new-tab';
   const SHORTCUT_CONTEXT_MENU_EDIT_VALUE = 'edit';
   const SHORTCUT_CONTEXT_MENU_REMOVE_VALUE = 'remove';
   const SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE = 'hide-add';
@@ -1335,10 +1417,112 @@
       : value !== false;
   }
 
+  function normalizeNewtabShortcutWidth(value) {
+    if (typeof SETTINGS.normalizeNewtabShortcutWidth === 'function') {
+      return SETTINGS.normalizeNewtabShortcutWidth(value, {
+        min: NEWTAB_SHORTCUT_WIDTH_MIN,
+        max: NEWTAB_SHORTCUT_WIDTH_MAX,
+        fallback: NEWTAB_SHORTCUT_WIDTH_DEFAULT
+      });
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.min(
+        NEWTAB_SHORTCUT_WIDTH_MAX,
+        Math.max(NEWTAB_SHORTCUT_WIDTH_MIN, Math.round(parsed))
+      );
+    }
+    return NEWTAB_SHORTCUT_WIDTH_DEFAULT;
+  }
+
+  function normalizeNewtabShortcutColumns(value) {
+    if (typeof SETTINGS.normalizeNewtabShortcutColumns === 'function') {
+      return SETTINGS.normalizeNewtabShortcutColumns(value, {
+        min: NEWTAB_SHORTCUT_COLUMNS_MIN,
+        max: NEWTAB_SHORTCUT_COLUMNS_MAX,
+        fallback: NEWTAB_SHORTCUT_COLUMNS_DEFAULT
+      });
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.min(
+        NEWTAB_SHORTCUT_COLUMNS_MAX,
+        Math.max(NEWTAB_SHORTCUT_COLUMNS_MIN, Math.round(parsed))
+      );
+    }
+    return NEWTAB_SHORTCUT_COLUMNS_DEFAULT;
+  }
+
+  function normalizeNewtabShortcutSize(value) {
+    if (typeof SETTINGS.normalizeNewtabShortcutSize === 'function') {
+      return SETTINGS.normalizeNewtabShortcutSize(value, {
+        min: NEWTAB_SHORTCUT_SIZE_MIN,
+        max: NEWTAB_SHORTCUT_SIZE_MAX,
+        fallback: NEWTAB_SHORTCUT_SIZE_DEFAULT
+      });
+    }
+    const parsed = Number(value);
+    return Math.min(
+      NEWTAB_SHORTCUT_SIZE_MAX,
+      Math.max(
+        NEWTAB_SHORTCUT_SIZE_MIN,
+        Number.isFinite(parsed) ? Math.round(parsed) : NEWTAB_SHORTCUT_SIZE_DEFAULT
+      )
+    );
+  }
+
+  function normalizeNewtabShortcutGap(value) {
+    if (typeof SETTINGS.normalizeNewtabShortcutGap === 'function') {
+      return SETTINGS.normalizeNewtabShortcutGap(value, {
+        min: NEWTAB_SHORTCUT_GAP_MIN,
+        max: NEWTAB_SHORTCUT_GAP_MAX,
+        fallback: NEWTAB_SHORTCUT_GAP_DEFAULT
+      });
+    }
+    const parsed = Number(value);
+    return Math.min(
+      NEWTAB_SHORTCUT_GAP_MAX,
+      Math.max(
+        NEWTAB_SHORTCUT_GAP_MIN,
+        Number.isFinite(parsed) ? Math.round(parsed) : NEWTAB_SHORTCUT_GAP_DEFAULT
+      )
+    );
+  }
+
+  function inferNewtabShortcutColumnsFromWidth(value) {
+    if (typeof SETTINGS.inferNewtabShortcutColumnsFromWidth === 'function') {
+      return SETTINGS.inferNewtabShortcutColumnsFromWidth(value, {
+        widthMin: NEWTAB_SHORTCUT_WIDTH_MIN,
+        widthMax: NEWTAB_SHORTCUT_WIDTH_MAX,
+        columnsMin: NEWTAB_SHORTCUT_COLUMNS_MIN,
+        columnsMax: NEWTAB_SHORTCUT_COLUMNS_MAX
+      });
+    }
+    const width = normalizeNewtabShortcutWidth(value);
+    const ratio = (width - NEWTAB_SHORTCUT_WIDTH_MIN) /
+      Math.max(1, NEWTAB_SHORTCUT_WIDTH_MAX - NEWTAB_SHORTCUT_WIDTH_MIN);
+    return normalizeNewtabShortcutColumns(
+      NEWTAB_SHORTCUT_COLUMNS_MIN +
+        ratio * (NEWTAB_SHORTCUT_COLUMNS_MAX - NEWTAB_SHORTCUT_COLUMNS_MIN)
+    );
+  }
+
   function normalizeNewtabInputAutoFocusEnabled(value) {
     return typeof SETTINGS.normalizeNewtabInputAutoFocusEnabled === 'function'
       ? SETTINGS.normalizeNewtabInputAutoFocusEnabled(value)
       : value === true;
+  }
+
+  function normalizeNewtabFeedbackButtonVisible(value) {
+    return typeof SETTINGS.normalizeNewtabFeedbackButtonVisible === 'function'
+      ? SETTINGS.normalizeNewtabFeedbackButtonVisible(value)
+      : value !== false;
+  }
+
+  function normalizeNewtabAppearanceButtonVisible(value) {
+    return typeof SETTINGS.normalizeNewtabAppearanceButtonVisible === 'function'
+      ? SETTINGS.normalizeNewtabAppearanceButtonVisible(value)
+      : value !== false;
   }
 
   function updateNewtabInputAutoFocusUi() {
@@ -1353,6 +1537,98 @@
     updateNewtabInputAutoFocusUi();
     if (storageArea) {
       storageArea.set({ [NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function updateNewtabShortcutPreferencesUi() {
+    if (wallpaperRuntime && typeof wallpaperRuntime.updateShortcutsUi === 'function') {
+      wallpaperRuntime.updateShortcutsUi();
+    }
+  }
+
+  function setNewtabShortcutsVisible(enabled, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutsVisible(enabled);
+    newtabShortcutsVisible = nextValue;
+    applyNewtabShortcutsVisibility();
+    updateNewtabShortcutPreferencesUi();
+    updateBookmarkSectionPosition({ preserveSearchEntryLayout: true });
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function setNewtabShortcutAddVisible(enabled, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutAddVisible(enabled);
+    newtabShortcutAddVisible = nextValue;
+    renderShortcuts();
+    updateNewtabShortcutPreferencesUi();
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function setNewtabShortcutDockMagnificationEnabled(enabled, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutDockMagnificationEnabled(enabled);
+    newtabShortcutDockMagnificationEnabled = nextValue;
+    applyNewtabShortcutDockMagnification();
+    updateNewtabShortcutPreferencesUi();
+    scheduleWallpaperAdaptiveToneUpdate();
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function setNewtabShortcutColumns(value, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutColumns(value);
+    newtabShortcutColumns = nextValue;
+    applyNewtabShortcutColumns();
+    updateNewtabShortcutPreferencesUi();
+    updateBookmarkSectionPosition({
+      preserveSearchEntryLayout: true,
+      stabilizeDockDensity: true
+    });
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function setNewtabShortcutSize(value, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutSize(value);
+    newtabShortcutSize = nextValue;
+    applyNewtabShortcutLayoutPreferences();
+    updateNewtabShortcutPreferencesUi();
+    updateBookmarkSectionPosition({
+      preserveSearchEntryLayout: true,
+      stabilizeDockDensity: true
+    });
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUT_SIZE_STORAGE_KEY]: nextValue });
+    }
+    return nextValue;
+  }
+
+  function setNewtabShortcutGap(value, options) {
+    const config = options || {};
+    const nextValue = normalizeNewtabShortcutGap(value);
+    newtabShortcutGap = nextValue;
+    applyNewtabShortcutLayoutPreferences();
+    updateNewtabShortcutPreferencesUi();
+    updateBookmarkSectionPosition({
+      preserveSearchEntryLayout: true,
+      stabilizeDockDensity: true
+    });
+    if (config.persist && storageArea) {
+      storageArea.set({ [NEWTAB_SHORTCUT_GAP_STORAGE_KEY]: nextValue });
     }
     return nextValue;
   }
@@ -1669,10 +1945,7 @@
     topContentContainer.style.setProperty('max-height', nextVisible ? '74px' : '0');
     topContentContainer.style.setProperty('margin-bottom', nextVisible ? '28px' : '0');
     topContentContainer.style.setProperty('opacity', nextVisible ? '1' : '0');
-    topContentContainer.style.setProperty(
-      'transform',
-      nextVisible ? 'translate3d(0, 0, 0)' : 'translate3d(0, -8px, 0)'
-    );
+    topContentContainer.style.removeProperty('transform');
     topContentContainer.style.setProperty('pointer-events', nextVisible ? 'auto' : 'none');
     topContentContainer.inert = !nextVisible;
     if (nextVisible) {
@@ -2118,6 +2391,12 @@
       name: 'Google',
       hostMatches: ['google.'],
       searchUrl: (query) => `https://www.google.com/search?q=${encodeURIComponent(query)}`
+    },
+    {
+      id: 'kagi',
+      name: 'Kagi',
+      hostMatches: ['kagi.com'],
+      searchUrl: (query) => `https://kagi.com/search?q=${encodeURIComponent(query)}`
     },
     {
       id: 'bing',
@@ -2679,8 +2958,7 @@
       sampleElement: getShortcutDockIcon(tile) || tile,
       minWidth: 42,
       minHeight: 42,
-      iconButton: true,
-      forcedIconBackground: 'default-theme'
+      iconButton: true
     }));
     if (addShortcutButton) {
       shortcutToneTargets.push({
@@ -2799,6 +3077,33 @@
     setSearchWidth: (value, options) => {
       setNewtabSearchWidth(value, options);
     },
+    shortcutColumnsConfig: {
+      min: NEWTAB_SHORTCUT_COLUMNS_MIN,
+      max: NEWTAB_SHORTCUT_COLUMNS_MAX,
+      fallback: NEWTAB_SHORTCUT_COLUMNS_DEFAULT
+    },
+    shortcutSizeConfig: {
+      min: NEWTAB_SHORTCUT_SIZE_MIN,
+      max: NEWTAB_SHORTCUT_SIZE_MAX,
+      fallback: NEWTAB_SHORTCUT_SIZE_DEFAULT
+    },
+    shortcutGapConfig: {
+      min: NEWTAB_SHORTCUT_GAP_MIN,
+      max: NEWTAB_SHORTCUT_GAP_MAX,
+      fallback: NEWTAB_SHORTCUT_GAP_DEFAULT
+    },
+    getShortcutsVisible: () => newtabShortcutsVisible,
+    setShortcutsVisible: setNewtabShortcutsVisible,
+    getShortcutAddVisible: () => newtabShortcutAddVisible,
+    setShortcutAddVisible: setNewtabShortcutAddVisible,
+    getShortcutDockMagnificationEnabled: () => newtabShortcutDockMagnificationEnabled,
+    setShortcutDockMagnificationEnabled: setNewtabShortcutDockMagnificationEnabled,
+    getShortcutColumns: () => newtabShortcutColumns,
+    setShortcutColumns: setNewtabShortcutColumns,
+    getShortcutSize: () => newtabShortcutSize,
+    setShortcutSize: setNewtabShortcutSize,
+    getShortcutGap: () => newtabShortcutGap,
+    setShortcutGap: setNewtabShortcutGap,
     featureHints: FEATURE_HINTS,
     inputAutoFocusReady: initialNewtabInputAutoFocusReadyTask,
     inputAutoFocusVisibilityGate: newtabEntryAnimationReadyPromise,
@@ -2878,794 +3183,6 @@
     }
   }
 
-  function getFigmaFolderSvg(idSuffix) {
-    const suffix = String(idSuffix || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const baseLowerFilterId = `x-nt-folder-filter-lower-base-${suffix}`;
-    const baseUpperFilterId = `x-nt-folder-filter-upper-base-${suffix}`;
-    const hoverLowerFilterId = `x-nt-folder-filter-lower-hover-${suffix}`;
-    const hoverUpperFilterId = `x-nt-folder-filter-upper-hover-${suffix}`;
-    const baseLowerGradientId = `x-nt-folder-gradient-lower-base-${suffix}`;
-    const baseUpperGradientId = `x-nt-folder-gradient-upper-base-${suffix}`;
-    const hoverLowerGradientId = `x-nt-folder-gradient-lower-hover-${suffix}`;
-    const hoverUpperGradientId = `x-nt-folder-gradient-upper-hover-${suffix}`;
-    const hoverUpperOverlayGradientId = `x-nt-folder-gradient-upper-overlay-hover-${suffix}`;
-    const morphUpperGradientId = `x-nt-folder-gradient-upper-morph-${suffix}`;
-    const morphUpperOverlayGradientId = `x-nt-folder-gradient-upper-overlay-morph-${suffix}`;
-    return `
-      <svg viewBox="0 0 31 29" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <g data-folder-layer="lower">
-          <g class="x-nt-folder-shape x-nt-folder-shape--base" filter="url(#${baseLowerFilterId})">
-            <path data-folder-part="lower-body" data-folder-fill-base="url(#${baseLowerGradientId})" data-folder-fill-hover="url(#${hoverLowerGradientId})" d="M7.24 2C6.08213 2 5.5032 2 5.06414 2.23247C4.70983 2.42007 4.42007 2.70983 4.23247 3.06414C4 3.5032 4 4.08213 4 5.24V19.76C4 20.9179 4 21.4968 4.23247 21.9359C4.42007 22.2902 4.70983 22.5799 5.06414 22.7675C5.5032 23 6.08213 23 7.24 23H23.76C24.9179 23 25.4968 23 25.9359 22.7675C26.2902 22.5799 26.5799 22.2902 26.7675 21.9359C27 21.4968 27 20.9179 27 19.76V8.24C27 7.08213 27 6.5032 26.7675 6.06414C26.5799 5.70983 26.2902 5.42007 25.9359 5.23247C25.4968 5 24.9179 5 23.76 5H16.2872C15.7668 5 15.5067 5 15.2631 4.93779C15.0647 4.88712 14.8753 4.80628 14.7014 4.69811C14.488 4.56531 14.308 4.37746 13.948 4.00178L12.9862 2.99822C12.6262 2.62254 12.4462 2.43469 12.2327 2.30189C12.0589 2.19372 11.8694 2.11288 11.6711 2.06221C11.4275 2 11.1673 2 10.647 2H7.24Z" fill="url(#${baseLowerGradientId})"/>
-            <path data-folder-part="lower-outline" d="M7.24023 2.5H10.6465C11.1918 2.5 11.3785 2.50393 11.5469 2.54688C11.6957 2.58488 11.8384 2.64543 11.9688 2.72656C12.1163 2.8184 12.2478 2.95016 12.625 3.34375L13.5869 4.34766C13.9294 4.70501 14.1583 4.94931 14.4375 5.12305C14.6547 5.25816 14.8918 5.35857 15.1396 5.42188C15.4582 5.50321 15.7923 5.5 16.2871 5.5H23.7598C24.3471 5.5 24.7568 5.50049 25.0752 5.52734C25.3875 5.5537 25.5669 5.60319 25.7021 5.6748C25.9676 5.81544 26.1846 6.03242 26.3252 6.29785C26.3968 6.4331 26.4463 6.61249 26.4727 6.9248C26.4995 7.24322 26.5 7.65291 26.5 8.24023V19.7598C26.5 20.3471 26.4995 20.7568 26.4727 21.0752C26.4463 21.3875 26.3968 21.5669 26.3252 21.7021C26.1846 21.9676 25.9676 22.1846 25.7021 22.3252C25.5669 22.3968 25.3875 22.4463 25.0752 22.4727C24.7568 22.4995 24.3471 22.5 23.7598 22.5H7.24023C6.65291 22.5 6.24322 22.4995 5.9248 22.4727C5.61249 22.4463 5.4331 22.3968 5.29785 22.3252C5.03242 22.1846 4.81544 21.9676 4.6748 21.7021C4.60319 21.5669 4.5537 21.3875 4.52734 21.0752C4.50049 20.7568 4.5 20.3471 4.5 19.7598V5.24023C4.5 4.65291 4.50049 4.24322 4.52734 3.9248C4.5537 3.61249 4.60319 3.4331 4.6748 3.29785C4.81544 3.03242 5.03242 2.81544 5.29785 2.6748C5.4331 2.60319 5.61249 2.5537 5.9248 2.52734C6.24322 2.50049 6.65291 2.5 7.24023 2.5Z" stroke="var(--stroke-0, #5393FF)"/>
-          </g>
-          <g class="x-nt-folder-shape x-nt-folder-shape--hover" filter="url(#${hoverLowerFilterId})">
-            <path data-folder-part-hover="lower-body" d="M7.27966 3C6.06845 3 5.46284 3 5.01299 3.24717C4.65028 3.44648 4.35832 3.75339 4.17738 4.12561C3.95298 4.58724 3.98322 5.19209 4.04371 6.4018L4.71971 19.9218C4.77497 21.027 4.8026 21.5797 5.04189 21.9962C5.23514 22.3326 5.52208 22.6056 5.86774 22.7818C6.29572 23 6.84904 23 7.95566 23H24.4374C25.6583 23 26.2687 23 26.7204 22.7502C27.0846 22.5488 27.3769 22.2388 27.5565 21.8635C27.7794 21.3979 27.7435 20.7885 27.6718 19.5697L27.053 9.04974C26.9885 7.95383 26.9563 7.40587 26.716 6.99327C26.5218 6.65999 26.2354 6.38996 25.8913 6.21572C25.4653 6 24.9164 6 23.8186 6H16.1608C15.6405 6 15.3803 6 15.1367 5.93779C14.9383 5.88712 14.7489 5.80628 14.5751 5.69811C14.3616 5.56531 14.1816 5.37746 13.8216 5.00178L12.8598 3.99822C12.4998 3.62254 12.3198 3.43469 12.1063 3.30189C11.9325 3.19372 11.7431 3.11288 11.5447 3.06221C11.3011 3 11.0409 3 10.5206 3H7.27966Z" fill="url(#${hoverLowerGradientId})"/>
-            <path data-folder-part-hover="lower-outline" d="M7.27987 3.5H10.5201C11.0655 3.5 11.2521 3.50393 11.4205 3.54688C11.5693 3.58488 11.712 3.64543 11.8424 3.72656C11.9899 3.8184 12.1214 3.95016 12.4986 4.34375L13.4605 5.34766C13.803 5.70501 14.0319 5.94931 14.3111 6.12305C14.5283 6.25816 14.7654 6.35857 15.0133 6.42188C15.3318 6.50321 15.6659 6.5 16.1607 6.5H23.8189C24.3759 6.5 24.7636 6.50051 25.066 6.52539C25.362 6.54976 25.5338 6.59535 25.6656 6.66211C25.9236 6.7928 26.1382 6.99524 26.2838 7.24512C26.3581 7.37281 26.4139 7.54183 26.4556 7.83594C26.4982 8.13633 26.5216 8.5232 26.5543 9.0791L27.1724 19.5986C27.2088 20.2168 27.2344 20.6491 27.2252 20.9854C27.2161 21.3158 27.1734 21.5048 27.1051 21.6475C26.9703 21.929 26.7512 22.1615 26.4781 22.3125C26.3398 22.389 26.1537 22.4423 25.8248 22.4707C25.4896 22.4996 25.0563 22.5 24.4371 22.5H7.95565C7.3943 22.5 7.00355 22.4998 6.69881 22.4746C6.40048 22.45 6.22764 22.4034 6.09529 22.3359C5.83605 22.2038 5.62012 21.9994 5.47518 21.7471C5.40123 21.6183 5.34672 21.4481 5.30721 21.1514C5.26684 20.8482 5.24736 20.4574 5.21932 19.8965L4.54354 6.37695C4.51286 5.76336 4.49152 5.33461 4.5035 5.00098C4.51527 4.67332 4.5587 4.48532 4.62752 4.34375C4.7632 4.06493 4.98177 3.83493 5.2535 3.68555C5.39147 3.60973 5.57715 3.55741 5.90389 3.5293C6.23648 3.50069 6.66562 3.5 7.27987 3.5Z" stroke="var(--stroke-0, #5393FF)"/>
-          </g>
-        </g>
-        <g data-folder-layer="file">
-          <g class="x-nt-folder-shape x-nt-folder-shape--base">
-            <path data-folder-part="file-body" d="M7 10C7 9.44772 7.44772 9 8 9H23C23.5523 9 24 9.44772 24 10V17C24 17.5523 23.5523 18 23 18H8C7.44772 18 7 17.5523 7 17V10Z" fill="var(--fill-0, white)"/>
-            <path data-folder-part="file-line" d="M13 11L18 11" stroke="var(--stroke-0, #DDE8FB)" stroke-linecap="round"/>
-          </g>
-          <g class="x-nt-folder-shape x-nt-folder-shape--hover">
-            <path data-folder-part-hover="file-body" d="M7.87362 10C7.87362 9.44772 8.32133 9 8.87362 9H23.8736C24.4259 9 24.8736 9.44772 24.8736 10V17C24.8736 17.5523 24.4259 18 23.8736 18H8.87362C8.32133 18 7.87362 17.5523 7.87362 17V10Z" fill="var(--fill-0, white)"/>
-            <path data-folder-part-hover="file-line" d="M13.8736 11L18.8736 11" stroke="var(--stroke-0, #DDE8FB)" stroke-linecap="round"/>
-          </g>
-        </g>
-        <g data-folder-layer="upper">
-          <g class="x-nt-folder-shape x-nt-folder-shape--base">
-            <g filter="url(#${baseUpperFilterId})">
-              <path data-folder-part="upper-body" data-folder-fill-base="url(#${morphUpperGradientId})" data-folder-fill-hover="url(#${morphUpperGradientId})" d="M7.24 5C6.08213 5 5.5032 5 5.06414 5.23247C4.70983 5.42007 4.42007 5.70983 4.23247 6.06414C4 6.5032 4 7.08213 4 8.24V19.76C4 20.9179 4 21.4968 4.23247 21.9359C4.42007 22.2902 4.70983 22.5799 5.06414 22.7675C5.5032 23 6.08213 23 7.24 23H23.76C24.9179 23 25.4968 23 25.9359 22.7675C26.2902 22.5799 26.5799 22.2902 26.7675 21.9359C27 21.4968 27 20.9179 27 19.76V8.24C27 7.08213 27 6.5032 26.7675 6.06414C26.5799 5.70983 26.2902 5.42007 25.9359 5.23247C25.4968 5 24.9179 5 23.76 5H14.9046H7.24Z" fill="url(#${morphUpperGradientId})"/>
-              <path data-folder-part="upper-overlay" data-folder-fill-base="url(#${morphUpperOverlayGradientId})" data-folder-fill-hover="url(#${morphUpperOverlayGradientId})" data-folder-opacity-base="0" data-folder-opacity-hover="1" d="M7.24 5C6.08213 5 5.5032 5 5.06414 5.23247C4.70983 5.42007 4.42007 5.70983 4.23247 6.06414C4 6.5032 4 7.08213 4 8.24V19.76C4 20.9179 4 21.4968 4.23247 21.9359C4.42007 22.2902 4.70983 22.5799 5.06414 22.7675C5.5032 23 6.08213 23 7.24 23H23.76C24.9179 23 25.4968 23 25.9359 22.7675C26.2902 22.5799 26.5799 22.2902 26.7675 21.9359C27 21.4968 27 20.9179 27 19.76V8.24C27 7.08213 27 6.5032 26.7675 6.06414C26.5799 5.70983 26.2902 5.42007 25.9359 5.23247C25.4968 5 24.9179 5 23.76 5H14.9046H7.24Z" fill="url(#${morphUpperOverlayGradientId})" opacity="0"/>
-            </g>
-            <path data-folder-part="upper-outline" d="M7.24023 5.5H23.7598C24.3471 5.5 24.7568 5.50049 25.0752 5.52734C25.3875 5.5537 25.5669 5.60319 25.7021 5.6748C25.9676 5.81544 26.1846 6.03242 26.3252 6.29785C26.3968 6.4331 26.4463 6.61249 26.4727 6.9248C26.4995 7.24322 26.5 7.65291 26.5 8.24023V19.7598C26.5 20.3471 26.4995 20.7568 26.4727 21.0752C26.4463 21.3875 26.3968 21.5669 26.3252 21.7021C26.1846 21.9676 25.9676 22.1846 25.7021 22.3252C25.5669 22.3968 25.3875 22.4463 25.0752 22.4727C24.7568 22.4995 24.3471 22.5 23.7598 22.5H7.24023C6.65291 22.5 6.24322 22.4995 5.9248 22.4727C5.61249 22.4463 5.4331 22.3968 5.29785 22.3252C5.03242 22.1846 4.81544 21.9676 4.6748 21.7021C4.60319 21.5669 4.5537 21.3875 4.52734 21.0752C4.50049 20.7568 4.5 20.3471 4.5 19.7598V8.24023C4.5 7.65291 4.50049 7.24322 4.52734 6.9248C4.5537 6.61249 4.60319 6.4331 4.6748 6.29785C4.81544 6.03242 5.03242 5.81544 5.29785 5.6748C5.4331 5.60319 5.61249 5.5537 5.9248 5.52734C6.24322 5.50049 6.65291 5.5 7.24023 5.5Z" stroke="var(--stroke-0, #5393FF)"/>
-          </g>
-          <g class="x-nt-folder-shape x-nt-folder-shape--hover">
-            <g filter="url(#${hoverUpperFilterId})">
-              <path data-folder-part-hover="upper-body" d="M9.52978 13C8.56387 13 8.08092 13 7.68721 13.1785C7.36853 13.3231 7.09334 13.5487 6.88913 13.8328C6.63684 14.1839 6.54213 14.6574 6.3527 15.6046L5.6487 19.1246C5.37742 20.481 5.24179 21.1591 5.43499 21.6872C5.59036 22.1119 5.88507 22.4713 6.27102 22.707C6.75093 23 7.44255 23 8.82578 23H25.2175C26.1834 23 26.6663 23 27.06 22.8215C27.3787 22.6769 27.6539 22.4513 27.8581 22.1672C28.1104 21.8161 28.2051 21.3426 28.3945 20.3954L29.0985 16.8754C29.3698 15.519 29.5054 14.8409 29.3122 14.3128C29.1569 13.8881 28.8622 13.5287 28.4762 13.293C27.9963 13 27.3047 13 25.9215 13H17.7782H9.52978Z" fill="url(#${hoverUpperGradientId})"/>
-              <path data-folder-part-hover="upper-overlay" d="M9.52978 13C8.56387 13 8.08092 13 7.68721 13.1785C7.36853 13.3231 7.09334 13.5487 6.88913 13.8328C6.63684 14.1839 6.54213 14.6574 6.3527 15.6046L5.6487 19.1246C5.37742 20.481 5.24179 21.1591 5.43499 21.6872C5.59036 22.1119 5.88507 22.4713 6.27102 22.707C6.75093 23 7.44255 23 8.82578 23H25.2175C26.1834 23 26.6663 23 27.06 22.8215C27.3787 22.6769 27.6539 22.4513 27.8581 22.1672C28.1104 21.8161 28.2051 21.3426 28.3945 20.3954L29.0985 16.8754C29.3698 15.519 29.5054 14.8409 29.3122 14.3128C29.1569 13.8881 28.8622 13.5287 28.4762 13.293C27.9963 13 27.3047 13 25.9215 13H17.7782H9.52978Z" fill="url(#${hoverUpperOverlayGradientId})"/>
-            </g>
-            <path data-folder-part-hover="upper-outline" d="M9.52987 13.5H25.9215C26.6224 13.5 27.1147 13.5001 27.4928 13.5342C27.866 13.5679 28.0704 13.6312 28.2154 13.7197C28.5048 13.8964 28.7258 14.166 28.8424 14.4844C28.9007 14.6439 28.9225 14.8569 28.8824 15.2295C28.8417 15.6069 28.7455 16.09 28.608 16.7773L27.9039 20.2969C27.8077 20.7777 27.741 21.1113 27.6685 21.3691C27.5978 21.6206 27.5306 21.7653 27.4517 21.875C27.2986 22.0881 27.0921 22.2578 26.8531 22.3662C26.7301 22.4219 26.5753 22.4595 26.315 22.4795C26.0479 22.5 25.7079 22.5 25.2174 22.5H8.82576C8.12483 22.5 7.63254 22.4999 7.25447 22.4658C6.88123 22.4321 6.67684 22.3688 6.53182 22.2803C6.24245 22.1036 6.02143 21.834 5.90487 21.5156C5.84649 21.3561 5.8247 21.1431 5.86483 20.7705C5.90551 20.3931 6.00177 19.91 6.13924 19.2227L6.84334 15.7031C6.93951 15.2223 7.00623 14.8887 7.07869 14.6309C7.14939 14.3794 7.21668 14.2347 7.29549 14.125C7.44865 13.9119 7.65511 13.7422 7.89412 13.6338C8.0171 13.5781 8.17191 13.5405 8.43221 13.5205C8.69934 13.5 9.03932 13.5 9.52987 13.5Z" stroke="var(--stroke-0, #5393FF)"/>
-          </g>
-        </g>
-        <defs>
-          <filter id="${baseLowerFilterId}" x="0" y="0" width="31" height="29" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-            <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-            <feOffset dy="2"/>
-            <feGaussianBlur stdDeviation="2"/>
-            <feComposite in2="hardAlpha" operator="out"/>
-            <feColorMatrix type="matrix" values="0 0 0 0 0.541176 0 0 0 0 0.713726 0 0 0 0 1 0 0 0 0.21 0"/>
-            <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
-            <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
-          </filter>
-          <filter id="${hoverLowerFilterId}" x="0" y="1" width="31.7267" height="28" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-            <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-            <feOffset dy="2"/>
-            <feGaussianBlur stdDeviation="2"/>
-            <feComposite in2="hardAlpha" operator="out"/>
-            <feColorMatrix type="matrix" values="0 0 0 0 0.541176 0 0 0 0 0.713726 0 0 0 0 1 0 0 0 0.21 0"/>
-            <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
-            <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
-          </filter>
-          <filter id="${baseUpperFilterId}" x="3.5" y="5" width="26" height="18.8" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-            <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-            <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
-            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-            <feOffset dy="0.8"/>
-            <feGaussianBlur stdDeviation="0.7"/>
-            <feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
-            <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.72 0"/>
-            <feBlend mode="normal" in2="shape" result="effect1_innerShadow"/>
-          </filter>
-          <filter id="${hoverUpperFilterId}" x="5.34419" y="13" width="24.0589" height="10.8" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-            <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-            <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
-            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
-            <feOffset dy="0.8"/>
-            <feGaussianBlur stdDeviation="0.7"/>
-            <feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
-            <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.72 0"/>
-            <feBlend mode="normal" in2="shape" result="effect1_innerShadow"/>
-          </filter>
-          <linearGradient id="${baseLowerGradientId}" x1="15.5" y1="2" x2="15.5" y2="23" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#93BBFF"/>
-            <stop offset="0.884515" stop-color="#81B0FF"/>
-            <stop offset="0.884615" stop-color="#4389FF"/>
-            <stop offset="1" stop-color="#97BEFF"/>
-          </linearGradient>
-          <linearGradient id="${baseUpperGradientId}" x1="15.5" y1="2" x2="15.5" y2="23" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#CCDFFF"/>
-            <stop offset="0.884515" stop-color="#B2CEFF"/>
-            <stop offset="0.884615" stop-color="#89B5FF"/>
-            <stop offset="1" stop-color="#97BEFF"/>
-          </linearGradient>
-          <linearGradient id="${hoverLowerGradientId}" x1="16.3736" y1="2" x2="16.3736" y2="23" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#93BBFF"/>
-            <stop offset="0.884515" stop-color="#81B0FF"/>
-            <stop offset="0.884615" stop-color="#4389FF"/>
-            <stop offset="1" stop-color="#97BEFF"/>
-          </linearGradient>
-          <linearGradient id="${hoverUpperGradientId}" x1="16.3736" y1="2" x2="16.3736" y2="23" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#93BBFF"/>
-            <stop offset="0.884515" stop-color="#81B0FF"/>
-            <stop offset="0.884615" stop-color="#4389FF"/>
-            <stop offset="1" stop-color="#97BEFF"/>
-          </linearGradient>
-          <linearGradient id="${hoverUpperOverlayGradientId}" x1="17.3736" y1="11.3333" x2="17.3736" y2="23" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#CCDFFF"/>
-            <stop offset="0.884515" stop-color="#B2CEFF"/>
-            <stop offset="0.884615" stop-color="#89B5FF"/>
-            <stop offset="1" stop-color="#97BEFF"/>
-          </linearGradient>
-          <linearGradient id="${morphUpperGradientId}" data-folder-gradient-morph="upper-main" x1="15.5" y1="2" x2="15.5" y2="23" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#CCDFFF"></stop>
-            <stop offset="0.884515" stop-color="#B2CEFF"></stop>
-            <stop offset="0.884615" stop-color="#89B5FF"></stop>
-            <stop offset="1" stop-color="#97BEFF"></stop>
-          </linearGradient>
-          <linearGradient id="${morphUpperOverlayGradientId}" data-folder-gradient-morph="upper-overlay" x1="15.5" y1="2" x2="15.5" y2="23" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#CCDFFF"></stop>
-            <stop offset="0.884515" stop-color="#B2CEFF"></stop>
-            <stop offset="0.884615" stop-color="#89B5FF"></stop>
-            <stop offset="1" stop-color="#97BEFF"></stop>
-          </linearGradient>
-        </defs>
-      </svg>
-    `;
-  }
-
-  const FOLDER_PATH_MORPH_DURATION_MS = 460;
-  const FOLDER_PATH_MORPH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
-  const FOLDER_PATH_MORPH_POINT_SAMPLE_COUNT = 140;
-  const FOLDER_PATH_MORPH_BEZIER = {
-    x1: 0.22,
-    y1: 1,
-    x2: 0.36,
-    y2: 1
-  };
-
-  function cubicBezierSampleCurveX(t, x1, x2) {
-    const inv = 1 - t;
-    return 3 * inv * inv * t * x1 + 3 * inv * t * t * x2 + t * t * t;
-  }
-
-  function cubicBezierSampleCurveY(t, y1, y2) {
-    const inv = 1 - t;
-    return 3 * inv * inv * t * y1 + 3 * inv * t * t * y2 + t * t * t;
-  }
-
-  function cubicBezierSampleCurveDerivativeX(t, x1, x2) {
-    const inv = 1 - t;
-    return 3 * inv * inv * x1 + 6 * inv * t * (x2 - x1) + 3 * t * t * (1 - x2);
-  }
-
-  function cubicBezierEase(progress, bezier) {
-    const clamped = Math.max(0, Math.min(1, progress));
-    if (clamped === 0 || clamped === 1) {
-      return clamped;
-    }
-    let t = clamped;
-    for (let i = 0; i < 8; i += 1) {
-      const x = cubicBezierSampleCurveX(t, bezier.x1, bezier.x2) - clamped;
-      const dx = cubicBezierSampleCurveDerivativeX(t, bezier.x1, bezier.x2);
-      if (Math.abs(x) < 1e-6 || Math.abs(dx) < 1e-6) {
-        break;
-      }
-      t -= x / dx;
-    }
-    t = Math.max(0, Math.min(1, t));
-    return cubicBezierSampleCurveY(t, bezier.y1, bezier.y2);
-  }
-
-  function buildPathMorphTemplate(fromD, toD) {
-    const numberPattern = /-?\d*\.?\d+(?:e[-+]?\d+)?/gi;
-    const fromNumbers = (String(fromD || '').match(numberPattern) || []).map((value) => Number(value));
-    const toNumbers = (String(toD || '').match(numberPattern) || []).map((value) => Number(value));
-    if (!fromNumbers.length || fromNumbers.length !== toNumbers.length) {
-      return null;
-    }
-    const fromMask = String(fromD).replace(numberPattern, '#');
-    const toMask = String(toD).replace(numberPattern, '#');
-    if (fromMask !== toMask) {
-      return null;
-    }
-    const segments = String(fromD).split(numberPattern);
-    return { type: 'number', segments, fromNumbers, toNumbers };
-  }
-
-  function composeNumberPathD(segments, numbers) {
-    let output = '';
-    for (let i = 0; i < numbers.length; i += 1) {
-      output += `${segments[i]}${Number(numbers[i].toFixed(6))}`;
-    }
-    output += segments[numbers.length] || '';
-    return output;
-  }
-
-  function isClosedPathData(d) {
-    return /[zZ]\s*$/.test(String(d || '').trim());
-  }
-
-  function samplePathPoints(svgEl, d, sampleCount) {
-    if (!svgEl || !d) {
-      return null;
-    }
-    const count = Math.max(8, sampleCount | 0);
-    const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    tempPath.setAttribute('d', d);
-    tempPath.setAttribute('fill', 'none');
-    tempPath.setAttribute('stroke', 'none');
-    tempPath.style.opacity = '0';
-    tempPath.style.pointerEvents = 'none';
-    svgEl.appendChild(tempPath);
-    try {
-      const total = tempPath.getTotalLength();
-      if (!Number.isFinite(total) || total <= 0) {
-        return null;
-      }
-      const closed = isClosedPathData(d);
-      const points = [];
-      const divisor = closed ? count : Math.max(1, count - 1);
-      for (let i = 0; i < count; i += 1) {
-        const ratio = i / divisor;
-        const len = Math.max(0, Math.min(total, total * ratio));
-        const point = tempPath.getPointAtLength(len);
-        points.push({ x: point.x, y: point.y });
-      }
-      return { points, closed };
-    } catch (error) {
-      return null;
-    } finally {
-      svgEl.removeChild(tempPath);
-    }
-  }
-
-  function buildPointMorphTemplate(pathEl, fromD, toD) {
-    if (!pathEl) {
-      return null;
-    }
-    const svgEl = pathEl.closest('svg');
-    if (!svgEl) {
-      return null;
-    }
-    const sampleCount = FOLDER_PATH_MORPH_POINT_SAMPLE_COUNT;
-    const fromData = samplePathPoints(svgEl, fromD, sampleCount);
-    const toData = samplePathPoints(svgEl, toD, sampleCount);
-    if (!fromData || !toData || fromData.points.length !== toData.points.length) {
-      return null;
-    }
-    const closed = fromData.closed && toData.closed;
-    let fromPoints = fromData.points;
-    let toPoints = toData.points;
-    if (closed && fromPoints.length > 4) {
-      const alignClosedPoints = (sourcePoints, targetPoints) => {
-        const rotatePoints = (points, shift) => {
-          const len = points.length;
-          const normalizedShift = ((shift % len) + len) % len;
-          if (!normalizedShift) {
-            return points.slice();
-          }
-          return points.slice(normalizedShift).concat(points.slice(0, normalizedShift));
-        };
-        const reversePoints = (points) => points.slice().reverse();
-        const calcScore = (aPoints, bPoints) => {
-          let total = 0;
-          for (let i = 0; i < aPoints.length; i += 1) {
-            const dx = aPoints[i].x - bPoints[i].x;
-            const dy = aPoints[i].y - bPoints[i].y;
-            total += dx * dx + dy * dy;
-          }
-          return total;
-        };
-        let best = targetPoints.slice();
-        let bestScore = Number.POSITIVE_INFINITY;
-        const directions = [targetPoints, reversePoints(targetPoints)];
-        for (let dirIndex = 0; dirIndex < directions.length; dirIndex += 1) {
-          const dirPoints = directions[dirIndex];
-          for (let shift = 0; shift < dirPoints.length; shift += 1) {
-            const candidate = rotatePoints(dirPoints, shift);
-            const score = calcScore(sourcePoints, candidate);
-            if (score < bestScore) {
-              bestScore = score;
-              best = candidate;
-            }
-          }
-        }
-        return best;
-      };
-      toPoints = alignClosedPoints(fromPoints, toPoints);
-    }
-    return {
-      type: 'point',
-      fromPoints,
-      toPoints,
-      closed
-    };
-  }
-
-  function composePointPathD(points, closed) {
-    if (!Array.isArray(points) || !points.length) {
-      return '';
-    }
-    let d = `M ${Number(points[0].x.toFixed(6))} ${Number(points[0].y.toFixed(6))}`;
-    for (let i = 1; i < points.length; i += 1) {
-      d += ` L ${Number(points[i].x.toFixed(6))} ${Number(points[i].y.toFixed(6))}`;
-    }
-    if (closed) {
-      d += ' Z';
-    }
-    return d;
-  }
-
-  function cancelFolderPathMorph(part) {
-    if (!part) {
-      return;
-    }
-    if (part.animationFrameId) {
-      cancelAnimationFrame(part.animationFrameId);
-      part.animationFrameId = 0;
-    }
-  }
-
-  function hexToRgb(hex) {
-    const raw = String(hex || '').trim();
-    const normalized = raw.startsWith('#') ? raw.slice(1) : raw;
-    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
-      return null;
-    }
-    return {
-      r: Number.parseInt(normalized.slice(0, 2), 16),
-      g: Number.parseInt(normalized.slice(2, 4), 16),
-      b: Number.parseInt(normalized.slice(4, 6), 16)
-    };
-  }
-
-  function rgbToHex(rgb) {
-    const toHex = (value) => {
-      const v = Math.max(0, Math.min(255, Math.round(value)));
-      return v.toString(16).padStart(2, '0');
-    };
-    return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
-  }
-
-  function lerpNumber(fromValue, toValue, t) {
-    return fromValue + (toValue - fromValue) * t;
-  }
-
-  function applyGradientMorphConfig(gradientEl, config) {
-    if (!gradientEl || !config) {
-      return;
-    }
-    gradientEl.setAttribute('x1', String(config.x1));
-    gradientEl.setAttribute('y1', String(config.y1));
-    gradientEl.setAttribute('x2', String(config.x2));
-    gradientEl.setAttribute('y2', String(config.y2));
-    const stops = gradientEl.querySelectorAll('stop');
-    config.stops.forEach((stopConfig, index) => {
-      const stopEl = stops[index];
-      if (!stopEl) {
-        return;
-      }
-      stopEl.setAttribute('offset', String(stopConfig.offset));
-      stopEl.setAttribute('stop-color', stopConfig.color);
-    });
-  }
-
-  function interpolateGradientConfig(fromConfig, toConfig, t) {
-    const progress = Math.max(0, Math.min(1, t));
-    const next = {
-      x1: Number(lerpNumber(fromConfig.x1, toConfig.x1, progress).toFixed(6)),
-      y1: Number(lerpNumber(fromConfig.y1, toConfig.y1, progress).toFixed(6)),
-      x2: Number(lerpNumber(fromConfig.x2, toConfig.x2, progress).toFixed(6)),
-      y2: Number(lerpNumber(fromConfig.y2, toConfig.y2, progress).toFixed(6)),
-      stops: []
-    };
-    for (let i = 0; i < fromConfig.stops.length; i += 1) {
-      const fromStop = fromConfig.stops[i];
-      const toStop = toConfig.stops[i];
-      if (!fromStop || !toStop) {
-        continue;
-      }
-      const fromRgb = hexToRgb(fromStop.color);
-      const toRgb = hexToRgb(toStop.color);
-      const color = (fromRgb && toRgb)
-        ? rgbToHex({
-          r: lerpNumber(fromRgb.r, toRgb.r, progress),
-          g: lerpNumber(fromRgb.g, toRgb.g, progress),
-          b: lerpNumber(fromRgb.b, toRgb.b, progress)
-        })
-        : (progress < 0.5 ? fromStop.color : toStop.color);
-      next.stops.push({
-        offset: Number(lerpNumber(fromStop.offset, toStop.offset, progress).toFixed(6)),
-        color
-      });
-    }
-    return next;
-  }
-
-  function initFolderUpperGradientMorph(folderIcon) {
-    if (!folderIcon || folderIcon._xUpperGradientMorph) {
-      return;
-    }
-    const svg = folderIcon.querySelector('svg');
-    if (!svg) {
-      return;
-    }
-    const mainGradientEl = svg.querySelector('[data-folder-gradient-morph="upper-main"]');
-    const overlayGradientEl = svg.querySelector('[data-folder-gradient-morph="upper-overlay"]');
-    if (!mainGradientEl || !overlayGradientEl) {
-      return;
-    }
-    const baseMain = {
-      x1: 15.5, y1: 2, x2: 15.5, y2: 23,
-      stops: [
-        { offset: 0, color: '#CCDFFF' },
-        { offset: 0.884515, color: '#B2CEFF' },
-        { offset: 0.884615, color: '#89B5FF' },
-        { offset: 1, color: '#97BEFF' }
-      ]
-    };
-    const hoverMain = {
-      x1: 16.3736, y1: 2, x2: 16.3736, y2: 23,
-      stops: [
-        { offset: 0, color: '#93BBFF' },
-        { offset: 0.884515, color: '#81B0FF' },
-        { offset: 0.884615, color: '#4389FF' },
-        { offset: 1, color: '#97BEFF' }
-      ]
-    };
-    const baseOverlay = {
-      x1: 15.5, y1: 2, x2: 15.5, y2: 23,
-      stops: [
-        { offset: 0, color: '#CCDFFF' },
-        { offset: 0.884515, color: '#B2CEFF' },
-        { offset: 0.884615, color: '#89B5FF' },
-        { offset: 1, color: '#97BEFF' }
-      ]
-    };
-    const hoverOverlay = {
-      x1: 17.3736, y1: 11.3333, x2: 17.3736, y2: 23,
-      stops: [
-        { offset: 0, color: '#CCDFFF' },
-        { offset: 0.827284, color: '#B2CEFF' },
-        { offset: 0.85339, color: '#89B5FF' },
-        { offset: 1, color: '#97BEFF' }
-      ]
-    };
-    folderIcon._xUpperGradientMorph = {
-      mainGradientEl,
-      overlayGradientEl,
-      baseMain,
-      hoverMain,
-      baseOverlay,
-      hoverOverlay,
-      state: 'base',
-      rafId: 0
-    };
-    applyGradientMorphConfig(mainGradientEl, baseMain);
-    applyGradientMorphConfig(overlayGradientEl, baseOverlay);
-  }
-
-  function playFolderUpperGradientMorph(folderIcon, toHover) {
-    if (!folderIcon) {
-      return;
-    }
-    if (!folderIcon._xUpperGradientMorph) {
-      initFolderUpperGradientMorph(folderIcon);
-    }
-    const morphState = folderIcon._xUpperGradientMorph;
-    if (!morphState) {
-      return;
-    }
-    const targetState = toHover ? 'hover' : 'base';
-    if (morphState.state === targetState) {
-      return;
-    }
-    morphState.state = targetState;
-    if (morphState.rafId) {
-      cancelAnimationFrame(morphState.rafId);
-      morphState.rafId = 0;
-    }
-    const fromMain = toHover ? morphState.baseMain : morphState.hoverMain;
-    const toMain = toHover ? morphState.hoverMain : morphState.baseMain;
-    const fromOverlay = toHover ? morphState.baseOverlay : morphState.hoverOverlay;
-    const toOverlay = toHover ? morphState.hoverOverlay : morphState.baseOverlay;
-    const startTime = performance.now();
-    const tick = (now) => {
-      const rawProgress = Math.max(0, Math.min(1, (now - startTime) / FOLDER_PATH_MORPH_DURATION_MS));
-      const eased = cubicBezierEase(rawProgress, FOLDER_PATH_MORPH_BEZIER);
-      applyGradientMorphConfig(morphState.mainGradientEl, interpolateGradientConfig(fromMain, toMain, eased));
-      applyGradientMorphConfig(morphState.overlayGradientEl, interpolateGradientConfig(fromOverlay, toOverlay, eased));
-      if (rawProgress < 1) {
-        morphState.rafId = requestAnimationFrame(tick);
-        return;
-      }
-      morphState.rafId = 0;
-      applyGradientMorphConfig(morphState.mainGradientEl, toMain);
-      applyGradientMorphConfig(morphState.overlayGradientEl, toOverlay);
-    };
-    morphState.rafId = requestAnimationFrame(tick);
-  }
-
-  function setFolderUpperFilterSuspended(folderIcon, suspended) {
-    if (!folderIcon) {
-      return;
-    }
-    const svg = folderIcon.querySelector('svg');
-    if (!svg) {
-      return;
-    }
-    const upperFilterGroup = svg.querySelector('g[data-folder-layer="upper"] .x-nt-folder-shape--base > g[filter]');
-    if (!upperFilterGroup) {
-      return;
-    }
-    if (suspended) {
-      if (typeof upperFilterGroup._xOriginalFilterAttr === 'undefined') {
-        upperFilterGroup._xOriginalFilterAttr = upperFilterGroup.getAttribute('filter');
-      }
-      upperFilterGroup.setAttribute('filter', 'none');
-      return;
-    }
-    const original = upperFilterGroup._xOriginalFilterAttr;
-    if (typeof original === 'string' && original) {
-      upperFilterGroup.setAttribute('filter', original);
-    } else {
-      upperFilterGroup.removeAttribute('filter');
-    }
-  }
-
-  function animatePathDWithCurve(part, fromD, toD) {
-    let template = buildPathMorphTemplate(fromD, toD);
-    if (!template) {
-      template = buildPointMorphTemplate(part.pathEl, fromD, toD);
-    }
-    if (!template) {
-      part.pathEl.setAttribute('d', toD);
-      return false;
-    }
-    cancelFolderPathMorph(part);
-    const startTime = performance.now();
-    const syncFollowers = (dValue) => {
-      if (!part || !Array.isArray(part.linkedFollowers) || !part.linkedFollowers.length) {
-        return;
-      }
-      part.linkedFollowers.forEach((el) => {
-        if (el && typeof el.setAttribute === 'function') {
-          el.setAttribute('d', dValue);
-        }
-      });
-    };
-    const tick = (now) => {
-      const elapsed = now - startTime;
-      const rawProgress = Math.max(0, Math.min(1, elapsed / FOLDER_PATH_MORPH_DURATION_MS));
-      const eased = cubicBezierEase(rawProgress, FOLDER_PATH_MORPH_BEZIER);
-      if (template.type === 'number') {
-        const values = template.fromNumbers.map((fromValue, index) => {
-          const toValue = template.toNumbers[index];
-          return fromValue + (toValue - fromValue) * eased;
-        });
-        const nextD = composeNumberPathD(template.segments, values);
-        part.pathEl.setAttribute('d', nextD);
-        syncFollowers(nextD);
-      } else {
-        const points = template.fromPoints.map((fromPoint, index) => {
-          const toPoint = template.toPoints[index];
-          return {
-            x: fromPoint.x + (toPoint.x - fromPoint.x) * eased,
-            y: fromPoint.y + (toPoint.y - fromPoint.y) * eased
-          };
-        });
-        const nextD = composePointPathD(points, template.closed);
-        part.pathEl.setAttribute('d', nextD);
-        syncFollowers(nextD);
-      }
-      if (rawProgress < 1) {
-        part.animationFrameId = requestAnimationFrame(tick);
-        return;
-      }
-      part.pathEl.setAttribute('d', toD);
-      syncFollowers(toD);
-      part.animationFrameId = 0;
-    };
-    part.animationFrameId = requestAnimationFrame(tick);
-    return true;
-  }
-
-  function initFolderPathMorph(folderIcon) {
-    if (!folderIcon || folderIcon._xFolderMorphParts) {
-      return;
-    }
-    const svg = folderIcon.querySelector('svg');
-    if (!svg) {
-      folderIcon._xFolderMorphParts = [];
-      return;
-    }
-    const hoverPathMap = new Map();
-    svg.querySelectorAll('[data-folder-part-hover]').forEach((pathEl) => {
-      const partName = pathEl.getAttribute('data-folder-part-hover');
-      const partD = pathEl.getAttribute('d');
-      if (!partName || !partD) {
-        return;
-      }
-      hoverPathMap.set(partName, partD);
-    });
-    const parts = [];
-    svg.querySelectorAll('[data-folder-part]').forEach((pathEl) => {
-      const partName = pathEl.getAttribute('data-folder-part');
-      const baseD = pathEl.getAttribute('d');
-      const hoverD = hoverPathMap.get(partName);
-      if (!partName || !baseD || !hoverD) {
-        return;
-      }
-      parts.push({
-        partName,
-        pathEl,
-        baseD,
-        hoverD,
-        fillBase: pathEl.getAttribute('data-folder-fill-base') || '',
-        fillHover: pathEl.getAttribute('data-folder-fill-hover') || '',
-        opacityBase: Number.parseFloat(pathEl.getAttribute('data-folder-opacity-base')),
-        opacityHover: Number.parseFloat(pathEl.getAttribute('data-folder-opacity-hover')),
-        linkedFollowers: [],
-        animationFrameId: 0
-      });
-    });
-    const partMap = new Map();
-    parts.forEach((part) => {
-      partMap.set(part.partName, part);
-    });
-    const upperBodyPart = partMap.get('upper-body');
-    const upperOverlayPart = partMap.get('upper-overlay');
-    if (upperBodyPart && upperOverlayPart) {
-      upperBodyPart.linkedFollowers.push(upperOverlayPart.pathEl);
-    }
-    parts.forEach((part) => {
-      if (part.fillBase) {
-        part.pathEl.setAttribute('fill', part.fillBase);
-      }
-      if (Number.isFinite(part.opacityBase)) {
-        part.pathEl.style.opacity = String(part.opacityBase);
-      }
-    });
-    folderIcon._xFolderMorphParts = parts;
-    folderIcon._xFolderMorphState = 'base';
-  }
-
-  function setFolderPathMorphState(folderIcon, toHover) {
-    if (!folderIcon) {
-      return;
-    }
-    if (!folderIcon._xFolderMorphParts) {
-      initFolderPathMorph(folderIcon);
-    }
-    const parts = Array.isArray(folderIcon._xFolderMorphParts) ? folderIcon._xFolderMorphParts : [];
-    if (!parts.length) {
-      return;
-    }
-    const targetState = toHover ? 'hover' : 'base';
-    if (folderIcon._xUpperFilterRestoreTimerId) {
-      clearTimeout(folderIcon._xUpperFilterRestoreTimerId);
-      folderIcon._xUpperFilterRestoreTimerId = 0;
-    }
-    setFolderUpperFilterSuspended(folderIcon, false);
-    if (!folderIcon._xUpperGradientMorph) {
-      initFolderUpperGradientMorph(folderIcon);
-    }
-    const gradientMorph = folderIcon._xUpperGradientMorph;
-    if (gradientMorph) {
-      if (gradientMorph.rafId) {
-        cancelAnimationFrame(gradientMorph.rafId);
-        gradientMorph.rafId = 0;
-      }
-      gradientMorph.state = targetState;
-      applyGradientMorphConfig(
-        gradientMorph.mainGradientEl,
-        toHover ? gradientMorph.hoverMain : gradientMorph.baseMain
-      );
-      applyGradientMorphConfig(
-        gradientMorph.overlayGradientEl,
-        toHover ? gradientMorph.hoverOverlay : gradientMorph.baseOverlay
-      );
-    }
-    const targetPaths = new Map(parts.map((part) => [
-      part.partName,
-      toHover ? part.hoverD : part.baseD
-    ]));
-    folderIcon._xFolderMorphState = targetState;
-    parts.forEach((part) => {
-      if (!part || !part.pathEl) {
-        return;
-      }
-      cancelFolderPathMorph(part);
-      const targetFill = toHover ? part.fillHover : part.fillBase;
-      if (targetFill) {
-        part.pathEl.setAttribute('fill', targetFill);
-      }
-      if (part.pathEl.style) {
-        part.pathEl.style.removeProperty('transition');
-        if (Number.isFinite(part.opacityBase) && Number.isFinite(part.opacityHover)) {
-          part.pathEl.style.opacity = String(toHover ? part.opacityHover : part.opacityBase);
-        }
-      }
-      const targetD = part.partName === 'upper-overlay'
-        ? (targetPaths.get('upper-body') || targetPaths.get(part.partName))
-        : targetPaths.get(part.partName);
-      if (!targetD) {
-        return;
-      }
-      part.pathEl.setAttribute('d', targetD);
-      (part.linkedFollowers || []).forEach((follower) => {
-        if (follower && typeof follower.setAttribute === 'function') {
-          follower.setAttribute('d', targetD);
-        }
-      });
-    });
-  }
-
-  function playFolderPathMorph(folderIcon, toHover, morphOptions) {
-    if (!folderIcon) {
-      return;
-    }
-    if (morphOptions && morphOptions.instant === true) {
-      setFolderPathMorphState(folderIcon, toHover);
-      return;
-    }
-    if (!folderIcon._xFolderMorphParts) {
-      initFolderPathMorph(folderIcon);
-    }
-    const parts = Array.isArray(folderIcon._xFolderMorphParts) ? folderIcon._xFolderMorphParts : [];
-    if (!parts.length) {
-      return;
-    }
-    const targetState = toHover ? 'hover' : 'base';
-    if (folderIcon._xFolderMorphState === targetState) {
-      return;
-    }
-    setFolderUpperFilterSuspended(folderIcon, true);
-    playFolderUpperGradientMorph(folderIcon, toHover);
-    if (folderIcon._xUpperFilterRestoreTimerId) {
-      clearTimeout(folderIcon._xUpperFilterRestoreTimerId);
-      folderIcon._xUpperFilterRestoreTimerId = 0;
-    }
-    folderIcon._xUpperFilterRestoreTimerId = window.setTimeout(() => {
-      folderIcon._xUpperFilterRestoreTimerId = 0;
-      setFolderUpperFilterSuspended(folderIcon, false);
-    }, FOLDER_PATH_MORPH_DURATION_MS + 48);
-    folderIcon._xFolderMorphState = targetState;
-    parts.forEach((part) => {
-      const currentD = part.pathEl && typeof part.pathEl.getAttribute === 'function'
-        ? (part.pathEl.getAttribute('d') || '')
-        : '';
-      const fromD = currentD || (toHover ? part.baseD : part.hoverD);
-      const toD = toHover ? part.hoverD : part.baseD;
-      if (!part.pathEl || !fromD || !toD) {
-        return;
-      }
-      const targetFill = toHover ? part.fillHover : part.fillBase;
-      if (targetFill) {
-        part.pathEl.setAttribute('fill', targetFill);
-      }
-      if (Number.isFinite(part.opacityBase) && Number.isFinite(part.opacityHover)) {
-        part.pathEl.style.transition = `opacity ${FOLDER_PATH_MORPH_DURATION_MS}ms ${FOLDER_PATH_MORPH_EASING}`;
-        part.pathEl.style.opacity = String(toHover ? part.opacityHover : part.opacityBase);
-      }
-      if (part.partName === 'upper-overlay') {
-        const upperBodyPart = parts.find((item) => item.partName === 'upper-body');
-        if (upperBodyPart && upperBodyPart.pathEl) {
-          part.pathEl.setAttribute('d', upperBodyPart.pathEl.getAttribute('d') || toD);
-          return;
-        }
-      }
-      const animated = animatePathDWithCurve(part, fromD, toD);
-      if (!animated) {
-        part.pathEl.setAttribute('d', toD);
-        part.animationFrameId = 0;
-      }
-    });
-  }
 
   function getSearchEngineById(id) {
     if (!id) {
@@ -4502,6 +4019,26 @@
       }
       setNewtabTimeSecondsVisible(nextValue);
     }
+    if (changes[NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY].newValue;
+      newtabFeedbackButtonVisible = normalizeNewtabFeedbackButtonVisible(raw);
+      if (storageArea && raw !== newtabFeedbackButtonVisible) {
+        storageArea.set({
+          [NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY]: newtabFeedbackButtonVisible
+        });
+      }
+      applyNewtabActionButtonVisibility();
+    }
+    if (changes[NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY].newValue;
+      newtabAppearanceButtonVisible = normalizeNewtabAppearanceButtonVisible(raw);
+      if (storageArea && raw !== newtabAppearanceButtonVisible) {
+        storageArea.set({
+          [NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY]: newtabAppearanceButtonVisible
+        });
+      }
+      applyNewtabActionButtonVisibility();
+    }
     if (changes[NEWTAB_ZEN_MODE_STORAGE_KEY]) {
       zenModeEnabled = normalizeZenModeEnabled(changes[NEWTAB_ZEN_MODE_STORAGE_KEY].newValue);
       applyZenMode();
@@ -4515,6 +4052,7 @@
         storageArea.set({ [NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY]: nextValue });
       }
       applyNewtabShortcutsVisibility();
+      updateNewtabShortcutPreferencesUi();
     }
     if (changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]) {
       const raw = changes[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY].newValue;
@@ -4524,6 +4062,7 @@
         storageArea.set({ [NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY]: nextValue });
       }
       renderShortcuts();
+      updateNewtabShortcutPreferencesUi();
     }
     if (changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]) {
       const raw = changes[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY].newValue;
@@ -4533,6 +4072,49 @@
         storageArea.set({ [NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY]: nextValue });
       }
       applyNewtabShortcutDockMagnification();
+      updateNewtabShortcutPreferencesUi();
+    }
+    if (changes[NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabShortcutColumns(raw);
+      newtabShortcutColumns = nextValue;
+      if (storageArea && raw !== nextValue) {
+        storageArea.set({ [NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY]: nextValue });
+      }
+      applyNewtabShortcutColumns();
+      updateBookmarkSectionPosition({
+        preserveSearchEntryLayout: true,
+        stabilizeDockDensity: true
+      });
+      updateNewtabShortcutPreferencesUi();
+    }
+    if (changes[NEWTAB_SHORTCUT_SIZE_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_SHORTCUT_SIZE_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabShortcutSize(raw);
+      newtabShortcutSize = nextValue;
+      if (storageArea && raw !== nextValue) {
+        storageArea.set({ [NEWTAB_SHORTCUT_SIZE_STORAGE_KEY]: nextValue });
+      }
+      applyNewtabShortcutLayoutPreferences();
+      updateBookmarkSectionPosition({
+        preserveSearchEntryLayout: true,
+        stabilizeDockDensity: true
+      });
+      updateNewtabShortcutPreferencesUi();
+    }
+    if (changes[NEWTAB_SHORTCUT_GAP_STORAGE_KEY]) {
+      const raw = changes[NEWTAB_SHORTCUT_GAP_STORAGE_KEY].newValue;
+      const nextValue = normalizeNewtabShortcutGap(raw);
+      newtabShortcutGap = nextValue;
+      if (storageArea && raw !== nextValue) {
+        storageArea.set({ [NEWTAB_SHORTCUT_GAP_STORAGE_KEY]: nextValue });
+      }
+      applyNewtabShortcutLayoutPreferences();
+      updateBookmarkSectionPosition({
+        preserveSearchEntryLayout: true,
+        stabilizeDockDensity: true
+      });
+      updateNewtabShortcutPreferencesUi();
     }
     if (changes[RECENT_MODE_STORAGE_KEY]) {
       const nextMode = normalizeRecentMode(changes[RECENT_MODE_STORAGE_KEY].newValue, 'latest');
@@ -4643,19 +4225,27 @@
 
   if (storageArea) {
     bootstrapInitialLanguageMode();
-    readPinnedRecentSites().then((items) => {
+    initialPinnedRecentSitesReadyTask = readPinnedRecentSites().then((items) => {
       pinnedRecentSites = items;
       if (recentSourceItems.length > 0) {
         recentRenderSignature = '';
         renderRecentSites(recentSourceItems);
       }
+      return items;
+    }).catch(() => {
+      pinnedRecentSites = [];
+      return pinnedRecentSites;
     });
-    readHiddenRecentSites().then((items) => {
+    initialHiddenRecentSitesReadyTask = readHiddenRecentSites().then((items) => {
       hiddenRecentSites = items;
       if (recentSourceItems.length > 0) {
         recentRenderSignature = '';
         renderRecentSites(recentSourceItems);
       }
+      return items;
+    }).catch(() => {
+      hiddenRecentSites = [];
+      return hiddenRecentSites;
     });
 
     storageArea.get([RECENT_COUNT_STORAGE_KEY], (result) => {
@@ -5177,8 +4767,15 @@
   let tabs = [];
   let currentNewtabTabId = null;
   let siteSearchProvidersCache = null;
+  let siteSearchProvidersLoadPromise = null;
+  let siteSearchProvidersLoadVersion = 0;
+  let aggregateSearchesCache = null;
+  let aggregateSearchesLoadPromise = null;
+  let aggregateSearchesLoadVersion = 0;
+  let aggregateSearchRequestController = null;
   let pendingProviderReload = false;
   let suggestionRequestSeq = 0;
+  let searchSuggestionsDismissed = false;
   let suggestionRequestWatchdogTimer = null;
   let searchResultPriorityMode = 'autocomplete';
   let enabledSearchResultSourceTypes = ['topSite', 'bookmark', 'history'];
@@ -5285,6 +4882,9 @@
   }
   const SITE_SEARCH_STORAGE_KEY = '_x_extension_site_search_custom_2024_unique_';
   const SITE_SEARCH_DISABLED_STORAGE_KEY = '_x_extension_site_search_disabled_2024_unique_';
+  const AGGREGATE_SEARCH_STORAGE_KEY = SETTINGS.AGGREGATE_SEARCH_STORAGE_KEY ||
+    AGGREGATE_SEARCH_STORE.STORAGE_KEY ||
+    '_x_extension_aggregate_searches_2026_unique_';
   migrateStorageIfNeeded([
     THEME_STORAGE_KEY,
     LANGUAGE_STORAGE_KEY,
@@ -5293,6 +4893,8 @@
     NEWTAB_WIDTH_MODE_STORAGE_KEY,
     NEWTAB_SEARCH_WIDTH_STORAGE_KEY,
     NEWTAB_INPUT_AUTO_FOCUS_ENABLED_STORAGE_KEY,
+    NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY,
+    NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY,
     NEWTAB_TOP_CONTENT_MODE_STORAGE_KEY,
     NEWTAB_TIME_FONT_WEIGHT_STORAGE_KEY,
     NEWTAB_TIME_SECONDS_VISIBLE_STORAGE_KEY,
@@ -5315,6 +4917,7 @@
     SEARCH_RESULT_DISPLAY_LIMIT_STORAGE_KEY,
     SITE_SEARCH_STORAGE_KEY,
     SITE_SEARCH_DISABLED_STORAGE_KEY,
+    AGGREGATE_SEARCH_STORAGE_KEY,
     SEARCH_BLACKLIST_STORAGE_KEY,
     FAVICON_REQUEST_BLACKLIST_STORAGE_KEY,
     FAVICON_ENHANCED_FETCH_ENABLED_STORAGE_KEY,
@@ -5323,7 +4926,11 @@
     ...NEWTAB_SHORTCUTS_STORAGE_KEYS,
     NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
     NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
-    NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY
+    NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
+    NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY,
+    NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY,
+    NEWTAB_SHORTCUT_SIZE_STORAGE_KEY,
+    NEWTAB_SHORTCUT_GAP_STORAGE_KEY
   ]);
   let handleTabKey = null;
   const defaultSiteSearchProviders = typeof SEARCH_UTILS.getDefaultSiteSearchProviders === 'function'
@@ -7085,6 +6692,55 @@
     return Boolean(section && section.getAttribute('data-visible') === 'true');
   }
 
+  function applyNewtabShortcutLayoutPreferences() {
+    if (!document.documentElement || !document.documentElement.style) {
+      return;
+    }
+    const rootStyle = document.documentElement.style;
+    const size = normalizeNewtabShortcutSize(newtabShortcutSize);
+    const gap = normalizeNewtabShortcutGap(newtabShortcutGap);
+    rootStyle.setProperty('--x-nt-shortcut-user-tile-size', `${size}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-icon-size', `${size * 0.75}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-icon-radius', `${size * 0.25}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-favicon-size', `${size * 0.4375}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-tile-padding', `${size * 0.125}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-column-gap', `${gap}px`);
+    rootStyle.setProperty('--x-nt-shortcut-user-row-gap', `${gap + 6}px`);
+    applyNewtabShortcutColumns();
+  }
+
+  function applyNewtabShortcutColumns() {
+    if (!document.documentElement || !document.documentElement.style) {
+      return;
+    }
+    document.documentElement.style.setProperty(
+      '--x-nt-shortcut-columns',
+      String(newtabShortcutColumns)
+    );
+    if (!shortcutGrid || typeof window.getComputedStyle !== 'function') {
+      return;
+    }
+    const gridStyle = window.getComputedStyle(shortcutGrid);
+    const tileSize = Number.parseFloat(
+      gridStyle.getPropertyValue('--x-nt-shortcut-tile-size')
+    );
+    const columnGap = Number.parseFloat(gridStyle.columnGap);
+    const paddingLeft = Number.parseFloat(gridStyle.paddingLeft);
+    const paddingRight = Number.parseFloat(gridStyle.paddingRight);
+    if (![tileSize, columnGap, paddingLeft, paddingRight].every(Number.isFinite)) {
+      return;
+    }
+    const targetWidth =
+      (tileSize * newtabShortcutColumns) +
+      (columnGap * Math.max(0, newtabShortcutColumns - 1)) +
+      paddingLeft +
+      paddingRight;
+    document.documentElement.style.setProperty(
+      '--x-nt-shortcuts-target-width',
+      `${Math.round(targetWidth)}px`
+    );
+  }
+
   function applyNewtabShortcutsVisibility() {
     if (!shortcutSection) {
       return;
@@ -7440,10 +7096,18 @@
     }
     return [
       {
-        value: SHORTCUT_CONTEXT_MENU_EDIT_VALUE,
-        label: t('shortcuts_edit', 'Edit')
+        action: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        value: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        label: t('newtab_open_in_new_tab', 'Open in new tab')
       },
       {
+        action: SHORTCUT_CONTEXT_MENU_EDIT_VALUE,
+        value: SHORTCUT_CONTEXT_MENU_EDIT_VALUE,
+        label: t('shortcuts_edit', 'Edit'),
+        dividerBefore: true
+      },
+      {
+        action: SHORTCUT_CONTEXT_MENU_REMOVE_VALUE,
         value: SHORTCUT_CONTEXT_MENU_REMOVE_VALUE,
         label: t('shortcuts_remove', 'Remove')
       }
@@ -7464,7 +7128,7 @@
         getShortcutContextMenuOptions(shortcutContextMenuTarget),
         shortcutContextMenuTarget && shortcutContextMenuTarget.kind === 'add'
           ? SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE
-          : SHORTCUT_CONTEXT_MENU_EDIT_VALUE
+          : NEWTAB_CONTEXT_MENU_OPEN_VALUE
       );
     }
   }
@@ -7483,7 +7147,11 @@
       bookmarkContextMenuSelectController.setOptions(
         bookmarkContextMenu.control,
         getBookmarkContextMenuOptions(bookmarkContextMenuTarget),
-        BOOKMARK_CONTEXT_MENU_EDIT_VALUE
+        bookmarkContextMenuTarget && bookmarkContextMenuTarget.isFolder
+          ? BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE
+          : bookmarkContextMenuTarget
+            ? NEWTAB_CONTEXT_MENU_OPEN_VALUE
+            : BOOKMARK_CONTEXT_MENU_EDIT_VALUE
       );
     }
   }
@@ -7502,7 +7170,7 @@
       recentContextMenuSelectController.setOptions(
         recentContextMenu.control,
         getRecentContextMenuOptions(recentContextMenuTarget),
-        RECENT_CONTEXT_MENU_REMOVE_VALUE
+        NEWTAB_CONTEXT_MENU_OPEN_VALUE
       );
     }
   }
@@ -7930,6 +7598,10 @@
       openShortcutEditor(shortcut, sourceElement);
       return;
     }
+    if (action === NEWTAB_CONTEXT_MENU_OPEN_VALUE) {
+      openExternalNewTabUrl(shortcut.url, 'newTab');
+      return;
+    }
     if (action === SHORTCUT_CONTEXT_MENU_REMOVE_VALUE) {
       removeShortcutById(targetId);
     }
@@ -7978,9 +7650,12 @@
       menuPortal: true,
       menuPortalZIndex: SHORTCUT_CONTEXT_MENU_PORTAL_Z_INDEX,
       menuPortalOffset: SHORTCUT_CONTEXT_MENU_PORTAL_OFFSET_PX,
-      value: SHORTCUT_CONTEXT_MENU_EDIT_VALUE,
+      value: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
       ariaLabel: t('newtab_shortcuts_context_menu_label', 'Shortcut actions'),
-      options: getShortcutContextMenuOptions()
+      options: getShortcutContextMenuOptions(),
+      onAction(payload) {
+        handleShortcutContextMenuAction(payload && payload.action);
+      }
     });
     const control = created.wrapper;
     const select = created.select;
@@ -8035,7 +7710,7 @@
     setShortcutContextMenuPosition(tile);
     const defaultValue = target.kind === 'add'
       ? SHORTCUT_CONTEXT_MENU_HIDE_ADD_VALUE
-      : SHORTCUT_CONTEXT_MENU_EDIT_VALUE;
+      : NEWTAB_CONTEXT_MENU_OPEN_VALUE;
     if (typeof shortcutContextMenuSelectController.setOptions === 'function') {
       shortcutContextMenuSelectController.setOptions(
         shortcutContextMenu.control,
@@ -8090,13 +7765,19 @@
         label: t('bookmarks_open_in_new_tab_group', 'Open in new tab group'),
         disabled: getBookmarkFolderOpenCount(target) <= 0
       });
+    } else if (target && !target.isFolder) {
+      options.push({
+        action: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        value: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        label: t('newtab_open_in_new_tab', 'Open in new tab')
+      });
     }
     options.push(
       {
         action: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
         value: BOOKMARK_CONTEXT_MENU_EDIT_VALUE,
         label: t('bookmarks_edit', 'Edit'),
-        dividerBefore: Boolean(target && target.isFolder)
+        dividerBefore: options.length > 0
       },
       {
         action: BOOKMARK_CONTEXT_MENU_REMOVE_VALUE,
@@ -8172,6 +7853,10 @@
     const target = bookmarkContextMenuTarget;
     closeBookmarkContextMenu();
     if (!target || !action) {
+      return;
+    }
+    if (action === NEWTAB_CONTEXT_MENU_OPEN_VALUE) {
+      openExternalNewTabUrl(target.url, 'newTab');
       return;
     }
     if (action === BOOKMARK_CONTEXT_MENU_EDIT_VALUE) {
@@ -8283,7 +7968,7 @@
         getBookmarkContextMenuOptions(target),
         target.isFolder
           ? BOOKMARK_CONTEXT_MENU_OPEN_GROUP_VALUE
-          : BOOKMARK_CONTEXT_MENU_EDIT_VALUE
+          : NEWTAB_CONTEXT_MENU_OPEN_VALUE
       );
     }
     bookmarkContextMenuSelectController.setOpen(bookmarkContextMenu.control, true);
@@ -8314,11 +7999,17 @@
   function getRecentContextMenuOptions(target) {
     return [
       {
+        action: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        value: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
+        label: t('newtab_open_in_new_tab', 'Open in new tab')
+      },
+      {
         action: RECENT_CONTEXT_MENU_REMOVE_VALUE,
         value: RECENT_CONTEXT_MENU_REMOVE_VALUE,
         label: target && target.item
           ? getRecentDismissTooltip(target.item)
-          : t('recent_dismiss_tooltip', 'Remove')
+          : t('recent_dismiss_tooltip', 'Remove'),
+        dividerBefore: true
       }
     ];
   }
@@ -8409,7 +8100,14 @@
     const action = String(actionValue || '');
     const target = recentContextMenuTarget;
     closeRecentContextMenu();
-    if (!target || !target.item || action !== RECENT_CONTEXT_MENU_REMOVE_VALUE) {
+    if (!target || !target.item || !action) {
+      return;
+    }
+    if (action === NEWTAB_CONTEXT_MENU_OPEN_VALUE) {
+      openExternalNewTabUrl(target.item.url, 'newTab');
+      return;
+    }
+    if (action !== RECENT_CONTEXT_MENU_REMOVE_VALUE) {
       return;
     }
     removeRecentSiteFromContextMenu(target.item);
@@ -8461,7 +8159,7 @@
       menuPortal: true,
       menuPortalZIndex: RECENT_CONTEXT_MENU_PORTAL_Z_INDEX,
       menuPortalOffset: RECENT_CONTEXT_MENU_PORTAL_OFFSET_PX,
-      value: RECENT_CONTEXT_MENU_REMOVE_VALUE,
+      value: NEWTAB_CONTEXT_MENU_OPEN_VALUE,
       ariaLabel: t('recent_context_menu_label', 'Recent site actions'),
       options: getRecentContextMenuOptions(),
       onAction(payload) {
@@ -8514,7 +8212,7 @@
       recentContextMenuSelectController.setOptions(
         recentContextMenu.control,
         getRecentContextMenuOptions(target),
-        RECENT_CONTEXT_MENU_REMOVE_VALUE
+        NEWTAB_CONTEXT_MENU_OPEN_VALUE
       );
     }
     recentContextMenuSelectController.setOpen(recentContextMenu.control, true);
@@ -9172,25 +8870,43 @@
       newtabShortcutsVisible = true;
       newtabShortcutAddVisible = true;
       newtabShortcutDockMagnificationEnabled = true;
+      newtabShortcutColumns = NEWTAB_SHORTCUT_COLUMNS_DEFAULT;
+      newtabShortcutSize = NEWTAB_SHORTCUT_SIZE_DEFAULT;
+      newtabShortcutGap = NEWTAB_SHORTCUT_GAP_DEFAULT;
+      applyNewtabShortcutLayoutPreferences();
       applyNewtabShortcutsVisibility();
       applyNewtabShortcutDockMagnification();
+      updateNewtabShortcutPreferencesUi();
       return Promise.resolve();
     }
     return new Promise((resolve) => {
       storageArea.get([
         NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY,
         NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY,
-        NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY
+        NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY,
+        NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY,
+        NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY,
+        NEWTAB_SHORTCUT_SIZE_STORAGE_KEY,
+        NEWTAB_SHORTCUT_GAP_STORAGE_KEY
       ], (result) => {
         const stored = result || {};
         const rawVisible = stored[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY];
         const rawAddVisible = stored[NEWTAB_SHORTCUT_ADD_VISIBLE_STORAGE_KEY];
         const rawMagnification =
           stored[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY];
+        const rawWidth = stored[NEWTAB_SHORTCUT_WIDTH_STORAGE_KEY];
+        const rawColumns = stored[NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY];
+        const rawSize = stored[NEWTAB_SHORTCUT_SIZE_STORAGE_KEY];
+        const rawGap = stored[NEWTAB_SHORTCUT_GAP_STORAGE_KEY];
         newtabShortcutsVisible = normalizeNewtabShortcutsVisible(rawVisible);
         newtabShortcutAddVisible = normalizeNewtabShortcutAddVisible(rawAddVisible);
         newtabShortcutDockMagnificationEnabled =
           normalizeNewtabShortcutDockMagnificationEnabled(rawMagnification);
+        newtabShortcutColumns = rawColumns === undefined
+          ? inferNewtabShortcutColumnsFromWidth(rawWidth)
+          : normalizeNewtabShortcutColumns(rawColumns);
+        newtabShortcutSize = normalizeNewtabShortcutSize(rawSize);
+        newtabShortcutGap = normalizeNewtabShortcutGap(rawGap);
         const repairs = {};
         if (rawVisible !== newtabShortcutsVisible) {
           repairs[NEWTAB_SHORTCUTS_VISIBLE_STORAGE_KEY] = newtabShortcutsVisible;
@@ -9202,11 +8918,22 @@
           repairs[NEWTAB_SHORTCUT_DOCK_MAGNIFICATION_ENABLED_STORAGE_KEY] =
             newtabShortcutDockMagnificationEnabled;
         }
+        if (rawColumns !== newtabShortcutColumns) {
+          repairs[NEWTAB_SHORTCUT_COLUMNS_STORAGE_KEY] = newtabShortcutColumns;
+        }
+        if (rawSize !== newtabShortcutSize) {
+          repairs[NEWTAB_SHORTCUT_SIZE_STORAGE_KEY] = newtabShortcutSize;
+        }
+        if (rawGap !== newtabShortcutGap) {
+          repairs[NEWTAB_SHORTCUT_GAP_STORAGE_KEY] = newtabShortcutGap;
+        }
         if (Object.keys(repairs).length > 0) {
           storageArea.set(repairs);
         }
+        applyNewtabShortcutLayoutPreferences();
         applyNewtabShortcutsVisibility();
         applyNewtabShortcutDockMagnification();
+        updateNewtabShortcutPreferencesUi();
         resolve();
       });
     });
@@ -9779,6 +9506,7 @@
   syncBookmarkTopbarSurfaceAppearance({ updateMenu: false, scheduleTone: false });
   syncBookmarkSurfaceMode();
   let bookmarkRenderSignature = '';
+  let sectionDataRevision = 0;
   let bookmarkLoadToken = 0;
   let bookmarkDataDirty = true;
   let bookmarkLoadedOnce = false;
@@ -11936,107 +11664,28 @@
     recentDataDirty = true;
   }
 
-  function readSectionCache(cacheKey) {
-    return new Promise((resolve) => {
-      if (!localStorageArea || !cacheKey) {
-        resolve(null);
-        return;
-      }
-      localStorageArea.get([cacheKey], (result) => {
-        const payload = result && result[cacheKey];
-        if (!payload || typeof payload !== 'object') {
-          resolve(null);
-          return;
-        }
-        const updatedAt = Number(payload.updatedAt || 0);
-        const items = Array.isArray(payload.items) ? payload.items : null;
-        if (!items || !Number.isFinite(updatedAt)) {
-          resolve(null);
-          return;
-        }
-        if ((Date.now() - updatedAt) > NEWTAB_SECTION_CACHE_TTL_MS) {
-          resolve(null);
-          return;
-        }
-        resolve(items);
-      });
-    });
-  }
-
-  function writeSectionCache(cacheKey, items) {
-    if (!localStorageArea || !cacheKey || !Array.isArray(items)) {
-      return;
-    }
-    localStorageArea.set({
-      [cacheKey]: {
-        updatedAt: Date.now(),
-        items: items
-      }
-    });
-  }
-
-  function hydrateSectionsFromCache() {
-    Promise.all([
-      readSectionCache(NEWTAB_RECENT_CACHE_STORAGE_KEY),
-      waitForFaviconRenderCaches(FAVICON_CACHE_BOOT_WAIT_MS)
-    ]).then(([items]) => {
-      if (!Array.isArray(items) || items.length === 0) {
-        return;
-      }
-      const recentSourceLimit = getRecentSourceLimit();
-      if (!recentSourceLimit || recentSourceLimit <= 0) {
-        return;
-      }
-      const cachedItems = items.slice(
-        0,
-        Math.max(0, recentSourceLimit + MAX_PINNED_RECENT_SITES)
-      );
-      renderRecentSites(cachedItems);
-      recentLoadedOnce = true;
-    });
-    const bookmarkCacheHydrationLoadToken = bookmarkLoadToken;
-    Promise.all([
-      readSectionCache(NEWTAB_BOOKMARK_CACHE_STORAGE_KEY),
-      waitForFaviconRenderCaches(FAVICON_CACHE_BOOT_WAIT_MS)
-    ]).then(([items]) => {
-      if (!NEWTAB_BOOKMARKS_STORE.shouldApplyBookmarkCacheHydration(
-        { loadToken: bookmarkCacheHydrationLoadToken },
-        {
-          loadToken: bookmarkLoadToken,
-          loadedOnce: bookmarkLoadedOnce,
-          dataDirty: bookmarkDataDirty
-        }
-      )) {
-        return;
-      }
-      if (!Array.isArray(items) || items.length === 0) {
-        return;
-      }
-      if (!currentBookmarkCount || currentBookmarkCount <= 0) {
-        return;
-      }
-      bookmarkCurrentPage = 0;
-      bookmarkAllItems = isBookmarkTopbarMode()
-        ? items.slice()
-        : items.slice(0, Math.max(0, getBookmarkLimit()));
-      bookmarkRootTotalCount = bookmarkAllItems.length;
-      bookmarkRootVisibleCount = bookmarkAllItems.length;
-      bookmarkRenderSignature = '';
-      renderCurrentBookmarkPage();
-      bookmarkLoadedOnce = true;
-    });
-  }
-
   function loadBookmarks(options) {
+    const config = options || {};
+    const requestedSectionDataRevision = Number.isFinite(Number(config.sectionDataRevision))
+      ? Number(config.sectionDataRevision)
+      : sectionDataRevision;
     if (!initialThemeApplied) {
-      return bootstrapInitialThemeMode().then(() => loadBookmarks(options));
+      return bootstrapInitialThemeMode().then(() => loadBookmarks({
+        ...config,
+        sectionDataRevision: requestedSectionDataRevision
+      }));
     }
-    const forceReload = Boolean(options && options.force);
-    const skipFaviconWait = Boolean(options && options.skipFaviconWait);
+    const forceReload = Boolean(config.force);
+    const skipFaviconWait = Boolean(config.skipFaviconWait);
     if (!skipFaviconWait && !areFaviconRenderCachesReady()) {
       const waitMs = forceReload ? Math.min(80, FAVICON_CACHE_BOOT_WAIT_MS) : FAVICON_CACHE_BOOT_WAIT_MS;
       return waitForFaviconRenderCaches(waitMs).then(() => (
-        loadBookmarks({ force: forceReload, skipFaviconWait: true })
+        loadBookmarks({
+          ...config,
+          force: forceReload,
+          skipFaviconWait: true,
+          sectionDataRevision: requestedSectionDataRevision
+        })
       ));
     }
     if (!forceReload && !bookmarkDataDirty && bookmarkLoadedOnce) {
@@ -12059,7 +11708,8 @@
       return Promise.resolve();
     }
     return getTopBookmarks(0, bookmarkCurrentFolderId).then((items) => {
-      if (requestToken !== bookmarkLoadToken) {
+      if (requestToken !== bookmarkLoadToken ||
+          requestedSectionDataRevision !== sectionDataRevision) {
         return;
       }
       if (!currentBookmarkCount || currentBookmarkCount <= 0) {
@@ -12092,30 +11742,33 @@
       updateBookmarkBreadcrumb();
       renderCurrentBookmarkPage();
       playPendingBookmarkLayoutAnimation();
-      if (isAtRoot) {
-        const bookmarkCacheLimit = isBookmarkTopbarMode()
-          ? Math.min(200, bookmarkAllItems.length)
-          : getBookmarkLimit();
-        writeSectionCache(
-          NEWTAB_BOOKMARK_CACHE_STORAGE_KEY,
-          bookmarkAllItems.slice(0, bookmarkCacheLimit)
-        );
-      }
       bookmarkDataDirty = false;
       bookmarkLoadedOnce = true;
     });
   }
 
   function loadRecentSites(options) {
+    const config = options || {};
+    const requestedSectionDataRevision = Number.isFinite(Number(config.sectionDataRevision))
+      ? Number(config.sectionDataRevision)
+      : sectionDataRevision;
     if (!initialThemeApplied) {
-      return bootstrapInitialThemeMode().then(() => loadRecentSites(options));
+      return bootstrapInitialThemeMode().then(() => loadRecentSites({
+        ...config,
+        sectionDataRevision: requestedSectionDataRevision
+      }));
     }
-    const forceReload = Boolean(options && options.force);
-    const skipFaviconWait = Boolean(options && options.skipFaviconWait);
+    const forceReload = Boolean(config.force);
+    const skipFaviconWait = Boolean(config.skipFaviconWait);
     if (!skipFaviconWait && !areFaviconRenderCachesReady()) {
       const waitMs = forceReload ? Math.min(80, FAVICON_CACHE_BOOT_WAIT_MS) : FAVICON_CACHE_BOOT_WAIT_MS;
       return waitForFaviconRenderCaches(waitMs).then(() => (
-        loadRecentSites({ force: forceReload, skipFaviconWait: true })
+        loadRecentSites({
+          ...config,
+          force: forceReload,
+          skipFaviconWait: true,
+          sectionDataRevision: requestedSectionDataRevision
+        })
       ));
     }
     if (!forceReload && !recentDataDirty && recentLoadedOnce) {
@@ -12135,18 +11788,12 @@
       return Promise.resolve();
     }
     return getRecentSites(recentSourceLimit + MAX_PINNED_RECENT_SITES, currentRecentMode).then((items) => {
-      if (requestToken !== recentLoadToken) {
+      if (requestToken !== recentLoadToken ||
+          requestedSectionDataRevision !== sectionDataRevision) {
         return;
       }
       const normalizedItems = Array.isArray(items) ? items : [];
       renderRecentSites(normalizedItems);
-      writeSectionCache(
-        NEWTAB_RECENT_CACHE_STORAGE_KEY,
-        normalizedItems.slice(
-          0,
-          Math.max(0, recentSourceLimit + MAX_PINNED_RECENT_SITES)
-        )
-      );
       recentDataDirty = false;
       recentLoadedOnce = true;
     });
@@ -13081,180 +12728,11 @@
   }
 
   function getSiteDisplayName(hostname, title) {
-    const rawTitle = String(title || '').trim();
-    const host = String(hostname || '').toLowerCase().replace(/^(www|m)\./i, '');
-    const brandMap = {
-      'lumno.kubai.design': 'Lumno',
-      'github.com': 'GitHub',
-      'youtube.com': 'YouTube',
-      'google.com': 'Google',
-      'mp.weixin.qq.com': t('site_brand_wechat_official', '微信公众号'),
-      'weibo.com': '微博',
-      'x.com': 'X',
-      'twitter.com': 'X',
-      'immersivetranslate.com': 'Immersive Translate',
-      'abouttrans.info': 'aboutTrans',
-      'aboutrans.info': 'aboutTrans'
-    };
-    const suffixes = new Set([
-      'co.uk', 'org.uk', 'gov.uk', 'ac.uk',
-      'com.cn', 'net.cn', 'org.cn', 'gov.cn',
-      'com.hk', 'com.tw', 'com.au', 'com.sg',
-      'co.jp', 'co.kr'
-    ]);
-    const noisySubdomains = new Set([
-      'onboarding', 'login', 'signin', 'auth', 'account',
-      'web', 'app', 'admin', 'stage', 'staging', 'preview', 'dev'
-    ]);
-    const separators = [' | ', ' - ', ' — ', ' – ', ' · ', ' • ', '：', ':'];
-
-    function getPrimaryLabelFromHost(hostValue) {
-      if (!hostValue) {
-        return '';
-      }
-      const parts = hostValue.split('.').filter(Boolean);
-      if (parts.length === 0) {
-        return '';
-      }
-      if (parts.length === 1) {
-        return parts[0];
-      }
-      const tail2 = `${parts[parts.length - 2]}.${parts[parts.length - 1]}`;
-      const index = suffixes.has(tail2) && parts.length >= 3 ? parts.length - 3 : parts.length - 2;
-      return parts[index] || parts[0];
-    }
-
-    function prettifyLabel(label) {
-      const value = String(label || '').trim();
-      if (!value) {
-        return '';
-      }
-      if (value.length === 1) {
-        return value.toUpperCase();
-      }
-      if (/^[a-z]+$/.test(value)) {
-        return value.charAt(0).toUpperCase() + value.slice(1);
-      }
-      return value;
-    }
-
-    function pickTitleCandidate() {
-      if (!rawTitle) {
-        return '';
-      }
-      const candidates = [rawTitle];
-      separators.forEach((sep) => {
-        if (rawTitle.includes(sep)) {
-          rawTitle.split(sep).forEach((part) => candidates.push(part));
-        }
-      });
-      let best = '';
-      let bestScore = -1;
-      candidates.forEach((part) => {
-        const value = String(part || '').trim();
-        if (!value || value.length < 2 || value.length > 24) {
-          return;
-        }
-        if (/https?:|\/|\\|\?|=|&/.test(value)) {
-          return;
-        }
-        if (/^\d+$/.test(value)) {
-          return;
-        }
-        let score = 0;
-        if (/[\u4e00-\u9fff]/.test(value)) {
-          score += 2;
-        }
-        if (/\s/.test(value)) {
-          score += 1;
-        }
-        if (value.length >= 3 && value.length <= 14) {
-          score += 1;
-        }
-        if (score > bestScore) {
-          best = value;
-          bestScore = score;
-        }
-      });
-      return best;
-    }
-
-    function normalizeWordToken(value) {
-      return String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-    }
-
-    function pickCasedLabelFromTitle(hostLabelRaw) {
-      const raw = String(hostLabelRaw || '').trim();
-      if (!raw || !rawTitle) {
-        return '';
-      }
-      const target = normalizeWordToken(raw);
-      if (!target) {
-        return '';
-      }
-      const candidates = [rawTitle];
-      separators.forEach((sep) => {
-        if (rawTitle.includes(sep)) {
-          rawTitle.split(sep).forEach((part) => candidates.push(part));
-        }
-      });
-      for (let i = 0; i < candidates.length; i += 1) {
-        const token = String(candidates[i] || '').trim();
-        if (!token) {
-          continue;
-        }
-        if (normalizeWordToken(token) === target) {
-          return token;
-        }
-      }
-      const words = rawTitle.split(/[\s|—–\-·•:：()（）\[\]【】]+/).map((part) => String(part || '').trim()).filter(Boolean);
-      for (let i = 0; i < words.length; i += 1) {
-        const word = words[i];
-        if (normalizeWordToken(word) === target) {
-          return word;
-        }
-      }
-      return '';
-    }
-
-    function isWeakHostLabel(label) {
-      const value = String(label || '').trim().toLowerCase();
-      if (!value) {
-        return true;
-      }
-      if (value.length <= 1 || /^\d+$/.test(value)) {
-        return true;
-      }
-      return noisySubdomains.has(value);
-    }
-
-    if (host) {
-      if (brandMap[host]) {
-        return brandMap[host];
-      }
-      const matchedBrandHost = Object.keys(brandMap).find((key) => host === key || host.endsWith(`.${key}`));
-      if (matchedBrandHost) {
-        return brandMap[matchedBrandHost];
-      }
-      const primaryHostLabel = getPrimaryLabelFromHost(host);
-      const casedFromTitle = pickCasedLabelFromTitle(primaryHostLabel);
-      const hostLabel = casedFromTitle || prettifyLabel(primaryHostLabel);
-      const titleCandidate = pickTitleCandidate();
-      const firstSubdomain = host.split('.').filter(Boolean)[0] || '';
-      if (noisySubdomains.has(firstSubdomain) && titleCandidate) {
-        return titleCandidate;
-      }
-      if (isWeakHostLabel(hostLabel) && titleCandidate) {
-        return titleCandidate;
-      }
-      if (hostLabel) {
-        return hostLabel;
-      }
-      if (titleCandidate) {
-        return titleCandidate;
-      }
-    }
-    return rawTitle || hostname || '';
+    return SITE_DISPLAY_NAME.getSiteDisplayName(
+      hostname,
+      title,
+      SITE_DISPLAY_NAME_OPTIONS
+    );
   }
 
   function getRecentCardColors(theme, host) {
@@ -13371,10 +12849,8 @@
     const colors = getShortcutIconColors(theme, host);
     tile.setAttribute('data-shortcut-theme-default', isDefaultTheme ? 'true' : 'false');
     tile.setAttribute('data-shortcut-theme-source', getThemeSource(fallbackTheme));
-    if (!isDefaultTheme) {
-      tile.style.removeProperty('--x-nt-shortcut-wallpaper-icon-bg');
-      tile.style.removeProperty('--x-nt-shortcut-wallpaper-icon-color');
-    }
+    tile.style.removeProperty('--x-nt-shortcut-wallpaper-icon-bg');
+    tile.style.removeProperty('--x-nt-shortcut-wallpaper-icon-color');
     tile.style.setProperty('--x-nt-shortcut-icon-bg', colors.iconBg);
     tile.style.setProperty('--x-nt-shortcut-icon-color', colors.iconColor);
     scheduleWallpaperAdaptiveToneUpdate();
@@ -13538,14 +13014,7 @@
     autocompleteState = null;
   }
 
-  function dismissAutocompletePreviewOnNonTabKey(event) {
-    if (!event || event.key === 'Tab') {
-      return false;
-    }
-    const isModifierOnly = event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta';
-    if (isModifierOnly) {
-      return false;
-    }
+  function restoreUserAuthoredSearchInput() {
     if (!autocompleteState || !autocompleteState.completion) {
       return false;
     }
@@ -13560,6 +13029,17 @@
     latestQuery = rawQuery.trim();
     clearAutocomplete();
     return true;
+  }
+
+  function dismissAutocompletePreviewOnNonTabKey(event) {
+    if (!event || event.key === 'Tab') {
+      return false;
+    }
+    const isModifierOnly = event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta';
+    if (isModifierOnly) {
+      return false;
+    }
+    return restoreUserAuthoredSearchInput();
   }
 
   function applyAutocomplete(allSuggestions, primarySuggestion, primaryHighlightReason) {
@@ -13680,6 +13160,13 @@
     return Boolean(provider && String(provider.category || '').trim() === 'searchEngine');
   }
 
+  function isAggregateSearchProvider(provider) {
+    if (typeof AGGREGATE_SEARCH_STORE.isAggregateSearchProvider === 'function') {
+      return AGGREGATE_SEARCH_STORE.isAggregateSearchProvider(provider);
+    }
+    return Boolean(provider && provider._xIsAggregateSearch === true);
+  }
+
   function isInteractiveSiteSearchProvider(provider) {
     if (typeof SEARCH_UTILS.isInteractiveSiteSearchProvider === 'function') {
       return SEARCH_UTILS.isInteractiveSiteSearchProvider(provider);
@@ -13690,10 +13177,40 @@
     );
   }
 
+  function getAggregateSearchRequestController() {
+    if (aggregateSearchRequestController) {
+      return aggregateSearchRequestController;
+    }
+    if (typeof AGGREGATE_SEARCH_SURFACE.createAggregateSearchRequestController !== 'function') {
+      return null;
+    }
+    aggregateSearchRequestController = AGGREGATE_SEARCH_SURFACE.createAggregateSearchRequestController({
+      chromeApi: chrome,
+      onFeedback(descriptor) {
+        showToast(t(descriptor.messageKey, descriptor.fallback), descriptor.isError);
+      }
+    });
+    return aggregateSearchRequestController;
+  }
+
   function runSiteSearchProviderQuery(provider, query, disposition) {
     const trimmedQuery = String(query || '').trim();
     if (!provider || !trimmedQuery) {
       return false;
+    }
+    if (isAggregateSearchProvider(provider) && provider.aggregateId) {
+      const normalizedDisposition = disposition || 'currentTab';
+      const controller = getAggregateSearchRequestController();
+      if (!controller) {
+        showToast(t('toast_error', 'Operation failed. Please try again.'), true);
+        return true;
+      }
+      controller.run({
+        aggregateId: String(provider.aggregateId),
+        disposition: normalizedDisposition,
+        query: trimmedQuery
+      });
+      return true;
     }
     if (isInteractiveSiteSearchProvider(provider)) {
       chrome.runtime.sendMessage({
@@ -13817,7 +13334,44 @@
       ? SHORTCUT_FAVICON.createSiteSearchProviderIconHydrator(attachFaviconData)
       : attachFaviconData;
 
+  function beginSiteSearchProviderLoad(loader, options) {
+    const settings = options && typeof options === 'object' ? options : {};
+    if (settings.invalidate === true) {
+      siteSearchProvidersLoadVersion += 1;
+      siteSearchProvidersLoadPromise = null;
+    }
+    const loadVersion = siteSearchProvidersLoadVersion;
+    let loadTask = null;
+    loadTask = Promise.resolve().then(() => loader()).then((items) => {
+      const normalizedItems = Array.isArray(items) ? items : [];
+      if (loadVersion === siteSearchProvidersLoadVersion &&
+          siteSearchProvidersLoadPromise === loadTask) {
+        siteSearchProvidersCache = normalizedItems;
+        return normalizedItems;
+      }
+      return siteSearchProvidersCache || [];
+    }).catch(() => {
+      if (loadVersion === siteSearchProvidersLoadVersion &&
+          siteSearchProvidersLoadPromise === loadTask) {
+        siteSearchProvidersCache = null;
+      }
+      return siteSearchProvidersCache || [];
+    }).finally(() => {
+      if (siteSearchProvidersLoadPromise === loadTask) {
+        siteSearchProvidersLoadPromise = null;
+      }
+    });
+    siteSearchProvidersLoadPromise = loadTask;
+    return {
+      promise: loadTask,
+      version: loadVersion
+    };
+  }
+
   function getSiteSearchProviders() {
+    if (siteSearchProvidersLoadPromise) {
+      return siteSearchProvidersLoadPromise;
+    }
     if (siteSearchProvidersCache) {
       return Promise.resolve(siteSearchProvidersCache);
     }
@@ -13825,7 +13379,7 @@
       siteSearchProvidersCache = defaultSiteSearchProviders.slice();
       return Promise.resolve(siteSearchProvidersCache);
     }
-    return SITE_SEARCH_STORE.loadSiteSearchProviders({
+    return beginSiteSearchProviderLoad(() => SITE_SEARCH_STORE.loadSiteSearchProviders({
       chromeApi: chrome,
       storageArea,
       storageKeys: {
@@ -13835,10 +13389,75 @@
       defaultProviders: defaultSiteSearchProviders,
       mergeCustomProviders: SEARCH_UTILS.mergeCustomProviders,
       getResourceUrl: getExtensionResourceUrl
-    }).then((items) => {
-      siteSearchProvidersCache = items;
-      return items;
+    })).promise;
+  }
+
+  function reloadSiteSearchProvidersFromStorage() {
+    return beginSiteSearchProviderLoad(() => {
+      const keys = [SITE_SEARCH_STORAGE_KEY, SITE_SEARCH_DISABLED_STORAGE_KEY];
+      const readTask = typeof SITE_SEARCH_STORE.getStorageValues === 'function'
+        ? SITE_SEARCH_STORE.getStorageValues(storageArea, keys)
+        : Promise.resolve({});
+      return readTask.then((result) => {
+        const customItems = Array.isArray(result[SITE_SEARCH_STORAGE_KEY])
+          ? result[SITE_SEARCH_STORAGE_KEY]
+          : [];
+        const disabledKeys = Array.isArray(result[SITE_SEARCH_DISABLED_STORAGE_KEY])
+          ? result[SITE_SEARCH_DISABLED_STORAGE_KEY]
+          : [];
+        return typeof SITE_SEARCH_STORE.mergeStoredProviders === 'function'
+          ? SITE_SEARCH_STORE.mergeStoredProviders(
+            defaultSiteSearchProviders,
+            customItems,
+            disabledKeys,
+            SEARCH_UTILS.mergeCustomProviders
+          )
+          : defaultSiteSearchProviders.slice();
+      });
+    }, { invalidate: true });
+  }
+
+  function getAggregateSearches() {
+    if (aggregateSearchesCache) {
+      return Promise.resolve(aggregateSearchesCache);
+    }
+    if (aggregateSearchesLoadPromise) {
+      return aggregateSearchesLoadPromise;
+    }
+    if (typeof AGGREGATE_SEARCH_STORE.loadAggregateSearches !== 'function') {
+      aggregateSearchesCache = [];
+      return Promise.resolve(aggregateSearchesCache);
+    }
+    const loadVersion = aggregateSearchesLoadVersion;
+    const loadTask = AGGREGATE_SEARCH_STORE.loadAggregateSearches(
+      storageArea,
+      AGGREGATE_SEARCH_STORAGE_KEY,
+      chrome
+    ).then((items) => {
+      if (loadVersion === aggregateSearchesLoadVersion) {
+        aggregateSearchesCache = items;
+        return items;
+      }
+      return aggregateSearchesCache || [];
+    }).catch(() => {
+      if (loadVersion === aggregateSearchesLoadVersion) {
+        aggregateSearchesCache = null;
+        return [];
+      }
+      return aggregateSearchesCache || [];
+    }).finally(() => {
+      if (aggregateSearchesLoadPromise === loadTask) {
+        aggregateSearchesLoadPromise = null;
+      }
     });
+    aggregateSearchesLoadPromise = loadTask;
+    return loadTask;
+  }
+
+  function createAggregateSearchScopeProvider(definition) {
+    return typeof AGGREGATE_SEARCH_STORE.createScopeProvider === 'function'
+      ? AGGREGATE_SEARCH_STORE.createScopeProvider(definition)
+      : null;
   }
 
   function getSiteSearchDisplayName(provider) {
@@ -13857,6 +13476,14 @@
   function getSiteSearchActionTitle(provider, query) {
     const site = getSiteSearchDisplayName(provider);
     const queryText = String(query || '').trim();
+    if (isAggregateSearchProvider(provider)) {
+      return queryText
+        ? formatMessage('aggregate_search_action_query', '使用{name}搜索“{query}”', {
+            name: site,
+            query: queryText
+          })
+        : formatMessage('aggregate_search_action', '使用{name}搜索', { name: site });
+    }
     if (isAiSiteSearchProvider(provider)) {
       return queryText
         ? formatMessage('ask_ai_provider_query', '向 {site} 提问 "{query}"', { site, query: queryText })
@@ -14057,13 +13684,62 @@
     return [defaultProvider].concat(providers);
   }
 
+  function isAggregateSearchDefinitionAvailable(definition, providers) {
+    if (typeof AGGREGATE_SEARCH_STORE.isAggregateSearchAvailable !== 'function') {
+      return Boolean(createAggregateSearchScopeProvider(definition));
+    }
+    return AGGREGATE_SEARCH_STORE.isAggregateSearchAvailable(
+      definition,
+      Array.isArray(providers) ? providers : getSearchModeProviders()
+    );
+  }
+
+  function getSearchTriggerProviders(providers, definitions) {
+    const sourceProviders = Array.isArray(providers) ? providers : [];
+    const availableDefinitions = (Array.isArray(definitions) ? definitions : [])
+      .filter((definition) => isAggregateSearchDefinitionAvailable(
+        definition,
+        sourceProviders
+      ));
+    return typeof AGGREGATE_SEARCH_STORE.mergeTriggerProviders === 'function'
+      ? AGGREGATE_SEARCH_STORE.mergeTriggerProviders(
+        sourceProviders,
+        availableDefinitions
+      )
+      : sourceProviders;
+  }
+
   function buildSearchModeMenuItems() {
     const engineGroup = t('search_scope_group_engines', '搜索引擎');
     const localGroup = t('search_scope_group_local', '浏览器内容');
     const aiGroup = t('search_scope_group_ai', 'AI 搜索');
     const siteGroup = t('search_scope_group_sites', '站内搜索');
+    const aggregateGroup = t('search_scope_group_aggregates', '聚合搜索');
     const items = [];
     const providers = getSearchModeProviders();
+    (aggregateSearchesCache || []).forEach((definition) => {
+      if (!isAggregateSearchDefinitionAvailable(definition, providers)) {
+        return;
+      }
+      const provider = createAggregateSearchScopeProvider(definition);
+      if (!provider) {
+        return;
+      }
+      items.push({
+        id: `aggregate:${definition.id}`,
+        kind: 'aggregate',
+        aggregate: definition,
+        provider,
+        label: definition.name,
+        group: aggregateGroup,
+        iconClass: 'ri-stack-line',
+        searchTerms: [definition.name].concat(definition.sourceRefs || []),
+        active: Boolean(
+          isAggregateSearchProvider(siteSearchState) &&
+          String(siteSearchState.aggregateId || '') === String(definition.id || '')
+        )
+      });
+    });
     providers
       .filter((provider) => isSearchEngineSiteSearchProvider(provider))
       .concat(providers.filter((provider) => (
@@ -14109,7 +13785,11 @@
   }
 
   function getSearchModeMenuItems() {
-    return loadSiteSearchIconCache().then(buildSearchModeMenuItems);
+    return Promise.all([
+      loadSiteSearchIconCache(),
+      getSiteSearchProviders(),
+      getAggregateSearches()
+    ]).then(buildSearchModeMenuItems);
   }
 
   function openSearchModeMenuFromDoubleTab() {
@@ -14166,6 +13846,11 @@
         { sourceType: item.sourceType },
         { preserveResults }
       );
+      restoreSearchModeQuery(rawQuery);
+      return;
+    }
+    if (item.kind === 'aggregate' && item.provider) {
+      activateSiteSearch(item.provider, { preserveResults });
       restoreSearchModeQuery(rawQuery);
       return;
     }
@@ -14278,82 +13963,6 @@
     clearAutocomplete();
   }
 
-  function getBrowserInternalScheme() {
-    const ua = navigator.userAgent || '';
-    if (ua.includes('Edg/')) {
-      return 'edge://';
-    }
-    if (ua.includes('Brave')) {
-      return 'brave://';
-    }
-    if (ua.includes('Vivaldi')) {
-      return 'vivaldi://';
-    }
-    if (ua.includes('OPR/') || ua.includes('Opera')) {
-      return 'opera://';
-    }
-    return 'chrome://';
-  }
-
-  function normalizeBrandName(brand) {
-    return String(brand || '').replace(/\s+/g, ' ').trim();
-  }
-
-  function isGreaseBrandName(brand) {
-    const compact = normalizeBrandName(brand).toLowerCase().replace(/[^a-z]/g, '');
-    return compact.includes('not') && compact.includes('brand');
-  }
-
-  function isChromiumEngineBrandName(brand) {
-    return normalizeBrandName(brand).toLowerCase() === 'chromium';
-  }
-
-  function getClientHintBrowserName(userAgentData) {
-    const brands = userAgentData && Array.isArray(userAgentData.brands)
-      ? userAgentData.brands
-      : [];
-    const names = brands
-      .map((item) => normalizeBrandName(item && item.brand))
-      .filter((name) => name && !isGreaseBrandName(name));
-    const productName = names.find((name) => {
-      const lower = name.toLowerCase();
-      return !isChromiumEngineBrandName(name) &&
-        lower !== 'google chrome' &&
-        lower !== 'chrome';
-    });
-    if (productName) {
-      return productName;
-    }
-    return names.find((name) => !isChromiumEngineBrandName(name)) ||
-      names.find((name) => isChromiumEngineBrandName(name)) ||
-      '';
-  }
-
-  function getFallbackBrowserName(scheme) {
-    if (scheme === 'edge://') {
-      return 'Microsoft Edge';
-    }
-    if (scheme === 'brave://') {
-      return 'Brave';
-    }
-    if (scheme === 'vivaldi://') {
-      return 'Vivaldi';
-    }
-    if (scheme === 'opera://') {
-      return 'Opera';
-    }
-    return 'Chrome';
-  }
-
-  function getBrowserInternalProfile() {
-    const scheme = getBrowserInternalScheme();
-    return {
-      scheme,
-      name: getClientHintBrowserName(navigator.userAgentData) ||
-        getFallbackBrowserName(scheme)
-    };
-  }
-
   function getBrowserPageSuggestionTitle(browserProfile, targetUrl) {
     const browserName = browserProfile && browserProfile.name ? browserProfile.name : '';
     if (browserName) {
@@ -14398,7 +14007,7 @@
 
   function buildKeywordSuggestions(input, rules) {
     const queryLower = input.toLowerCase();
-    const browserProfile = getBrowserInternalProfile();
+    const browserProfile = BROWSER_PROFILE.getBrowserInternalProfile(navigator);
     const scheme = browserProfile.scheme;
     const matches = [];
     rules.forEach((rule) => {
@@ -14900,7 +14509,45 @@
     lastRenderedActionContextKey = '';
   }
 
+  function dismissSearchSuggestionsFromBackground() {
+    restoreUserAuthoredSearchInput();
+    searchSuggestionsDismissed = true;
+    suggestionRequestSeq += 1;
+    if (remoteSuggestionDebounceTimer) {
+      clearTimeout(remoteSuggestionDebounceTimer);
+      remoteSuggestionDebounceTimer = null;
+    }
+    if (suggestionRequestWatchdogTimer) {
+      clearTimeout(suggestionRequestWatchdogTimer);
+      suggestionRequestWatchdogTimer = null;
+    }
+    clearSearchSuggestions();
+  }
+
+  function restoreDismissedSearchSuggestions() {
+    if (!searchSuggestionsDismissed || !inputParts || !inputParts.input) {
+      return false;
+    }
+    const rawValue = String(inputParts.input.value || '');
+    const query = rawValue.trim();
+    searchSuggestionsDismissed = false;
+    if (!query) {
+      return false;
+    }
+    latestRawQuery = rawValue;
+    latestQuery = query;
+    if (!localSearchScopeState && isSlashCommandInput(query)) {
+      renderSuggestions([], query);
+      return true;
+    }
+    requestSuggestions(query, { immediate: true });
+    return true;
+  }
+
   function renderSuggestions(suggestions, query) {
+    if (searchSuggestionsDismissed) {
+      return;
+    }
     if (!query) {
       clearSearchSuggestions();
       return;
@@ -14908,7 +14555,7 @@
     lastSuggestionResponse = Array.isArray(suggestions) ? suggestions : [];
 
     getShortcutRules().then((rules) => {
-      if (query !== latestQuery) {
+      if (searchSuggestionsDismissed || query !== latestQuery) {
         return;
       }
       const rawTagInput = (latestRawQuery || inputParts.input.value || '').trim();
@@ -14960,9 +14607,13 @@
         preSuggestions.push(...keywordSuggestions);
       }
 
-      const providersForTags = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+      const siteProvidersForTags = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
         ? siteSearchProvidersCache
         : defaultSiteSearchProviders;
+      const providersForTags = getSearchTriggerProviders(
+        siteProvidersForTags,
+        aggregateSearchesCache
+      );
       if (!siteSearchProvidersCache && !pendingProviderReload) {
         pendingProviderReload = true;
         getSiteSearchProviders().then((items) => {
@@ -14970,7 +14621,6 @@
           if (query !== latestQuery) {
             return;
           }
-          siteSearchProvidersCache = items;
           renderSuggestions(lastSuggestionResponse, query);
         });
       }
@@ -15010,15 +14660,18 @@
         };
       const siteSearchSuggestion = siteSearchQueryModeActive
         ? (() => {
-            const siteUrl = buildSearchUrl(siteSearchState.template, query);
-            if (!siteUrl) {
+            const aggregateSearch = isAggregateSearchProvider(siteSearchState);
+            const siteUrl = aggregateSearch
+              ? ''
+              : buildSearchUrl(siteSearchState.template, query);
+            if (!aggregateSearch && !siteUrl) {
               return null;
             }
             return {
               type: 'siteSearch',
               title: getSiteSearchActionTitle(siteSearchState, query),
               url: siteUrl,
-              favicon: getProviderIcon(siteSearchState),
+              favicon: aggregateSearch ? '' : getProviderIcon(siteSearchState),
               provider: siteSearchState,
               searchQuery: query
             };
@@ -15030,11 +14683,13 @@
         newTabSuggestion,
         ...suggestions
       ].filter(Boolean);
-      const groupedDefaultSuggestions = typeof SEARCH_UTILS.groupSearchSuggestionsByKind === 'function'
-        ? SEARCH_UTILS.groupSearchSuggestionsByKind(defaultSuggestions, {
-          searchFirst: searchResultPriorityMode === 'search'
-        })
-        : defaultSuggestions;
+      let groupedDefaultSuggestions = defaultSuggestions;
+      if (searchResultPriorityMode !== 'search' &&
+          typeof SEARCH_UTILS.groupSearchSuggestionsByKind === 'function') {
+        groupedDefaultSuggestions = SEARCH_UTILS.groupSearchSuggestionsByKind(defaultSuggestions, {
+          searchFirst: false
+        });
+      }
 
       let allSuggestions = localSearchQueryModeActive
         ? suggestions.filter((item) => (
@@ -15059,6 +14714,20 @@
         }
       });
       allSuggestions = filterBlacklistedSuggestions(allSuggestions, query);
+      const hasDirectUrlSuggestion = preSuggestions.some((suggestion) => (
+        suggestion && suggestion.type === 'directUrl'
+      ));
+      if (searchResultPriorityMode === 'search' &&
+          !localSearchQueryModeActive &&
+          !slashCommandModeActive &&
+          !toggleCommandActive &&
+          !siteSearchQueryModeActive &&
+          !hasDirectUrlSuggestion &&
+          typeof SEARCH_UTILS.composeSearchFirstSuggestionSlate === 'function') {
+        allSuggestions = SEARCH_UTILS.composeSearchFirstSuggestionSlate(allSuggestions, {
+          limit: searchResultDisplayLimit
+        });
+      }
 
       const keywordSuggestionState = getKeywordSearchSuggestionState(allSuggestions);
       const onlyKeywordSuggestions = keywordSuggestionState.onlyKeywordSuggestions;
@@ -15121,7 +14790,8 @@
           primaryHighlightIndex = 0;
           primaryHighlightReason = 'topSite';
         }
-        if (!siteSearchState && query && !onlyKeywordSuggestions && openTabQuickSwitchEnabled) {
+        if (preferAutocompleteFirst &&
+            !siteSearchState && query && !onlyKeywordSuggestions && openTabQuickSwitchEnabled) {
           const openTabMatch = typeof SEARCH_UTILS.findSearchOpenTabMatchIndex === 'function'
             ? SEARCH_UTILS.findSearchOpenTabMatchIndex(allSuggestions, {
               rawQuery: latestRawQuery.trim(),
@@ -15310,6 +14980,11 @@
     const requestStartedAt = Date.now();
     const requestQuery = latestQuery;
     const requestSeq = ++suggestionRequestSeq;
+    const requestSearchFirst = searchResultPriorityMode === 'search';
+    const showExactSearchPendingState = requestSearchFirst &&
+      !requestLocalSearchScope &&
+      !siteSearchState &&
+      !getDirectUrlSuggestion(requestQuery);
     directNavigationSettleController.cancel();
     if (deferInitialDirectNavigationRender) {
       directNavigationSettleController.schedule({
@@ -15324,6 +14999,9 @@
     if (suggestionRequestWatchdogTimer) {
       clearTimeout(suggestionRequestWatchdogTimer);
       suggestionRequestWatchdogTimer = null;
+    }
+    if (showExactSearchPendingState) {
+      renderSuggestions([], requestQuery);
     }
     suggestionRequestWatchdogTimer = setTimeout(function() {
       if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
@@ -15355,12 +15033,17 @@
         return;
       }
       const localSuggestions = response && Array.isArray(response.suggestions) ? response.suggestions : [];
-      renderSuggestions(localSuggestions, requestQuery);
       if (requestLocalSearchScope) {
+        renderSuggestions(localSuggestions, requestQuery);
         return;
       }
+      if (!showExactSearchPendingState) {
+        renderSuggestions(localSuggestions, requestQuery);
+      }
       refreshTabsForSearchContext(() => {});
-      const remoteDelay = immediate ? 0 : Math.max(0, 120 - (Date.now() - requestStartedAt));
+      const remoteDelay = (requestSearchFirst || immediate)
+        ? 0
+        : Math.max(0, 120 - (Date.now() - requestStartedAt));
       remoteSuggestionDebounceTimer = setTimeout(function() {
         remoteSuggestionDebounceTimer = null;
         if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
@@ -15370,7 +15053,8 @@
           action: 'getSearchEngineSuggestions',
           query: requestQuery,
           context: 'newtab',
-          localSuggestions: localSuggestions
+          localSuggestions: localSuggestions,
+          searchFirst: requestSearchFirst
         }, function(remoteResponse) {
           if (requestSeq !== suggestionRequestSeq || requestQuery !== latestQuery) {
             return;
@@ -15462,6 +15146,7 @@
       cursor: 'pointer'
     },
     onInput: function(event) {
+      searchSuggestionsDismissed = false;
       if (searchInputHistoryController && !isApplyingSearchInputHistory) {
         searchInputHistoryController.resetNavigation();
       }
@@ -15520,20 +15205,6 @@
         return;
       }
       requestSuggestions(query);
-    },
-    onBlur: function(event) {
-      const rawValue = event && event.target ? event.target.value : '';
-      if (localSearchScopeState || !isSlashCommandInput(rawValue)) {
-        return;
-      }
-      latestRawQuery = '';
-      latestQuery = '';
-      clearAutocomplete();
-      clearSearchSuggestions();
-      if (event && event.target) {
-        event.target.value = '';
-      }
-      updateModeBadge('');
     },
     onKeyDown: function(event) {
       syncSuggestionActionModifiersFromEvent(event);
@@ -15827,147 +15498,6 @@
     return Boolean(el.isContentEditable);
   }
 
-  function parseFallbackShortcut(shortcut) {
-    const value = String(shortcut || '').trim();
-    if (!value) {
-      return null;
-    }
-    const parts = value.split('+').map((item) => String(item || '').trim()).filter(Boolean);
-    if (parts.length === 0) {
-      return null;
-    }
-    const keyToken = parts[parts.length - 1];
-    const modifierTokens = parts.slice(0, -1);
-    const spec = {
-      ctrl: false,
-      alt: false,
-      shift: false,
-      meta: false,
-      key: ''
-    };
-
-    modifierTokens.forEach((token) => {
-      const lower = token.toLowerCase();
-      if (lower === 'ctrl' || lower === 'control' || lower === 'macctrl') {
-        spec.ctrl = true;
-      } else if (lower === 'alt' || lower === 'option') {
-        spec.alt = true;
-      } else if (lower === 'shift') {
-        spec.shift = true;
-      } else if (lower === 'command' || lower === 'cmd' || lower === 'meta' || lower === 'super') {
-        spec.meta = true;
-      }
-    });
-
-    const keyLower = keyToken.toLowerCase();
-    const specialMap = {
-      tab: 'Tab',
-      enter: 'Enter',
-      return: 'Enter',
-      esc: 'Escape',
-      escape: 'Escape',
-      space: ' ',
-      spacebar: ' ',
-      up: 'ArrowUp',
-      down: 'ArrowDown',
-      left: 'ArrowLeft',
-      right: 'ArrowRight',
-      comma: ',',
-      period: '.',
-      slash: '/',
-      semicolon: ';',
-      quote: '\'',
-      minus: '-',
-      plus: '+',
-      backslash: '\\',
-      backquote: '`',
-      bracketleft: '[',
-      bracketright: ']'
-    };
-    if (specialMap[keyLower]) {
-      spec.key = specialMap[keyLower];
-      return spec;
-    }
-    if (/^f\d{1,2}$/.test(keyLower)) {
-      spec.key = keyLower.toUpperCase();
-      return spec;
-    }
-    if (keyLower.length === 1) {
-      spec.key = keyLower;
-      return spec;
-    }
-    spec.key = keyToken;
-    return spec;
-  }
-
-  function getFallbackShortcutKeyTokenFromCode(rawCode) {
-    const code = String(rawCode || '').trim();
-    if (!code) {
-      return '';
-    }
-    if (/^Key[A-Z]$/.test(code)) {
-      return code.slice(3).toLowerCase();
-    }
-    if (/^Digit[0-9]$/.test(code)) {
-      return code.slice(5);
-    }
-    const codeMap = {
-      Backquote: '`',
-      Minus: '-',
-      Equal: '+',
-      BracketLeft: '[',
-      BracketRight: ']',
-      Backslash: '\\',
-      Semicolon: ';',
-      Quote: '\'',
-      Comma: ',',
-      Period: '.',
-      Slash: '/',
-      Space: ' ',
-      Tab: 'Tab',
-      Enter: 'Enter',
-      Escape: 'Escape',
-      ArrowUp: 'ArrowUp',
-      ArrowDown: 'ArrowDown',
-      ArrowLeft: 'ArrowLeft',
-      ArrowRight: 'ArrowRight'
-    };
-    if (codeMap[code]) {
-      return codeMap[code];
-    }
-    if (/^F\d{1,2}$/.test(code)) {
-      return code.toUpperCase();
-    }
-    return '';
-  }
-
-  function getFallbackShortcutKeyTokenFromEvent(event) {
-    if (!event) {
-      return '';
-    }
-    return getFallbackShortcutKeyTokenFromCode(event.code) || String(event.key || '');
-  }
-
-  function shortcutMatchesEvent(event, spec) {
-    if (!event || !spec) {
-      return false;
-    }
-    if (Boolean(event.ctrlKey) !== spec.ctrl ||
-      Boolean(event.altKey) !== spec.alt ||
-      Boolean(event.shiftKey) !== spec.shift ||
-      Boolean(event.metaKey) !== spec.meta) {
-      return false;
-    }
-    const eventKey = getFallbackShortcutKeyTokenFromEvent(event);
-    if (spec.key.length === 1) {
-      return eventKey.toLowerCase() === spec.key;
-    }
-    if (spec.key.startsWith('F')) {
-      return eventKey.toUpperCase() === spec.key;
-    }
-    return eventKey === spec.key;
-  }
-
   function refreshFallbackShortcut(force) {
     const now = Date.now();
     if (!force && (now - fallbackShortcutRefreshAt) < 15000) {
@@ -15986,7 +15516,7 @@
           return;
         }
         fallbackShortcutRaw = nextShortcut;
-        fallbackShortcutSpec = parseFallbackShortcut(nextShortcut);
+        fallbackShortcutSpec = SHORTCUT_KEY_MATCHER.parseShortcut(nextShortcut);
       });
     } catch (e) {
       // Ignore runtime bridge failures.
@@ -16055,6 +15585,19 @@
       window.location.hash.includes('focus');
     let forceInitialFocusPending = hasExplicitFocusHint;
 
+    const clearExplicitFocusQuery = () => {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('focus') !== '1') {
+          return;
+        }
+        url.searchParams.delete('focus');
+        window.history.replaceState(window.history.state, '', url.toString());
+      } catch (_error) {
+        // Keep focus recovery independent from address cleanup failures.
+      }
+    };
+
     const retryDelays = [0, 60, 140, 280, 520, 900, 1400];
     const attemptFocusIfVisible = () => {
       if (!newtabInputAutoFocusEnabled) {
@@ -16068,7 +15611,11 @@
       }
       const focused = tryFocusSearchInput(forceInitialFocusPending);
       if (focused) {
+        const consumedExplicitFocusHint = forceInitialFocusPending;
         forceInitialFocusPending = false;
+        if (consumedExplicitFocusHint) {
+          clearExplicitFocusQuery();
+        }
       }
     };
 
@@ -16118,7 +15665,8 @@
       return;
     }
     refreshFallbackShortcut(false);
-    if (fallbackShortcutSpec && shortcutMatchesEvent(event, fallbackShortcutSpec)) {
+    if (fallbackShortcutSpec &&
+        SHORTCUT_KEY_MATCHER.eventMatchesShortcut(event, fallbackShortcutSpec)) {
       event.preventDefault();
       event.stopPropagation();
       activateNewtabShortcutFocus();
@@ -16167,6 +15715,8 @@
 
   const handleBackgroundPointerFocus = NEWTAB_BACKGROUND_SEARCH_FOCUS.createBackgroundFocusHandler({
     getBackgroundTargets: () => [document.body, root, searchLayer],
+    getSearchValue: () => inputParts.input.value,
+    dismissSearchResults: dismissSearchSuggestionsFromBackground,
     focusSearch: focusSearchInputPreservingScroll
   });
 
@@ -16182,6 +15732,7 @@
   window.addEventListener('pointerdown', handleBackgroundPointerFocus, true);
   modeBadge = inputParts.modeBadge;
   const searchInput = inputParts.input;
+  searchInput.addEventListener('focus', restoreDismissedSearchSuggestions);
   searchInputRef = searchInput;
   const searchScopeIcon = inputParts.icon;
   const rightIcon = inputParts.rightIcon;
@@ -16193,9 +15744,32 @@
     if (!searchScopeIcon) {
       return;
     }
-    searchScopeIcon.dataset.hoverActive = active ? 'true' : 'false';
+    const enabled = searchScopeIcon.getAttribute('aria-disabled') !== 'true';
+    searchScopeIcon.dataset.hoverActive = active && enabled ? 'true' : 'false';
+  }
+  function setSearchScopeIconEnabled(enabled) {
+    if (!searchScopeIcon) {
+      return;
+    }
+    const nextEnabled = enabled !== false;
+    searchScopeIcon.setAttribute('aria-disabled', nextEnabled ? 'false' : 'true');
+    searchScopeIcon.setAttribute('tabindex', nextEnabled ? '0' : '-1');
+    searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
+    if (nextEnabled) {
+      searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+      return;
+    }
+    searchScopeIcon.removeAttribute('data-tooltip');
+    hideSearchInputCursorTooltip();
+    setSearchScopeIconVisualState(false);
+    if (typeof searchScopeIcon.blur === 'function') {
+      searchScopeIcon.blur();
+    }
   }
   function activateSearchScopeIcon(event) {
+    if (!searchScopeIcon || searchScopeIcon.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
     if (event && typeof event.preventDefault === 'function') {
       event.preventDefault();
     }
@@ -16216,9 +15790,7 @@
   if (searchScopeIcon) {
     searchScopeIcon.dataset.searchScopeAction = 'true';
     searchScopeIcon.setAttribute('role', 'button');
-    searchScopeIcon.setAttribute('tabindex', '0');
-    searchScopeIcon.setAttribute('aria-label', searchScopeTooltipText());
-    searchScopeIcon.setAttribute('data-tooltip', searchScopeTooltipText());
+    setSearchScopeIconEnabled(true);
     setSearchScopeIconVisualState(false);
     searchScopeIcon.addEventListener('mouseenter', () => {
       setSearchScopeIconVisualState(true);
@@ -16386,6 +15958,66 @@
     }
   }
 
+  function setNewtabActionControlVisibility(element, visible) {
+    if (!element) {
+      return;
+    }
+    const nextVisible = visible !== false;
+    element.hidden = !nextVisible;
+    element.style.setProperty('display', nextVisible ? '' : 'none');
+    element.setAttribute('aria-hidden', nextVisible ? 'false' : 'true');
+    element.inert = !nextVisible;
+    if (nextVisible) {
+      element.removeAttribute('inert');
+    } else {
+      element.setAttribute('inert', '');
+    }
+  }
+
+  function applyNewtabActionButtonVisibility() {
+    if (!newtabFeedbackButtonVisible && feedbackReactController) {
+      closeFeedbackPopover();
+    }
+    if (!newtabAppearanceButtonVisible && wallpaperRuntime) {
+      closeWallpaperPanel();
+    }
+    setNewtabActionControlVisibility(feedbackControl, newtabFeedbackButtonVisible);
+    setNewtabActionControlVisibility(wallpaperControl, newtabAppearanceButtonVisible);
+  }
+
+  function loadNewtabActionButtonVisibility() {
+    if (!storageArea) {
+      newtabFeedbackButtonVisible = true;
+      newtabAppearanceButtonVisible = true;
+      applyNewtabActionButtonVisibility();
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      storageArea.get([
+        NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY,
+        NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY
+      ], (result) => {
+        const stored = result || {};
+        const rawFeedback = stored[NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY];
+        const rawAppearance = stored[NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY];
+        newtabFeedbackButtonVisible = normalizeNewtabFeedbackButtonVisible(rawFeedback);
+        newtabAppearanceButtonVisible = normalizeNewtabAppearanceButtonVisible(rawAppearance);
+        const repairs = {};
+        if (rawFeedback !== newtabFeedbackButtonVisible) {
+          repairs[NEWTAB_FEEDBACK_BUTTON_VISIBLE_STORAGE_KEY] = newtabFeedbackButtonVisible;
+        }
+        if (rawAppearance !== newtabAppearanceButtonVisible) {
+          repairs[NEWTAB_APPEARANCE_BUTTON_VISIBLE_STORAGE_KEY] = newtabAppearanceButtonVisible;
+        }
+        applyNewtabActionButtonVisibility();
+        if (Object.keys(repairs).length > 0) {
+          storageArea.set(repairs);
+        }
+        resolve();
+      });
+    });
+  }
+
   function setSiteSearchTabHint(provider) {
     if (inputModeController) {
       inputModeController.setTabHintVisible(true, provider);
@@ -16466,6 +16098,9 @@
       ));
     },
     onModeTagRemovalConfirmationReset: hideToast,
+    onModeTagActiveChange: (active) => {
+      setSearchScopeIconEnabled(!active);
+    },
     onModeMenuLayoutChange: syncSearchModeMenuResultOffset,
     isTabHintSuppressed: () => Boolean(siteSearchState || localSearchScopeState)
   });
@@ -16515,6 +16150,7 @@
     newtabResizeFrame = 0;
     const previousBookmarkLimit = getBookmarkLimit();
     applyNewtabWidthMode();
+    applyNewtabShortcutColumns();
     const recentLayoutBefore = recentLoadedOnce && shouldAnimateNewtabLayoutShift()
       ? captureRecentCardLayout()
       : null;
@@ -16610,9 +16246,13 @@
     }
     if (triggerInput) {
       event.preventDefault();
-      const providers = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
+      const siteProviders = (siteSearchProvidersCache && siteSearchProvidersCache.length > 0)
         ? siteSearchProvidersCache
         : defaultSiteSearchProviders;
+      const providers = getSearchTriggerProviders(
+        siteProviders,
+        aggregateSearchesCache
+      );
       const topSiteMatch = getTopSiteMatchCandidate(currentSuggestions, triggerInput);
       const directProvider = getSiteSearchTriggerCandidate(triggerInput, providers, topSiteMatch);
       if (directProvider) {
@@ -16625,13 +16265,21 @@
         activateLocalSearchScope(directLocalScope);
         return true;
       }
-      Promise.all([getSiteSearchProviders(), getShortcutRules()]).then(([items, rules]) => {
+      Promise.all([
+        getSiteSearchProviders(),
+        getAggregateSearches(),
+        getShortcutRules()
+      ]).then(([items, definitions, rules]) => {
         if (siteSearchState || localSearchScopeState ||
             String(inputParts.input.value || '').trim() !== triggerInput) {
           return;
         }
         const asyncTopSiteMatch = getTopSiteMatchCandidate(currentSuggestions, triggerInput);
-        const asyncProvider = getSiteSearchTriggerCandidate(triggerInput, items, asyncTopSiteMatch);
+        const asyncProvider = getSiteSearchTriggerCandidate(
+          triggerInput,
+          getSearchTriggerProviders(items, definitions),
+          asyncTopSiteMatch
+        );
         if (asyncProvider) {
           activateSiteSearch(asyncProvider);
           return;
@@ -16720,28 +16368,78 @@
   });
 
   getSiteSearchProviders();
+  getAggregateSearches().then(() => {
+    if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+      inputModeController.refreshModeMenu();
+    }
+    if (latestQuery) {
+      requestSuggestions(latestQuery, { immediate: true });
+    }
+  });
 
   addStorageChangeListener((changes, areaName) => {
-    if (!isPrimaryStorageAreaName(areaName) ||
-        (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY])) {
+    if (!isPrimaryStorageAreaName(areaName) || !(
+      changes[SITE_SEARCH_STORAGE_KEY] ||
+      changes[SITE_SEARCH_DISABLED_STORAGE_KEY] ||
+      changes[AGGREGATE_SEARCH_STORAGE_KEY]
+    )) {
+      return;
+    }
+    if (changes[AGGREGATE_SEARCH_STORAGE_KEY]) {
+      aggregateSearchesLoadVersion += 1;
+      aggregateSearchesLoadPromise = null;
+      aggregateSearchesCache = typeof AGGREGATE_SEARCH_STORE.normalizeAggregateSearches === 'function'
+        ? AGGREGATE_SEARCH_STORE.normalizeAggregateSearches(
+          changes[AGGREGATE_SEARCH_STORAGE_KEY].newValue
+        )
+        : [];
+      if (isAggregateSearchProvider(siteSearchState)) {
+        const currentId = String(siteSearchState.aggregateId || '');
+        const updatedDefinition = aggregateSearchesCache.find(
+          (item) => String(item && item.id ? item.id : '') === currentId
+        );
+        const updatedProvider = isAggregateSearchDefinitionAvailable(
+          updatedDefinition,
+          getSearchModeProviders()
+        )
+          ? createAggregateSearchScopeProvider(updatedDefinition)
+          : null;
+        if (updatedProvider) {
+          siteSearchState = updatedProvider;
+          setSiteSearchPrefix(updatedProvider, defaultTheme, { animate: false });
+        } else {
+          clearSiteSearch();
+        }
+      }
+      if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+        inputModeController.refreshModeMenu();
+      }
+      if (latestQuery) {
+        requestSuggestions(latestQuery, { immediate: true });
+      }
+    }
+    if (!changes[SITE_SEARCH_STORAGE_KEY] && !changes[SITE_SEARCH_DISABLED_STORAGE_KEY]) {
       return;
     }
     if (!storageArea) {
       return;
     }
-    storageArea.get([SITE_SEARCH_STORAGE_KEY, SITE_SEARCH_DISABLED_STORAGE_KEY], (result) => {
-      const customItems = Array.isArray(result[SITE_SEARCH_STORAGE_KEY]) ? result[SITE_SEARCH_STORAGE_KEY] : [];
-      const disabledKeys = Array.isArray(result[SITE_SEARCH_DISABLED_STORAGE_KEY])
-        ? result[SITE_SEARCH_DISABLED_STORAGE_KEY]
-        : [];
-      siteSearchProvidersCache = typeof SITE_SEARCH_STORE.mergeStoredProviders === 'function'
-        ? SITE_SEARCH_STORE.mergeStoredProviders(
-          defaultSiteSearchProviders,
-          customItems,
-          disabledKeys,
-          SEARCH_UTILS.mergeCustomProviders
-        )
-        : defaultSiteSearchProviders.slice();
+    const providerReload = reloadSiteSearchProvidersFromStorage();
+    providerReload.promise.then(() => {
+      if (providerReload.version !== siteSearchProvidersLoadVersion) {
+        return;
+      }
+      if (isAggregateSearchProvider(siteSearchState)) {
+        const activeDefinition = (aggregateSearchesCache || []).find((item) => (
+          String(item && item.id ? item.id : '') === String(siteSearchState.aggregateId || '')
+        ));
+        if (!isAggregateSearchDefinitionAvailable(activeDefinition, siteSearchProvidersCache)) {
+          clearSiteSearch();
+        }
+      }
+      if (inputModeController && typeof inputModeController.refreshModeMenu === 'function') {
+        inputModeController.refreshModeMenu();
+      }
       if (latestQuery) {
         requestSuggestions(latestQuery, { immediate: true });
       }
@@ -16844,6 +16542,9 @@
   }
   if (updateNoticeController && updateNoticeController.element) {
     document.body.insertBefore(updateNoticeController.element, newtabUpdateNoticeAnchor);
+    if (typeof updateNoticeController.recordExposure === 'function') {
+      updateNoticeController.recordExposure();
+    }
   }
   document.body.insertBefore(suggestionsSurface, newtabUpdateNoticeAnchor);
   document.body.insertBefore(suggestionsOutline, newtabUpdateNoticeAnchor);
@@ -16964,6 +16665,8 @@
     positionBookmarkCascadeLevels();
   }, { passive: true });
   bottomDockRuntime.onScroll(scheduleWallpaperAdaptiveToneUpdate, { passive: true });
+  const actionButtonVisibilityReadyPromise = loadNewtabActionButtonVisibility();
+  observeNewtabStartupTask('action-button-visibility', actionButtonVisibilityReadyPromise);
   const shortcutPreferencesReadyPromise = loadNewtabShortcutPreferences();
   observeNewtabStartupTask('shortcut-preferences', shortcutPreferencesReadyPromise);
   const shortcutsReadyPromise = shortcutPreferencesReadyPromise.then(loadVisibleShortcuts);
@@ -16984,54 +16687,53 @@
     typeof globalThis.LumnoMotionPreferenceReady.then === 'function'
       ? globalThis.LumnoMotionPreferenceReady
       : Promise.resolve(true);
-  let initialNewtabSkipsEntryMotion = false;
+  const initialLayoutStorageReadyTask = startupStorageReadBatch
+    ? startupStorageReadBatch.ready
+    : Promise.resolve(true);
+  const initialFontsReadyTask = document.fonts && document.fonts.ready &&
+    typeof document.fonts.ready.then === 'function'
+      ? document.fonts.ready.catch(() => true)
+      : Promise.resolve(true);
+  observeNewtabStartupTask('fonts', initialFontsReadyTask);
   const initialVisualReadyPromise = Promise.all([
     initialAppearanceReadyTask,
     initialBookmarkViewModeReadyPromise,
     loadZenMode(),
-    shortcutPreferencesReadyPromise,
-    initialMotionPreferenceReadyTask
-  ]).then(() => {
-    initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion();
-    if (!initialNewtabSkipsEntryMotion) {
-      hydrateSectionsFromCache();
-      maybeShowFileAccessNotice();
-      markNewtabReady();
-      return;
-    }
-    return Promise.all([
-      initialLanguageReadyTask,
-      sectionPolicyReadyPromise,
-      initialShortcutsReadyTask
-    ]).then(() => {
-      const recentSitesReadyTask = loadRecentSites();
-      const bookmarksReadyTask = loadBookmarks();
-      observeNewtabStartupTask('recent-sites', recentSitesReadyTask);
-      observeNewtabStartupTask('bookmarks', bookmarksReadyTask);
-      return Promise.all([recentSitesReadyTask, bookmarksReadyTask]);
-    }).catch((error) => {
-      console.warn('[Lumno] Motion-free new tab entry setup failed.', error);
-    }).then(() => {
-      maybeShowFileAccessNotice();
-      markNewtabReady();
-    });
-  });
-  observeNewtabStartupTask('visual-ready', initialVisualReadyPromise);
-  const initialDeferredContentReadyTask = Promise.all([
-    initialVisualReadyPromise,
+    actionButtonVisibilityReadyPromise,
+    initialMotionPreferenceReadyTask,
     initialLanguageReadyTask,
-    sectionPolicyReadyPromise
-  ]).then(() => {
-    if (initialNewtabSkipsEntryMotion) {
-      return;
-    }
-    const recentSitesReadyTask = loadRecentSites();
-    const bookmarksReadyTask = loadBookmarks();
+    sectionPolicyReadyPromise,
+    initialShortcutsReadyTask,
+    initialPinnedRecentSitesReadyTask,
+    initialHiddenRecentSitesReadyTask,
+    initialLayoutStorageReadyTask,
+    initialFontsReadyTask
+  ]).catch((error) => {
+    console.warn('[Lumno] Initial new tab layout setup failed.', error);
+  }).then(() => {
+    // Run one authoritative data pass after every layout-affecting preference
+    // has settled. This keeps cached/default geometry from becoming visible and
+    // then moving the entire entry when bookmarks or history arrive.
+    sectionDataRevision += 1;
+    const initialSectionDataRevision = sectionDataRevision;
+    const recentSitesReadyTask = loadRecentSites({
+      force: true,
+      sectionDataRevision: initialSectionDataRevision
+    });
+    const bookmarksReadyTask = loadBookmarks({
+      force: true,
+      sectionDataRevision: initialSectionDataRevision
+    });
     observeNewtabStartupTask('recent-sites', recentSitesReadyTask);
     observeNewtabStartupTask('bookmarks', bookmarksReadyTask);
     return Promise.all([recentSitesReadyTask, bookmarksReadyTask]);
+  }).catch((error) => {
+    console.warn('[Lumno] Initial new tab content setup failed.', error);
+  }).then(() => {
+    maybeShowFileAccessNotice();
+    markNewtabReady();
   });
-  observeNewtabStartupTask('deferred-content', initialDeferredContentReadyTask);
+  observeNewtabStartupTask('visual-ready', initialVisualReadyPromise);
   updateBookmarkSectionPosition();
   markNewtabStartupMilestone('script-end');
 

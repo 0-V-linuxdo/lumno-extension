@@ -13,8 +13,8 @@ function loadGeckoRuntime(sandboxExtras) {
 }
 
 const gecko = loadGeckoRuntime();
-assert.strictEqual(gecko.PRODUCT_TAG, '0.9.51-firefox-v1.8.0');
-assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.8.0');
+assert.strictEqual(gecko.PRODUCT_TAG, '0.9.55-firefox-v1.2.0');
+assert.strictEqual(gecko.FIREFOX_MANIFEST_VERSION, '1.2.0');
 assert.strictEqual(gecko.getDefaultShortcut('show-search'), 'Alt+K');
 assert.strictEqual(gecko.getDefaultShortcut('show-tab-switcher'), 'Alt+Q');
 assert.strictEqual(gecko.isGeckoRuntime(), false, 'Node test runtime is not Gecko');
@@ -175,6 +175,18 @@ assert.match(islandsSource, /new Proxy\(globalThis/, 'overlay-islands must dual-
 assert.ok(
   gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/shared/gecko-content-globals.js'),
   'overlay content scripts must include the Gecko global mirror'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/shared/aggregate-search-store.js'),
+  'overlay content scripts must include aggregate search store'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/shared/aggregate-search-surface.js'),
+  'overlay content scripts must include aggregate search surface'
+);
+assert.ok(
+  gecko.OVERLAY_CONTENT_SCRIPT_FILES.includes('src/shared/browser-profile.js'),
+  'overlay content scripts must include browser profile'
 );
 const islandsIndex = gecko.OVERLAY_CONTENT_SCRIPT_FILES.indexOf('src/react/overlay-islands.js');
 const mirrorIndex = gecko.OVERLAY_CONTENT_SCRIPT_FILES.indexOf('src/shared/gecko-content-globals.js');

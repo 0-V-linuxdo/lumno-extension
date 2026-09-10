@@ -40,6 +40,7 @@
     bd: 'assets/images/site-search/tile-bd.png',
     bi: 'assets/images/site-search/tile-bi.png',
     gg: 'assets/images/site-search/tile-gg.png',
+    kg: 'assets/images/site-search/tile-kg.png',
     ddg: 'assets/images/site-search/tile-ddg.png',
     br: 'assets/images/site-search/tile-br.png',
     eco: 'assets/images/site-search/tile-eco.png',
@@ -123,7 +124,9 @@
   }
 
   function getSiteSearchPinnedIconAssetPath(provider) {
-    const providerKey = String(provider && provider.key || '').trim().toLowerCase();
+    const providerKey = String(
+      provider && (provider.builtinKey || provider.key) || ''
+    ).trim().toLowerCase();
     return SITE_SEARCH_PINNED_ICON_ASSETS[providerKey] || '';
   }
 

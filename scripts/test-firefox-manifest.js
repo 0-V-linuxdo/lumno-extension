@@ -6,11 +6,15 @@ const backgroundSource = fs.readFileSync('src/background/background.js', 'utf8')
 const imported = [...backgroundSource.matchAll(/lumnoImportScript\('([^']+)'/g)].map((match) => match[1]);
 
 assert.strictEqual(manifest.manifest_version, 3, 'Chrome source stays MV3');
-assert.strictEqual(manifest.version, '0.9.51', 'Chrome source stays upstream 0.9.51');
+assert.strictEqual(manifest.version, '0.9.55', 'Chrome source stays upstream 0.9.55');
 assert.ok(manifest.background.service_worker, 'Chrome still needs service_worker');
 assert.ok(!manifest.background.scripts, 'Chrome source must not ship Firefox background.scripts');
 assert.ok(imported.includes('src/shared/gecko-runtime.js'), 'background should load gecko runtime first');
 assert.strictEqual(imported[0], 'src/shared/gecko-runtime.js');
+assert.ok(imported.includes('src/shared/aggregate-search-store.js'), 'background should load aggregate search store');
+assert.ok(imported.includes('src/background/aggregate-search.js'), 'background should load aggregate search runtime');
+assert.ok(imported.includes('src/shared/browser-profile.js'), 'background should load browser profile helpers');
+assert.ok(imported.includes('src/background/newtab-fallback.js'), 'background should load newtab fallback helpers');
 imported.forEach((file) => {
   assert.ok(fs.existsSync(file), `background helper missing: ${file}`);
 });

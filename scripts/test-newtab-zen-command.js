@@ -4,7 +4,7 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const newtabJs = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.js'), 'utf8');
-const newtabHtml = fs.readFileSync(path.join(repoRoot, 'src/newtab/newtab.html'), 'utf8');
+const newtabHtml = fs.readFileSync(path.join(repoRoot, 'newtab.html'), 'utf8');
 const suggestionsViewJs = fs.readFileSync(path.join(repoRoot, 'react-src/newtab/suggestions.tsx'), 'utf8');
 
 function assertMatches(source, pattern, message) {
@@ -49,7 +49,7 @@ assertMatches(
 
 assertMatches(
   newtabJs,
-  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.then\(\(\) => \{[\s\S]*?markNewtabReady\(\);/,
+  /const initialVisualReadyPromise = Promise\.all\(\[[\s\S]*?loadZenMode\(\),[\s\S]*?\]\)\.catch[\s\S]*?markNewtabReady\(\);/,
   'New Tab should restore Zen mode before marking the page ready'
 );
 

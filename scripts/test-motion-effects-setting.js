@@ -4,7 +4,7 @@ const settings = require('../src/shared/settings.js');
 
 const optionsHtml = fs.readFileSync('src/options/options.html', 'utf8');
 const optionsSource = fs.readFileSync('src/options/options.js', 'utf8');
-const newtabHtml = fs.readFileSync('src/newtab/newtab.html', 'utf8');
+const newtabHtml = fs.readFileSync('newtab.html', 'utf8');
 const newtabSource = fs.readFileSync('src/newtab/newtab.js', 'utf8');
 const onboardingHtml = fs.readFileSync('src/onboarding/onboarding.html', 'utf8');
 const motionPreloadSource = fs.readFileSync('src/shared/motion-preload.js', 'utf8');
@@ -91,8 +91,8 @@ assert.match(
 );
 assert.strictEqual(
   (newtabSource.match(/shouldSkipNewtabEntryMotion\(\)/g) || []).length,
-  5,
-  'the user preference should be read only by the four New Tab entry decisions and its helper'
+  4,
+  'the user preference should be read only by the three New Tab entry decisions and its helper'
 );
 assert.match(
   newtabSource,
@@ -121,8 +121,8 @@ assert.match(
 );
 assert.match(
   newtabSource,
-  /initialMotionPreferenceReadyTask[\s\S]*initialVisualReadyPromise = Promise\.all\([\s\S]*initialMotionPreferenceReadyTask[\s\S]*initialNewtabSkipsEntryMotion = shouldSkipNewtabEntryMotion\(\);[\s\S]*if \(!initialNewtabSkipsEntryMotion\)[\s\S]*Promise\.all\(\[\s*initialLanguageReadyTask,\s*sectionPolicyReadyPromise,\s*initialShortcutsReadyTask\s*\]\)[\s\S]*const recentSitesReadyTask = loadRecentSites\(\);\s*const bookmarksReadyTask = loadBookmarks\(\);[\s\S]*return Promise\.all\(\[recentSitesReadyTask, bookmarksReadyTask\]\);[\s\S]*markNewtabReady\(\)/,
-  'motion-free New Tabs should wait for text and visible sections before one atomic reveal'
+  /initialMotionPreferenceReadyTask[\s\S]*initialVisualReadyPromise = Promise\.all\([\s\S]*initialMotionPreferenceReadyTask[\s\S]*initialLanguageReadyTask[\s\S]*sectionPolicyReadyPromise[\s\S]*initialShortcutsReadyTask[\s\S]*initialFontsReadyTask[\s\S]*const recentSitesReadyTask = loadRecentSites\(\{[\s\S]*?force: true[\s\S]*?const bookmarksReadyTask = loadBookmarks\(\{[\s\S]*?force: true[\s\S]*?return Promise\.all\(\[recentSitesReadyTask, bookmarksReadyTask\]\);[\s\S]*markNewtabReady\(\)/,
+  'animated and motion-free New Tabs should wait for stable text and visible sections before one atomic reveal'
 );
 
 assert.match(

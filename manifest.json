@@ -38,7 +38,7 @@
    "content_scripts": [
       {
          "matches": [ "\u003Call_urls>" ],
-         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/content/hotkey-listener.js", "src/overlay/gecko-overlay-bridge.js" ],
+         "js": [ "src/shared/gecko-runtime.js", "src/shared/settings.js", "src/shared/shortcut-key-matcher.js", "src/content/hotkey-listener.js", "src/overlay/gecko-overlay-bridge.js" ],
          "run_at": "document_start"
       },
       {
@@ -100,7 +100,7 @@
       ]
    },
    "chrome_url_overrides": {
-      "newtab": "src/newtab/newtab.html"
+      "newtab": "newtab.html"
    },
    "host_permissions": [ "\u003Call_urls>" ],
    "icons": {
@@ -115,7 +115,7 @@
    },
    "web_accessible_resources": [
       {
-        "resources": [ "assets/images/lumno.png", "assets/images/lumno-selection-mark.svg", "assets/images/lumno-input-light.png", "assets/images/lumno-wordmark.svg", "assets/images/lumno-wordmark-dark.svg", "assets/images/lumno-wordmark-mask.svg", "assets/images/site-search/*.png", "assets/data/site-search.json", "assets/data/shortcut-rules.json", "assets/vendor/pinyin-pro.js", "assets/remixicon/fonts/remixicon.css", "assets/remixicon/fonts/remixicon.woff2", "assets/remixicon/icons/*.svg", "assets/fonts/open-sans/open-sans.css", "assets/fonts/open-sans/OpenSans-VariableFont-wdth-wght.ttf", "_locales/en/messages.json", "_locales/ja/messages.json", "_locales/zh_CN/messages.json", "_locales/zh_TW/messages.json", "src/shared/search-input.css", "src/shared/menu-surface.css", "src/shared/feature-hints.css", "src/shared/tooltip.css", "src/shared/cursor-tooltip.css", "src/shared/toast.css", "src/overlay/suggestions-view.css", "src/content/youtube-auto-pip-page.js", "_favicon/*" ],
+        "resources": [ "assets/images/lumno.png", "assets/images/lumno-selection-mark.svg", "assets/images/lumno-input-light.png", "assets/images/lumno-wordmark.svg", "assets/images/lumno-wordmark-dark.svg", "assets/images/lumno-wordmark-mask.svg", "assets/images/site-search/*.png", "assets/images/browser-pages/*.svg", "assets/data/site-search.json", "assets/data/shortcut-rules.json", "assets/vendor/pinyin-pro.js", "assets/remixicon/fonts/remixicon.css", "assets/remixicon/fonts/remixicon.woff2", "assets/remixicon/icons/*.svg", "assets/fonts/open-sans/open-sans.css", "assets/fonts/open-sans/OpenSans-VariableFont-wdth-wght.ttf", "_locales/en/messages.json", "_locales/ja/messages.json", "_locales/zh_CN/messages.json", "_locales/zh_TW/messages.json", "src/shared/search-input.css", "src/shared/menu-surface.css", "src/shared/feature-hints.css", "src/shared/tooltip.css", "src/shared/cursor-tooltip.css", "src/shared/toast.css", "src/overlay/suggestions-view.css", "src/content/youtube-auto-pip-page.js", "_favicon/*" ],
          "matches": [ "\u003Call_urls>" ]
       }
    ],
@@ -124,5 +124,5 @@
    "name": "__MSG_ext_name__",
    "author": "Kubai087",
    "permissions": [ "scripting", "tabs", "tabGroups", "history", "topSites", "bookmarks", "storage", "search", "favicon" ],
-   "version": "0.9.51"
+   "version": "0.9.55"
 }

@@ -25,7 +25,7 @@ assert.strictEqual(unzip.status, 0, unzip.stderr || 'failed to unzip firefox pac
 
 const packagedManifest = JSON.parse(fs.readFileSync(path.join(extractDir, 'manifest.json'), 'utf8'));
 assert.strictEqual(packagedManifest.manifest_version, 2, 'Firefox package must be Manifest V2');
-assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.8.0');
+assert.strictEqual(packagedManifest.version, geckoRuntime.FIREFOX_MANIFEST_VERSION || '1.2.0');
 assert.ok(!packagedManifest.key, 'Firefox package must not include the Chrome public key');
 assert.ok(!packagedManifest.externally_connectable, 'Firefox package must not include Chrome-only externally_connectable');
 assert.ok(!packagedManifest.host_permissions, 'MV2 host access belongs in permissions');
@@ -52,6 +52,14 @@ assert.strictEqual(packagedManifest.commands['show-tab-switcher'].suggested_key.
 assert.ok(Array.isArray(packagedManifest.web_accessible_resources));
 assert.ok(!packagedManifest.web_accessible_resources.includes('_favicon/*'));
 assert.ok(
+  packagedManifest.web_accessible_resources.includes('assets/images/browser-pages/*.svg'),
+  'Firefox package must expose bundled browser-page icons to overlay pages'
+);
+assert.ok(
+  fs.existsSync(path.join(extractDir, 'assets/images/browser-pages/extensions.svg')),
+  'Firefox zip must contain the bundled extensions icon'
+);
+assert.ok(
   fs.existsSync(path.join(extractDir, 'src/background/gecko-mv2-polyfill.js')),
   'Firefox zip must contain the MV2 scripting polyfill'
 );
@@ -76,6 +84,20 @@ assert.ok(
 );
 assert.ok(fs.existsSync(path.join(extractDir, 'src/shared/gecko-content-globals.js')));
 assert.ok(overlayEntry.js.includes('src/overlay/gecko-overlay-bridge.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/background/aggregate-search.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/shared/aggregate-search-store.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/shared/browser-profile.js'));
+assert.ok(packagedManifest.background.scripts.includes('src/background/newtab-fallback.js'));
+const newtabOverride = packagedManifest.chrome_url_overrides && packagedManifest.chrome_url_overrides.newtab;
+assert.ok(newtabOverride, 'Firefox package must keep a newtab override');
+assert.ok(
+  fs.existsSync(path.join(extractDir, newtabOverride)),
+  `Firefox zip must contain chrome_url_overrides.newtab target: ${newtabOverride}`
+);
+assert.ok(fs.existsSync(path.join(extractDir, 'src/newtab/lumno-newtab.html')));
+assert.ok(overlayEntry.js.includes('src/shared/aggregate-search-store.js'));
+assert.ok(overlayEntry.js.includes('src/shared/aggregate-search-surface.js'));
+assert.ok(overlayEntry.js.includes('src/shared/browser-profile.js'));
 const firstScripts = packagedManifest.content_scripts[0] && packagedManifest.content_scripts[0].js;
 assert.ok(Array.isArray(firstScripts) && firstScripts.includes('src/overlay/gecko-overlay-bridge.js'));
 const packagedPolyfill = fs.readFileSync(
